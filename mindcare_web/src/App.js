@@ -1,22 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { BrowserRouter } from "react-router-dom";
+import { Provider, useDispatch } from "react-redux";
+import { store } from "./store/store";
+import { fetchMe } from "./store/authSlice";
+import AppRoutes from "./routes/AppRoutes";
+import "./styles/global.css";
 
-function App() {
-  const [message, setMessage] = useState("");
+function AppInner() {
+  const dispatch = useDispatch();
 
   useEffect(() => {
-    fetch("/api/hello")
-      .then((res) => res.json())
-      .then((data) => setMessage(data.message))
-      .catch((err) => console.error(err));
-  }, []);
+    if (localStorage.getItem("token")) dispatch(fetchMe());
+  }, [dispatch]);
 
-  return (
-    <div style={{ padding: "20px" }}>
-      <h1>MindCare Frontend</h1>
-      <p>Message from API: {message}</p>
-    </div>
-  );
+  return <AppRoutes />;
 }
 
-export default App;
-
+export default function App() {
+  return (
+    <Provider store={store}>
+      <BrowserRouter>
+        <AppInner />
+      </BrowserRouter>
+    </Provider>
+  );
+}

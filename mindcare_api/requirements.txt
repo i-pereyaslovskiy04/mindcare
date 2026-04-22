@@ -1,2 +1,6 @@
 fastapi
 uvicorn
+python-jose[cryptography]
+bcrypt
+python-multipart
+email-validator
