@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import styles from './NewsSection.module.css';
 import { ArrowRightIcon } from '../icons';
 
@@ -24,8 +25,8 @@ export default function NewsCardSmall({ news, className, style }) {
   const actionLabel = news.tag === 'Вебинар' ? 'Смотреть' : 'Читать';
 
   return (
-    <a
-      href={news.href}
+    <Link
+      to={`/news/${news.id}`}
       className={`${styles.newsCardSm} ${className}`}
       style={style}
     >
@@ -43,6 +44,6 @@ export default function NewsCardSmall({ news, className, style }) {
           {actionLabel} <ArrowRightIcon width={11} height={11} strokeWidth={1.3} />
         </div>
       </div>
-    </a>
+    </Link>
   );
 }

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import styles from './NewsSection.module.css';
 import { ArrowRightIcon } from '../icons';
 
@@ -11,8 +12,8 @@ const PlaceholderImage = () => (
 
 export default function FeaturedNews({ news, className, style }) {
   return (
-    <a
-      href={news.href}
+    <Link
+      to={`/news/${news.id}`}
       className={`${styles.newsFeatured} ${className}`}
       style={style}
     >
@@ -28,6 +29,6 @@ export default function FeaturedNews({ news, className, style }) {
           Читать далее <ArrowRightIcon />
         </div>
       </div>
-    </a>
+    </Link>
   );
 }

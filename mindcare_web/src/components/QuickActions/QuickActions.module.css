@@ -20,6 +20,7 @@
   padding: clamp(16px, 1.6vw, 24px) clamp(20px, 2.5vw, 48px);
   border-right: 1px solid var(--nav-border);
   cursor: pointer;
+  background: transparent;
   transition: background 0.15s;
 }
 
@@ -40,7 +41,7 @@
   width: 40px;
   height: 40px;
   border-radius: 11px;
-  background: var(--sand);
+  background: transparent;
   flex-shrink: 0;
   display: flex;
   align-items: center;

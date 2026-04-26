@@ -1,0 +1,150 @@
+.pageWrap {
+  background: var(--cream);
+}
+
+.pageInner {
+  padding-top: var(--section-py);
+  padding-bottom: var(--section-py);
+}
+
+.pageHeader {
+  margin-bottom: clamp(24px, 2.5vw, 40px);
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h1);
+  font-weight: 400;
+  line-height: var(--lh-h1);
+  color: var(--espresso);
+}
+
+/* Loading / error / empty states */
+.loading {
+  font-size: var(--fs-body);
+  color: var(--text-light);
+  padding: 60px 0;
+  text-align: center;
+}
+
+.error {
+  font-size: var(--fs-ui);
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid rgba(185, 64, 64, 0.18);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin: 40px 0;
+}
+
+.empty {
+  font-size: var(--fs-body);
+  color: var(--text-light);
+  padding: 60px 0;
+  text-align: center;
+}
+
+/* News grid */
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+/* List of remaining news items below the featured card */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: clamp(32px, 3vw, 48px);
+  flex-wrap: wrap;
+}
+
+.paginBtn {
+  background: var(--warm-white);
+  border: 1.5px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 9px 18px;
+  font-size: var(--fs-ui);
+  font-family: 'Nunito', sans-serif;
+  font-weight: 600;
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.paginBtn:hover:not(:disabled) {
+  background: var(--sand);
+  border-color: var(--latte);
+  color: var(--espresso);
+}
+
+.paginBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.paginNumbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paginNum {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  font-size: 14px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.paginNum:hover:not(.paginNumActive) {
+  background: var(--warm-white);
+  border-color: var(--nav-border);
+  color: var(--espresso);
+}
+
+.paginNumActive {
+  background: var(--espresso);
+  color: var(--milk);
+  font-weight: 600;
+}
+
+.paginEllipsis {
+  color: var(--text-light);
+  font-size: 14px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  height: 38px;
+}
+
+@media (max-width: 768px) {
+  .paginBtn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .paginNum {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }
+}

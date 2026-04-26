@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
-  { label: 'Главная', href: '#' },
+  { label: 'Главная', to: '/' },
   { label: 'О нас', href: '#' },
   { label: 'Услуги', href: '#' },
   { label: 'Материалы', href: '#' },
@@ -62,7 +63,9 @@ export default function Navbar({ onOpenAuth }) {
         <ul className={styles.navLinks}>
           {NAV_LINKS.map((link) => (
             <li key={link.label}>
-              <a href={link.href}>{link.label}</a>
+              {link.to
+                ? <Link to={link.to}>{link.label}</Link>
+                : <a href={link.href}>{link.label}</a>}
             </li>
           ))}
         </ul>
@@ -99,9 +102,9 @@ export default function Navbar({ onOpenAuth }) {
         <ul className={styles.mobileNavLinks}>
           {NAV_LINKS.map((link) => (
             <li key={link.label}>
-              <a href={link.href} onClick={closeMenu}>
-                {link.label}
-              </a>
+              {link.to
+                ? <Link to={link.to} onClick={closeMenu}>{link.label}</Link>
+                : <a href={link.href} onClick={closeMenu}>{link.label}</a>}
             </li>
           ))}
         </ul>

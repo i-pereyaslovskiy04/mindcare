@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import styles from './NewsSection.module.css';
 import { ArrowRightIcon } from '../icons';
 
@@ -14,8 +15,8 @@ const ThumbIcon = () => (
 
 export default function NewsListItem({ news, className, style }) {
   return (
-    <a
-      href={news.href}
+    <Link
+      to={`/news/${news.id}`}
       className={`${styles.newsListItem} ${className}`}
       style={style}
     >
@@ -30,6 +31,6 @@ export default function NewsListItem({ news, className, style }) {
       <div className={styles.newsListArrow} aria-hidden="true">
         <ArrowRightIcon width={15} height={15} />
       </div>
-    </a>
+    </Link>
   );
 }
