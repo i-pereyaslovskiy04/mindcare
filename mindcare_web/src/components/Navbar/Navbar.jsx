@@ -4,8 +4,8 @@ import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
   { label: 'Главная', to: '/' },
-  { label: 'О нас', href: '#' },
-  { label: 'Услуги', href: '#' },
+  { label: 'О нас', to: '/about' },
+  { label: 'Услуги', to: '/services' },
   { label: 'Материалы', href: '#' },
 ];
 
