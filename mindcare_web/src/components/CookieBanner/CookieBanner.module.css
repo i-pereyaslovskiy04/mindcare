@@ -1,0 +1,121 @@
+.cookieBanner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.cookieBanner.cookieVisible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: all;
+}
+
+.cookieBanner.cookieHiding {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cookieInner {
+  background: var(--espresso);
+  border-top: 2px solid var(--coffee);
+  padding: 16px var(--container-px);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.cookieIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(201, 185, 154, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cookieText {
+  flex: 1;
+  min-width: 200px;
+  font-size: var(--fs-sub);
+  color: var(--fog);
+  line-height: 1.65;
+  font-weight: 300;
+}
+
+.cookieText a {
+  color: var(--latte);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(201, 185, 154, 0.4);
+  font-weight: 500;
+}
+
+.cookieActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.cookieBtnAccept {
+  background: var(--latte);
+  color: var(--espresso);
+  border: none;
+  padding: 9px 22px;
+  border-radius: 22px;
+  font-size: var(--fs-ui);
+  font-family: 'Nunito', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cookieBtnAccept:hover {
+  background: var(--milk);
+}
+
+.cookieBtnDecline {
+  background: transparent;
+  color: var(--fog);
+  border: 1.5px solid rgba(201, 185, 154, 0.35);
+  padding: 8px 20px;
+  border-radius: 22px;
+  font-size: var(--fs-ui);
+  font-family: 'Nunito', sans-serif;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.cookieBtnDecline:hover {
+  background: rgba(201, 185, 154, 0.08);
+  border-color: rgba(201, 185, 154, 0.55);
+  color: var(--milk);
+}
+
+@media (max-width: 768px) {
+  .cookieInner {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .cookieActions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .cookieBtnAccept,
+  .cookieBtnDecline {
+    width: 100%;
+  }
+}
