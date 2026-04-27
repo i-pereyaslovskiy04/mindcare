@@ -1,5 +1,5 @@
-import FeaturedNews from '../News/FeaturedNews';
-import NewsListItem from '../News/NewsListItem';
+import FeaturedNews from '../../../components/News/FeaturedNews';
+import NewsListItem from '../../../components/News/NewsListItem';
 import styles from './NewsPage.module.css';
 
 export default function NewsGrid({ items }) {

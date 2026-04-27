@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Navbar from '../../components/Navbar/Navbar';
-import Hero from '../../components/Hero/Hero';
-import QuickActions from '../../components/QuickActions/QuickActions';
+import Hero from './components/Hero';
+import QuickActions from './components/QuickActions';
 import NewsSection from '../../components/News/NewsSection';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../components/AuthModal/AuthModal';

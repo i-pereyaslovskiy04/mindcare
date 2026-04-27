@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../components/AuthModal/AuthModal';
-import NewsGrid from '../../components/NewsPage/NewsGrid';
-import Pagination from '../../components/NewsPage/Pagination';
+import NewsGrid from './components/NewsGrid';
+import Pagination from './components/Pagination';
 import { getNews } from '../../services/api';
-import styles from '../../components/NewsPage/NewsPage.module.css';
+import styles from './components/NewsPage.module.css';
 
 const LIMIT = 9;
 

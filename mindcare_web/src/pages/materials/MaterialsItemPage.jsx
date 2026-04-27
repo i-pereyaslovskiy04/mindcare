@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../components/AuthModal/AuthModal';
-import { MOCK_MATERIALS } from '../../components/Materials/mockMaterials';
+import { MOCK_MATERIALS } from './components/mockMaterials';
 import styles from './MaterialsItemPage.module.css';
 
 const HeroPlaceholder = () => (

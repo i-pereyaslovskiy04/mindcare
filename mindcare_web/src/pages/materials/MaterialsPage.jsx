@@ -3,9 +3,9 @@ import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../components/AuthModal/AuthModal';
 import PageHero from '../../components/Hero/PageHero';
-import MaterialsToolbar from '../../components/Materials/MaterialsToolbar';
-import MaterialsGrid from '../../components/Materials/MaterialsGrid';
-import { MOCK_MATERIALS } from '../../components/Materials/mockMaterials';
+import MaterialsToolbar from './components/MaterialsToolbar';
+import MaterialsGrid from './components/MaterialsGrid';
+import { MOCK_MATERIALS } from './components/mockMaterials';
 import styles from './MaterialsPage.module.css';
 
 const PAGE_SIZE = 6;

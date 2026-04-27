@@ -4,9 +4,9 @@ import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../components/AuthModal/AuthModal';
 import PageHero from '../../components/Hero/PageHero';
-import ServicesSlider from '../../components/Services/ServicesSlider';
-import ProcessBlock from '../../components/Services/ProcessBlock';
-import PrinciplesBlock from '../../components/Services/PrinciplesBlock';
+import ServicesSlider from './components/ServicesSlider';
+import ProcessBlock from './components/ProcessBlock';
+import PrinciplesBlock from './components/PrinciplesBlock';
 import styles from './Services.module.css';
 
 export default function Services() {

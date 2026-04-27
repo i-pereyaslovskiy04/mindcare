@@ -3,12 +3,12 @@ import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../components/AuthModal/AuthModal';
 import PageHero from '../../components/Hero/PageHero';
-import AboutIntro from '../../components/About/AboutIntro';
-import AboutMission from '../../components/About/AboutMission';
-import AboutServicesPreview from '../../components/About/AboutServicesPreview';
-import AboutApproach from '../../components/About/AboutApproach';
-import AboutTrust from '../../components/About/AboutTrust';
-import AboutMedia from '../../components/About/AboutMedia';
+import AboutIntro from './components/AboutIntro';
+import AboutMission from './components/AboutMission';
+import AboutServicesPreview from './components/AboutServicesPreview';
+import AboutApproach from './components/AboutApproach';
+import AboutTrust from './components/AboutTrust';
+import AboutMedia from './components/AboutMedia';
 
 export default function About() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
