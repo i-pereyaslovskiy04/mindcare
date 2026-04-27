@@ -53,17 +53,46 @@ src/
 
 ---
 
+## Page-module архитектура
+
+Каждый домен в `pages/` — самодостаточный модуль. Структура домена:
+
+```
+pages/<domain>/
+  <Page>.jsx              # entry point, маршрутизируется из AppRoutes.jsx
+  <Page>.module.css       # стили страницы (если есть)
+  components/             # page-specific компоненты (только для этого домена)
+    <Component>.jsx
+    <Component>.module.css
+    mock<Data>.js         # mock-данные домена (временно, до подключения API)
+```
+
+Один домен можно удалить или добавить, не затрагивая остальные части `src/`.
+
+---
+
+## Правило разделения компонентов
+
+| Уровень | Путь | Когда использовать |
+|---|---|---|
+| **Shared** | `src/components/` | Компонент используется в **2+ доменах** |
+| **Page-local** | `pages/<domain>/components/` | Компонент используется **только** в одном домене |
+
+**Запрещено:**
+- класть page-specific компонент в `src/components/`
+- дублировать shared компонент внутри `pages/`
+
+Текущие shared компоненты: `Navbar`, `Footer`, `PageHero`, `AuthModal`, `CookieBanner`, `NewsSection`, `FeaturedNews`, `NewsCardSmall`, `NewsListItem`, `icons/`.
+
+---
+
 ## Принципы организации
 
-**Domain grouping в pages/.** Страницы сгруппированы по доменам (`home/`, `news/`, `materials/` и т.д.). Каждый домен — папка с `.jsx` и `.module.css` рядом. Плоская структура не масштабируется при росте числа маршрутов.
+**Co-location CSS.** Каждый компонент хранит стили рядом (`.module.css`). Глобальные стили — только в `styles/`.
 
-**Co-location CSS.** Каждый компонент и страница хранит стили рядом (`.module.css`). Глобальные стили только в `styles/`.
+**Feature slices.** Сложная бизнес-логика (ForgotPassword) живёт в `features/auth/` — не в `components/` и не в `pages/`.
 
-**Feature slices.** Сложная бизнес-фича (ForgotPassword) живёт в `features/auth/` со своими хуками, шагами и стилями — не в `components/`.
-
-**Mock → API.** Данные сейчас в `mockMaterials.js` / `mockNews.js`. Переход на API — замена одного вызова в `services/api.js` без изменения компонентов.
-
-**Page-module.** Каждая страница — самодостаточный модуль: `pages/<domain>/Page.jsx` + `pages/<domain>/components/` для локальных секций. В `components/` остаётся только то, что используется в двух и более доменах.
+**Mock → API.** Mock-данные (`mockMaterials.js`, `mockNews.js`) лежат в `components/` своего домена. Переход на реальный API — замена одного вызова в `services/api.js` без изменения компонентов.
 
 ---
 
