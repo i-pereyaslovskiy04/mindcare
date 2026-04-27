@@ -1,0 +1,22 @@
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding-top: clamp(32px, 4vw, 52px);
+}
+
+.loadMoreBtn {
+  padding: 12px 48px;
+  background: transparent;
+  border: 1.5px solid var(--espresso);
+  border-radius: 10px;
+  color: var(--espresso);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+}
+
+.loadMoreBtn:hover {
+  background: var(--espresso);
+  color: var(--text-on-dark);
+}

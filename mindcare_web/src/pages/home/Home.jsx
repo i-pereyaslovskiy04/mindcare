@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import Navbar from '../components/Navbar/Navbar';
-import Hero from '../components/Hero/Hero';
-import QuickActions from '../components/QuickActions/QuickActions';
-import NewsSection from '../components/News/NewsSection';
-import Footer from '../components/Footer/Footer';
-import AuthModal from '../components/AuthModal/AuthModal';
-import CookieBanner from '../components/CookieBanner/CookieBanner';
+import Navbar from '../../components/Navbar/Navbar';
+import Hero from '../../components/Hero/Hero';
+import QuickActions from '../../components/QuickActions/QuickActions';
+import NewsSection from '../../components/News/NewsSection';
+import Footer from '../../components/Footer/Footer';
+import AuthModal from '../../components/AuthModal/AuthModal';
+import CookieBanner from '../../components/CookieBanner/CookieBanner';
 
 export default function Home() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);

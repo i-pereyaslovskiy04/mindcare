@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import Navbar from '../components/Navbar/Navbar';
-import Footer from '../components/Footer/Footer';
-import AuthModal from '../components/AuthModal/AuthModal';
-import { getNewsById } from '../services/api';
+import Navbar from '../../components/Navbar/Navbar';
+import Footer from '../../components/Footer/Footer';
+import AuthModal from '../../components/AuthModal/AuthModal';
+import { getNewsById } from '../../services/api';
 import styles from './NewsItemPage.module.css';
 
 const HeroPlaceholder = () => (
