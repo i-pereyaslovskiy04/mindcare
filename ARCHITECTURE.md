@@ -8,26 +8,39 @@ src/
 │   └── api.js              # Низкоуровневый fetch-клиент
 ├── services/
 │   └── api.js              # Публичный API-слой (getNewsById и т.д.)
-├── components/             # Переиспользуемые компоненты
-│   ├── About/              # Секции страницы /about
-│   ├── AuthModal/          # Модальное окно авторизации
+├── components/             # Только по-настоящему шаренные компоненты
+│   ├── AuthModal/          # Модальное окно авторизации (LoginForm, RegisterForm)
 │   ├── CookieBanner/
 │   ├── Footer/
-│   ├── Hero/               # Hero.jsx (главная), PageHero.jsx (подстраницы)
-│   ├── Materials/          # Тулбар, карточки, grid, mock-данные
+│   ├── Hero/               # PageHero.jsx — shared hero для всех подстраниц
 │   ├── Navbar/
-│   ├── News/               # Секции, карточки, grid, пагинация, mock
-│   ├── QuickActions/
-│   └── Services/           # Слайдер, карточки, принципы, процесс
+│   ├── News/               # NewsSection + FeaturedNews, NewsCardSmall, NewsListItem
+│   └── icons/              # Shared SVG-иконки
 ├── features/
-│   └── auth/               # Login + ForgotPassword (multi-step flow)
-├── pages/                  # Компоненты маршрутов, сгруппированы по доменам
-│   ├── home/               # Home.jsx
-│   ├── about/              # About.jsx
-│   ├── services/           # Services.jsx + Services.module.css
-│   ├── news/               # NewsPage.jsx · NewsItemPage.jsx + .module.css
-│   ├── materials/          # MaterialsPage.jsx · MaterialsItemPage.jsx + .module.css
-│   └── not-found/          # NotFound.jsx + .module.css
+│   └── auth/               # Login + ForgotPassword (multi-step: email→OTP→password→success)
+├── pages/                  # Page-module архитектура: каждый домен самодостаточен
+│   ├── home/
+│   │   ├── Home.jsx
+│   │   └── components/     # Hero.jsx, QuickActions.jsx
+│   ├── about/
+│   │   ├── About.jsx
+│   │   └── components/     # AboutIntro, AboutMission, AboutApproach,
+│   │                       # AboutTrust, AboutMedia, AboutServicesPreview, AboutHero
+│   ├── services/
+│   │   ├── Services.jsx + Services.module.css
+│   │   └── components/     # ServicesSlider, ServiceCard, ProcessBlock,
+│   │                       # PrinciplesBlock, ServicesHero
+│   ├── news/
+│   │   ├── NewsPage.jsx
+│   │   ├── NewsItemPage.jsx + NewsItemPage.module.css
+│   │   └── components/     # NewsGrid, Pagination, NewsPage.module.css, mockNews.js
+│   ├── materials/
+│   │   ├── MaterialsPage.jsx + MaterialsPage.module.css
+│   │   ├── MaterialsItemPage.jsx + MaterialsItemPage.module.css
+│   │   └── components/     # MaterialsToolbar, FilterDropdown, MaterialsGrid,
+│   │                       # MaterialCard, MaterialsHero, mockMaterials.js
+│   └── not-found/
+│       └── NotFound.jsx + NotFound.module.css
 ├── routes/
 │   └── AppRoutes.jsx       # Единая точка маршрутизации
 ├── store/
@@ -50,7 +63,7 @@ src/
 
 **Mock → API.** Данные сейчас в `mockMaterials.js` / `mockNews.js`. Переход на API — замена одного вызова в `services/api.js` без изменения компонентов.
 
-**Page ≠ Section ≠ Component.** Страница (`pages/`) собирает секции (`components/<Feature>/`), секции используют атомарные компоненты (карточки, кнопки, иконки).
+**Page-module.** Каждая страница — самодостаточный модуль: `pages/<domain>/Page.jsx` + `pages/<domain>/components/` для локальных секций. В `components/` остаётся только то, что используется в двух и более доменах.
 
 ---
 

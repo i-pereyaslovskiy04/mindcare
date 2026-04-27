@@ -102,32 +102,67 @@ stateDiagram-v2
 
 ## 5. Component Hierarchy (text)
 
+Shared components (`components/`) are reused across pages.  
+Page-local components (`pages/<domain>/components/`) belong to one domain only.
+
 ```
-Navbar
-  └── AuthModal
+Navbar                          ← shared
+  └── AuthModal                 ← shared
         ├── LoginForm
         └── RegisterForm
 
-Page (any)
-  ├── Navbar
-  ├── PageHero  ← title, eyebrow, subtitle
-  ├── <content sections>
-  └── Footer
+Footer                          ← shared
+PageHero                        ← shared (hero for all sub-pages)
 
-MaterialsPage
-  ├── PageHero
-  ├── MaterialsToolbar
-  │     ├── search input
-  │     ├── FilterDropdown (Категория)
-  │     └── FilterDropdown (Сортировка)
-  ├── MaterialsGrid
-  │     └── MaterialCard[]  →  Link /materials/:id
-  └── "Загрузить ещё" button
+─────────────────────────────────────────────────
 
-NewsPage
-  ├── PageHero
-  ├── NewsGrid
-  │     ├── NewsCardSmall[]  →  Link /news/:id
-  │     └── Pagination
-  └── Footer
+pages/home/
+  Home.jsx
+  └── components/               ← page-local
+        ├── Hero.jsx
+        └── QuickActions.jsx
+  (also uses shared: PageHero, NewsSection, Footer)
+
+pages/about/
+  About.jsx
+  └── components/               ← page-local
+        ├── AboutHero
+        ├── AboutIntro
+        ├── AboutMission
+        ├── AboutServicesPreview
+        ├── AboutApproach
+        ├── AboutTrust
+        └── AboutMedia
+
+pages/services/
+  Services.jsx
+  └── components/               ← page-local
+        ├── ServicesHero
+        ├── ServicesSlider
+        │     └── ServiceCard
+        ├── PrinciplesBlock
+        └── ProcessBlock
+
+pages/news/
+  NewsPage.jsx
+  NewsItemPage.jsx
+  └── components/               ← page-local
+        ├── NewsGrid
+        │     ├── FeaturedNews  ← shared (components/News/)
+        │     └── NewsListItem  ← shared (components/News/)
+        ├── Pagination
+        └── mockNews.js
+
+pages/materials/
+  MaterialsPage.jsx
+  MaterialsItemPage.jsx
+  └── components/               ← page-local
+        ├── MaterialsHero
+        ├── MaterialsToolbar
+        │     ├── search input
+        │     ├── FilterDropdown (Категория)
+        │     └── FilterDropdown (Сортировка)
+        ├── MaterialsGrid
+        │     └── MaterialCard[]  →  Link /materials/:id
+        └── mockMaterials.js
 ```

@@ -77,26 +77,40 @@ npm start
 
 ---
 
-## Компоненты (основные группы)
+## Компоненты
+
+### Шаренные (`components/`)
 
 | Группа | Компоненты |
 |---|---|
 | **Layout** | Navbar, Footer |
-| **Hero** | Hero (главная), PageHero (внутренние страницы) |
-| **Materials** | MaterialsToolbar, FilterDropdown, MaterialsGrid, MaterialCard |
-| **News** | NewsSection, FeaturedNews, NewsGrid, NewsCardSmall, NewsListItem, Pagination |
-| **Services** | ServicesSlider, ServiceCard, PrinciplesBlock, ProcessBlock |
-| **About** | AboutHero, AboutIntro, AboutMission, AboutApproach, AboutTrust, AboutMedia |
+| **Hero** | PageHero — общий hero для всех подстраниц |
+| **News** | NewsSection, FeaturedNews, NewsCardSmall, NewsListItem |
 | **Auth** | AuthModal, LoginForm, RegisterForm |
-| **Features/Auth** | ForgotPassword (4-step flow: email → OTP → password → success) |
-| **Shared** | QuickActions, CookieBanner |
+| **Misc** | CookieBanner, icons/ |
+
+### Page-local (`pages/<domain>/components/`)
+
+| Домен | Компоненты |
+|---|---|
+| **home** | Hero (главная), QuickActions |
+| **about** | AboutHero, AboutIntro, AboutMission, AboutApproach, AboutTrust, AboutMedia, AboutServicesPreview |
+| **services** | ServicesHero, ServicesSlider, ServiceCard, PrinciplesBlock, ProcessBlock |
+| **news** | NewsGrid, Pagination |
+| **materials** | MaterialsHero, MaterialsToolbar, FilterDropdown, MaterialsGrid, MaterialCard |
+
+### Feature slices (`features/`)
+
+| Фича | Описание |
+|---|---|
+| **auth/ForgotPassword** | 4-шаговый flow: email → OTP → новый пароль → успех |
 
 ---
 
 ## Данные
 
-На данный момент используются mock-данные в компонентах:
+На данный момент используются mock-данные:
 
-- `src/components/Materials/mockMaterials.js` — материалы
-- `src/components/News/NewsPage/mockNews.js` — новости
+- `src/pages/materials/components/mockMaterials.js` — материалы
+- `src/pages/news/components/mockNews.js` — новости
 - `src/services/api.js` — точка входа для будущих API-вызовов
