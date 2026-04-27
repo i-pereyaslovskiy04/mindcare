@@ -6,7 +6,7 @@ const NAV_LINKS = [
   { label: 'Главная', to: '/' },
   { label: 'О нас', to: '/about' },
   { label: 'Услуги', to: '/services' },
-  { label: 'Материалы', href: '#' },
+  { label: 'Материалы', to: '/materials' },
 ];
 
 const UserIcon = () => (

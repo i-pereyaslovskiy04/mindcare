@@ -1,0 +1,164 @@
+/* ── Wrapper ─────────────────────────────── */
+
+.wrap {
+  position: relative;   /* panel anchors here, NOT to viewport */
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+/* ── Trigger (readonly input) ────────────── */
+
+.trigger {
+  flex: 1;                   /* fill full width of .wrap — eliminates dead zones */
+  height: 100%;
+  padding: 0 38px 0 18px;   /* right pad clears the chevron */
+  border: none;
+  background: transparent;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  font-weight: 400;
+  color: var(--text-main);
+  outline: none;
+  cursor: pointer;
+  white-space: nowrap;
+  caret-color: transparent;             /* no blinking text cursor */
+  -webkit-appearance: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s;
+  border-radius: 8px;
+  overflow: hidden;                     /* clips hover-bg to border-radius */
+}
+
+/* placeholder stays same colour as value — both inputs look identical */
+.trigger::placeholder { color: var(--text-main); opacity: 1; }
+
+.trigger:hover   { background-color: rgba(42, 26, 16, 0.04); }
+.trigger:active  { background-color: rgba(42, 26, 16, 0.04); } /* no press dip */
+.trigger:focus,
+.trigger:focus-visible,
+.trigger:active {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* open state: same tint as hover */
+.triggerOpen { background-color: rgba(42, 26, 16, 0.04); }
+
+/* ── Chevron ────────────────────────────── */
+
+.chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  color: var(--text-light);
+  pointer-events: none;             /* clicks pass through to input */
+  transition: transform 0.18s ease;
+}
+
+.chevronUp {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* ── Panel — grows from the bar ─────────── */
+
+.panel {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  min-width: 100%;
+  padding: 6px 6px 8px;
+  margin: 0;
+  list-style: none;
+
+  background: var(--sand);
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  box-shadow: 0 6px 16px rgba(42, 26, 16, 0.07);
+  z-index: 10;                  /* low — scoped to component, not global */
+
+  animation: panelIn 0.15s ease forwards;
+}
+
+.panelRight {
+  left: auto;
+  right: 0;
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Items ──────────────────────────────── */
+
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  font-weight: 400;
+  color: var(--text-main);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  transition: background-color 0.1s;
+}
+
+.item:hover          { background-color: rgba(42, 26, 16, 0.07); }
+.item:focus,
+.item:focus-visible  { outline: true; box-shadow: none; }
+
+/* selected: text accent only, no fill */
+.itemActive {
+  color: var(--mocha);
+  font-weight: 600;
+}
+
+/* ── ≤1024px: compact trigger for mid-range viewports ── */
+
+@media (max-width: 1024px) {
+  .trigger {
+    padding: 0 30px 0 14px;
+  }
+
+  .chevron {
+    right: 10px;
+  }
+}
+
+/* ── ≤768px: panel fills its half of the toolbar ── */
+
+@media (max-width: 768px) {
+  /* override panelRight's left:auto so panel stays within its container */
+  .panel {
+    left: 0;
+    right: 0;
+    min-width: unset;
+  }
+}
+
+/* ── ≤480px: compact padding, truncate long labels ── */
+
+@media (max-width: 480px) {
+  .trigger {
+    padding: 0 30px 0 12px; /* tighter, chevron still clears */
+    font-size: 0.82rem;
+    text-overflow: ellipsis; /* "Сортировка" → "Сортиров…" if too narrow */
+  }
+
+  .chevron {
+    right: 10px;
+  }
+}
