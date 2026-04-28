@@ -1,6 +1,6 @@
 import styles from './MaterialsToolbar.module.css';
 import { CATEGORIES } from './mockMaterials';
-import FilterDropdown from './FilterDropdown';
+import MultiSelect from '../../../components/UI/MultiSelect/MultiSelect';
 
 const SearchIcon = () => (
   <svg
@@ -13,20 +13,19 @@ const SearchIcon = () => (
   </svg>
 );
 
-const CATEGORY_ITEMS = [
-  { value: '', label: 'Категория' },
-  ...CATEGORIES.map(c => ({ value: c, label: c })),
-];
+const CATEGORY_OPTIONS = CATEGORIES.map(c => ({ value: c, label: c }));
 
-const SORT_ITEMS = [
+const SORT_OPTIONS = [
   { value: 'newest', label: 'Сначала новые' },
   { value: 'oldest', label: 'Сначала старые' },
 ];
 
 export default function MaterialsToolbar({ search, category, sort, onSearch, onCategory, onSort }) {
   return (
-    <div className={styles.toolbar} role="search">
-      <div className={styles.searchWrap}>
+    <div className={styles.filterBar} role="search">
+
+      {/* ── Search ── */}
+      <div className={styles.searchSegment}>
         <SearchIcon />
         <input
           className={styles.searchInput}
@@ -38,26 +37,32 @@ export default function MaterialsToolbar({ search, category, sort, onSearch, onC
         />
       </div>
 
-      <span className={styles.sep} aria-hidden="true" />
+      {/* hidden on mobile (search gets border-bottom instead) */}
+      <span className={`${styles.sep} ${styles.sepAfterSearch}`} aria-hidden="true" />
 
-      <FilterDropdown
-        items={CATEGORY_ITEMS}
+      {/* ── Categories ── */}
+      <MultiSelect
+        options={CATEGORY_OPTIONS}
         value={category}
         onChange={onCategory}
         placeholder="Категория"
-        className={styles.filterWrap}
+        flat
+        className={styles.catSegment}
       />
 
       <span className={styles.sep} aria-hidden="true" />
 
-      <FilterDropdown
-        items={SORT_ITEMS}
+      {/* ── Sort ── */}
+      <MultiSelect
+        options={SORT_OPTIONS}
         value={sort}
         onChange={onSort}
         placeholder="Сортировка"
-        align="right"
-        className={`${styles.filterWrap} ${styles.filterWrapLast}`}
+        single
+        flat
+        className={styles.sortSegment}
       />
+
     </div>
   );
 }

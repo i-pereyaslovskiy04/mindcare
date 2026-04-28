@@ -1,0 +1,187 @@
+/* ── Panel — position:absolute, anchored to position:relative parent ─── */
+/* Scrolls naturally with the page. No portal, no fixed coords needed.    */
+
+.panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(42, 26, 16, 0.13);
+  z-index: 500;
+  animation: dropIn 0.14s ease both;
+}
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Header ─────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nav-border);
+}
+
+.headerTitle {
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.closeBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.1s, color 0.1s;
+}
+
+.closeBtn:hover {
+  background: rgba(42, 26, 16, 0.06);
+  color: var(--text-muted);
+}
+
+/* ── Sections ───────────────────────────────────────── */
+
+.section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nav-border);
+}
+
+.sectionTitle {
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  margin-bottom: 10px;
+}
+
+/* ── Tag toggle buttons ─────────────────────────────── */
+
+.tagGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tagBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nav-border);
+  background: var(--sand);
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-tag);
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.tagBtn:hover:not(.tagBtnActive) {
+  border-color: var(--latte);
+}
+
+.tagBtnActive {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+/* ── Sort radio group ───────────────────────────────── */
+
+.sortList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  color: var(--text-main);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.radioInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.radioCustom {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--latte);
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 0.12s;
+}
+
+.radioInput:checked ~ .radioCustom {
+  border-color: var(--mocha);
+}
+
+.radioInput:checked ~ .radioCustom::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--mocha);
+}
+
+/* ── Clear all button ───────────────────────────────── */
+
+.clearSection {
+  padding: 12px 16px;
+}
+
+.clearBtn {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.1s, border-color 0.1s;
+}
+
+.clearBtn:hover {
+  background: rgba(42, 26, 16, 0.04);
+  border-color: var(--latte);
+}

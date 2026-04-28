@@ -1,27 +1,41 @@
-.toolbar {
+/* ══════════════════════════════════════════════════════
+   Unified filter bar — ONE border, ONE shadow.
+   No overflow:hidden → dropdown panels escape below.
+   ══════════════════════════════════════════════════════ */
+
+.filterBar {
   display: flex;
-  align-items: stretch; /* children fill full content height → wrap bottom = pill bottom interior */
-  background: var(--sand);
-  border-radius: 999px;
+  align-items: stretch;
   border: 1px solid var(--nav-border);
-  /* fluid: 56px on wide screens → 48px at ~960px, no hard jump */
-  height: clamp(48px, 4.9vw, 56px);
+  border-radius: 16px;
+  background: var(--warm-white);
+  box-shadow: 0 2px 12px rgba(42, 26, 16, 0.07);
   margin-bottom: clamp(28px, 3.5vw, 48px);
+  /* prevent bar itself from overflowing the page */
+  min-width: 0;
+  max-width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* ── Search ────────────────────────────── */
+.filterBar:focus-within {
+  border-color: var(--latte);
+  box-shadow: 0 2px 16px rgba(42, 26, 16, 0.1);
+}
 
-.searchWrap {
-  flex: 1;
-  min-width: 120px; /* search never collapses below usable width */
+/* ── Search (dominant, flex:3) ─────────────────────── */
+
+.searchSegment {
+  flex: 3;
+  min-width: 0;           /* prevents flex blowout */
   position: relative;
   display: flex;
   align-items: center;
+  min-height: clamp(48px, 4.9vw, 56px);
 }
 
 .searchIcon {
   position: absolute;
-  left: 20px;
+  left: 18px;
   color: var(--text-light);
   pointer-events: none;
   flex-shrink: 0;
@@ -30,81 +44,99 @@
 .searchInput {
   width: 100%;
   height: 100%;
-  padding: 0 16px 0 50px;
+  padding: 0 14px 0 46px;
   border: none;
   background: transparent;
   color: var(--text-main);
+  font-family: 'Nunito', sans-serif;
   font-size: var(--fs-ui);
   outline: none;
+  min-width: 0;
 }
 
-.searchInput::placeholder {
-  color: var(--text-light);
-}
+.searchInput::placeholder { color: var(--text-light); }
+.searchInput::-webkit-search-cancel-button { -webkit-appearance: none; }
 
-.searchInput::-webkit-search-cancel-button {
-  -webkit-appearance: none;
-}
-
-/* ── Separator ─────────────────────────── */
+/* ── Separators ────────────────────────────────────── */
 
 .sep {
   width: 1px;
-  height: 20px;
   background: var(--nav-border);
+  align-self: center;
+  height: 20px;
   flex-shrink: 0;
-  align-self: center; /* sep stays short, doesn't stretch */
 }
 
-/* ── ≤768px: search top row, filters bottom row ── */
+/* ── Categories (flex:1.5, max-width caps at 260px) ── */
+
+.catSegment {
+  flex: 1.5;
+  min-width: 0;
+  max-width: 260px;
+}
+
+/* ── Sort (flex:1, min-width keeps it readable) ────── */
+
+.sortSegment {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* ══════════════════════════════════════════════════════
+   TABLET  769px – 768px: keep ONE ROW, tighter sizing
+   ══════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
-  .toolbar {
-    border-radius: 20px;
-    height: auto;
-    flex-wrap: wrap;
-    align-items: stretch; /* each line stretches to fill row height */
+  .searchSegment {
+    flex: 2;
+    min-height: 48px;
   }
 
-  .searchWrap {
+  .catSegment {
+    flex: 1;
+    max-width: none;        /* remove desktop cap, let flex govern */
+  }
+
+  .sortSegment {
+    flex: 1;
+    min-width: 120px;       /* slightly relaxed for tighter screens */
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   MOBILE  ≤ 560px: wrap into 2 rows inside same box
+   Row 1: [ search — full width ]
+   Row 2: [ categories | sep | sort ] — 50 / 50
+   ══════════════════════════════════════════════════════ */
+
+@media (max-width: 560px) {
+  .filterBar {
+    flex-wrap: wrap;
+    border-radius: 14px;
+  }
+
+  /* Row 1: search fills entire width */
+  .searchSegment {
     flex: 1 1 100%;
-    height: 50px;
+    width: 100%;
+    min-height: 46px;
     border-bottom: 1px solid var(--nav-border);
   }
 
-  .searchInput {
-    height: 100%;
-  }
-
-  .sep {
+  /* Vertical sep between search and categories disappears —
+     border-bottom on searchSegment replaces it */
+  .sepAfterSearch {
     display: none;
   }
 
-  /* filters share one row, explicit height so trigger's height:100% resolves */
-  .filterWrap {
-    flex: 1;
+  /* Row 2: categories and sort split 50 / 50.
+     flex:1 1 0 → equal growth; max-width/min-width overridden
+     so neither can dominate or overflow. */
+  .catSegment,
+  .sortSegment {
+    flex: 1 1 0;
     min-width: 0;
-    height: 46px;
-    border-right: 1px solid var(--nav-border);
-  }
-
-  .filterWrapLast {
-    border-right: none;
-  }
-}
-
-/* ── ≤480px: tighter sizing, same 2-row structure ── */
-
-@media (max-width: 480px) {
-  .toolbar {
-    border-radius: 16px;
-  }
-
-  .searchWrap {
-    height: 44px;
-  }
-
-  .filterWrap {
-    height: 40px;
+    max-width: none;
+    width: 50%;
   }
 }
