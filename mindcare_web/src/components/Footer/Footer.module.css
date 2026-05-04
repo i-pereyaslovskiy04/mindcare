@@ -1,0 +1,221 @@
+.footer {
+  font-family: 'Nunito', sans-serif;
+  background: #E4D9CA;
+  color: #5C4D3C;
+  width: 100%;
+  border-top: 1px solid #D0C4B2;
+}
+
+.footerTop {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  gap: 48px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid #D0C4B2;
+  padding-top: 56px;
+}
+
+.brandName {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 300;
+  color: #4A3728;
+  line-height: 1.2;
+  margin-bottom: 14px;
+  letter-spacing: 0.02em;
+}
+
+.brandNameHighlight {
+  font-style: italic;
+  color: #8B6F47;
+}
+
+.brandDesc {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.75;
+  color: #5C4D3C;
+  max-width: 260px;
+  margin-bottom: 16px;
+}
+
+.mailLink {
+  font-size: 14px;
+  color: #8B6F47;
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(139, 111, 71, 0.35);
+  padding-bottom: 1px;
+  transition: color 0.15s;
+}
+
+.mailLink:hover {
+  color: #4A3728;
+}
+
+.colLabel {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8B6F47;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.navList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.navList a {
+  text-decoration: none;
+  font-size: 14px;
+  color: #5C4D3C;
+  font-weight: 400;
+  transition: color 0.15s;
+}
+
+.navList a:hover {
+  color: #4A3728;
+}
+
+.socials {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.socRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(139, 111, 71, 0.15);
+  background: rgba(255, 255, 255, 0.3);
+  transition: background 0.15s;
+}
+
+.socRow:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.socIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(139, 111, 71, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.socName {
+  font-size: 13px;
+  color: #5C4D3C;
+  font-weight: 400;
+}
+
+.legal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px var(--container-px);
+  text-align: center;
+}
+
+.copy {
+  font-size: 12px;
+  color: #8A7260;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.legalLinks {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.legalLinks a + a::before {
+  content: '·';
+  margin-right: 24px;
+  color: rgba(138, 114, 96, 0.4);
+  pointer-events: none;
+}
+
+.legalLink {
+  font-size: 12px;
+  color: #8A7260;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(138, 114, 96, 0.3);
+  padding-bottom: 1px;
+  transition: color 0.15s;
+}
+
+.legalLink:hover {
+  color: #4A3728;
+}
+
+/* Tablet: brand full-width, nav + socials in two columns */
+@media (max-width: 768px) {
+  .footerTop {
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    padding-top: 40px;
+    padding-bottom: 40px;
+  }
+
+  .footerBrand {
+    grid-column: 1 / -1;
+  }
+
+  .brandDesc {
+    max-width: 100%;
+  }
+}
+
+/* Mobile: single column */
+@media (max-width: 480px) {
+  .footerTop {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+
+  /* ── Socials: single flex row ────────────────── */
+
+  /* Switch from column to row; each button gets equal share */
+  .socials {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  /* Equal-width buttons; icon centred since label is hidden */
+  .socRow {
+    flex: 1;
+    justify-content: center;
+    padding: 12px 8px;
+    gap: 0;            /* gap is irrelevant with no label */
+  }
+
+  .socName {
+    display: none;
+  }
+
+  .socIcon {
+    width: 30px;       /* keep desktop size — icon is the only visual element */
+    height: 30px;
+    flex-shrink: 0;
+  }
+}

@@ -1,0 +1,86 @@
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: clamp(28px, 3.5vw, 48px);
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h2);
+  font-weight: 400;
+  color: var(--espresso);
+}
+
+.link {
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--coffee);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.link:hover {
+  color: var(--espresso);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--grid-gap);
+}
+
+.card {
+  padding: clamp(20px, 2vw, 28px);
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  transition: box-shadow 0.2s var(--ease-card), transform 0.2s var(--ease-card);
+}
+
+.card:hover {
+  box-shadow: 0 6px 24px rgba(42, 26, 16, 0.1);
+  transform: translateY(-2px);
+}
+
+.num {
+  display: block;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 38px;
+  font-weight: 300;
+  color: var(--latte);
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3);
+  font-weight: 400;
+  color: var(--espresso);
+  margin-bottom: 10px;
+}
+
+.cardDesc {
+  font-size: var(--fs-sub);
+  line-height: 1.6;
+  color: var(--text-light);
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .head {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

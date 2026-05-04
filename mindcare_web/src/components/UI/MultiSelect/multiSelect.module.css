@@ -1,0 +1,327 @@
+/* ── Wrapper ─────────────────────────────────────────── */
+
+.wrap {
+  position: relative;
+  min-width: 0;
+}
+
+/* ── Trigger ─────────────────────────────────────────── */
+
+.trigger {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 40px 6px 14px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s ease, border-radius 0.12s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(42, 26, 16, 0.05);
+}
+
+.trigger:hover {
+  border-color: var(--latte);
+  box-shadow: 0 2px 6px rgba(42, 26, 16, 0.08);
+}
+
+.wrapOpen .trigger {
+  border-color: var(--coffee);
+  border-bottom-color: var(--nav-border);
+  border-radius: 12px 12px 0 0;
+  box-shadow: none;
+}
+
+/* ── Value area ─────────────────────────────────────── */
+
+.valueArea {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.placeholder {
+  color: var(--text-light);
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+
+.singleValue {
+  color: var(--text-main);
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  white-space: nowrap;
+}
+
+/* ── Tags (multi mode) ──────────────────────────────── */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--sand);
+  border: 1px solid var(--nav-border);
+  border-radius: 999px;
+  padding: 2px 6px 2px 9px;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-tag);
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.tagLabel {
+  white-space: nowrap;
+}
+
+.tagRemove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-light);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.1s, background-color 0.1s;
+}
+
+.tagRemove:hover {
+  color: var(--error);
+  background-color: rgba(185, 64, 64, 0.1);
+}
+
+/* ── Chevron ─────────────────────────────────────────── */
+
+.chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  color: var(--text-light);
+  pointer-events: none;
+  transition: transform 0.18s ease;
+}
+
+.chevronUp {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* ── Panel (standalone mode) ─────────────────────────── */
+
+.panel {
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 0;
+  right: 0;
+  z-index: 300;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 8px 20px rgba(42, 26, 16, 0.1);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.panelOpen {
+  border-color: var(--coffee);
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ── Search inside panel ─────────────────────────────── */
+
+.panelSearch {
+  position: relative;
+  padding: 8px 8px 4px;
+}
+
+.panelSearchIcon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--text-light);
+  pointer-events: none;
+}
+
+.panelSearchInput {
+  width: 100%;
+  padding: 7px 10px 7px 34px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: var(--sand);
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  color: var(--text-main);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.panelSearchInput:focus { border-color: var(--latte); }
+.panelSearchInput::placeholder { color: var(--text-light); }
+
+/* ── Options list ─────────────────────────────────────── */
+
+.list {
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--latte) transparent;
+}
+
+.list::-webkit-scrollbar { width: 4px; }
+.list::-webkit-scrollbar-track { background: transparent; }
+.list::-webkit-scrollbar-thumb { background: var(--latte); border-radius: 4px; }
+
+/* ── Item button ────────────────────────────────────── */
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.1s;
+}
+
+.item:hover { background: rgba(42, 26, 16, 0.06); }
+
+.itemActive {
+  color: var(--mocha);
+  font-weight: 600;
+}
+
+.empty {
+  padding: 14px 16px;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  color: var(--text-light);
+  text-align: center;
+}
+
+/* ── Checkbox (multi mode only) ─────────────────────── */
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--latte);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.checkboxChecked {
+  background: var(--mocha);
+  border-color: var(--mocha);
+  color: #fff;
+}
+
+/* ══════════════════════════════════════════════════════
+   FLAT VARIANT — used inside the unified filterBar.
+   The filterBar provides border/shadow/radius; the
+   trigger strips its own styling and fills the row.
+   Panel escapes via position:absolute (filterBar has
+   no overflow:hidden so it renders below the bar).
+   ══════════════════════════════════════════════════════ */
+
+/* Wrap: become a flex column so trigger can flex:1 to fill bar height */
+.wrapFlat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;       /* participate correctly in parent flex shrink */
+}
+
+/* Trigger: transparent, no border, no radius, fills bar height */
+.wrapFlat .trigger {
+  flex: 1;
+  min-height: unset;
+  padding: 0 40px 0 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;           /* clip tags/text to trigger bounds */
+  transition: background-color 0.15s ease;
+}
+
+.wrapFlat .trigger:hover {
+  background: rgba(42, 26, 16, 0.04);
+  box-shadow: none;
+  border: none;
+}
+
+/* Text elements truncate instead of breaking layout */
+.wrapFlat .placeholder,
+.wrapFlat .singleValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* valueArea: clip but allow tags to wrap naturally */
+.wrapFlat .valueArea {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Open: tint the active segment, no border changes */
+.wrapFlat.wrapOpen .trigger {
+  background: rgba(42, 26, 16, 0.04);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Panel: full own border + radius; sits flush below filterBar.
+   top: 100% of .wrapFlat == filterBar inner-bottom edge,
+   which coincides with the filterBar's bottom border line.
+   border-top:none makes the filterBar border serve as divider. */
+.wrapFlat .panel {
+  top: 100%;
+  border: 1px solid var(--nav-border);
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 8px 24px rgba(42, 26, 16, 0.12);
+}
+
+.wrapFlat .panelOpen {
+  border-color: var(--latte);
+}

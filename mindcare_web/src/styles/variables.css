@@ -1,0 +1,83 @@
+:root {
+  /* Colors */
+  --cream: #F5F0E8;
+  --warm-white: #FAF7F2;
+  --latte: #C9B99A;
+  --coffee: #8B6F47;
+  --espresso: #4A3728;
+  --mocha: #6B4F35;
+  --milk: #EDE4D3;
+  --fog: #D9CFC0;
+  --sand: #E8DFD0;
+
+  /* Background colors */
+  --nav-bg: #EDE4D6;
+  --nav-border: #D8CDBF;
+  --footer-bg: #E4D9CA;
+  --footer-border: #D0C4B2;
+
+  /* Text colors */
+  --text-main: #2E2318;
+  --text-muted: #5C4D3C;
+  --text-light: #8A7260;
+  --text-on-dark: #EDE4D3;
+
+  /* Status colors */
+  --error: #B94040;
+  --error-bg: #FDF0EE;
+  --success: #5D8A5E;
+
+  /* Font sizes - responsive */
+  --fs-h1: clamp(40px, 3.2vw, 64px);
+  --lh-h1: 1.12;
+
+  --fs-h2: clamp(28px, 2.2vw, 40px);
+  --lh-h2: 1.2;
+
+  --fs-h3: clamp(18px, 1.4vw, 24px);
+  --lh-h3: 1.3;
+
+  --fs-h3-sm: clamp(15px, 1.1vw, 19px);
+  --lh-h3-sm: 1.35;
+
+  --fs-body: clamp(15px, 0.95vw, 18px);
+  --lh-body: 1.7;
+
+  --fs-ui: clamp(14px, 0.9vw, 16px);
+  --lh-ui: 1.4;
+
+  --fs-sub: clamp(13px, 0.8vw, 15px);
+  --lh-sub: 1.65;
+
+  --fs-tag: clamp(12px, 0.75vw, 13px);
+  --lh-tag: 1.4;
+
+  /* Letter spacing */
+  --ls-nav: 0.03em;
+  --ls-tag: 0.1em;
+  --ls-label: 0.12em;
+
+  /* Layout */
+  --container-max: 1320px;
+  --container-px: clamp(16px, 4vw, 80px);
+  --section-py: clamp(36px, 4vw, 60px);
+  --grid-gap: clamp(12px, 1.2vw, 18px);
+
+  /* Animation */
+  --ease-card: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --container-max: 1360px;
+    --grid-gap: 16px;
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --container-max: 1480px;
+    --grid-gap: 20px;
+    --section-py: 68px;
+  }
+}
