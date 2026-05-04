@@ -1,0 +1,205 @@
+/* ── Outer container ────────────────────────────────── */
+
+.searchBar {
+  margin-bottom: clamp(28px, 3.5vw, 48px);
+}
+
+/* ── Input row ──────────────────────────────────────── */
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Search input wrapper ───────────────────────────── */
+
+.inputWrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(42, 26, 16, 0.07);
+  min-height: clamp(48px, 4.9vw, 54px);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.inputWrap:focus-within {
+  border-color: var(--latte);
+  box-shadow: 0 2px 16px rgba(42, 26, 16, 0.1);
+}
+
+.searchIcon {
+  position: absolute;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  color: var(--text-light);
+  pointer-events: none;
+}
+
+.input {
+  flex: 1;
+  height: 100%;
+  padding: 0 42px 0 46px;
+  border: none;
+  background: transparent;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  color: var(--text-main);
+  outline: none;
+  min-width: 0;
+}
+
+.input::placeholder { color: var(--text-light); }
+
+/* ✕ clear button inside input */
+.clearInputBtn {
+  position: absolute;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.clearInputBtn:hover {
+  background: rgba(42, 26, 16, 0.07);
+  color: var(--text-muted);
+}
+
+/* ── Filter button wrapper — relative for dropdown ── */
+
+.filterBtnWrap {
+  position: relative; /* anchors FiltersDropdown (position:absolute) */
+  flex-shrink: 0;
+}
+
+/* ── Filter ⚙ button ────────────────────────────────── */
+
+.filterBtn {
+  width: clamp(48px, 4.9vw, 54px);
+  height: clamp(48px, 4.9vw, 54px);
+  border-radius: 14px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  box-shadow: 0 2px 12px rgba(42, 26, 16, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s, color 0.15s;
+}
+
+.filterBtn:hover {
+  border-color: var(--latte);
+  box-shadow: 0 2px 16px rgba(42, 26, 16, 0.1);
+  color: var(--text-main);
+}
+
+/* Has active filters */
+.filterBtnActive {
+  border-color: var(--coffee);
+  background: var(--sand);
+  color: var(--espresso);
+}
+
+/* Panel is open */
+.filterBtnOpen {
+  border-color: var(--coffee);
+  color: var(--espresso);
+}
+
+/* Active filter count badge */
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--espresso);
+  color: var(--text-on-dark);
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── Active tag chips row ───────────────────────────── */
+
+.chipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px 4px 12px;
+  background: var(--sand);
+  border: 1px solid var(--nav-border);
+  border-radius: 999px;
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-tag);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.chipRemove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-light);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.1s, background-color 0.1s;
+}
+
+.chipRemove:hover {
+  color: var(--error);
+  background: rgba(185, 64, 64, 0.1);
+}
+
+/* ── Mobile ≤ 560px: chips scroll horizontally ──────── */
+
+@media (max-width: 768px) {
+  .chipsRow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .chipsRow::-webkit-scrollbar { display: none; }
+}

@@ -1,0 +1,57 @@
+.head {
+  max-width: 600px;
+  margin-bottom: clamp(32px, 4vw, 52px);
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h2);
+  font-weight: 400;
+  color: var(--espresso);
+  margin-bottom: 14px;
+}
+
+.sub {
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--text-light);
+}
+
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--grid-gap);
+}
+
+.pillar {
+  padding: clamp(22px, 2.5vw, 34px);
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  transition: box-shadow 0.2s var(--ease-card), transform 0.2s var(--ease-card);
+}
+
+.pillar:hover {
+  box-shadow: 0 6px 24px rgba(42, 26, 16, 0.1);
+  transform: translateY(-2px);
+}
+
+.pillarTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3);
+  font-weight: 400;
+  color: var(--espresso);
+  margin-bottom: 10px;
+}
+
+.pillarDesc {
+  font-size: var(--fs-sub);
+  line-height: 1.6;
+  color: var(--text-light);
+}
+
+@media (max-width: 768px) {
+  .pillars {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,135 @@
+.card {
+  flex: 0 0 calc((100% - 2 * var(--grid-gap)) / 3);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 18px;
+  overflow: hidden;
+  transition: box-shadow 0.22s var(--ease-card), transform 0.22s var(--ease-card);
+}
+
+.card:hover {
+  box-shadow: 0 8px 32px rgba(42, 26, 16, 0.12);
+  transform: translateY(-3px);
+}
+
+/* ── Card visual (top gradient band) ─── */
+
+.cardVisual {
+  position: relative;
+  height: 148px;
+  display: flex;
+  align-items: flex-end;
+  padding: 18px 22px;
+}
+
+.accent1 { background: linear-gradient(135deg, #4A3728 0%, #7A5535 100%); }
+.accent2 { background: linear-gradient(135deg, #2A3A32 0%, #4A6855 100%); }
+.accent3 { background: linear-gradient(135deg, #2E2E46 0%, #4A4870 100%); }
+.accent4 { background: linear-gradient(135deg, #3A3020 0%, #6B5530 100%); }
+.accent5 { background: linear-gradient(135deg, #2A3838 0%, #3A5850 100%); }
+
+.cardNum {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 56px;
+  font-weight: 300;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.18);
+  user-select: none;
+  position: absolute;
+  right: 20px;
+  bottom: 10px;
+}
+
+/* ── Card body ─────────────────────────── */
+
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: clamp(18px, 1.8vw, 26px) clamp(18px, 1.8vw, 26px) clamp(22px, 2vw, 30px);
+  gap: 12px;
+}
+
+.cardTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(20px, 1.7vw, 27px);
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--espresso);
+}
+
+.cardDesc {
+  font-size: var(--fs-sub);
+  line-height: 1.65;
+  color: var(--text-light);
+}
+
+/* ── Benefits list ─────────────────────── */
+
+.benefits {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.benefit {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--fs-sub);
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.checkIcon {
+  flex-shrink: 0;
+  color: var(--coffee);
+  margin-top: 1px;
+}
+
+/* ── Button ────────────────────────────── */
+
+.cardBtn {
+  margin-top: auto;
+  width: 100%;
+  text-align: center;
+  background: var(--espresso);
+  color: var(--text-on-dark);
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 12px 22px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.17s, transform 0.14s;
+}
+
+.cardBtn:hover {
+  background: var(--mocha);
+  transform: translateY(-1px);
+}
+
+.cardBtn:active {
+  transform: translateY(0);
+}
+
+/* ── Responsive ────────────────────────── */
+
+@media (max-width: 900px) {
+  .card {
+    flex: 0 0 calc((100% - var(--grid-gap)) / 2);
+  }
+}
+
+@media (max-width: 560px) {
+  .card {
+    flex: 0 0 85vw;
+  }
+}

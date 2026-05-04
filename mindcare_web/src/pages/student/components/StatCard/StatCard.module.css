@@ -1,0 +1,43 @@
+.card {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+}
+
+.label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--coffee);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 34px;
+  font-weight: 400;
+  color: var(--espresso);
+  line-height: 1.05;
+  margin-top: 8px;
+}
+
+.unit {
+  font-style: italic;
+  color: var(--coffee);
+  font-size: 22px;
+  margin-left: 6px;
+}
+
+.trend {
+  font-size: 12px;
+  color: var(--success);
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.trendDown {
+  composes: trend;
+  color: var(--error);
+}

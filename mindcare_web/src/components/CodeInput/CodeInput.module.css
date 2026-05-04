@@ -1,0 +1,47 @@
+.otp {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.otpBox {
+  width: 48px;
+  height: 52px;
+  border: 1.5px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--cream);
+  font-size: 20px;
+  font-weight: 600;
+  font-family: 'Nunito', sans-serif;
+  color: var(--espresso);
+  text-align: center;
+  outline: none;
+  caret-color: var(--coffee);
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  -webkit-appearance: none;
+}
+
+.otpBox:focus {
+  border-color: var(--coffee);
+  background: var(--warm-white);
+  box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.1);
+}
+
+.otpFilled {
+  border-color: var(--latte);
+}
+
+.otpError {
+  border-color: var(--error);
+  background: var(--error-bg);
+}
+
+@media (max-width: 480px) {
+  .otpBox {
+    width: 42px;
+    height: 46px;
+    font-size: 18px;
+  }
+
+  .otp { gap: 7px; }
+}

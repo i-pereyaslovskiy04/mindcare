@@ -1,0 +1,434 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.page {
+  animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ---- typography ---- */
+.labelTag {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--coffee);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+
+.labelTagMuted {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-light);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--espresso);
+  margin-bottom: 6px;
+}
+
+.pageTitle em {
+  font-style: italic;
+  color: var(--coffee);
+}
+
+.pageSub {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+  line-height: 1.6;
+  margin-bottom: 28px;
+  max-width: 640px;
+}
+
+.sectionTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin-bottom: 14px;
+}
+
+/* ---- grid ---- */
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.g21 { grid-template-columns: 2fr 1fr; }
+.g3  { grid-template-columns: repeat(3, 1fr); }
+
+/* ---- card ---- */
+.card {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+}
+
+/* ---- dark mood card ---- */
+.moodCard {
+  background: linear-gradient(135deg, var(--espresso), var(--mocha));
+  border-radius: 16px;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.08), 0 8px 24px rgba(74, 55, 40, 0.14);
+}
+
+.moodCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.moodCardTagLabel {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--latte);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.moodCardTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--milk);
+  margin-top: 8px;
+  line-height: 1.1;
+}
+
+.moodCardHint {
+  font-size: 13px;
+  color: var(--fog);
+  margin-top: 8px;
+  font-weight: 300;
+  max-width: 380px;
+}
+
+.moodScore {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.moodScoreNum {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 54px;
+  color: var(--latte);
+  line-height: 1;
+  font-weight: 300;
+}
+
+.moodScoreLabel {
+  font-size: 11px;
+  color: var(--fog);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* ---- mood slider ---- */
+.moodSlider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
+  outline: none;
+  cursor: pointer;
+  display: block;
+}
+
+.moodSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2.5px solid var(--espresso);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(74, 55, 40, 0.25);
+  transition: transform 0.12s;
+}
+
+.moodSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+
+.moodSlider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2.5px solid var(--espresso);
+  cursor: pointer;
+}
+
+.moodScaleLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--fog);
+  margin-top: 8px;
+  font-weight: 300;
+}
+
+.moodButtons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- next session card ---- */
+.sessionCard {
+  composes: card;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sessionDate {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  color: var(--espresso);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.sessionTime {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.psychCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--cream);
+  border-radius: 10px;
+  margin-top: auto;
+}
+
+.psychAvatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--latte), var(--coffee));
+  color: var(--milk);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.psychName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.psychRole {
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+/* ---- buttons ---- */
+.btnLatte {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  background: var(--latte);
+  color: var(--espresso);
+  transition: background 0.15s;
+}
+
+.btnLatte:hover {
+  background: var(--fog);
+}
+
+.btnGhostDark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  background: transparent;
+  color: var(--milk);
+  border: 1px solid rgba(201, 185, 154, 0.4);
+  transition: background 0.15s;
+}
+
+.btnGhostDark:hover {
+  background: rgba(201, 185, 154, 0.1);
+}
+
+.btnSoft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  background: var(--cream);
+  color: var(--espresso);
+  border: 1px solid var(--nav-border);
+  width: 100%;
+  transition: background 0.15s;
+}
+
+.btnSoft:hover {
+  background: var(--sand);
+}
+
+/* ---- chart header ---- */
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.periodChips {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.chip:hover {
+  background: var(--sand);
+}
+
+.chipActive {
+  composes: chip;
+  background: var(--espresso);
+  color: var(--milk);
+  border-color: var(--espresso);
+}
+
+/* ---- quick-actions list rows ---- */
+.liRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+}
+
+.liRow:last-child {
+  margin-bottom: 0;
+}
+
+.liRow:hover {
+  background: var(--cream);
+  border-color: var(--latte);
+  transform: translateX(3px);
+}
+
+.liIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: var(--sand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--coffee);
+}
+
+.liTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--espresso);
+  line-height: 1.3;
+}
+
+.liDesc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-top: 3px;
+}
+
+.liBadge {
+  margin-left: auto;
+  background: rgba(139, 111, 71, 0.14);
+  color: var(--coffee);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 12px;
+}
+
+.liArrow {
+  margin-left: auto;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+/* ---- responsive ---- */
+@media (max-width: 980px) {
+  .g21 { grid-template-columns: 1fr; }
+  .g3  { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .pageTitle { font-size: 30px; }
+  .g3 { grid-template-columns: 1fr; }
+}
