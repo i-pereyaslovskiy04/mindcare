@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, Outlet } from 'react-router-dom';
 import Sidebar from './components/Sidebar/Sidebar';
 import Icon from './components/Icon';
 import styles from './StudentLayout.module.css';
@@ -7,7 +7,7 @@ const CRUMB_LABELS = {
   '/student':           'Главная',
   '/student/diary':     'Дневник состояния',
   '/student/tests':     'Тесты',
-  '/student/articles':  'Материалы и статьи',
+  '/student/materials': 'Материалы и статьи',
   '/student/tasks':     'Задания психолога',
   '/student/chat':      'Чат с психологом',
   '/student/goals':     'Цели терапии',
@@ -15,7 +15,7 @@ const CRUMB_LABELS = {
   '/student/settings':  'Настройки',
 };
 
-export default function StudentLayout({ children }) {
+export default function StudentLayout() {
   const { pathname } = useLocation();
   const crumb = CRUMB_LABELS[pathname] ?? 'Кабинет';
 
@@ -42,7 +42,7 @@ export default function StudentLayout({ children }) {
 
         <div className={styles.content}>
           <div className={styles.contentInner}>
-            {children}
+            <Outlet />
           </div>
         </div>
       </main>

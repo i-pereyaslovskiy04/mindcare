@@ -1,0 +1,69 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.page {
+  animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.labelTag {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--coffee);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--espresso);
+  margin-bottom: 6px;
+}
+
+.pageTitle em {
+  font-style: italic;
+  color: var(--coffee);
+}
+
+.pageSub {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+  line-height: 1.6;
+  margin-bottom: 28px;
+  max-width: 600px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 20px;
+  align-items: start;
+}
+
+.formCol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.historyCol {
+  position: sticky;
+  top: 0;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .historyCol {
+    position: static;
+  }
+}

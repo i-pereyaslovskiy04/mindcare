@@ -1,0 +1,235 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.page {
+  animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ---- header ---- */
+.labelTag {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--coffee);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--espresso);
+  margin-bottom: 6px;
+}
+
+.pageTitle em {
+  font-style: italic;
+  color: var(--coffee);
+}
+
+.pageSub {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+  line-height: 1.6;
+  margin-bottom: 28px;
+  max-width: 640px;
+}
+
+/* ---- catalog card ---- */
+.catalogCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 22px 24px;
+  margin-bottom: 28px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 4px 12px rgba(74, 55, 40, 0.05);
+}
+
+.catalogSub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* ---- section heading ---- */
+.hSection {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin: 0 0 18px;
+  line-height: 1.2;
+}
+
+.sectionMeta {
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-light);
+}
+
+/* ---- grid ---- */
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.g2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* ---- test card ---- */
+.testCard {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.testCard:hover {
+  border-color: var(--latte);
+  box-shadow: 0 2px 4px rgba(74, 55, 40, 0.06), 0 10px 28px rgba(74, 55, 40, 0.1);
+}
+
+.testCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.hCard {
+  font-family: 'Nunito', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--espresso);
+  margin: 4px 0;
+  line-height: 1.25;
+}
+
+/* ---- badge ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badgeDone {
+  background: rgba(93, 138, 94, 0.14);
+  color: var(--success);
+}
+
+/* ---- date / score row ---- */
+.testDateRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 10px 0 6px;
+}
+
+.testDate {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+.testScore {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--espresso);
+}
+
+/* ---- progress bar ---- */
+.pbar {
+  height: 8px;
+  background: var(--milk);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pbarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--coffee), var(--latte));
+  border-radius: 4px;
+}
+
+/* ---- summary ---- */
+.testSummary {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  flex: 1;
+  margin: 12px 0 14px;
+}
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.btnPrimary {
+  background: var(--coffee);
+  color: #fff;
+}
+
+.btnPrimary:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.btnSoft {
+  background: var(--cream);
+  color: var(--espresso);
+  border: 1px solid var(--nav-border);
+  width: 100%;
+  justify-content: center;
+}
+
+.btnSoft:hover {
+  border-color: var(--latte);
+  background: var(--sand);
+}
+
+/* ---- responsive ---- */
+@media (max-width: 860px) {
+  .g2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .pageTitle { font-size: 30px; }
+  .catalogCard { flex-direction: column; align-items: flex-start; }
+}

@@ -13,6 +13,10 @@ import NotFound from '../pages/not-found/NotFound';
 import ClientDashboard from '../pages/client/ClientDashboard';
 import ConsultantDashboard from '../pages/consultant/ConsultantDashboard';
 import AdminDashboard from '../pages/admin/AdminDashboard';
+import StudentHome from '../pages/student/StudentHome';
+import DiaryPage from '../pages/student/DiaryPage';
+import TestsPage from '../pages/student/Tests/TestsPage';
+import StudentMaterialsPage from '../pages/student/Materials/MaterialsPage';
 
 function ProtectedRoute({ roles, children }) {
   const { user, loading } = useAuth();
@@ -42,7 +46,12 @@ export default function AppRoutes() {
             <ClientDashboard />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<StudentHome />} />
+        <Route path="diary" element={<DiaryPage />} />
+        <Route path="tests" element={<TestsPage />} />
+        <Route path="materials" element={<StudentMaterialsPage />} />
+      </Route>
       <Route
         path="/psychologist"
         element={

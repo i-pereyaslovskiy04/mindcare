@@ -10,7 +10,7 @@ const NAV_SECTIONS = [
       { key: 'home',     label: 'Главная',             icon: 'home',     to: '/student' },
       { key: 'diary',    label: 'Дневник состояния',   icon: 'diary',    to: '/student/diary' },
       { key: 'tests',    label: 'Тесты',               icon: 'tests',    to: '/student/tests' },
-      { key: 'articles', label: 'Материалы и статьи',  icon: 'articles', to: '/student/articles' },
+      { key: 'materials', label: 'Материалы и статьи', icon: 'articles', to: '/student/materials' },
     ],
   },
   {

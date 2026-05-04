@@ -1,0 +1,102 @@
+.card {
+  background: linear-gradient(135deg, var(--espresso), var(--mocha));
+  border-radius: 16px;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.08), 0 8px 24px rgba(74, 55, 40, 0.14);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.tagLabel {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--latte);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.moodWord {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--milk);
+  margin-top: 8px;
+  line-height: 1.1;
+}
+
+.score {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.scoreNum {
+  display: block;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 54px;
+  color: var(--latte);
+  line-height: 1;
+  font-weight: 300;
+}
+
+.scoreLabel {
+  display: block;
+  font-size: 11px;
+  color: var(--fog);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
+  outline: none;
+  cursor: pointer;
+  display: block;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2.5px solid var(--espresso);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(74, 55, 40, 0.25);
+  transition: transform 0.12s;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+
+.slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2.5px solid var(--espresso);
+  cursor: pointer;
+}
+
+.scaleLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--fog);
+  font-weight: 300;
+}
