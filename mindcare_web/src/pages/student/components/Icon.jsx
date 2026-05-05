@@ -43,7 +43,9 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
     case 'arrow-right':
       return <svg {...props}><path d="M5 12h14M13 5l7 7-7 7" /></svg>;
     case 'heart':
-      return <svg {...props}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>;
+      return <svg {...props} fill="currentColor" stroke="none"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z" /></svg>;
+    case 'heart-o':
+      return <svg {...props}><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z" /></svg>;
     case 'leaf':
       return <svg {...props}><path d="M11 20A7 7 0 0 1 4 13V4h9a7 7 0 0 1 7 7v0a9 9 0 0 1-9 9z" /><path d="M4 4l16 16" /></svg>;
     case 'logout':
