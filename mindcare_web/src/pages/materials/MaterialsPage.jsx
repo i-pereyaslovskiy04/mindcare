@@ -5,7 +5,7 @@ import AuthModal from '../../features/auth/ui/AuthModal';
 import PageHero from '../../components/Hero/PageHero';
 import SearchBar from './components/SearchBar';
 import MaterialsGrid from './components/MaterialsGrid';
-import { useMaterials, TAG_OPTIONS } from '../../hooks/useMaterials';
+import { useMaterials, TAG_OPTIONS, TOPIC_OPTIONS } from '../../hooks/useMaterials';
 import styles from './MaterialsPage.module.css';
 
 export default function MaterialsPage() {
@@ -13,7 +13,8 @@ export default function MaterialsPage() {
 
   const {
     setQuery,
-    selectedTags, setSelectedTags,
+    selectedTags,   setSelectedTags,
+    selectedTopics, setSelectedTopics,
     sort, setSort,
     visible,
     hasMore,
@@ -35,9 +36,12 @@ export default function MaterialsPage() {
             onQueryChange={setQuery}
             selectedTags={selectedTags}
             onTagsChange={setSelectedTags}
+            selectedTopics={selectedTopics}
+            onTopicsChange={setSelectedTopics}
             sort={sort}
             onSortChange={setSort}
             tagOptions={TAG_OPTIONS}
+            topicOptions={TOPIC_OPTIONS}
           />
           <MaterialsGrid items={visible} />
 

@@ -61,10 +61,12 @@
   align-self: flex-start;
 }
 
-.tagArticle   { background: #EDE4D3; color: var(--mocha); }
-.tagWebinar   { background: #DDE8E0; color: #3D6B45; }
-.tagExercise  { background: #E8E0EE; color: #5A3F7A; }
-.tagGuide     { background: #E8EDF5; color: #2E4D7A; }
+.tagAnxiety    { background: #EDE4D3; color: var(--mocha); }
+.tagStress     { background: #DDE8E0; color: #3D6B45; }
+.tagSleep      { background: #E8EDF5; color: #2E4D7A; }
+.tagRelations  { background: #FAEBF0; color: #7A3A54; }
+.tagSelfEsteem { background: #E8E0EE; color: #5A3F7A; }
+.tagEmotions   { background: #FBF0E4; color: #7A5A3A; }
 
 /* ── Content ────────────────────────────── */
 

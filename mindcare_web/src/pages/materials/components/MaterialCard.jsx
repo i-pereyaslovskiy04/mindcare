@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom';
 import styles from './MaterialCard.module.css';
 
-const TAG_CLASS = {
-  Статья:     'tagArticle',
-  Вебинар:    'tagWebinar',
-  Упражнение: 'tagExercise',
-  Гид:        'tagGuide',
+const TOPIC_CLASS = {
+  'Тревога':    'tagAnxiety',
+  'Стресс':     'tagStress',
+  'Сон':        'tagSleep',
+  'Отношения':  'tagRelations',
+  'Самооценка': 'tagSelfEsteem',
+  'Эмоции':     'tagEmotions',
 };
 
 const PlaceholderIcon = () => (
@@ -20,7 +22,7 @@ const PlaceholderIcon = () => (
 );
 
 export default function MaterialCard({ item }) {
-  const tagCls = TAG_CLASS[item.tag] ?? 'tagArticle';
+  const topicCls = TOPIC_CLASS[item.topic] ?? 'tagAnxiety';
 
   return (
     <article className={styles.card}>
@@ -32,7 +34,7 @@ export default function MaterialCard({ item }) {
       </div>
 
       <div className={styles.body}>
-        <span className={`${styles.tag} ${styles[tagCls]}`}>{item.tag}</span>
+        <span className={`${styles.tag} ${styles[topicCls]}`}>{item.topic}</span>
         <h3 className={styles.title}>{item.title}</h3>
         <p className={styles.desc}>{item.description}</p>
         <time className={styles.date}>{item.date}</time>

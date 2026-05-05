@@ -22,19 +22,29 @@ export default function FiltersDropdown({
   onClose,
   selectedTags,
   onTagsChange,
+  selectedTopics,
+  onTopicsChange,
   sort,
   onSortChange,
   tagOptions,
+  topicOptions,
   onClear,
 }) {
-  const toggleTag = tag =>
+  const toggleTag = (tag) =>
     onTagsChange(
       selectedTags.includes(tag)
-        ? selectedTags.filter(t => t !== tag)
-        : [...selectedTags, tag]
+        ? selectedTags.filter((t) => t !== tag)
+        : [...selectedTags, tag],
     );
 
-  const hasActiveFilters = selectedTags.length > 0 || sort !== 'newest';
+  const toggleTopic = (topic) =>
+    onTopicsChange(
+      selectedTopics.includes(topic)
+        ? selectedTopics.filter((t) => t !== topic)
+        : [...selectedTopics, topic],
+    );
+
+  const hasActiveFilters = selectedTags.length > 0 || selectedTopics.length > 0 || sort !== 'newest';
 
   return (
     <div className={styles.panel}>
@@ -47,9 +57,9 @@ export default function FiltersDropdown({
       </div>
 
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Категория</h3>
+        <h3 className={styles.sectionTitle}>Тип</h3>
         <div className={styles.tagGrid}>
-          {tagOptions.map(opt => {
+          {tagOptions.map((opt) => {
             const active = selectedTags.includes(opt.value);
             return (
               <button
@@ -67,9 +77,29 @@ export default function FiltersDropdown({
       </section>
 
       <section className={styles.section}>
+        <h3 className={styles.sectionTitle}>Тема</h3>
+        <div className={styles.tagGrid}>
+          {topicOptions.map((opt) => {
+            const active = selectedTopics.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                className={`${styles.tagBtn} ${active ? styles.tagBtnActive : ''}`}
+                onClick={() => toggleTopic(opt.value)}
+                aria-pressed={active}
+              >
+                {active && <CheckIcon />}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className={styles.section}>
         <h3 className={styles.sectionTitle}>Сортировка</h3>
         <div className={styles.sortList}>
-          {SORT_OPTIONS.map(opt => (
+          {SORT_OPTIONS.map((opt) => (
             <label key={opt.value} className={styles.radioLabel}>
               <input
                 type="radio"

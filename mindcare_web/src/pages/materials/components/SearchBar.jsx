@@ -27,37 +27,34 @@ export default function SearchBar({
   onQueryChange,
   selectedTags,
   onTagsChange,
+  selectedTopics,
+  onTopicsChange,
   sort,
   onSortChange,
   tagOptions,
+  topicOptions,
 }) {
-  const [inputValue, setInputValue] = useState('');
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(
-    () => window.matchMedia('(max-width: 768px)').matches
+  const [inputValue,    setInputValue]    = useState('');
+  const [isFilterOpen,  setIsFilterOpen]  = useState(false);
+  const [isMobile,      setIsMobile]      = useState(
+    () => window.matchMedia('(max-width: 768px)').matches,
   );
 
-  const debounceRef = useRef(null);
-  // Wraps the filter button + desktop dropdown; position:relative anchors the dropdown
+  const debounceRef   = useRef(null);
   const filterWrapRef = useRef(null);
-  // Used only for mobile sheet click-outside (panel is in a portal, outside filterWrapRef)
-  const sheetRef = useRef(null);
+  const sheetRef      = useRef(null);
 
-  // Track breakpoint changes
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)');
-    const handler = e => setIsMobile(e.matches);
+    const handler = (e) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // Close on outside click.
-  // Desktop: filterWrapRef covers button + dropdown → single check.
-  // Mobile:  filterWrapRef covers button, sheetRef covers portaled sheet.
   useEffect(() => {
     if (!isFilterOpen) return;
-    const handler = e => {
-      const inWrap = filterWrapRef.current?.contains(e.target);
+    const handler = (e) => {
+      const inWrap  = filterWrapRef.current?.contains(e.target);
       const inSheet = sheetRef.current?.contains(e.target);
       if (!inWrap && !inSheet) setIsFilterOpen(false);
     };
@@ -65,15 +62,14 @@ export default function SearchBar({
     return () => document.removeEventListener('mousedown', handler, true);
   }, [isFilterOpen]);
 
-  // Close on Escape
   useEffect(() => {
     if (!isFilterOpen) return;
-    const handler = e => { if (e.key === 'Escape') setIsFilterOpen(false); };
+    const handler = (e) => { if (e.key === 'Escape') setIsFilterOpen(false); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [isFilterOpen]);
 
-  const handleInputChange = e => {
+  const handleInputChange = (e) => {
     const val = e.target.value;
     setInputValue(val);
     clearTimeout(debounceRef.current);
@@ -86,24 +82,32 @@ export default function SearchBar({
     onQueryChange('');
   };
 
-  const removeTag = tag => onTagsChange(selectedTags.filter(t => t !== tag));
+  const removeTag   = (tag)   => onTagsChange(selectedTags.filter((t) => t !== tag));
+  const removeTopic = (topic) => onTopicsChange(selectedTopics.filter((t) => t !== topic));
 
   const handleClearAll = () => {
     onTagsChange([]);
+    onTopicsChange([]);
     onSortChange('newest');
   };
 
-  const activeFilterCount = selectedTags.length + (sort !== 'newest' ? 1 : 0);
+  const activeFilterCount =
+    selectedTags.length + selectedTopics.length + (sort !== 'newest' ? 1 : 0);
 
   const sharedProps = {
     onClose: () => setIsFilterOpen(false),
     selectedTags,
     onTagsChange,
+    selectedTopics,
+    onTopicsChange,
     sort,
     onSortChange,
     tagOptions,
+    topicOptions,
     onClear: handleClearAll,
   };
+
+  const hasActiveChips = selectedTags.length > 0 || selectedTopics.length > 0;
 
   return (
     <div className={styles.searchBar}>
@@ -132,7 +136,7 @@ export default function SearchBar({
           )}
         </div>
 
-        {/* position:relative here — FiltersDropdown (absolute) anchors to this div */}
+        {/* position:relative — FiltersDropdown (absolute) anchors to this div */}
         <div className={styles.filterBtnWrap} ref={filterWrapRef}>
           <button
             className={[
@@ -140,7 +144,7 @@ export default function SearchBar({
               activeFilterCount > 0 ? styles.filterBtnActive : '',
               isFilterOpen ? styles.filterBtnOpen : '',
             ].filter(Boolean).join(' ')}
-            onClick={() => setIsFilterOpen(v => !v)}
+            onClick={() => setIsFilterOpen((v) => !v)}
             aria-label={`Фильтры${activeFilterCount > 0 ? `, выбрано: ${activeFilterCount}` : ''}`}
             aria-expanded={isFilterOpen}
             aria-haspopup="menu"
@@ -151,7 +155,6 @@ export default function SearchBar({
             )}
           </button>
 
-          {/* Desktop: true dropdown, lives inside the relative wrapper */}
           {isFilterOpen && !isMobile && (
             <FiltersDropdown {...sharedProps} />
           )}
@@ -159,11 +162,11 @@ export default function SearchBar({
 
       </div>
 
-      {/* ── Selected tag chips ── */}
-      {selectedTags.length > 0 && (
+      {/* ── Selected chips (types + topics) ── */}
+      {hasActiveChips && (
         <div className={styles.chipsRow} aria-label="Активные фильтры">
-          {selectedTags.map(tag => (
-            <span key={tag} className={styles.chip}>
+          {selectedTags.map((tag) => (
+            <span key={`tag-${tag}`} className={styles.chip}>
               {tag}
               <button
                 className={styles.chipRemove}
@@ -174,10 +177,22 @@ export default function SearchBar({
               </button>
             </span>
           ))}
+          {selectedTopics.map((topic) => (
+            <span key={`topic-${topic}`} className={styles.chip}>
+              {topic}
+              <button
+                className={styles.chipRemove}
+                onClick={() => removeTopic(topic)}
+                aria-label={`Убрать фильтр «${topic}»`}
+              >
+                <XTinyIcon />
+              </button>
+            </span>
+          ))}
         </div>
       )}
 
-      {/* Mobile: portal bottom sheet, completely outside the layout tree */}
+      {/* Mobile: portal bottom sheet */}
       {isFilterOpen && isMobile && (
         <FilterSheet sheetRef={sheetRef} {...sharedProps} />
       )}
