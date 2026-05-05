@@ -23,8 +23,6 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
       return <svg {...props}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 11l2 2 4-4" /><path d="M8 16h8" /></svg>;
     case 'chat':
       return <svg {...props}><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z" /></svg>;
-    case 'goals':
-      return <svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></svg>;
     case 'calendar':
       return <svg {...props}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>;
     case 'settings':
@@ -50,6 +48,10 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
       return <svg {...props}><path d="M11 20A7 7 0 0 1 4 13V4h9a7 7 0 0 1 7 7v0a9 9 0 0 1-9 9z" /><path d="M4 4l16 16" /></svg>;
     case 'logout':
       return <svg {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>;
+    case 'send':
+      return <svg {...props}><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>;
+    case 'paperclip':
+      return <svg {...props}><path d="m21 11-9 9a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5" /></svg>;
     default:
       return null;
   }

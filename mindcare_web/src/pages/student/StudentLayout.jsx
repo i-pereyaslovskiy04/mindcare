@@ -10,7 +10,6 @@ const CRUMB_LABELS = {
   '/student/materials': 'Материалы и статьи',
   '/student/tasks':     'Задания психолога',
   '/student/chat':      'Чат с психологом',
-  '/student/goals':     'Цели терапии',
   '/student/calendar':  'Календарь и сессии',
   '/student/settings':  'Настройки',
 };

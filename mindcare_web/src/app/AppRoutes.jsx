@@ -17,6 +17,8 @@ import StudentHome from '../pages/student/StudentHome';
 import DiaryPage from '../pages/student/DiaryPage';
 import TestsPage from '../pages/student/Tests/TestsPage';
 import StudentMaterialsPage from '../pages/student/Materials/MaterialsPage';
+import TasksPage from '../pages/student/Tasks/TasksPage';
+import ChatPage from '../pages/student/Chat/ChatPage';
 
 function ProtectedRoute({ roles, children }) {
   const { user, loading } = useAuth();
@@ -51,6 +53,8 @@ export default function AppRoutes() {
         <Route path="diary" element={<DiaryPage />} />
         <Route path="tests" element={<TestsPage />} />
         <Route path="materials" element={<StudentMaterialsPage />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="chat" element={<ChatPage />} />
       </Route>
       <Route
         path="/psychologist"
