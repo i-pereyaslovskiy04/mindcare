@@ -1,0 +1,104 @@
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  cursor: pointer;
+  padding: 6px 4px 14px;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+  user-select: none;
+}
+
+.cell:hover {
+  background: var(--sand);
+  border-color: var(--latte);
+  transform: translateY(-1px);
+}
+
+.num {
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--text-main);
+  line-height: 1;
+}
+
+.out {
+  opacity: 0.4;
+}
+
+.out:hover {
+  transform: none;
+  background: var(--warm-white);
+  border-color: var(--nav-border);
+}
+
+.today {
+  border-color: var(--coffee);
+  background: var(--warm-white);
+  box-shadow: 0 0 0 2px rgba(139, 111, 71, 0.12);
+}
+
+.today .num {
+  color: var(--espresso);
+  font-weight: 700;
+}
+
+.today:hover {
+  background: var(--cream);
+}
+
+.sessionDay {
+  background: var(--espresso);
+  border-color: var(--espresso);
+}
+
+.sessionDay .num {
+  color: var(--text-on-dark);
+}
+
+.sessionDay:hover {
+  background: var(--mocha);
+  border-color: var(--mocha);
+}
+
+.active {
+  box-shadow: 0 0 0 2px var(--coffee);
+  border-color: var(--coffee);
+  z-index: 2;
+}
+
+.sessionDay.active {
+  box-shadow: 0 0 0 2px var(--latte);
+  border-color: var(--latte);
+}
+
+.dots {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--coffee);
+  flex-shrink: 0;
+}
+
+.sessionDay .dot {
+  background: var(--latte);
+}
+
+.dotSession { background: var(--espresso); }
+.dotPast    { background: var(--latte); }
+.dotTask    { background: var(--coffee); }
+.dotDiary   { background: var(--success); }

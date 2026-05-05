@@ -1,0 +1,94 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.iconBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--espresso);
+  color: var(--text-on-dark);
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: var(--milk);
+  color: var(--coffee);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--latte);
+}
+
+.joinBtn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  background: var(--espresso);
+  color: var(--text-on-dark);
+  border: none;
+  border-radius: 8px;
+  font-size: var(--fs-sub);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.joinBtn:hover {
+  background: var(--mocha);
+}

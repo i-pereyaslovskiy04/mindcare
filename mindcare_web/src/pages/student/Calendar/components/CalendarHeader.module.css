@@ -1,0 +1,52 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.monthLabel {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+}
+
+.yearLabel {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3);
+  color: var(--text-main);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.nav {
+  display: flex;
+  gap: 6px;
+}
+
+.navBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  border: 1px solid var(--nav-border);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.navBtn:hover {
+  background: var(--sand);
+  color: var(--text-main);
+}

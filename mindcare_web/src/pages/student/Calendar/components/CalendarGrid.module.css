@@ -1,0 +1,19 @@
+.wrapper {
+  position: relative;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.dowCell {
+  text-align: center;
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  padding: 8px 0;
+}

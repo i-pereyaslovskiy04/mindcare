@@ -52,6 +52,10 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
       return <svg {...props}><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>;
     case 'paperclip':
       return <svg {...props}><path d="m21 11-9 9a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5" /></svg>;
+    case 'chevron-left':
+      return <svg {...props}><path d="M15 18l-6-6 6-6" /></svg>;
+    case 'chevron-right':
+      return <svg {...props}><path d="M9 18l6-6-6-6" /></svg>;
     default:
       return null;
   }

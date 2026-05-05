@@ -1,0 +1,79 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--nav-border);
+}
+
+.item:first-child {
+  border-top: 1px solid var(--nav-border);
+}
+
+.dateCol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.day {
+  font-size: var(--fs-h3-sm);
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  color: var(--text-main);
+  line-height: 1;
+}
+
+.mon {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  margin-top: 2px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.desc {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.psych {
+  font-size: var(--fs-sub);
+  color: var(--text-light);
+}
