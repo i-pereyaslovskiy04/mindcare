@@ -2,38 +2,37 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 
-from app.auth.security import decode_access_token
-from app.auth import service
+from app.auth import storage
 
 _bearer = HTTPBearer(auto_error=False)
 
 
-def get_current_user(
+def get_session_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
-) -> dict:
+) -> str:
+    """Извлекает токен сессии из заголовка Authorization: Bearer <token>."""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    return credentials.credentials
 
-    payload = decode_access_token(credentials.credentials)
-    if not payload:
+
+def get_current_user(token: str = Depends(get_session_token)) -> dict:
+    """Проверяет сессию в БД и возвращает текущего пользователя."""
+    session = storage.find_session(token)
+    if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail="Invalid or expired session",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token type",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    storage.touch_session(token)  # обновляем last_active
 
-    user = service.get_user_by_id(payload["sub"])
+    user = storage.find_user_by_id(session["user_id"])
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,7 +42,7 @@ def get_current_user(
 
 
 def require_role(*roles: str):
-    """Factory: returns a dependency that enforces role membership."""
+    """Фабрика зависимостей: проверяет роль пользователя."""
     def checker(current_user: dict = Depends(get_current_user)) -> dict:
         if current_user["role"] not in roles:
             raise HTTPException(

@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr
 from typing import Literal
+from datetime import datetime
 
-Role = Literal["student", "psychologist", "admin"]
+Role = Literal["student", "psychologist", "admin", "supervisor"]
 
 
 class RegisterRequest(BaseModel):
@@ -26,30 +27,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
+class SessionResponse(BaseModel):
+    """Ответ на успешный логин — токен сессии."""
+    session_token: str
+    expires_at: datetime
     role: Role
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
-class AccessTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class RefreshResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-
-
-class LogoutRequest(BaseModel):
-    refresh_token: str
 
 
 class UserResponse(BaseModel):

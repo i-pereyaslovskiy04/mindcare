@@ -5,10 +5,7 @@ class Settings(BaseSettings):
     # --- DATABASE ---
     DATABASE_URL: str
     # --- AUTH ---
-    SECRET_KEY: str
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    SESSION_EXPIRE_DAYS: int = 7
     # --- EMAIL ---
     EMAIL_MODE: str = "dev"   # "dev" | "smtp"
     SMTP_HOST: str = ""
@@ -23,13 +20,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore",
+        extra="ignore",   # игнорирует лишние переменные из .env
     )
 
 
 settings = Settings()
-
-SECRET_KEY = settings.SECRET_KEY
-ALGORITHM = settings.ALGORITHM
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS
+SESSION_EXPIRE_DAYS = settings.SESSION_EXPIRE_DAYS

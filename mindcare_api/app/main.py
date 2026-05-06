@@ -5,11 +5,27 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.routes import router as auth_router
 from app.db.session import engine
-from app.db import models  # noqa: F401 — registers all models with Base
+from app.db import models  # noqa: F401 — регистрирует все модели в Base
 from app.db.models import Base
 
-# Create all tables (including otp_verifications) before the app starts accepting requests.
-Base.metadata.create_all(bind=engine)
+
+def _create_custom_tables() -> None:
+    """Создаёт только кастомные таблицы, которых нет в SQL-схеме.
+    Основные 38 таблиц (users, roles, user_sessions и др.) применяются через:
+      psql -U postgres -d mindcare -f db/sql/full_schema.sql
+    """
+    from sqlalchemy import inspect as _inspect
+    inspector = _inspect(engine)
+    existing = set(inspector.get_table_names())
+    tables_to_create = [
+        t for t in Base.metadata.sorted_tables
+        if t.name == "otp_verifications" and t.name not in existing
+    ]
+    if tables_to_create:
+        Base.metadata.create_all(bind=engine, tables=tables_to_create)
+
+
+_create_custom_tables()
 
 
 @asynccontextmanager

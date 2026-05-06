@@ -1,9 +1,8 @@
 fastapi
 uvicorn
-python-jose[cryptography]
 bcrypt
 python-multipart
 email-validator
 sqlalchemy
-pymysql
+psycopg2-binary
 pydantic-settings

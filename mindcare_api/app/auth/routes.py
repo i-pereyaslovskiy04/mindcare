@@ -1,23 +1,18 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 
 from app.auth.schemas import (
     RegisterRequest,
     RegisterInitRequest,
     RegisterConfirmRequest,
     LoginRequest,
-    TokenResponse,
-    RefreshRequest,
-    AccessTokenResponse,
-    RefreshResponse,
-    LogoutRequest,
+    SessionResponse,
     UserResponse,
     MessageResponse,
     PasswordResetInitRequest,
     PasswordResetConfirmRequest,
 )
 from app.auth import service
-from app.auth.security import create_access_token, create_refresh_token
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_user, get_session_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -49,54 +44,41 @@ def register_confirm(body: RegisterConfirmRequest):
     return {"message": "Регистрация завершена"}
 
 
-@router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest):
+@router.post("/login", response_model=SessionResponse)
+def login(body: LoginRequest, request: Request):
     try:
         user = service.authenticate_user(email=body.email, password=body.password)
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    access_token = create_access_token(user["id"], user["role"])
-    refresh_token = create_refresh_token()
-    service.save_refresh_token(refresh_token, user["id"])
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    session_token, expires_at = service.create_session(
+        user_id=user["id"],
+        ip=ip,
+        user_agent=user_agent,
+    )
 
     return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "role": user["role"],
-    }
-
-
-@router.post("/refresh", response_model=RefreshResponse)
-def refresh(body: RefreshRequest):
-    try:
-        user_id, new_refresh_token = service.rotate_refresh_token(body.refresh_token)
-    except service.AuthError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
-
-    user = service.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    return {
-        "access_token": create_access_token(user["id"], user["role"]),
-        "refresh_token": new_refresh_token,
+        "session_token": session_token,
+        "expires_at":    expires_at,
+        "role":          user["role"],
     }
 
 
 @router.post("/logout", response_model=MessageResponse)
-def logout(body: LogoutRequest):
-    service.revoke_refresh_token(body.refresh_token)
+def logout(token: str = Depends(get_session_token)):
+    service.terminate_session(token)
     return {"message": "Logged out successfully"}
 
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: dict = Depends(get_current_user)):
     return {
-        "id": current_user["id"],
+        "id":    current_user["id"],
         "email": current_user["email"],
-        "name": current_user["name"],
-        "role": current_user["role"],
+        "name":  current_user["name"],
+        "role":  current_user["role"],
     }
 
 
@@ -106,7 +88,6 @@ def password_reset_init(body: PasswordResetInitRequest):
         service.password_reset_init(email=body.email)
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    # Always return the same message — do not reveal whether email is registered.
     return {"message": "Если аккаунт с таким email существует, код отправлен на него"}
 
 
