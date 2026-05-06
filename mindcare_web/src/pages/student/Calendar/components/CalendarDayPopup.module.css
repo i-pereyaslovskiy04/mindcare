@@ -1,18 +1,32 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-}
-
 .popup {
-  position: relative;
-  z-index: 11;
+  position: absolute;
+  z-index: 51;
+  width: 280px;
   background: #fff;
   border: 1px solid var(--nav-border);
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.09);
+  box-shadow: 0 8px 28px rgba(74,55,40,0.16), 0 2px 8px rgba(74,55,40,0.08);
   padding: 16px 20px;
-  margin-top: 12px;
+  animation: popIn 0.18s ease;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.popup::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: var(--arrow-left, 140px);
+  margin-left: -6px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-top: 1px solid var(--nav-border);
+  border-left: 1px solid var(--nav-border);
+  transform: rotate(45deg);
 }
 
 .header {

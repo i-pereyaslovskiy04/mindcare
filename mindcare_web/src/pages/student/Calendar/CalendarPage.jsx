@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { MOCK_SESSIONS } from './data/mockSessions';
 import { MOCK_EVENTS } from './data/mockEvents';
 import { dateKey } from './utils/calendarUtils';
@@ -28,6 +28,9 @@ export default function CalendarPage() {
   const [activeFormat, setActiveFormat] = useState('Видео');
   const [activeSlot, setActiveSlot] = useState(null);
   const [selectedDayKey, setSelectedDayKey] = useState(null);
+  const [popupPos, setPopupPos] = useState(null);
+
+  const calendarBoxRef = useRef(null);
 
   const sessionMap = useMemo(() => {
     const map = {};
@@ -63,17 +66,28 @@ export default function CalendarPage() {
     else setMonth(m => m + 1);
   }
 
+  function handleDaySelect(key, pos) {
+    setSelectedDayKey(key);
+    setPopupPos(pos);
+  }
+
+  function closePopup() {
+    setSelectedDayKey(null);
+    setPopupPos(null);
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.left}>
-        <section className={styles.calendarBox}>
+        <section className={styles.calendarBox} ref={calendarBoxRef} onClick={(e) => e.stopPropagation()}>
           <CalendarHeader year={year} month={month} onPrev={prev} onNext={next} />
           <CalendarGrid
             year={year}
             month={month}
             sessionMap={sessionMap}
             todayKey={todayKey}
-            onDaySelect={setSelectedDayKey}
+            onDaySelect={handleDaySelect}
+            containerRef={calendarBoxRef}
           />
           <div className={styles.legend}>
             {LEGEND_ITEMS.map(item => (
@@ -83,14 +97,16 @@ export default function CalendarPage() {
               </span>
             ))}
           </div>
+          {selectedDayKey && popupPos && (
+            <CalendarDayPopup
+              events={eventsDetailMap[selectedDayKey] || []}
+              onClose={closePopup}
+              top={popupPos.top}
+              left={popupPos.left}
+              arrowLeft={popupPos.arrowLeft}
+            />
+          )}
         </section>
-
-        {selectedDayKey && (
-          <CalendarDayPopup
-            events={eventsDetailMap[selectedDayKey] || []}
-            onClose={() => setSelectedDayKey(null)}
-          />
-        )}
 
         <UpcomingList sessions={upcoming} />
         <SessionHistory sessions={past} />

@@ -20,6 +20,7 @@ import StudentMaterialsPage from '../pages/student/Materials/MaterialsPage';
 import TasksPage from '../pages/student/Tasks/TasksPage';
 import ChatPage from '../pages/student/Chat/ChatPage';
 import CalendarPage from '../pages/student/Calendar/CalendarPage';
+import SettingsPage from '../pages/student/Settings/SettingsPage';
 
 function ProtectedRoute({ roles, children }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,7 @@ export default function AppRoutes() {
         <Route path="tasks" element={<TasksPage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="calendar" element={<CalendarPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route
         path="/psychologist"
