@@ -56,6 +56,8 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
       return <svg {...props}><path d="M15 18l-6-6 6-6" /></svg>;
     case 'chevron-right':
       return <svg {...props}><path d="M9 18l6-6-6-6" /></svg>;
+    case 'mail':
+      return <svg {...props}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>;
     case 'trash':
       return (
         <svg {...props}>
