@@ -1,4 +1,4 @@
-const API_BASE = process.env.REACT_APP_API_URL || '/api';
+const API_BASE  = process.env.REACT_APP_API_URL || '/api';
 const AUTH_BASE = `${API_BASE}/auth`;
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -29,8 +29,8 @@ export async function registerConfirm({ email, code }) {
   return _handleResponse(res);
 }
 
-export async function forgotPassword({ email }) {
-  const res = await fetch(`${AUTH_BASE}/forgot-password`, {
+export async function passwordResetInit({ email }) {
+  const res = await fetch(`${AUTH_BASE}/password/reset/init`, {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify({ email }),
@@ -38,11 +38,11 @@ export async function forgotPassword({ email }) {
   return _handleResponse(res);
 }
 
-export async function resetPassword({ token, newPassword }) {
-  const res = await fetch(`${AUTH_BASE}/reset-password`, {
+export async function passwordResetConfirm({ email, code, newPassword }) {
+  const res = await fetch(`${AUTH_BASE}/password/reset/confirm`, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ token, new_password: newPassword }),
+    body: JSON.stringify({ email, code, new_password: newPassword }),
   });
   return _handleResponse(res);
 }

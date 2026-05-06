@@ -12,11 +12,13 @@ const AuthContext = createContext(null);
 
 const AUTH_BASE = '/api/auth';
 
-async function _post(url, body) {
+async function _post(url, body, token = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers,
+    body: body !== null ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -25,11 +27,11 @@ async function _post(url, body) {
   return res.json();
 }
 
-async function _getMe(accessToken) {
+async function _getMe(sessionToken) {
   const res = await fetch(`${AUTH_BASE}/me`, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${sessionToken}`,
     },
   });
   if (!res.ok) throw new Error('Failed to fetch user');
@@ -37,89 +39,60 @@ async function _getMe(accessToken) {
 }
 
 export const authApi = {
-  register:             (body)  => _post(`${AUTH_BASE}/register`, body),
-  registerInit:         (body)  => _post(`${AUTH_BASE}/register/init`, body),
-  registerConfirm:      (body)  => _post(`${AUTH_BASE}/register/confirm`, body),
-  login:                (body)  => _post(`${AUTH_BASE}/login`, body),
-  refresh:              (token) => _post(`${AUTH_BASE}/refresh`, { refresh_token: token }),
-  logout:               (token) => _post(`${AUTH_BASE}/logout`, { refresh_token: token }),
-  passwordResetInit:    (body)  => _post(`${AUTH_BASE}/password/reset/init`, body),
-  passwordResetConfirm: (body)  => _post(`${AUTH_BASE}/password/reset/confirm`, body),
+  register:             (body) => _post(`${AUTH_BASE}/register`, body),
+  registerInit:         (body) => _post(`${AUTH_BASE}/register/init`, body),
+  registerConfirm:      (body) => _post(`${AUTH_BASE}/register/confirm`, body),
+  login:                (body) => _post(`${AUTH_BASE}/login`, body),
+  logout:               (token) => _post(`${AUTH_BASE}/logout`, null, token),
+  passwordResetInit:    (body) => _post(`${AUTH_BASE}/password/reset/init`, body),
+  passwordResetConfirm: (body) => _post(`${AUTH_BASE}/password/reset/confirm`, body),
   me: _getMe,
 };
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const accessTokenRef = useRef(null);
+  const sessionTokenRef       = useRef(null);
 
-  const getToken = useCallback(() => accessTokenRef.current, []);
-  const setToken = useCallback((token) => { accessTokenRef.current = token; }, []);
+  const getToken = useCallback(() => sessionTokenRef.current, []);
 
   useEffect(() => {
-    configureClient({ getToken, setToken });
-  }, [getToken, setToken]);
+    configureClient({ getToken });
+  }, [getToken]);
 
   const clearSession = useCallback(() => {
-    accessTokenRef.current = null;
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('access_token');
+    sessionTokenRef.current = null;
+    localStorage.removeItem('session_token');
     setUser(null);
   }, []);
 
+  // Слушаем событие "сессия истекла" от apiFetch
   useEffect(() => {
     const handler = () => clearSession();
     window.addEventListener('auth:session-expired', handler);
     return () => window.removeEventListener('auth:session-expired', handler);
   }, [clearSession]);
 
-  // Restore session on mount.
-  // Strategy: try the stored access_token first (fast, no rotation).
-  // Only fall back to refresh when it is expired/missing.
-  // Cancellation flag prevents StrictMode's double-invoke from causing
-  // two concurrent rotations with the same refresh token.
+  // Восстановление сессии при перезагрузке страницы
   useEffect(() => {
     let cancelled = false;
 
     const restore = async () => {
-      const storedAccess = localStorage.getItem('access_token');
-
-      if (storedAccess) {
-        try {
-          accessTokenRef.current = storedAccess;
-          const userData = await authApi.me(storedAccess);
-          if (!cancelled) {
-            setUser(userData);
-            setLoading(false);
-          }
-          return;
-        } catch {
-          // Token expired or invalid — fall through to refresh.
-          accessTokenRef.current = null;
-          localStorage.removeItem('access_token');
-        }
-      }
-
-      if (cancelled) return;
-
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
+      const storedToken = localStorage.getItem('session_token');
+      if (!storedToken) {
         if (!cancelled) setLoading(false);
         return;
       }
 
       try {
-        const { access_token, refresh_token: newRefresh } = await authApi.refresh(refreshToken);
-        if (cancelled) return;
-        accessTokenRef.current = access_token;
-        localStorage.setItem('access_token', access_token);
-        if (newRefresh) localStorage.setItem('refresh_token', newRefresh);
-        const userData = await authApi.me(access_token);
+        sessionTokenRef.current = storedToken;
+        const userData = await authApi.me(storedToken);
         if (!cancelled) setUser(userData);
       } catch {
+        // Сессия недействительна — чистим
         if (!cancelled) {
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('access_token');
+          sessionTokenRef.current = null;
+          localStorage.removeItem('session_token');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -131,19 +104,19 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async ({ email, password }) => {
+    // Ответ: { session_token, expires_at, role }
     const data = await authApi.login({ email, password });
-    accessTokenRef.current = data.access_token;
-    localStorage.setItem('access_token', data.access_token);
-    localStorage.setItem('refresh_token', data.refresh_token);
-    const userData = await authApi.me(data.access_token);
+    sessionTokenRef.current = data.session_token;
+    localStorage.setItem('session_token', data.session_token);
+    const userData = await authApi.me(data.session_token);
     setUser(userData);
     return data.role;
   }, []);
 
   const logout = useCallback(async () => {
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (refreshToken) {
-      try { await authApi.logout(refreshToken); } catch {}
+    const token = sessionTokenRef.current;
+    if (token) {
+      try { await authApi.logout(token); } catch {}
     }
     clearSession();
   }, [clearSession]);
