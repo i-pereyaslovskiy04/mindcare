@@ -4,7 +4,7 @@ from sqlalchemy import (
     Column, String, Integer, Boolean, DateTime,
     ForeignKey, Text, UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -76,7 +76,7 @@ class UserSession(Base):
 
     id          = Column(String(255), primary_key=True)   # сам токен сессии
     user_id     = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    ip_address  = Column(String(50))
+    ip_address  = Column(INET)
     user_agent  = Column(Text)
     started_at  = Column(DateTime(timezone=True), server_default=func.now())
     last_active = Column(DateTime(timezone=True), server_default=func.now())
@@ -104,3 +104,55 @@ class OtpVerification(Base):
     expires_at    = Column(DateTime, nullable=False)
     created_at    = Column(DateTime, nullable=False)
     last_sent_at  = Column(DateTime, nullable=False)
+
+
+
+
+class Consent(Base):
+    """Версионируемые политики (privacy_policy, data_processing, test_consent)."""
+    __tablename__ = "consents"
+
+    id           = Column(Integer, primary_key=True)
+    policy_type  = Column(String(100), nullable=False)
+    version      = Column(Integer, nullable=False, default=1)
+    title        = Column(String(255), nullable=False)
+    content      = Column(Text, nullable=False)
+    is_mandatory = Column(Boolean, default=True)
+    published_at = Column(DateTime(timezone=True))
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("policy_type", "version"),)
+
+
+class ConsentRecord(Base):
+    """Факт согласия пользователя на конкретную версию политики."""
+    __tablename__ = "consent_records"
+
+    id          = Column(Integer, primary_key=True)
+    user_id     = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    consent_id  = Column(Integer, ForeignKey("consents.id", ondelete="RESTRICT"), nullable=False)
+    accepted    = Column(Boolean, nullable=False)
+    ip_address  = Column(INET)   
+    user_agent  = Column(Text)
+    accepted_at = Column(DateTime(timezone=True), server_default=func.now())
+    revoked_at  = Column(DateTime(timezone=True))
+
+class AuthLog(Base):
+    """
+    Журнал аутентификационных событий: логины, выходы, сбросы пароля.
+    Партиционирован по месяцам (управляется на уровне БД).
+    Композитный PK (id, created_at) обязателен из-за партиционирования.
+    """
+    __tablename__ = "auth_log"
+
+    id             = Column(Integer, primary_key=True)
+    user_id        = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    user_email     = Column(String(255))   # денормализация: email на момент события
+    event          = Column(String(50), nullable=False)  # 'login'/'logout'/'failed_login'/'password_reset'/'register'
+    success        = Column(Boolean, nullable=False, default=True)
+    failure_reason = Column(String(255))
+    ip_address     = Column(INET)
+    user_agent     = Column(Text)
+    session_id     = Column(String(255))
+    mfa_method     = Column(String(20))
+    created_at     = Column(DateTime(timezone=True), server_default=func.now(), primary_key=True)
