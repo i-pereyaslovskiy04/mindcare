@@ -27,21 +27,21 @@ class AuthError(Exception):
 # ---------------------------------------------------------------------------
 # Регистрация
 # ---------------------------------------------------------------------------
+# говорит что это лишнее так как есть register_init и register_confirm
+# def register_user(name: str, email: str, password: str) -> dict:
+#     if not name or len(name.strip()) < 2:
+#         raise AuthError("Name must be at least 2 characters", 422)
+#     if len(password) < 8:
+#         raise AuthError("Password must be at least 8 characters", 422)
+#     if storage.find_user_by_email(email):
+#         raise AuthError("Email already registered", 409)
 
-def register_user(name: str, email: str, password: str) -> dict:
-    if not name or len(name.strip()) < 2:
-        raise AuthError("Name must be at least 2 characters", 422)
-    if len(password) < 8:
-        raise AuthError("Password must be at least 8 characters", 422)
-    if storage.find_user_by_email(email):
-        raise AuthError("Email already registered", 409)
-
-    return storage.save_user({
-        "name":            name.strip(),
-        "email":           email,
-        "hashed_password": _hash(password),
-        "role":            "student",
-    })
+#     return storage.save_user({
+#         "name":            name.strip(),
+#         "email":           email,
+#         "hashed_password": _hash(password),
+#         "role":            "student",
+#     })
 
 
 def register_init(name: str, email: str, password: str) -> None:
@@ -70,9 +70,32 @@ def register_init(name: str, email: str, password: str) -> None:
         traceback.print_exc()
         raise AuthError(f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500)
 
+REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
+# Как было
+#def register_confirm(email: str, code: str) -> dict:
+#    """Проверяет OTP и создаёт пользователя."""
+#    from app.auth import otp_service
+#
+#    try:
+#        user_data = otp_service.verify_otp(email, code)
+#    except ValueError as e:
+#        raise AuthError(str(e), 400)
+#
+#    return storage.save_user({
+#        "name":            user_data["name"],
+#        "email":           email,
+#        "hashed_password": user_data["password_hash"],
+#        "role":            "student",
+#    })
 
-def register_confirm(email: str, code: str) -> dict:
-    """Проверяет OTP и создаёт пользователя."""
+
+def register_confirm(
+    email: str,
+    code: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """Проверяет OTP, создаёт пользователя и записывает согласия на ПДн."""
     from app.auth import otp_service
 
     try:
@@ -80,13 +103,34 @@ def register_confirm(email: str, code: str) -> dict:
     except ValueError as e:
         raise AuthError(str(e), 400)
 
-    return storage.save_user({
+    # Проверяем что в БД есть актуальные политики до создания юзера
+    consent_ids = {}
+    for policy_type in REQUIRED_CONSENTS:
+        cid = storage.get_active_consent_id(policy_type)
+        if cid is None:
+            raise AuthError(
+                f"Политика '{policy_type}' не найдена в БД. Обратитесь к администратору.",
+                500,
+            )
+        consent_ids[policy_type] = cid
+
+    user = storage.save_user({
         "name":            user_data["name"],
         "email":           email,
         "hashed_password": user_data["password_hash"],
         "role":            "student",
     })
 
+    # Записываем согласия
+    for cid in consent_ids.values():
+        storage.save_consent_record(
+            user_id=int(user["id"]),
+            consent_id=cid,
+            ip=ip,
+            user_agent=user_agent,
+        )
+
+    return user
 
 # ---------------------------------------------------------------------------
 # Аутентификация

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from app.db.session import SessionLocal
-from app.db.models import User, UserRole, Role, UserSession
+from app.db.models import User, UserRole, Role, UserSession, Consent, ConsentRecord
 from app.auth.security import generate_session_token
 from app.core.config import SESSION_EXPIRE_DAYS
 
@@ -58,7 +58,7 @@ def find_user_by_email(email: str) -> Optional[dict]:
     with SessionLocal() as db:
         user = (
             db.query(User)
-            .filter(User.email == email, User.deleted_at == None)
+            .filter(User.email == email.lower().strip(), User.deleted_at == None)
             .first()
         )
         return _user_to_dict(user, db) if user else None
@@ -78,7 +78,7 @@ def save_user(user: dict) -> dict:
     with SessionLocal() as db:
         db_user = User(
             full_name=user["name"],
-            email=user["email"],
+            email=user["email"].lower().strip(),
             password_hash=user["hashed_password"],
         )
         db.add(db_user)
@@ -87,6 +87,36 @@ def save_user(user: dict) -> dict:
         db.commit()
         db.refresh(db_user)
         return _user_to_dict(db_user, db)
+
+
+def get_active_consent_id(policy_type: str) -> Optional[int]:
+    """Возвращает id последней версии согласия данного типа."""
+    with SessionLocal() as db:
+        consent = (
+            db.query(Consent)
+            .filter(Consent.policy_type == policy_type)
+            .order_by(Consent.version.desc())
+            .first()
+        )
+        return consent.id if consent else None
+
+
+def save_consent_record(
+    user_id: int,
+    consent_id: int,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    """Записывает факт согласия пользователя."""
+    with SessionLocal() as db:
+        db.add(ConsentRecord(
+            user_id=user_id,
+            consent_id=consent_id,
+            accepted=True,
+            ip_address=ip,
+            user_agent=user_agent,
+        ))
+        db.commit()
 
 
 def update_last_login(user_id: str) -> None:
