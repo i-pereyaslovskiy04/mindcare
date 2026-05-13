@@ -16,7 +16,7 @@ export default function UpcomingList({ sessions }) {
     <section className={styles.section}>
       <h3 className={styles.heading}>Предстоящие сессии</h3>
       <ul className={styles.list}>
-        {sessions.map(s => {
+        {sessions.map((s, i) => {
           const { day, month } = parseDate(s.date);
           const iconName = TYPE_ICON[s.type] || 'video';
           return (
@@ -30,8 +30,12 @@ export default function UpcomingList({ sessions }) {
                   {day} {MONTH_NAMES_GENITIVE[month]} · {s.time} · {s.psychologist}
                 </span>
               </div>
-              <span className={styles.badge}>Предстоит</span>
-              <button className={styles.joinBtn}>Войти</button>
+              <div className={styles.right}>
+                <span className={styles.badge}>Подтверждена</span>
+                {i === 0 && (
+                  <button className={styles.joinBtn}>Подключиться</button>
+                )}
+              </div>
             </li>
           );
         })}

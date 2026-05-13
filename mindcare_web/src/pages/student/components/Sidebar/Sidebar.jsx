@@ -43,6 +43,7 @@ export default function Sidebar() {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
+        <span className={styles.brandShort}>М</span>
         <span className={styles.brandFull}>
           Психо<em>логия</em> ДонГУ
         </span>
@@ -69,6 +70,7 @@ export default function Sidebar() {
                 key={item.key}
                 to={item.to}
                 end={item.to === '/student'}
+                title={item.label}
                 className={({ isActive }) =>
                   `${styles.navItem} ${isActive ? styles.active : ''}`
                 }
@@ -76,7 +78,7 @@ export default function Sidebar() {
                 <span className={styles.navIcon}>
                   <Icon name={item.icon} size={18} />
                 </span>
-                <span>{item.label}</span>
+                <span className={styles.navLabel}>{item.label}</span>
                 {item.badge && (
                   <span className={styles.badge}>{item.badge}</span>
                 )}

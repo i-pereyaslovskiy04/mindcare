@@ -36,6 +36,12 @@ export default function StudentLayout() {
               <Icon name="bell" size={16} />
               <span className={styles.dot} />
             </button>
+            <button className={styles.iconBtn} aria-label="Почта">
+              <Icon name="mail" size={16} />
+            </button>
+            <button className={styles.iconBtn} aria-label="Выйти">
+              <Icon name="logout" size={16} />
+            </button>
           </div>
         </div>
 
