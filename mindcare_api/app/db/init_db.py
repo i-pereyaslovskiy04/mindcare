@@ -2,11 +2,10 @@
 Инициализация базы данных при старте приложения.
 
 Функции:
-  check_connection()    — проверяет доступность PostgreSQL
-  ensure_database()     — создаёт БД если отсутствует
+  ensure_database()     — создаёт БД если отсутствует (dev convenience)
   check_migrations()    — проверяет, что DB на head; бросает RuntimeError если нет
-  init_db()             — точка входа FastAPI: ensure_database + check + seed
   health_check()        — для /api/health endpoint
+  init_db()             — точка входа FastAPI: ensure_database + check + seed
 
 ╔══════════════════════════════════════════════════════════════╗
 ║  КРИТИЧЕСКИ ВАЖНО: ПОРЯДОК ЗАПУСКА                          ║
@@ -27,22 +26,7 @@ from sqlalchemy.exc import OperationalError
 log = logging.getLogger(__name__)
 
 
-# ─── Connection & DB existence ────────────────────────────────────────────────
-
-def check_connection() -> bool:
-    """
-    Проверяет, что PostgreSQL доступен и принимает запросы.
-    Возвращает True если OK, иначе False.
-    """
-    from app.db.session import engine
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return True
-    except OperationalError as exc:
-        log.error("[DB] Connection check failed: %s", exc)
-        return False
-
+# ─── DB existence ─────────────────────────────────────────────────────────────
 
 def ensure_database() -> None:
     """

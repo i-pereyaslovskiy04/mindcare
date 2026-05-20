@@ -4,8 +4,9 @@
 Экспортирует:
   engine       — SQLAlchemy Engine (psycopg2, синхронный)
   SessionLocal — фабрика сессий
-  Base         — реэкспорт из base.py (обратная совместимость)
   get_db()     — FastAPI-dependency (yield-based)
+
+Base живёт в app.db.base — импортируй оттуда напрямую.
 
 ВАЖНО: проект использует синхронный SQLAlchemy (psycopg2).
 Не переключать на asyncpg без явного решения команды.
@@ -15,7 +16,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.db.base import Base  # noqa: F401 — реэкспорт для обратной совместимости
 
 engine = create_engine(
     settings.DATABASE_URL,

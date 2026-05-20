@@ -13,7 +13,10 @@ env/
 instance/
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
+.coverage
 coverage/
+htmlcov/
 
 # --- Node / React ---
 node_modules/

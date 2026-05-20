@@ -3,8 +3,11 @@
 Зависит только от storage и не знает про FastAPI/HTTP.
 """
 
+import logging
 import secrets
 import string
+
+log = logging.getLogger(__name__)
 
 from app.users import storage
 from app.users.schemas import (
@@ -96,10 +99,9 @@ def create_user(data: AdminUserCreate) -> dict:
             password=password,
         )
     except Exception as e:
-        import sys
-        print(
-            f"[WARN] Юзер {user['email']} создан, но письмо не отправлено: {e}",
-            file=sys.stderr,
+        log.warning(
+            "[create_user] User %s created but welcome email failed: %s",
+            user["email"], e,
         )
 
     return user

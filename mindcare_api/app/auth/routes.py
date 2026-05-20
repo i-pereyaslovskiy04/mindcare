@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 
 from app.auth.schemas import (
-    RegisterRequest,
     RegisterInitRequest,
     RegisterConfirmRequest,
     LoginRequest,
@@ -15,15 +14,6 @@ from app.auth import service, audit
 from app.auth.deps import get_current_user, get_session_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-# говорит что это лишний метод
-# @router.post("/register", response_model=MessageResponse, status_code=201)
-# def register(body: RegisterRequest):
-#     try:
-#         service.register_user(name=body.name, email=body.email, password=body.password)
-#     except service.AuthError as e:
-#         raise HTTPException(status_code=e.status_code, detail=e.message)
-#     return {"message": "Registration successful"}
 
 
 @router.post("/register/init", response_model=MessageResponse)
@@ -40,7 +30,7 @@ def register_confirm(body: RegisterConfirmRequest, request: Request):
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     try:
-        user =service.register_confirm(email=body.email, code=body.code)
+        user = service.register_confirm(email=body.email, code=body.code)
     except service.AuthError as e:
         audit.log_auth_event(
             event="register",
@@ -79,7 +69,6 @@ def login(body: LoginRequest, request: Request):
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    
     session_token, expires_at = service.create_session(
         user_id=user["id"],
         ip=ip,
@@ -105,9 +94,9 @@ def login(body: LoginRequest, request: Request):
 
 @router.post("/logout", response_model=MessageResponse)
 def logout(
-    request: Request, 
-    token: str = Depends(get_session_token), 
-    current_user: dict = Depends(get_current_user)
+    request: Request,
+    token: str = Depends(get_session_token),
+    current_user: dict = Depends(get_current_user),
 ):
     service.terminate_session(token)
     audit.log_auth_event(
