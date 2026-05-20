@@ -91,6 +91,11 @@
 - Project Tree не отражает реальную структуру `mindcare_web/src/`
 - Обновить когда структура стабилизируется
 
+**`LoginForm` использует устаревший паттерн ошибок**
+- Хранит ошибки полей как булевы значения (`errors.email: true`) и серверную ошибку в отдельном `apiError`
+- По стандарту `ARCHITECTURE.md §10` — должен быть единый `errors` со строками + `errors._form`
+- Файл: `mindcare_web/src/features/auth/ui/LoginForm.jsx`
+
 **CSS-классы ролей в `UsersTable` нарушают camelCase-конвенцию**
 - Динамические классы `role_student`, `role_psychologist` и т.д. используют underscore
 - По конвенции ARCHITECTURE.md §10 — должны быть `roleStudent`, `rolePsychologist`, `roleAdmin`, `roleSupervisor`
@@ -100,6 +105,26 @@
 - `update_user` в storage стрипает `full_name`, но не стрипает `phone`
 - Непоследовательная нормализация входных данных
 - Файл: `mindcare_api/app/users/storage.py`
+
+**Дублирование стилей между UserCreateModal и UserEditModal**
+- Общие классы (`.body`, `.title`, `.field`, `.input`, `.btnPrimary`, `.btnSecondary` и др.)
+  продублированы в двух CSS-модулях слово в слово
+- CSS Modules не поддерживают наследование — решение: вынести общие стили
+  в `admin-users/ui/adminModal.module.css` и импортировать в оба компонента
+- Файлы: `mindcare_web/src/features/admin-users/ui/UserCreateModal.module.css`,
+  `mindcare_web/src/features/admin-users/ui/UserEditModal.module.css`
+
+**`DeleteConfirmDialog` — setState после закрытия диалога**
+- Если нажать Escape пока идёт DELETE-запрос, Modal закроет диалог,
+  но `setDeleting(false)` в `.finally()` выполнится на скрытом компоненте
+- Добавить `cancelled`-флаг по аналогии с useUserForm useEffect
+- Файл: `mindcare_web/src/features/admin-users/ui/DeleteConfirmDialog.jsx`
+
+**`useUserForm` — нет защиты от двойного submit**
+- `handleSubmit` не проверяет `submitting` перед запуском запроса
+- Двойной клик по кнопке Submit (если она не задизейблена) запустит два параллельных запроса
+- Добавить `if (submitting) return;` в начало `handleSubmit`
+- Файл: `mindcare_web/src/features/admin-users/hooks/useUserForm.js`
 
 **`authApi.register` в AuthContext — неиспользуемый экспорт**
 - Регистрация идёт через `registerInit` + `registerConfirm`; `register` — остаток ранней реализации
