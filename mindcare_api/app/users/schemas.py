@@ -24,7 +24,6 @@ class AdminUserListItem(BaseModel):
 
     """Юзер в списке для админа. Не содержит чувствительных полей (password_hash и т.п.)."""
 
-    id: int
     uuid: str
     email: str
     full_name: str
@@ -59,7 +58,6 @@ class AdminUserCreate(BaseModel):
 class AdminUserCreateResponse(BaseModel):
     """Ответ POST /api/admin/users."""
 
-    id: int
     uuid: str
     email: str
     full_name: str
@@ -84,7 +82,6 @@ class AdminUserUpdate(BaseModel):
 class AdminUserRead(BaseModel):
     """Ответ PATCH /api/admin/users/{uuid} и GET /api/admin/users/{uuid}."""
 
-    id: int
     uuid: str
     email: str
     full_name: str
