@@ -7,7 +7,13 @@ import secrets
 import string
 
 from app.users import storage
-from app.users.schemas import AdminUserListQuery, AdminUserListItem, PaginatedUsersResponse, AdminUserCreate, AdminUserUpdate
+from app.users.schemas import (
+    AdminUserListQuery,
+    AdminUserListItem,
+    PaginatedUsersResponse,
+    AdminUserCreate,
+    AdminUserUpdate,
+)
 from app.auth.service import AuthError
 from app.services.email_service import send_welcome_psychologist
 
@@ -20,7 +26,6 @@ def _generate_password(length: int = 12) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
     while True:
         password = "".join(secrets.choice(alphabet) for _ in range(length))
-        # Проверяем что пароль содержит минимум по одному символу каждого типа
         if (
             any(c.islower() for c in password)
             and any(c.isupper() for c in password)
@@ -28,12 +33,12 @@ def _generate_password(length: int = 12) -> str:
             and any(c in "!@#$%^&*" for c in password)
         ):
             return password
-        
+
 
 def get_users_list(query: AdminUserListQuery) -> PaginatedUsersResponse:
     """
     Возвращает пагинированный список юзеров по заданным фильтрам.
-    
+
     Принимает Pydantic-схему запроса, делегирует выборку в storage,
     упаковывает результат в PaginatedUsersResponse.
     """
@@ -60,15 +65,15 @@ def get_users_list(query: AdminUserListQuery) -> PaginatedUsersResponse:
 def create_user(data: AdminUserCreate) -> dict:
     """
     Создаёт нового юзера (психолога или админа) от имени администратора.
-    
+
     Генерирует временный пароль и отправляет его на email нового юзера.
     Пароль хешируется перед сохранением в БД.
-    
+
     Raises:
         AuthError: если email уже занят (409)
         AuthError: если не удалось отправить письмо (500)
     """
-    from app.auth.service import _hash  # локальный импорт чтобы избежать circular import
+    from app.auth.service import _hash  # локальный импорт — circular import
 
     password = _generate_password()
     password_hash = _hash(password)
@@ -91,10 +96,11 @@ def create_user(data: AdminUserCreate) -> dict:
             password=password,
         )
     except Exception as e:
-        # Юзер уже создан — не откатываем. Логируем и сообщаем что письмо не ушло.
-        # Админ может вручную сбросить пароль позже.
-        print(f"[WARN] Юзер {user['email']} создан, но письмо не отправлено: {e}",
-              file=__import__("sys").stderr)
+        import sys
+        print(
+            f"[WARN] Юзер {user['email']} создан, но письмо не отправлено: {e}",
+            file=sys.stderr,
+        )
 
     return user
 
@@ -104,6 +110,16 @@ def get_user(uuid: str) -> dict:
     if user is None:
         raise AuthError("Пользователь не найден", status_code=404)
     return user
+
+
+def delete_user(uuid: str) -> None:
+    """
+    Мягкое удаление юзера от имени администратора.
+    Raises AuthError 404 если юзер не найден.
+    """
+    found = storage.soft_delete_user(uuid)
+    if not found:
+        raise AuthError("Пользователь не найден", status_code=404)
 
 
 def update_user(uuid: str, data: AdminUserUpdate) -> dict:
@@ -116,8 +132,14 @@ def update_user(uuid: str, data: AdminUserUpdate) -> dict:
         AuthError: если юзер не найден (404)
         AuthError: если роль не существует в БД (400)
     """
-    if all(v is None for v in (data.full_name, data.phone, data.is_active, data.role)):
-        raise AuthError("Необходимо указать хотя бы одно поле для обновления", status_code=400)
+    if all(
+        v is None
+        for v in (data.full_name, data.phone, data.is_active, data.role)
+    ):
+        raise AuthError(
+            "Необходимо указать хотя бы одно поле для обновления",
+            status_code=400,
+        )
 
     try:
         return storage.update_user(

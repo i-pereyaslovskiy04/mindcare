@@ -3,11 +3,11 @@
 Все SQLAlchemy-запросы изолированы здесь.
 """
 
+import uuid as _uuid
 from typing import Optional
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, asc, desc
-from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.db.models import User, UserRole, Role
@@ -26,19 +26,17 @@ def find_users(
 ) -> tuple[list[dict], int]:
     """
     Возвращает кортеж (items, total) для пагинированного списка юзеров.
-    
+
     - items — список юзеров на текущей странице (в виде dict)
     - total — общее число юзеров с учётом фильтров (без пагинации)
-    
+
     Применяет soft-delete фильтр: deleted_at IS NULL.
     Невалидные поля сортировки заменяются на 'created_at'.
     """
-    # Защита от невалидного sort (whitelist)
     if sort not in ALLOWED_SORT_FIELDS:
         sort = "created_at"
-    
+
     with SessionLocal() as db:
-        # ... тут будет основная логика
         # ── 1. Базовый запрос с JOIN к ролям ──
         query = (
             db.query(User, Role.name.label("role_name"))
@@ -97,12 +95,17 @@ def get_user_by_uuid(uuid: str) -> Optional[dict]:
     Возвращает dict с данными юзера (включая роль) или None если не найден.
     Применяет soft-delete фильтр: deleted_at IS NULL.
     """
+    try:
+        uuid_obj = _uuid.UUID(uuid)
+    except ValueError:
+        return None
+
     with SessionLocal() as db:
         row = (
             db.query(User, Role.name.label("role_name"))
             .outerjoin(UserRole, UserRole.user_id == User.id)
             .outerjoin(Role, Role.id == UserRole.role_id)
-            .filter(User.uuid == uuid)
+            .filter(User.uuid == uuid_obj)
             .filter(User.deleted_at.is_(None))
             .first()
         )
@@ -134,10 +137,15 @@ def update_user(
     Роль меняется атомарно: удаляем старую запись user_roles, вставляем новую.
     Raises ValueError если юзер не найден или роль не существует в БД.
     """
+    try:
+        uuid_obj = _uuid.UUID(uuid)
+    except ValueError:
+        raise ValueError(f"Некорректный UUID: {uuid}")
+
     with SessionLocal() as db:
         user = (
             db.query(User)
-            .filter(User.uuid == uuid)
+            .filter(User.uuid == uuid_obj)
             .filter(User.deleted_at.is_(None))
             .first()
         )
@@ -183,6 +191,41 @@ def update_user(
         }
 
 
+def soft_delete_user(uuid: str) -> bool:
+    """
+    Мягкое удаление юзера — выставляет deleted_at, не удаляет физически.
+    Возвращает True если юзер найден и помечен удалённым, False если не найден.
+    Также отзывает все активные сессии юзера.
+    """
+    try:
+        uuid_obj = _uuid.UUID(uuid)
+    except ValueError:
+        return False
+
+    with SessionLocal() as db:
+        user = (
+            db.query(User)
+            .filter(User.uuid == uuid_obj)
+            .filter(User.deleted_at.is_(None))
+            .first()
+        )
+        if not user:
+            return False
+
+        now = datetime.now(timezone.utc)
+        user.deleted_at = now
+        user.is_active = False
+
+        from app.db.models import UserSession
+        db.query(UserSession).filter(
+            UserSession.user_id == user.id,
+            ~UserSession.is_revoked,
+        ).update({"is_revoked": True}, synchronize_session=False)
+
+        db.commit()
+        return True
+
+
 def create_user(
     email: str,
     full_name: str,
@@ -192,16 +235,15 @@ def create_user(
 ) -> dict:
     """
     Создаёт нового пользователя с указанной ролью.
-    
+
     Используется только из админских эндпоинтов.
     Публичная регистрация — через auth/storage.save_user.
-    
+
     Возвращает dict с данными созданного юзера.
     Не создаёт consent_records — для adminski-созданных юзеров
     согласие фиксируется отдельно при первом логине (TODO: Этап 2).
     """
     with SessionLocal() as db:
-        # Проверка дубликата email — до создания юзера
         existing = (
             db.query(User)
             .filter(User.email == email.lower().strip())
@@ -211,7 +253,6 @@ def create_user(
         if existing:
             raise ValueError(f"Пользователь с email {email} уже существует")
 
-        # Создаём юзера
         new_user = User(
             email=email.lower().strip(),
             full_name=full_name.strip(),
@@ -222,7 +263,6 @@ def create_user(
         db.add(new_user)
         db.flush()  # получаем id до commit — нужен для user_roles
 
-        # Назначаем роль
         role_obj = db.query(Role).filter(Role.name == role).first()
         if not role_obj:
             raise ValueError(f"Роль '{role}' не найдена в БД")

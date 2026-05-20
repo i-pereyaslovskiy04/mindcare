@@ -24,15 +24,26 @@ router = APIRouter(
     dependencies=[Depends(require_role("admin"))],
 )
 
+
 @router.get("/", response_model=PaginatedUsersResponse)
 def list_users(
     page: int = Query(default=1, ge=1, description="Номер страницы"),
-    size: int = Query(default=20, ge=1, le=100, description="Элементов на странице"),
-    search: Optional[str] = Query(default=None, description="Поиск по email или ФИО"),
-    role: Optional[str] = Query(default=None, description="Фильтр по роли"),
-    is_active: Optional[bool] = Query(default=None, description="Фильтр по активности"),
+    size: int = Query(
+        default=20, ge=1, le=100, description="Элементов на странице"
+    ),
+    search: Optional[str] = Query(
+        default=None, description="Поиск по email или ФИО"
+    ),
+    role: Optional[str] = Query(
+        default=None, description="Фильтр по роли"
+    ),
+    is_active: Optional[bool] = Query(
+        default=None, description="Фильтр по активности"
+    ),
     sort: str = Query(default="created_at", description="Поле сортировки"),
-    order: Literal["asc", "desc"] = Query(default="desc", description="Направление сортировки"),
+    order: Literal["asc", "desc"] = Query(
+        default="desc", description="Направление сортировки"
+    ),
 ):
     """Список всех пользователей с пагинацией, поиском и фильтрами."""
     query = AdminUserListQuery(
@@ -73,9 +84,21 @@ def get_user(uuid: str):
 def update_user(uuid: str, body: AdminUserUpdate):
     """
     Частичное обновление пользователя.
-    Поддерживает: блокировку/разблокировку, смену роли, обновление ФИО и телефона.
+    Поддерживает: блокировку/разблокировку, смену роли, ФИО и телефон.
     """
     try:
         return service.update_user(uuid, body)
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.delete("/{uuid}", status_code=204)
+def delete_user(uuid: str):
+    """
+    Мягкое удаление пользователя. Отзывает все сессии.
+    Возвращает 204 No Content при успехе.
+    """
+    try:
+        service.delete_user(uuid)
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
