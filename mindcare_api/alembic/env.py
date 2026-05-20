@@ -13,12 +13,17 @@ Alembic environment configuration для MindCare API.
   alembic revision --autogenerate -m "describe change"
   alembic current               # текущая версия
   alembic history               # история миграций
+
+Примечание по logging:
+  fileConfig() намеренно НЕ вызывается — это CLI-инструмент, и
+  logging.basicConfig() настроен Python-ом по умолчанию (WARNING уровень),
+  чего достаточно для alembic CLI.
+  Если нужны подробные логи миграций: alembic --verbose upgrade head
 """
 
 import os
 import re
 import sys
-from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
@@ -30,14 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Принудительно задаём кодировку клиента PostgreSQL (Windows + русская локаль)
 os.environ.setdefault("PGCLIENTENCODING", "UTF8")
 
-# ── Logging ───────────────────────────────────────────────────────────────────
 config = context.config
-
-# disable_existing_loggers=False: НЕ уничтожает логгеры uvicorn/fastapi/app.*
-# если command.upgrade() когда-либо вызывается программно из приложения.
-# По умолчанию True — что ломает logging всего приложения.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # ── Models & Metadata ─────────────────────────────────────────────────────────
 # КРИТИЧНО: импортировать app.db.models ДО Base.metadata

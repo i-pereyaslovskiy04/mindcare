@@ -4,8 +4,7 @@
 Функции:
   check_connection()    — проверяет доступность PostgreSQL
   ensure_database()     — создаёт БД если отсутствует
-  check_migrations()    — проверяет, что DB на актуальной revision (read-only)
-  run_migrations()      — CLI/CI: alembic upgrade head (НЕ вызывать из FastAPI)
+  check_migrations()    — проверяет, что DB на head; бросает RuntimeError если нет
   init_db()             — точка входа FastAPI: ensure_database + check + seed
   health_check()        — для /api/health endpoint
 
@@ -15,8 +14,9 @@
 ║  1. alembic upgrade head   ← применить миграции (CLI/CI)    ║
 ║  2. uvicorn app.main:app   ← стартовать приложение          ║
 ║                                                              ║
-║  Миграции НЕ запускаются автоматически при старте FastAPI.  ║
-║  init_db() выполняет только проверку версии и seed.         ║
+║  Миграции НИКОГДА не запускаются при старте FastAPI.        ║
+║  Если DB не на head — init_db() бросит RuntimeError и       ║
+║  uvicorn не стартует. Это намеренное поведение.             ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
@@ -108,17 +108,16 @@ def ensure_database() -> None:
 
 # ─── Migration status check ───────────────────────────────────────────────────
 
-def check_migrations() -> bool:
+def check_migrations() -> None:
     """
     Проверяет, что DB находится на актуальной Alembic revision.
 
-    READ-ONLY: только проверка, никаких миграций не выполняется.
-    Логирует WARNING если DB отстаёт от head.
+    READ-ONLY: только проверка через MigrationContext, никаких миграций.
+    Если DB не на head — бросает RuntimeError с инструкцией.
+    Если таблица alembic_version отсутствует — DB не мигрирована вообще.
 
-    Возвращает True если DB на head, False если есть pending миграции.
-
-    Вызывается из init_db() при старте приложения.
-    Если забыли запустить 'alembic upgrade head' — увидишь WARNING в логах.
+    Вызывается из init_db() при каждом старте uvicorn.
+    Если забыли запустить 'alembic upgrade head' — приложение не стартует.
     """
     import os
     from alembic.config import Config
@@ -140,57 +139,27 @@ def check_migrations() -> bool:
             ctx = MigrationContext.configure(conn)
             current = ctx.get_current_revision()
 
-        if current in heads:
-            log.info("[DB] Schema is up to date (revision: %s)", current)
-            return True
-        else:
-            log.warning(
-                "[DB] *** MIGRATION WARNING ***\n"
-                "[DB]   Database is at revision: %s\n"
-                "[DB]   Latest revision(s):      %s\n"
-                "[DB]   Run 'alembic upgrade head' before starting the application.",
-                current,
-                ", ".join(heads),
-            )
-            return False
     except Exception as exc:
-        log.warning("[DB] Could not check migration status: %s", exc)
-        return False
+        raise RuntimeError(
+            f"[DB] Cannot check migration status: {exc}\n"
+            "Убедись, что PostgreSQL запущен и DATABASE_URL корректен."
+        ) from exc
 
+    if current is None:
+        raise RuntimeError(
+            "[DB] Database is not migrated (alembic_version table is empty or missing).\n"
+            "Run:  cd mindcare_api && alembic upgrade head"
+        )
 
-# ─── Migration runner (CLI/CI only) ──────────────────────────────────────────
+    if current not in heads:
+        raise RuntimeError(
+            f"[DB] Database is not migrated to head.\n"
+            f"[DB]   Current revision : {current}\n"
+            f"[DB]   Expected head(s) : {', '.join(sorted(heads))}\n"
+            "Run:  cd mindcare_api && alembic upgrade head"
+        )
 
-def run_migrations() -> None:
-    """
-    Применяет все pending Alembic миграции (alembic upgrade head).
-
-    ⚠️  НЕ ВЫЗЫВАТЬ из FastAPI lifespan / async context.
-        Sync psycopg2 + async event loop = deadlock / startup freeze.
-
-    Предназначена для:
-      - CLI:      cd mindcare_api && alembic upgrade head
-      - CI/CD:    python -c "from app.db.init_db import run_migrations; run_migrations()"
-      - dev setup скрипты (вне async контекста)
-
-    Idempotent: если DB уже на head — ничего не происходит.
-    """
-    import os
-    from alembic.config import Config
-    from alembic import command
-
-    ini_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "alembic.ini",
-    )
-
-    log.info("[DB] Running alembic upgrade head (ini: %s)...", ini_path)
-    try:
-        alembic_cfg = Config(ini_path)
-        command.upgrade(alembic_cfg, "head")
-        log.info("[DB] Alembic upgrade head completed OK")
-    except Exception as exc:
-        log.error("[DB] Alembic upgrade head failed: %s", exc, exc_info=True)
-        raise
+    log.info("[DB] Schema is up to date (revision: %s)", current)
 
 
 # ─── Health check ─────────────────────────────────────────────────────────────
@@ -236,14 +205,12 @@ def init_db() -> None:
 
     Выполняет ТОЛЬКО:
       1. ensure_database()  — создаёт БД если нет (dev convenience)
-      2. check_migrations() — WARNING если DB не на head (read-only)
+      2. check_migrations() — бросает RuntimeError если DB не на head
       3. run_seed()         — базовые данные (идемпотентно)
 
-    Миграции НЕ выполняются здесь.
+    Миграции НИКОГДА не выполняются автоматически.
+    Если DB не на head — приложение НЕ стартует (RuntimeError → uvicorn exit).
     Запустите 'alembic upgrade head' ПЕРЕД стартом приложения.
-
-    При любой критической ошибке бросает исключение —
-    FastAPI не стартует с неработающей БД.
     """
     log.info("[DB] ══════════════════════════════════════════════")
     log.info("[DB]  Database initialization starting")
