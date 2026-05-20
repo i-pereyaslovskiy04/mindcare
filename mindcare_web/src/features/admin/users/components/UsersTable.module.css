@@ -127,3 +127,35 @@
   background: var(--error-bg);
   color: var(--error);
 }
+
+/* ── Row actions ── */
+.actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.actionBtn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  margin-left: 6px;
+}
+
+.actionBtn:first-child { margin-left: 0; }
+
+.actionBtn:hover {
+  background: var(--cream);
+  color: var(--espresso);
+}
+
+.actionBtnDanger:hover {
+  background: var(--error-bg);
+  color: var(--error);
+  border-color: rgba(185, 64, 64, 0.25);
+}

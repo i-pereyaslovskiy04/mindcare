@@ -1,4 +1,4 @@
-import Modal from '../../../components/Modal/Modal';
+import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
 import styles from './UserEditModal.module.css';
 
@@ -23,7 +23,6 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
           <Skeleton />
         ) : (
           <form onSubmit={handleSubmit} noValidate>
-            {/* Нередактируемые поля — только для отображения */}
             <div className={styles.roGroup}>
               <div className={styles.roField}>
                 <span className={styles.roLabel}>Email</span>
@@ -45,7 +44,6 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
               </div>
             </div>
 
-            {/* Редактируемые поля */}
             <div className={styles.field}>
               <label className={styles.label} htmlFor="uem-full_name">ФИО</label>
               <input
@@ -110,19 +108,10 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             )}
 
             <div className={styles.actions}>
-              <button
-                type="button"
-                className={styles.btnSecondary}
-                onClick={onClose}
-                disabled={submitting}
-              >
+              <button type="button" className={styles.btnSecondary} onClick={onClose} disabled={submitting}>
                 Отмена
               </button>
-              <button
-                type="submit"
-                className={styles.btnPrimary}
-                disabled={submitting || loading}
-              >
+              <button type="submit" className={styles.btnPrimary} disabled={submitting || loading}>
                 {submitting ? 'Сохраняем…' : 'Сохранить'}
               </button>
             </div>
@@ -132,8 +121,6 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
     </Modal>
   );
 }
-
-/* ── Скелетон загрузки ── */
 
 function Skeleton() {
   return (

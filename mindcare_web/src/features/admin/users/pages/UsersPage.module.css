@@ -5,9 +5,15 @@
 
 .header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.headerLeft {
+  display: flex;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 24px;
 }
 
 .title {
@@ -20,6 +26,25 @@
 .total {
   font-size: 13px;
   color: var(--text-light);
+}
+
+.btnCreate {
+  height: 38px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--espresso);
+  color: var(--milk);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.btnCreate:hover {
+  opacity: 0.88;
 }
 
 /* ── Pagination ── */

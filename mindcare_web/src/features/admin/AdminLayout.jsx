@@ -1,5 +1,5 @@
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
-import { useAuth } from '../../features/auth/AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import styles from './AdminLayout.module.css';
 
 const CRUMB_LABELS = {
@@ -8,7 +8,7 @@ const CRUMB_LABELS = {
 
 export default function AdminLayout() {
   const { pathname } = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const crumb = CRUMB_LABELS[pathname] ?? 'Панель';
 
   return (
@@ -41,6 +41,16 @@ export default function AdminLayout() {
             <span className={styles.navItemSoon}>скоро</span>
           </span>
         </nav>
+
+        <div className={styles.sidebarFooter}>
+          <button
+            type="button"
+            className={styles.logoutBtn}
+            onClick={logout}
+          >
+            Выйти
+          </button>
+        </div>
       </aside>
 
       <main className={styles.main}>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUser, createUser, updateUser } from '../../../api/admin.api';
+import { getUser, createUser, updateUser } from '../../../../api/users.api';
 
 const CREATE_INITIAL = { full_name: '', email: '', role: 'psychologist' };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -29,15 +29,16 @@ export function useUserForm({ mode, uuid, onSuccess }) {
   const isCreate = mode === 'create';
 
   const [values, setValues] = useState(
-    isCreate ? CREATE_INITIAL : { full_name: '', phone: '', role: '', is_active: true }
+    isCreate
+      ? CREATE_INITIAL
+      : { full_name: '', phone: '', role: '', is_active: true }
   );
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(!isCreate);
+  const [errors, setErrors]       = useState({});
+  const [loading, setLoading]     = useState(!isCreate);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isCreate) return;
-    if (!uuid) return;
+    if (isCreate || !uuid) return;
 
     let cancelled = false;
     setLoading(true);
@@ -48,8 +49,8 @@ export function useUserForm({ mode, uuid, onSuccess }) {
         if (cancelled) return;
         setValues({
           full_name: user.full_name,
-          phone: user.phone || '',
-          role: user.role,
+          phone:     user.phone || '',
+          role:      user.role,
           is_active: user.is_active,
         });
       })
@@ -74,18 +75,15 @@ export function useUserForm({ mode, uuid, onSuccess }) {
     e.preventDefault();
 
     const errs = isCreate ? validateCreate(values) : validateEdit(values);
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      return;
-    }
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setSubmitting(true);
     const request = isCreate ? createUser(values) : updateUser(uuid, values);
 
     request
       .then((result) => { onSuccess(result); })
-      .catch((err) => { setErrors({ _form: err.message }); })
-      .finally(() => { setSubmitting(false); });
+      .catch((err)   => { setErrors({ _form: err.message }); })
+      .finally(()    => { setSubmitting(false); });
   }
 
   function reset() {

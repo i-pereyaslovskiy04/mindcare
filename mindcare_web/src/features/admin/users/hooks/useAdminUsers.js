@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useDebounce } from '../../../hooks/useDebounce';
-import { getUsers } from '../../../api/admin.api';
+import { useDebounce } from '../../../../hooks/useDebounce';
+import { getUsers } from '../../../../api/users.api';
 
 export function useAdminUsers() {
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [items, setItems]   = useState([]);
+  const [total, setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [query, setQueryRaw] = useState('');
+  const [error, setError]   = useState(null);
+  const [page, setPage]     = useState(1);
+  const [query, setQueryRaw]   = useState('');
   const [filters, setFiltersRaw] = useState({ role: '', is_active: '' });
-  const [tick, setTick] = useState(0);
+  const [tick, setTick]     = useState(0);
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -35,8 +35,8 @@ export function useAdminUsers() {
 
     getUsers({
       page,
-      search: debouncedQuery,
-      role: filters.role,
+      search:    debouncedQuery,
+      role:      filters.role,
       is_active: filters.is_active,
     })
       .then((data) => {
@@ -52,9 +52,7 @@ export function useAdminUsers() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [debouncedQuery, filters, page, tick]);
 
   return {

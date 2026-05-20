@@ -1,48 +1,65 @@
-const API_BASE  = process.env.REACT_APP_API_URL || '/api';
-const AUTH_BASE = `${API_BASE}/auth`;
+/**
+ * Auth API — all /api/auth/* calls.
+ *
+ * Every function goes through apiFetch (client.js).
+ * No raw fetch() anywhere in this file.
+ *
+ * Public endpoints (no auth required): login, registerInit,
+ * registerConfirm, passwordResetInit, passwordResetConfirm.
+ *
+ * Protected endpoints (requires Bearer token in client): me, logout.
+ */
 
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+import { apiFetch } from './client';
 
-async function _handleResponse(res) {
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || body.message || `HTTP ${res.status}`);
-  }
-  return res.json();
+const BASE = '/api/auth';
+
+/** POST /api/auth/login → { session_token, expires_at, role } */
+export function login({ email, password }) {
+  return apiFetch(`${BASE}/login`, {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
 }
 
-export async function registerInit({ name, email, password }) {
-  const res = await fetch(`${AUTH_BASE}/register/init`, {
+/** POST /api/auth/logout — revokes current session. */
+export function logout() {
+  return apiFetch(`${BASE}/logout`, { method: 'POST' });
+}
+
+/** GET /api/auth/me → { id, email, name, role } */
+export function me() {
+  return apiFetch(`${BASE}/me`);
+}
+
+/** POST /api/auth/register/init — sends OTP to email. */
+export function registerInit({ name, email, password }) {
+  return apiFetch(`${BASE}/register/init`, {
     method: 'POST',
-    headers: JSON_HEADERS,
     body: JSON.stringify({ name, email, password }),
   });
-  return _handleResponse(res);
 }
 
-export async function registerConfirm({ email, code }) {
-  const res = await fetch(`${AUTH_BASE}/register/confirm`, {
+/** POST /api/auth/register/confirm — verifies OTP, creates account. */
+export function registerConfirm({ email, code }) {
+  return apiFetch(`${BASE}/register/confirm`, {
     method: 'POST',
-    headers: JSON_HEADERS,
     body: JSON.stringify({ email, code }),
   });
-  return _handleResponse(res);
 }
 
-export async function passwordResetInit({ email }) {
-  const res = await fetch(`${AUTH_BASE}/password/reset/init`, {
+/** POST /api/auth/password/reset/init — sends reset OTP (silent if email not found). */
+export function passwordResetInit({ email }) {
+  return apiFetch(`${BASE}/password/reset/init`, {
     method: 'POST',
-    headers: JSON_HEADERS,
     body: JSON.stringify({ email }),
   });
-  return _handleResponse(res);
 }
 
-export async function passwordResetConfirm({ email, code, newPassword }) {
-  const res = await fetch(`${AUTH_BASE}/password/reset/confirm`, {
+/** POST /api/auth/password/reset/confirm — verifies OTP + sets new password. */
+export function passwordResetConfirm({ email, code, new_password }) {
+  return apiFetch(`${BASE}/password/reset/confirm`, {
     method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ email, code, new_password: newPassword }),
+    body: JSON.stringify({ email, code, new_password }),
   });
-  return _handleResponse(res);
 }

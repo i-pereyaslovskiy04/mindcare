@@ -1,23 +1,20 @@
 import styles from './UsersTable.module.css';
 
 const ROLE_LABELS = {
-  student: 'Студент',
+  student:      'Студент',
   psychologist: 'Психолог',
-  admin: 'Администратор',
-  supervisor: 'Супервизор',
+  admin:        'Администратор',
+  supervisor:   'Супервизор',
 };
 
 const SKELETON_ROWS = 7;
 
-function SkeletonRow() {
+function SkeletonRow({ cols }) {
   return (
     <tr>
-      <td><span className={styles.skeletonCell} /></td>
-      <td><span className={styles.skeletonCell} style={{ width: '70%' }} /></td>
-      <td><span className={styles.skeletonCell} style={{ width: '72px' }} /></td>
-      <td><span className={styles.skeletonCell} style={{ width: '84px' }} /></td>
-      <td><span className={styles.skeletonCell} style={{ width: '80px' }} /></td>
-      <td><span className={styles.skeletonCell} style={{ width: '80px' }} /></td>
+      {Array.from({ length: cols }, (_, i) => (
+        <td key={i}><span className={styles.skeletonCell} /></td>
+      ))}
     </tr>
   );
 }
@@ -27,7 +24,9 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('ru-RU');
 }
 
-export default function UsersTable({ items, loading, error }) {
+export default function UsersTable({ items, loading, error, onEdit, onDelete }) {
+  const cols = 7; // ФИО, Email, Роль, Статус, Регистрация, Вход, Действия
+
   return (
     <div className={styles.wrapper}>
       <table className={styles.table}>
@@ -39,16 +38,17 @@ export default function UsersTable({ items, loading, error }) {
             <th>Статус</th>
             <th>Дата регистрации</th>
             <th>Последний вход</th>
+            <th aria-label="Действия" />
           </tr>
         </thead>
         <tbody>
           {loading && Array.from({ length: SKELETON_ROWS }, (_, i) => (
-            <SkeletonRow key={i} />
+            <SkeletonRow key={i} cols={cols} />
           ))}
 
           {!loading && error && (
             <tr>
-              <td colSpan={6} className={styles.error}>
+              <td colSpan={cols} className={styles.error}>
                 Ошибка загрузки: {error}
               </td>
             </tr>
@@ -56,7 +56,7 @@ export default function UsersTable({ items, loading, error }) {
 
           {!loading && !error && items.length === 0 && (
             <tr>
-              <td colSpan={6} className={styles.empty}>
+              <td colSpan={cols} className={styles.empty}>
                 Пользователи не найдены
               </td>
             </tr>
@@ -78,6 +78,24 @@ export default function UsersTable({ items, loading, error }) {
               </td>
               <td className={styles.date}>{formatDate(item.created_at)}</td>
               <td className={styles.date}>{formatDate(item.last_login)}</td>
+              <td className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.actionBtn}
+                  onClick={() => onEdit?.(item)}
+                  aria-label={`Редактировать ${item.full_name}`}
+                >
+                  Изменить
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+                  onClick={() => onDelete?.(item)}
+                  aria-label={`Удалить ${item.full_name}`}
+                >
+                  Удалить
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>

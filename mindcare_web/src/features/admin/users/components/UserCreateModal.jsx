@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import Modal from '../../../components/Modal/Modal';
+import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
 import styles from './UserCreateModal.module.css';
 
@@ -35,8 +35,6 @@ export default function UserCreateModal({ open, onClose, onCreated }) {
     </Modal>
   );
 }
-
-/* ── Экран формы ── */
 
 function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }) {
   return (
@@ -100,19 +98,10 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
         )}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.btnSecondary}
-            onClick={onCancel}
-            disabled={submitting}
-          >
+          <button type="button" className={styles.btnSecondary} onClick={onCancel} disabled={submitting}>
             Отмена
           </button>
-          <button
-            type="submit"
-            className={styles.btnPrimary}
-            disabled={submitting}
-          >
+          <button type="submit" className={styles.btnPrimary} disabled={submitting}>
             {submitting ? 'Создаём…' : 'Создать'}
           </button>
         </div>
@@ -121,23 +110,18 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
   );
 }
 
-/* ── Экран успеха ── */
-
 function SuccessScreen({ user, onClose }) {
   return (
     <div className={styles.body}>
       <div className={styles.successIcon} aria-hidden="true">✓</div>
       <h2 className={styles.title}>Пользователь создан</h2>
-
       <p className={styles.successName}>{user.full_name}</p>
       <p className={styles.successEmail}>{user.email}</p>
 
       <div className={styles.passwordBlock}>
         <p className={styles.passwordLabel}>Временный пароль</p>
         <p className={styles.password}>{user.temporary_password}</p>
-        <p className={styles.passwordNote}>
-          Пароль также отправлен на почту пользователя
-        </p>
+        <p className={styles.passwordNote}>Пароль также отправлен на почту пользователя</p>
       </div>
 
       <div className={styles.actions}>
