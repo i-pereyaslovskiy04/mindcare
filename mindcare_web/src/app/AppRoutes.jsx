@@ -75,7 +75,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<UsersPage />} />
+        <Route index element={<Navigate to="users" replace />} />
         <Route path="users" element={<UsersPage />} />
       </Route>
 
