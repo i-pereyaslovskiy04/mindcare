@@ -13,6 +13,7 @@ import NotFound from '../pages/not-found/NotFound';
 import ClientDashboard from '../pages/client/ClientDashboard';
 import ConsultantDashboard from '../pages/consultant/ConsultantDashboard';
 import AdminDashboard from '../pages/admin/AdminDashboard';
+import UsersPage from '../pages/admin/users/UsersPage';
 import StudentHome from '../pages/student/StudentHome';
 import DiaryPage from '../pages/student/DiaryPage';
 import TestsPage from '../pages/student/Tests/TestsPage';
@@ -73,7 +74,10 @@ export default function AppRoutes() {
             <AdminDashboard />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<UsersPage />} />
+        <Route path="users" element={<UsersPage />} />
+      </Route>
 
       <Route path="*" element={<NotFound />} />
     </Routes>

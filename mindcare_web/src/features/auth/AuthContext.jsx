@@ -6,6 +6,7 @@ import {
   useCallback,
   useRef,
 } from 'react';
+import { flushSync } from 'react-dom';
 import { configureClient } from '../../api/client';
 
 const AuthContext = createContext(null);
@@ -109,7 +110,11 @@ export function AuthProvider({ children }) {
     sessionTokenRef.current = data.session_token;
     localStorage.setItem('session_token', data.session_token);
     const userData = await authApi.me(data.session_token);
-    setUser(userData);
+    // flushSync гарантирует что user зафиксирован до navigate() в LoginForm,
+    // иначе ProtectedRoute видит user=null и редиректит на /
+    flushSync(() => {
+      setUser(userData);
+    });
     return data.role;
   }, []);
 
