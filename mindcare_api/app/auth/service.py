@@ -27,21 +27,8 @@ class AuthError(Exception):
 # ---------------------------------------------------------------------------
 # Регистрация
 # ---------------------------------------------------------------------------
-# говорит что это лишнее так как есть register_init и register_confirm
-# def register_user(name: str, email: str, password: str) -> dict:
-#     if not name or len(name.strip()) < 2:
-#         raise AuthError("Name must be at least 2 characters", 422)
-#     if len(password) < 8:
-#         raise AuthError("Password must be at least 8 characters", 422)
-#     if storage.find_user_by_email(email):
-#         raise AuthError("Email already registered", 409)
 
-#     return storage.save_user({
-#         "name":            name.strip(),
-#         "email":           email,
-#         "hashed_password": _hash(password),
-#         "role":            "student",
-#     })
+REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
 
 
 def register_init(name: str, email: str, password: str) -> None:
@@ -58,7 +45,9 @@ def register_init(name: str, email: str, password: str) -> None:
 
     password_hash = _hash(password)
     try:
-        code = otp_service.create_or_update_otp(email, name.strip(), password_hash)
+        code = otp_service.create_or_update_otp(
+            email, name.strip(), password_hash
+        )
     except ValueError as e:
         raise AuthError(str(e), 429)
 
@@ -68,25 +57,9 @@ def register_init(name: str, email: str, password: str) -> None:
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise AuthError(f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500)
-
-REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
-# Как было
-#def register_confirm(email: str, code: str) -> dict:
-#    """Проверяет OTP и создаёт пользователя."""
-#    from app.auth import otp_service
-#
-#    try:
-#        user_data = otp_service.verify_otp(email, code)
-#    except ValueError as e:
-#        raise AuthError(str(e), 400)
-#
-#    return storage.save_user({
-#        "name":            user_data["name"],
-#        "email":           email,
-#        "hashed_password": user_data["password_hash"],
-#        "role":            "student",
-#    })
+        raise AuthError(
+            f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
+        )
 
 
 def register_confirm(
@@ -95,7 +68,7 @@ def register_confirm(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
-    """Проверяет OTP, создаёт пользователя и записывает согласия на ПДн."""
+    """Проверяет OTP, создаёт/реактивирует пользователя, записывает согласия."""
     from app.auth import otp_service
 
     try:
@@ -103,25 +76,30 @@ def register_confirm(
     except ValueError as e:
         raise AuthError(str(e), 400)
 
-    # Проверяем что в БД есть актуальные политики до создания юзера
+    # Проверяем наличие актуальных политик до создания юзера
     consent_ids = {}
     for policy_type in REQUIRED_CONSENTS:
         cid = storage.get_active_consent_id(policy_type)
         if cid is None:
             raise AuthError(
-                f"Политика '{policy_type}' не найдена в БД. Обратитесь к администратору.",
+                f"Политика '{policy_type}' не найдена в БД."
+                " Обратитесь к администратору.",
                 500,
             )
         consent_ids[policy_type] = cid
 
-    user = storage.save_user({
-        "name":            user_data["name"],
-        "email":           email,
-        "hashed_password": user_data["password_hash"],
-        "role":            "student",
-    })
+    # Реактивация мягко-удалённого аккаунта или создание нового
+    user = storage.reactivate_user(
+        email, user_data["name"], user_data["password_hash"]
+    )
+    if user is None:
+        user = storage.save_user({
+            "name":            user_data["name"],
+            "email":           email,
+            "hashed_password": user_data["password_hash"],
+            "role":            "student",
+        })
 
-    # Записываем согласия
     for cid in consent_ids.values():
         storage.save_consent_record(
             user_id=int(user["id"]),
@@ -131,6 +109,7 @@ def register_confirm(
         )
 
     return user
+
 
 # ---------------------------------------------------------------------------
 # Аутентификация
@@ -153,7 +132,7 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 def password_reset_init(email: str) -> None:
-    """Отправляет OTP для сброса пароля. Возвращает молча если email не найден."""
+    """Отправляет OTP для сброса пароля. Молчит если email не найден."""
     from app.auth import otp_service
     from app.services.email_service import send_password_reset_otp
 
@@ -175,10 +154,14 @@ def password_reset_init(email: str) -> None:
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise AuthError(f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500)
+        raise AuthError(
+            f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
+        )
 
 
-def password_reset_confirm(email: str, code: str, new_password: str) -> None:
+def password_reset_confirm(
+    email: str, code: str, new_password: str
+) -> None:
     """Проверяет OTP, обновляет пароль, отзывает все сессии пользователя."""
     if len(new_password) < 8:
         raise AuthError("Password must be at least 8 characters", 422)
@@ -195,7 +178,8 @@ def password_reset_confirm(email: str, code: str, new_password: str) -> None:
         raise AuthError("Пользователь не найден", 404)
 
     storage.update_user_password(user["id"], _hash(new_password))
-    storage.revoke_all_user_sessions(user["id"])  # инвалидируем все сессии после смены пароля
+    # Инвалидируем все сессии после смены пароля
+    storage.revoke_all_user_sessions(user["id"])
 
 
 # ---------------------------------------------------------------------------
