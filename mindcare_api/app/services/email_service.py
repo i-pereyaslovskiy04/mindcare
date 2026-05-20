@@ -210,3 +210,23 @@ def send_password_reset_otp(to_email: str, code: str) -> None:
         ),
         description_plain="Введите код, чтобы сбросить пароль.",
     )
+
+
+def send_welcome_psychologist(to_email: str, name: str, password: str) -> None:
+    _send_otp_email(
+        to_email=to_email,
+        code=password,
+        subject="Добро пожаловать в MindCare — ваши данные для входа",
+        heading="Ваш аккаунт создан",
+        description_html=(
+            f"Здравствуйте, <strong>{name}</strong>!<br><br>"
+            "Для вас создан аккаунт психолога на платформе MindCare. "
+            "Ниже — ваш временный пароль. "
+            "Пожалуйста, войдите и смените его при первой возможности."
+        ),
+        description_plain=(
+            f"Здравствуйте, {name}!\n\n"
+            "Для вас создан аккаунт психолога на платформе MindCare.\n"
+            "Ниже — ваш временный пароль. Смените его при первом входе."
+        ),
+    )

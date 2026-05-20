@@ -190,6 +190,8 @@ src/api/
 До реализации соответствующего бэкенд-эндпоинта *.api.js может импортировать mock из data/. После подключения к API импорт удаляется. См. раздел 6 для полных правил работы с моками.
 **Запрещено:** API в `services/`, API внутри `pages/`, API внутри `components/`
 
+**Исключение — `features/auth/AuthContext.jsx`:** использует нативный `fetch()` напрямую (не через `apiFetch`). Это намеренно: `AuthContext` сам настраивает `client.js` через `configureClient()` и обрабатывает событие `auth:session-expired`. Использование `apiFetch` внутри `AuthContext` создало бы циклическую зависимость при 401-обработке. Все остальные модули используют только `apiFetch`.
+
 ### Components — domain-agnostic примитивы
 
 ```

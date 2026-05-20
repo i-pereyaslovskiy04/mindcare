@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.routes import router as auth_router
+from app.users.routes_admin import router as admin_users_router
 from app.db.session import engine
 from app.db import models  # noqa: F401 — регистрирует все модели в Base
 from app.db.models import Base
@@ -46,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix="/api")
+app.include_router(admin_users_router, prefix="/api")
 
 
 @app.get("/api/hello")

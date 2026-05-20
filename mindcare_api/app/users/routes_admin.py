@@ -1,0 +1,104 @@
+"""
+Админские эндпоинты управления пользователями.
+Префикс: /api/admin/users
+Доступ: только с ролью 'admin' через Depends(require_role("admin")).
+"""
+from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import Optional, Literal
+
+from app.auth.deps import require_role
+from app.users import service
+from app.users.schemas import (
+    AdminUserListQuery,
+    PaginatedUsersResponse,
+    AdminUserCreate,
+    AdminUserCreateResponse,
+    AdminUserUpdate,
+    AdminUserRead,
+)
+
+
+router = APIRouter(
+    prefix="/admin/users",
+    tags=["admin: users"],
+    dependencies=[Depends(require_role("admin"))],
+)
+
+
+@router.get("/", response_model=PaginatedUsersResponse)
+def list_users(
+    page: int = Query(default=1, ge=1, description="Номер страницы"),
+    size: int = Query(
+        default=20, ge=1, le=100, description="Элементов на странице"
+    ),
+    search: Optional[str] = Query(
+        default=None, description="Поиск по email или ФИО"
+    ),
+    role: Optional[str] = Query(
+        default=None, description="Фильтр по роли"
+    ),
+    is_active: Optional[bool] = Query(
+        default=None, description="Фильтр по активности"
+    ),
+    sort: str = Query(default="created_at", description="Поле сортировки"),
+    order: Literal["asc", "desc"] = Query(
+        default="desc", description="Направление сортировки"
+    ),
+):
+    """Список всех пользователей с пагинацией, поиском и фильтрами."""
+    query = AdminUserListQuery(
+        page=page,
+        size=size,
+        search=search,
+        role=role,
+        is_active=is_active,
+        sort=sort,
+        order=order,
+    )
+    return service.get_users_list(query)
+
+
+@router.post("/", response_model=AdminUserCreateResponse, status_code=201)
+def create_user(body: AdminUserCreate):
+    """
+    Создание нового пользователя (психолога или админа).
+    Пароль генерируется автоматически и отправляется на email.
+    """
+    try:
+        user = service.create_user(body)
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return user
+
+
+@router.get("/{uuid}", response_model=AdminUserRead)
+def get_user(uuid: str):
+    """Профиль конкретного пользователя по UUID."""
+    try:
+        return service.get_user(uuid)
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.patch("/{uuid}", response_model=AdminUserRead)
+def update_user(uuid: str, body: AdminUserUpdate):
+    """
+    Частичное обновление пользователя.
+    Поддерживает: блокировку/разблокировку, смену роли, ФИО и телефон.
+    """
+    try:
+        return service.update_user(uuid, body)
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.delete("/{uuid}", status_code=204)
+def delete_user(uuid: str):
+    """
+    Мягкое удаление пользователя. Отзывает все сессии.
+    Возвращает 204 No Content при успехе.
+    """
+    try:
+        service.delete_user(uuid)
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
