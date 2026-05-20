@@ -272,9 +272,9 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | POST | `/api/auth/password/reset/confirm` | Public | ✅ |
 | GET | `/api/admin/users` | Admin | ✅ |
 | POST | `/api/admin/users` | Admin | ✅ |
-| PATCH | `/api/admin/users/{id}` | Admin | 🔲 в работе |
-| DELETE | `/api/admin/users/{id}` | Admin | 🔲 в работе |
-| GET | `/api/admin/users/{id}` | Admin | 🔲 в работе |
+| PATCH | `/api/admin/users/{id}` | Admin | ✅ |
+| DELETE | `/api/admin/users/{id}` | Admin | ✅ |
+| GET | `/api/admin/users/{id}` | Admin | ✅ |
 
 ## Соглашения по коду
 
