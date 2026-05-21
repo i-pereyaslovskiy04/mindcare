@@ -15,3 +15,27 @@ export function getUsers({
   if (is_active !== '') params.set('is_active', is_active);
   return apiFetch(`/api/admin/users/?${params}`);
 }
+
+export function getUser(uuid) {
+  return apiFetch(`/api/admin/users/${uuid}`);
+}
+
+export function createUser(data) {
+  return apiFetch('/api/admin/users/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateUser(uuid, data) {
+  return apiFetch(`/api/admin/users/${uuid}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteUser(uuid) {
+  return apiFetch(`/api/admin/users/${uuid}`, {
+    method: 'DELETE',
+  });
+}

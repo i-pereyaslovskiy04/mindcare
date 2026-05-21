@@ -522,15 +522,21 @@ refetch          // ручной перезапрос
 
 `FiltersDropdown.jsx` и `FilterSheet.jsx` содержат одинаковые константы (`SORT_OPTIONS`) и SVG иконки (`XIcon`, `CheckIcon`). Если фильтр опций изменится — нужно обновить два файла.
 
-### 8.4 Social login buttons — нефункциональные
+### 8.4 LoginForm использует устаревший паттерн ошибок
+
+`LoginForm.jsx` хранит ошибки полей как булевы значения (`errors.email: true`) и серверную ошибку в отдельном `apiError`. Это противоречит стандарту из раздела 10 (единый `errors` со строками + `errors._form`).
+
+**Что сделать:** переписать `LoginForm` без `apiError`, перевести `errors` на строки-сообщения, убрать хардкод текстов из JSX.
+
+### 8.5 Social login buttons — нефункциональные
 
 `LoginForm` и `RegisterForm` рендерят кнопки Telegram / VK / Yandex без `onClick`. Это dead UI, вводящий пользователей в заблуждение.
 
-### 8.5 Нет глобального ErrorBoundary
+### 8.6 Нет глобального ErrorBoundary
 
 Любая render-ошибка в `AppRoutes` крэшит всё приложение. `App.jsx` не оборачивает дерево в `ErrorBoundary`.
 
-### 8.6 Dashboard pages — stubs
+### 8.7 Dashboard pages — stubs
 
 `ClientDashboard`, `ConsultantDashboard`, `AdminDashboard` отображают только приветствие. Реальный UI не реализован.
 
@@ -670,6 +676,38 @@ return { items, loading, error, hasMore, loadMore }
 - Один `.module.css` на один компонент — никогда не шарить стили между двумя компонентами
 - Классы в camelCase: `.cardTitle`, `.btnPrimary`
 - Никаких глобальных селекторов внутри модуля
+
+### Error handling в формах
+
+В проекте единый стандарт: один объект `errors` со строками-сообщениями.
+
+```js
+const [errors, setErrors] = useState({});
+
+// Клиентская ошибка поля:
+// { full_name: 'Минимум 2 символа', email: 'Введите корректный email' }
+
+// Серверная / общая ошибка (не привязана к полю):
+// { _form: 'Email уже занят' }
+
+// Оба типа одновременно:
+// { email: 'Некорректный формат', _form: 'Сервер недоступен' }
+```
+
+В компоненте:
+
+```jsx
+{errors.email && <span className={styles.hint} role="alert">{errors.email}</span>}
+{errors._form && <div className={styles.formError} role="alert">{errors._form}</div>}
+```
+
+**Правила:**
+- Значение поля в `errors` — всегда строка с сообщением или `undefined`
+- `errors._form` — серверные и общие ошибки формы
+- Булевы значения в `errors` и отдельный `apiError` — **устаревший паттерн** (только `LoginForm`, рефакторинг в бэклоге)
+- Hooks возвращают `errors` в контракте, компонент не хранит ошибки отдельно
+
+---
 
 ### Порядок imports
 

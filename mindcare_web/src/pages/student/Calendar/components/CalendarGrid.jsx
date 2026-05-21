@@ -4,7 +4,9 @@ import { MOCK_EVENTS } from '../data/mockEvents';
 import CalendarDayCell from './CalendarDayCell';
 import styles from './CalendarGrid.module.css';
 
-export default function CalendarGrid({ year, month, sessionMap, todayKey, onDaySelect }) {
+const POPUP_W = 280;
+
+export default function CalendarGrid({ year, month, sessionMap, todayKey, onDaySelect, containerRef }) {
   const [selectedKey, setSelectedKey] = useState(null);
 
   const cells = buildGrid(year, month);
@@ -18,17 +20,30 @@ export default function CalendarGrid({ year, month, sessionMap, todayKey, onDayS
     return map;
   }, []);
 
-  function handleCellClick(cell) {
+  function handleCellClick(cell, e) {
     const key = dateKey(cell.year, cell.month, cell.day);
     const events = eventsMap[key] || [];
     if (!events.length) {
       setSelectedKey(null);
-      onDaySelect?.(null);
+      onDaySelect?.(null, null);
       return;
     }
     const next = selectedKey === key ? null : key;
     setSelectedKey(next);
-    onDaySelect?.(next);
+
+    let pos = null;
+    if (next && e?.currentTarget && containerRef?.current) {
+      const cellRect = e.currentTarget.getBoundingClientRect();
+      const contRect = containerRef.current.getBoundingClientRect();
+      const cellCenterX = cellRect.left + cellRect.width / 2 - contRect.left;
+      const popupLeft = Math.max(8, Math.min(cellCenterX - POPUP_W / 2, contRect.width - POPUP_W - 8));
+      pos = {
+        top: cellRect.bottom - contRect.top + 10,
+        left: popupLeft,
+        arrowLeft: cellCenterX - popupLeft,
+      };
+    }
+    onDaySelect?.(next, pos);
   }
 
   return (
@@ -47,7 +62,7 @@ export default function CalendarGrid({ year, month, sessionMap, todayKey, onDayS
               dotStatus={sessionMap[key]?.status || null}
               isSelected={selectedKey === key}
               events={eventsMap[key] || []}
-              onClick={() => handleCellClick(cell)}
+              onClick={(e) => handleCellClick(cell, e)}
             />
           );
         })}

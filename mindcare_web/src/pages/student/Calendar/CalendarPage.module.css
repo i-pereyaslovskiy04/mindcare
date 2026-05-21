@@ -19,6 +19,7 @@
 }
 
 .calendarBox {
+  position: relative;
   background: #fff;
   border: 1px solid var(--nav-border);
   border-radius: 14px;

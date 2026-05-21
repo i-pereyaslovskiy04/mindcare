@@ -9,7 +9,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from app.db.session import SessionLocal
-from app.db.models import User, UserRole, Role, UserSession, Consent, ConsentRecord
+from app.db.models import (
+    User, UserRole, Role, UserSession, Consent, ConsentRecord,
+)
 from app.auth.security import generate_session_token
 from app.core.config import SESSION_EXPIRE_DAYS
 
@@ -25,7 +27,8 @@ def _get_primary_role(db, user_id: int) -> str:
         .join(Role, UserRole.role_id == Role.id)
         .filter(UserRole.user_id == user_id)
         .filter(
-            (UserRole.expires_at == None) | (UserRole.expires_at > datetime.now(timezone.utc))
+            UserRole.expires_at.is_(None)
+            | (UserRole.expires_at > datetime.now(timezone.utc))
         )
         .first()
     )
@@ -58,7 +61,10 @@ def find_user_by_email(email: str) -> Optional[dict]:
     with SessionLocal() as db:
         user = (
             db.query(User)
-            .filter(User.email == email.lower().strip(), User.deleted_at == None)
+            .filter(
+                User.email == email.lower().strip(),
+                User.deleted_at.is_(None),
+            )
             .first()
         )
         return _user_to_dict(user, db) if user else None
@@ -68,7 +74,10 @@ def find_user_by_id(user_id: str) -> Optional[dict]:
     with SessionLocal() as db:
         user = (
             db.query(User)
-            .filter(User.id == int(user_id), User.deleted_at == None)
+            .filter(
+                User.id == int(user_id),
+                User.deleted_at.is_(None),
+            )
             .first()
         )
         return _user_to_dict(user, db) if user else None
@@ -82,11 +91,41 @@ def save_user(user: dict) -> dict:
             password_hash=user["hashed_password"],
         )
         db.add(db_user)
-        db.flush()  # получаем id до commit, чтобы создать user_roles в той же транзакции
+        db.flush()  # нужен id до commit — для user_roles в той же транзакции
         _assign_role(db, db_user.id, user.get("role", "student"))
         db.commit()
         db.refresh(db_user)
         return _user_to_dict(db_user, db)
+
+
+def reactivate_user(
+    email: str,
+    name: str,
+    password_hash: str,
+) -> Optional[dict]:
+    """
+    Реактивирует мягко-удалённого пользователя вместо создания нового.
+    Возвращает dict если такой удалённый юзер найден, иначе None.
+    Роль, uuid и id остаются прежними — обновляются только имя, пароль и статус.
+    """
+    with SessionLocal() as db:
+        user = (
+            db.query(User)
+            .filter(
+                User.email == email.lower().strip(),
+                User.deleted_at.isnot(None),
+            )
+            .first()
+        )
+        if not user:
+            return None
+        user.deleted_at = None
+        user.is_active = True
+        user.full_name = name
+        user.password_hash = password_hash
+        db.commit()
+        db.refresh(user)
+        return _user_to_dict(user, db)
 
 
 def get_active_consent_id(policy_type: str) -> Optional[int]:
@@ -172,14 +211,17 @@ def find_session(token: str) -> Optional[dict]:
             db.query(UserSession)
             .filter(
                 UserSession.id == token,
-                UserSession.is_revoked == False,
+                ~UserSession.is_revoked,
                 UserSession.expires_at > datetime.now(timezone.utc),
             )
             .first()
         )
         if not session:
             return None
-        return {"user_id": str(session.user_id), "expires_at": session.expires_at}
+        return {
+            "user_id":    str(session.user_id),
+            "expires_at": session.expires_at,
+        }
 
 
 def revoke_session(token: str) -> None:

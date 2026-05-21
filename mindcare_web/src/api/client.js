@@ -31,5 +31,6 @@ export async function apiFetch(url, options = {}) {
   }
 
   if (!res.ok) throw await _parseError(res);
+  if (res.status === 204) return null;
   return res.json();
 }
