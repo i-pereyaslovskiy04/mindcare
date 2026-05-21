@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
-import { getRoleHome } from '../../features/auth/authUtils';
+import { getRoleHome } from '../../shared/lib/routes';
 import Navbar from '../../components/Navbar/Navbar';
 import Hero from './components/Hero';
 import QuickActions from './components/QuickActions';

@@ -5,12 +5,6 @@ from datetime import datetime
 Role = Literal["student", "psychologist", "admin", "supervisor"]
 
 
-class RegisterRequest(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-
-
 class RegisterInitRequest(BaseModel):
     name: str
     email: EmailStr

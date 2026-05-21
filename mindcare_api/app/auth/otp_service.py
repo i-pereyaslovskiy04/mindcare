@@ -1,38 +1,70 @@
 """
-DB-backed OTP service. All OTP state lives in the otp_verifications MySQL table.
-Replaces the former in-memory otp_store.py — safe for multi-instance deployments
-and server restarts.
+DB-backed OTP service. All OTP state lives in the otp_verifications table.
+Safe for multi-instance deployments and server restarts.
+
+Безопасность хранения кода:
+  OTP-коды хранятся как SHA-256 хеш (hex, 64 символа), не plaintext.
+  Это защищает от раскрытия действующих кодов при утечке дампа БД.
+
+  Почему SHA-256 (а не bcrypt):
+    - TTL = 10 минут: атакующий ограничен во времени
+    - MAX_ATTEMPTS = 5: brute force через API заблокирован
+    - SHA-256 без соли достаточен для OTP (в отличие от постоянных паролей),
+      потому что:
+        a) коды одноразовые и истекают
+        b) пространство перебора мало (1M), но это нейтрализуется TTL+attempts
+    - bcrypt слишком медленный для OTP (каждая проверка занимала бы ~200ms)
 """
 
+import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta
 
 from app.db.session import SessionLocal
 from app.db.models import OtpVerification
 
-RESEND_COOLDOWN = 60            # seconds before a new code can be requested
+log = logging.getLogger(__name__)
+
+RESEND_COOLDOWN = 60            # секунд между повторными отправками
 OTP_TTL         = timedelta(minutes=10)
 MAX_ATTEMPTS    = 5
 
 
 def _utcnow() -> datetime:
-    """Naive UTC timestamp — consistent with MySQL DATETIME column storage."""
+    """Naive UTC timestamp — совместимо с DateTime (без timezone) в ORM."""
     return datetime.utcnow()
+
+
+def _hash_code(plaintext_code: str) -> str:
+    """
+    Хешируем OTP-код через SHA-256.
+    Возвращает hex-строку из 64 символов.
+    """
+    return hashlib.sha256(plaintext_code.encode("utf-8")).hexdigest()
+
+
+def _verify_code(plaintext_code: str, stored_hash: str) -> bool:
+    """Сравниваем введённый код с сохранённым хешем."""
+    return _hash_code(plaintext_code) == stored_hash
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
     """
-    Create (or overwrite) the OTP record for *email*.
+    Создаёт (или перезаписывает) OTP-запись для email.
 
-    - If a record already exists and was sent < RESEND_COOLDOWN seconds ago,
-      raises ValueError with a user-facing cooldown message.
-    - Otherwise writes a fresh 6-digit code with a 10-minute TTL.
-    - Returns the plaintext code so the caller can send it by email.
+    - Если запись уже существует и код был отправлен < RESEND_COOLDOWN сек назад,
+      бросает ValueError с пользовательским сообщением.
+    - Иначе генерирует новый 6-значный код, хранит его SHA-256 хеш,
+      устанавливает TTL 10 минут.
+    - Возвращает plaintext-код для отправки по email.
+      В БД хранится ТОЛЬКО хеш — plaintext нигде не сохраняется.
     """
-    code = str(secrets.randbelow(1_000_000)).zfill(6)
-    now  = _utcnow()
+    plaintext_code = str(secrets.randbelow(1_000_000)).zfill(6)
+    code_hash      = _hash_code(plaintext_code)
+    now            = _utcnow()
 
     with SessionLocal() as db:
         existing = (
@@ -47,7 +79,8 @@ def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
                 wait = int(RESEND_COOLDOWN - elapsed)
                 raise ValueError(f"Повторная отправка доступна через {wait} с")
 
-            existing.code          = code
+            # Обновляем запись — перезаписываем хеш нового кода
+            existing.code          = code_hash
             existing.name          = name
             existing.password_hash = password_hash
             existing.attempts      = 0
@@ -56,7 +89,7 @@ def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
         else:
             db.add(OtpVerification(
                 email=email,
-                code=code,
+                code=code_hash,          # сохраняем хеш, не plaintext
                 name=name,
                 password_hash=password_hash,
                 attempts=0,
@@ -67,22 +100,24 @@ def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
 
         db.commit()
 
-    print(f"[OTPService] OTP created/updated for {email}")
-    return code
+    log.info("[OTP] Code created/updated for %s", email)
+    return plaintext_code   # plaintext возвращается caller'у для отправки по email
 
 
 def verify_otp(email: str, code: str) -> dict:
     """
-    Verify *code* for *email*.
+    Проверяет OTP-код для email.
 
-    Success  → deletes the DB record, returns {"name": ..., "password_hash": ...}.
-    Failure  → raises ValueError with a user-facing Russian message.
+    Принимает plaintext-код от пользователя, хеширует и сравнивает с БД.
 
-    Failure cases (in order):
-      1. No record found (already used or never created)
-      2. TTL expired             → record deleted
-      3. Max attempts exceeded   → record deleted
-      4. Wrong code              → attempts incremented; record deleted on last attempt
+    Успех  → удаляет запись из БД, возвращает {"name": ..., "password_hash": ...}.
+    Ошибка → бросает ValueError с пользовательским сообщением.
+
+    Случаи ошибок (по порядку):
+      1. Запись не найдена (уже использована или не создана)
+      2. TTL истёк           → запись удаляется
+      3. Превышены попытки   → запись удаляется
+      4. Неверный код        → attempts++; удаляется на последней попытке
     """
     now = _utcnow()
 
@@ -106,27 +141,33 @@ def verify_otp(email: str, code: str) -> dict:
             db.commit()
             raise ValueError("Превышено число попыток. Начните регистрацию заново")
 
-        if record.code != code:
+        # Сравниваем хеш введённого кода с сохранённым хешем
+        if not _verify_code(code, record.code):
             record.attempts += 1
             remaining = MAX_ATTEMPTS - record.attempts
             if remaining <= 0:
                 db.delete(record)
                 db.commit()
-                raise ValueError("Неверный код. Попытки исчерпаны. Начните регистрацию заново")
+                raise ValueError(
+                    "Неверный код. Попытки исчерпаны. Начните регистрацию заново"
+                )
             db.commit()
-            print(f"[OTPService] wrong code for {email}, attempts={record.attempts}, remaining={remaining}")
+            log.info(
+                "[OTP] Wrong code for %s, attempts=%d, remaining=%d",
+                email, record.attempts, remaining,
+            )
             raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
 
         user_data = {"name": record.name, "password_hash": record.password_hash}
         db.delete(record)
         db.commit()
 
-    print(f"[OTPService] verify_otp OK for {email}")
+    log.info("[OTP] Verification OK for %s", email)
     return user_data
 
 
 def delete_otp(email: str) -> None:
-    """Remove the OTP record for *email*. No-op if no record exists."""
+    """Удаляет OTP-запись для email. No-op если записи нет."""
     with SessionLocal() as db:
         db.query(OtpVerification).filter(OtpVerification.email == email).delete(
             synchronize_session=False
@@ -136,9 +177,9 @@ def delete_otp(email: str) -> None:
 
 def cleanup_expired() -> int:
     """
-    Delete all OTP records whose TTL has elapsed.
-    Returns the number of rows removed.
-    Intended to run at application startup and/or on a schedule.
+    Удаляет все OTP-записи с истёкшим TTL.
+    Возвращает количество удалённых строк.
+    Вызывается при старте приложения и/или по расписанию.
     """
     now = _utcnow()
     with SessionLocal() as db:
@@ -150,5 +191,5 @@ def cleanup_expired() -> int:
         db.commit()
 
     if deleted:
-        print(f"[OTPService] cleanup_expired: removed {deleted} expired record(s)")
+        log.info("[OTP] cleanup_expired: removed %d expired record(s)", deleted)
     return deleted

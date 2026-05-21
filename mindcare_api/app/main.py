@@ -1,42 +1,86 @@
+"""
+FastAPI application entry point.
+
+╔══════════════════════════════════════════════════════════════╗
+║  ПОРЯДОК ЗАПУСКА (обязательно):                             ║
+║                                                              ║
+║  1. alembic upgrade head   ← применить миграции (CLI)       ║
+║  2. uvicorn app.main:app   ← стартовать приложение          ║
+╚══════════════════════════════════════════════════════════════╝
+
+Startup sequence (lifespan):
+  1. init_db()         — ensure_database + check_migrations (read-only) + seed
+  2. cleanup_expired() — удаляет просроченные OTP из прошлых запусков
+
+  Миграции НЕ запускаются при старте. Только проверка версии (WARNING если
+  DB отстаёт) и idempotent seed.
+
+Маршруты:
+  /api/auth/*         — аутентификация (open + protected)
+  /api/admin/users/*  — управление пользователями (admin only)
+  /api/health         — health-check (БД + revision + tables count)
+"""
+
+import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth.routes import router as auth_router
-from app.users.routes_admin import router as admin_users_router
-from app.db.session import engine
-from app.db import models  # noqa: F401 — регистрирует все модели в Base
-from app.db.models import Base
+# Принудительно задаём кодировку клиента PostgreSQL до любых импортов SQLAlchemy.
+# На Windows с русской локалью (cp1251) psycopg2 иначе падает с UnicodeDecodeError
+# при первом обращении к БД (PostgreSQL возвращает ошибки на русском в cp1251).
+os.environ.setdefault("PGCLIENTENCODING", "UTF8")
+
+# ─── Logging ──────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+log = logging.getLogger(__name__)
 
 
-def _create_custom_tables() -> None:
-    """Создаёт только кастомные таблицы, которых нет в SQL-схеме.
-    Основные 38 таблиц (users, roles, user_sessions и др.) применяются через:
-      psql -U postgres -d mindcare -f db/sql/full_schema.sql
-    """
-    from sqlalchemy import inspect as _inspect
-    inspector = _inspect(engine)
-    existing = set(inspector.get_table_names())
-    tables_to_create = [
-        t for t in Base.metadata.sorted_tables
-        if t.name == "otp_verifications" and t.name not in existing
-    ]
-    if tables_to_create:
-        Base.metadata.create_all(bind=engine, tables=tables_to_create)
-
-
-_create_custom_tables()
-
+# ─── Lifespan ─────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    """
+    Выполняется один раз при старте (до первого запроса) и при остановке.
+
+    Блокирующие sync-операции (init_db, cleanup_expired) безопасны здесь:
+    приложение ещё не обслуживает запросы — event-loop не заблокирован.
+    """
+    # ── Startup ───────────────────────────────────────────────────────────────
+    log.info("MindCare API starting up...")
+
+    from app.db.init_db import init_db
+    init_db()                   # ensure_database + check_migrations + seed
+
     from app.auth.otp_service import cleanup_expired
-    cleanup_expired()
+    removed = cleanup_expired()  # чистим просроченные OTP прошлых сессий
+    if removed:
+        log.info("Cleaned up %d expired OTP record(s)", removed)
+
+    log.info("MindCare API ready")
     yield
 
+    # ── Shutdown ──────────────────────────────────────────────────────────────
+    log.info("MindCare API shutting down...")
+    from app.db.session import engine
+    engine.dispose()
+    log.info("Database connections closed.")
 
-app = FastAPI(title="MindCare API", lifespan=lifespan)
+
+# ─── Application ──────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="MindCare API",
+    description="Психологическая служба Донецкого государственного университета",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,10 +90,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router, prefix="/api")
+# ─── Routers ──────────────────────────────────────────────────────────────────
+
+from app.auth.routes import router as auth_router              # noqa: E402
+from app.users.routes_admin import router as admin_users_router  # noqa: E402
+
+app.include_router(auth_router,        prefix="/api")
 app.include_router(admin_users_router, prefix="/api")
 
 
-@app.get("/api/hello")
+# ─── Built-in endpoints ───────────────────────────────────────────────────────
+
+@app.get("/api/hello", tags=["meta"])
 def read_root():
     return {"message": "Привет from FastAPI!"}
+
+
+@app.get("/api/health", tags=["meta"])
+def health():
+    """
+    Health-check: проверяет соединение с БД и возвращает кол-во таблиц в metadata.
+    """
+    from app.db.init_db import health_check
+    return health_check()

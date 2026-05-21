@@ -5,7 +5,7 @@ Email message layer — формирует письма для конкретн�
 
 from datetime import datetime
 
-from app.services.email_sender import send_email
+from app.services._smtp import send_email
 
 # ─── Цвета из variables.css frontend-проекта ─────────────────────────────────
 #   --warm-white  #FAF7F2   страничный фон

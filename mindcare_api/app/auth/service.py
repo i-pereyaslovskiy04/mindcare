@@ -3,11 +3,14 @@ Business logic layer — no FastAPI, no HTTP concepts.
 Depends only on storage and bcrypt. Safe to unit-test in isolation.
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
 import bcrypt
 from app.auth import storage
+
+log = logging.getLogger(__name__)
 
 
 def _hash(password: str) -> str:
@@ -32,7 +35,7 @@ REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
 
 
 def register_init(name: str, email: str, password: str) -> None:
-    """Валидация данных → OTP в БД → отправка письма."""
+    """Валидация данных -> OTP в БД -> отправка письма."""
     if not name or len(name.strip()) < 2:
         raise AuthError("Name must be at least 2 characters", 422)
     if len(password) < 8:
@@ -51,12 +54,11 @@ def register_init(name: str, email: str, password: str) -> None:
     except ValueError as e:
         raise AuthError(str(e), 429)
 
-    print(f"[register_init] sending OTP to {email}")
+    log.info("[register_init] sending OTP to %s", email)
     try:
         send_registration_otp(email, code)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        log.exception("[register_init] failed to send email to %s", email)
         raise AuthError(
             f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
         )
@@ -76,7 +78,6 @@ def register_confirm(
     except ValueError as e:
         raise AuthError(str(e), 400)
 
-    # Проверяем наличие актуальных политик до создания юзера
     consent_ids = {}
     for policy_type in REQUIRED_CONSENTS:
         cid = storage.get_active_consent_id(policy_type)
@@ -88,7 +89,6 @@ def register_confirm(
             )
         consent_ids[policy_type] = cid
 
-    # Реактивация мягко-удалённого аккаунта или создание нового
     user = storage.reactivate_user(
         email, user_data["name"], user_data["password_hash"]
     )
@@ -123,10 +123,6 @@ def authenticate_user(email: str, password: str) -> dict:
     return user
 
 
-def get_user_by_id(user_id: str) -> Optional[dict]:
-    return storage.find_user_by_id(user_id)
-
-
 # ---------------------------------------------------------------------------
 # Сброс пароля
 # ---------------------------------------------------------------------------
@@ -152,8 +148,7 @@ def password_reset_init(email: str) -> None:
     try:
         send_password_reset_otp(email, code)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        log.exception("[password_reset_init] failed to send email to %s", email)
         raise AuthError(
             f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
         )
@@ -178,7 +173,6 @@ def password_reset_confirm(
         raise AuthError("Пользователь не найден", 404)
 
     storage.update_user_password(user["id"], _hash(new_password))
-    # Инвалидируем все сессии после смены пароля
     storage.revoke_all_user_sessions(user["id"])
 
 

@@ -1,12 +1,15 @@
 /**
- * Authenticated HTTP client.
+ * Base HTTP client.
  *
- * Использует session_token из AuthContext.
- * При 401 — сессия истекла, уведомляем AuthProvider через событие.
+ * Single source for all fetch calls.
+ * - Injects Authorization: Bearer <token> when a session exists.
+ * - credentials: "include" for future cookie-based auth migration.
+ * - On 401: dispatches auth:session-expired so AuthContext can clear state.
  */
 
 const _cfg = { getToken: null };
 
+/** Called once by AuthProvider to wire in the token getter. */
 export function configureClient({ getToken }) {
   _cfg.getToken = getToken;
 }
@@ -18,13 +21,18 @@ async function _parseError(res) {
 
 export async function apiFetch(url, options = {}) {
   const token = _cfg.getToken?.();
+
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
 
   if (res.status === 401) {
     window.dispatchEvent(new Event('auth:session-expired'));

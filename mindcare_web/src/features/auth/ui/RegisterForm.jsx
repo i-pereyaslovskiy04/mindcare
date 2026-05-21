@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
-import { authApi, useAuth } from '../AuthContext';
-import { getRoleHome } from '../authUtils';
+import { useAuth } from '../AuthContext';
+import { registerInit, registerConfirm } from '../../../api/auth.api';
+import { getRoleHome } from '../../../shared/lib/routes';
 import { TelegramIcon, VKIcon, YandexIcon } from '../../../components/icons';
 import CodeInput from '../../../components/CodeInput/CodeInput';
 
@@ -99,7 +100,7 @@ export default function RegisterForm({ onSuccess }) {
 
     setIsLoading(true);
     try {
-      await authApi.registerInit({ name: name.trim(), email, password });
+      await registerInit({ name: name.trim(), email, password });
       setOtp(['', '', '', '', '', '']);
       setOtpError('');
       setTimer(RESEND_COOLDOWN);
@@ -118,7 +119,7 @@ export default function RegisterForm({ onSuccess }) {
     setOtpError('');
     setIsLoading(true);
     try {
-      await authApi.registerConfirm({ email, code });
+      await registerConfirm({ email, code });
       const role = await login({ email, password });
       onSuccess();
       navigate(getRoleHome(role));
@@ -136,7 +137,7 @@ export default function RegisterForm({ onSuccess }) {
     setOtpError('');
     setIsLoading(true);
     try {
-      await authApi.registerInit({ name: name.trim(), email, password });
+      await registerInit({ name: name.trim(), email, password });
       setOtp(['', '', '', '', '', '']);
       setTimer(RESEND_COOLDOWN);
     } catch (err) {

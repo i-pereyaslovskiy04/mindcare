@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
-import { getRoleHome } from '../authUtils';
+import { getRoleHome } from '../../../shared/lib/routes';
 import { TelegramIcon, VKIcon, YandexIcon } from '../../../components/icons';
 
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);

@@ -1,15 +1,12 @@
 import '../styles/variables.css';
 import '../styles/global.css';
-import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from '../features/auth/AuthContext';
-import AppRoutes from './AppRoutes';
+import Providers from './providers';
+import AppRouter from './router';
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <Providers>
+      <AppRouter />
+    </Providers>
   );
 }

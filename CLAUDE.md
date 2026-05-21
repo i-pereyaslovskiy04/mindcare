@@ -55,16 +55,40 @@ python scripts/test_smtp.py
 ### База данных
 
 ```bash
-# Первичная инициализация БД (применяет все миграции 001-010)
-psql -U postgres -d mindcare -f db/sql/full_schema.sql
+# ══════════════════════════════════════════════════════════
+# ПОРЯДОК ЗАПУСКА (ОБЯЗАТЕЛЬНО перед стартом приложения):
+# ══════════════════════════════════════════════════════════
+
+# 1. Применить все Alembic-миграции (создаёт/обновляет схему)
+cd mindcare_api/
+alembic upgrade head
+
+# 2. Запустить приложение (seed выполнится автоматически в lifespan)
+uvicorn app.main:app --reload
+
+# ══════════════════════════════════════════════════════════
 
 # Подключение к БД для ручных запросов
 psql -U MindcareUser -d mindcare
+
+# Проверить текущую версию схемы
+cd mindcare_api/ && alembic current
+
+# Создать новую миграцию после изменения ORM-моделей
+cd mindcare_api/ && alembic revision --autogenerate -m "describe_change"
+
+# История миграций
+cd mindcare_api/ && alembic history
 ```
 
-> **Важно:** миграции применяются через SQL-файлы, не через Alembic.
-> `Base.metadata.create_all()` в `main.py` создаёт **только** таблицу `otp_verifications`
-> которой нет в SQL-схеме. Остальные 38 таблиц — только через `full_schema.sql`.
+> **Важно:** схема БД управляется **только** через Alembic.
+> `Base.metadata.create_all()` **удалён** — не использовать.
+> Все 41 таблица создаётся через `alembic upgrade head`.
+> Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
+> начиная с migration `3a7c5e2b8f1d`.
+>
+> FastAPI при старте **НЕ** применяет миграции — только проверяет revision
+> и выдаёт WARNING если DB отстаёт от head.
 
 ### Frontend (`mindcare_web/`)
 
@@ -152,19 +176,31 @@ mindcare_api/
 ✅ Роли проверяются на бэке через require_role — не только на фронте
 ✅ Email всегда нормализуется: email.lower().strip()
 ✅ Пароли — bcrypt через passlib. Никакого sha256, md5
+✅ OTP-коды — SHA-256 хеш в БД, plaintext только в email. Никакого plaintext.
 ✅ Токены сброса пароля — хранятся как хеш, не plaintext
 ✅ Soft delete — deleted_at, не физическое удаление
 ✅ Внешний API использует users.uuid (UUID), не users.id (INT)
+✅ Схема БД — только через Alembic (alembic upgrade head перед стартом)
 ❌ Не использовать fastapi-users — конфликтует с нашей схемой
 ❌ Не использовать async SQLAlchemy — проект на sync psycopg2
-❌ Не добавлять Alembic для основных таблиц — они через SQL-файлы
+❌ Не вызывать alembic.command.upgrade() из FastAPI lifespan — deadlock
+❌ Не вызывать Base.metadata.create_all() — удалён, схема только через Alembic
 ```
 
 ---
 
 ### База данных: схема
 
-38 таблиц в 7 модулях. Миграции в `db/sql/`, применяются через `psql`.
+41 таблица в 10 модулях. Схема управляется через Alembic.
+Миграции: `mindcare_api/alembic/versions/`.
+
+**Миграции (в порядке применения):**
+
+| Revision | Описание |
+|----------|----------|
+| `af13ad7a133c` | baseline: 38 таблиц (все кроме audit) |
+| `3a7c5e2b8f1d` | add_audit_tables: auth_log, audit_log, data_change_log |
+| `c5d8a1b4e7f2` | otp_code_varchar64: otp_verifications.code VARCHAR(6→64) для SHA-256 |
 
 **Ключевые таблицы:**
 
@@ -174,16 +210,17 @@ mindcare_api/
 | `roles`, `user_roles`, `permissions`, `role_permissions` | RBAC. Роли через M:N |
 | `student_profiles`, `psychologist_profiles` | Профили 1:1 с users |
 | `user_sessions` | Сессии (заменяют JWT). Soft-revoke через `is_revoked` |
-| `otp_verifications` | OTP для регистрации и сброса пароля. Создаётся через `create_all` |
+| `otp_verifications` | OTP для регистрации и сброса пароля. code = SHA-256 хеш |
 | `consents`, `consent_records` | Согласия на ПДн. Обязательны при регистрации |
-| `appointments` | Записи на консультации. EXCLUDE USING gist против пересечений |
+| `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
-| `auth_log`, `audit_log`, `data_change_log` | Аудит. Партиционированы по месяцам до 2026-12-31 |
+| `auth_log`, `audit_log`, `data_change_log` | Аудит. В prod могут быть партиционированы по месяцам |
+| `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
-> **Критический риск:** партиции `auth_log`, `audit_log`, `data_change_log`
-> захардкожены до **31.12.2026**. После этой даты INSERT упадёт и логин сломается.
-> Нужен скрипт автогенерации партиций — в бэклоге.
+> **Критический риск:** если в prod-БД `auth_log`/`audit_log`/`data_change_log`
+> партиционированы, партиции захардкожены до **31.12.2026**. После этой даты
+> INSERT упадёт и логин сломается. Нужен скрипт автогенерации партиций — в бэклоге.
 
 **Роли в системе:**
 
@@ -436,6 +473,9 @@ Conventional Commits:
 **Не «исправляй» эти вещи без явного запроса** — они отложены осознанно.
 
 Критические риски (прочитай перед любой работой с auth или БД):
-- Партиции `auth_log`, `audit_log`, `data_change_log` захардкожены до **31.12.2026** → после этой даты логин сломается
-- `session_notes.content` хранится открытым текстом — шифрование не реализовано
-- OTP-коды в `otp_verifications` хранятся plaintext, не хешем
+- Партиции `auth_log`, `audit_log`, `data_change_log` (если партиционированы в prod) захардкожены до **31.12.2026** → после этой даты логин сломается (silent fail в audit.py, но потеря аудита)
+- `session_notes.content` хранится открытым текстом — шифрование не реализовано (нарушение ФЗ-152 для специальных категорий ПДн)
+- `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
+
+Исправлено (больше не критично):
+- OTP-коды теперь хранятся как SHA-256 хеш (migration `c5d8a1b4e7f2`, otp_service.py)
