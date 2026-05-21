@@ -31,11 +31,8 @@
 - Файл: `app/db/models.py` (OtpVerification), `app/auth/otp_service.py`
 
 **`_get_primary_role` недетерминирован при нескольких ролях**
-- Использует `.first()` без `ORDER BY`
-- Если у юзера две роли — вернёт случайную
-- Сейчас безопасно (один юзер = одна роль), но сломается при расширении
-- Нужен `ORDER BY granted_at DESC` или явный приоритет ролей
-- Файл: `app/auth/storage.py`
+- ~~Использует `.first()` без `ORDER BY`~~
+- Закрыто: заменено коррелированным подзапросом с `ROLE_PRIORITY` в `users/storage.py`
 
 **Email без нормализации в `register_init`**
 - `save_user` нормализует email (`.lower().strip()`)
@@ -99,7 +96,7 @@
 **CSS-классы ролей в `UsersTable` нарушают camelCase-конвенцию**
 - Динамические классы `role_student`, `role_psychologist` и т.д. используют underscore
 - По конвенции ARCHITECTURE.md §10 — должны быть `roleStudent`, `rolePsychologist`, `roleAdmin`, `roleSupervisor`
-- Файл: `mindcare_web/src/features/admin-users/ui/UsersTable.jsx`
+- Файл: `mindcare_web/src/features/admin/users/components/UsersTable.jsx`
 
 **`phone` не стрипается при обновлении юзера**
 - `update_user` в storage стрипает `full_name`, но не стрипает `phone`
@@ -110,25 +107,68 @@
 - Общие классы (`.body`, `.title`, `.field`, `.input`, `.btnPrimary`, `.btnSecondary` и др.)
   продублированы в двух CSS-модулях слово в слово
 - CSS Modules не поддерживают наследование — решение: вынести общие стили
-  в `admin-users/ui/adminModal.module.css` и импортировать в оба компонента
-- Файлы: `mindcare_web/src/features/admin-users/ui/UserCreateModal.module.css`,
-  `mindcare_web/src/features/admin-users/ui/UserEditModal.module.css`
+  в `admin/users/components/adminModal.module.css` и импортировать в оба компонента
+- Файлы: `mindcare_web/src/features/admin/users/components/UserCreateModal.module.css`,
+  `mindcare_web/src/features/admin/users/components/UserEditModal.module.css`
 
 **`DeleteConfirmDialog` — setState после закрытия диалога**
 - Если нажать Escape пока идёт DELETE-запрос, Modal закроет диалог,
   но `setDeleting(false)` в `.finally()` выполнится на скрытом компоненте
 - Добавить `cancelled`-флаг по аналогии с useUserForm useEffect
-- Файл: `mindcare_web/src/features/admin-users/ui/DeleteConfirmDialog.jsx`
+- Файл: `mindcare_web/src/features/admin/users/components/DeleteConfirmDialog.jsx`
 
 **`useUserForm` — нет защиты от двойного submit**
 - `handleSubmit` не проверяет `submitting` перед запуском запроса
 - Двойной клик по кнопке Submit (если она не задизейблена) запустит два параллельных запроса
 - Добавить `if (submitting) return;` в начало `handleSubmit`
-- Файл: `mindcare_web/src/features/admin-users/hooks/useUserForm.js`
+- Файл: `mindcare_web/src/features/admin/users/hooks/useUserForm.js`
 
 **`authApi.register` в AuthContext — неиспользуемый экспорт**
 - Регистрация идёт через `registerInit` + `registerConfirm`; `register` — остаток ранней реализации
 - Файл: `mindcare_web/src/features/auth/AuthContext.jsx`
+
+---
+
+## 🔵 Запланировано (следующие задачи)
+
+**Admin-создание пользователя с email soft-deleted аккаунта**
+- `storage.create_user` проверяет уникальность только среди активных записей (`deleted_at IS NULL`)
+- Если email принадлежит удалённому аккаунту — создаётся дубль в БД
+- Решение: реактивировать старую запись по аналогии с `reactivate_user()` в `auth/storage.py`
+- Файл: `mindcare_api/app/users/storage.py` → `create_user()`
+
+**Аудит-лог admin-операций: добавить target_user_id и логировать неудачи**
+- `log_auth_event` не имеет поля `target_user_id` — нельзя ответить «когда и кем изменён конкретный пользователь»
+- Сейчас uuid цели закодирован в строке события (`admin_create_user:{uuid}`) — костыль
+- Правильное решение: добавить `target_user_id` в модель `AuthLog` + параметр в `log_auth_event` + миграция БД
+- Дополнительно: логировать неуспешные операции (`success=False`) в except-блоках
+- Файлы: `mindcare_api/app/db/models/audit.py`, `mindcare_api/app/auth/audit.py`,
+  `mindcare_api/app/users/routes_admin.py`, новая Alembic-миграция
+
+**Защита от самоудаления и удаления последнего администратора**
+- Администратор может удалить свой аккаунт → потеря доступа к панели
+- Администратор может удалить/понизить роль единственного активного admin → никто не войдёт
+- В `service.delete_user` и `service.update_user` добавить проверки:
+  1. `uuid != current_user["uuid"]` — нельзя трогать себя
+  2. После операции должен остаться хотя бы один активный admin
+- Требует передачи `current_user` из роутера в сервис
+- Файлы: `mindcare_api/app/users/service.py`, `mindcare_api/app/users/routes_admin.py`
+
+**Белый экран при загрузке роутов (PrivateRoute / RoleRoute)**
+- `router.jsx`: `if (loading) return null` — пустая страница пока AuthContext восстанавливает сессию
+- Заменить на `<PageSkeleton />` или аналогичный placeholder
+- Файл: `mindcare_web/src/app/router.jsx`
+
+**Показ удалённых пользователей в админке**
+- Сейчас `find_users` всегда фильтрует `deleted_at IS NULL` — удалённые не видны
+- Бэк: добавить `include_deleted: bool = False` в `find_users`, `AdminUserListQuery` и роутер;
+  добавить `deleted_at: Optional[datetime]` в `AdminUserListItem`
+- Фронт: фильтр «Показать удалённых» в `UsersFilters`; визуальный индикатор в `UsersTable`
+  (зачёркнутый текст или отдельный бейдж «Удалён»)
+- Файлы: `mindcare_api/app/users/storage.py`, `mindcare_api/app/users/schemas.py`,
+  `mindcare_api/app/users/routes_admin.py`,
+  `mindcare_web/src/features/admin/users/components/UsersFilters.jsx`,
+  `mindcare_web/src/features/admin/users/components/UsersTable.jsx`
 
 ---
 

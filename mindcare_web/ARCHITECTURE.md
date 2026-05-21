@@ -538,7 +538,9 @@ refetch          // ручной перезапрос
 
 ### 8.7 Dashboard pages — stubs
 
-`ClientDashboard`, `ConsultantDashboard`, `AdminDashboard` отображают только приветствие. Реальный UI не реализован.
+`ClientDashboard` и `ConsultantDashboard` отображают только приветствие. Реальный UI не реализован.
+
+~~`AdminDashboard`~~ — закрыто: Admin-панель полностью реализована (AdminLayout + UsersPage с CRUD пользователей). Роутинг переработан: `AppRoutes.jsx` → `router.jsx`, admin-модуль переехал в `features/admin/`.
 
 ---
 

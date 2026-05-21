@@ -307,11 +307,11 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/auth/me` | Auth | ✅ |
 | POST | `/api/auth/password/reset/init` | Public | ✅ |
 | POST | `/api/auth/password/reset/confirm` | Public | ✅ |
-| GET | `/api/admin/users` | Admin | ✅ |
-| POST | `/api/admin/users` | Admin | ✅ |
-| PATCH | `/api/admin/users/{id}` | Admin | ✅ |
-| DELETE | `/api/admin/users/{id}` | Admin | ✅ |
-| GET | `/api/admin/users/{id}` | Admin | ✅ |
+| GET | `/api/admin/users` | Admin, Supervisor | ✅ |
+| POST | `/api/admin/users` | Admin, Supervisor | ✅ |
+| PATCH | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
+| DELETE | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
 
 ## Соглашения по коду
 
