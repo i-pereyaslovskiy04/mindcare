@@ -1,6 +1,12 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
 .page {
   display: flex;
   flex-direction: column;
+  animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .header {
@@ -17,8 +23,9 @@
 }
 
 .title {
-  font-size: var(--fs-h3);
-  font-weight: 700;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  font-weight: 500;
   color: var(--espresso);
   margin: 0;
 }
@@ -32,7 +39,7 @@
   height: 38px;
   padding: 0 20px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--espresso);
   color: var(--milk);
   font-size: 13.5px;
@@ -44,7 +51,7 @@
 }
 
 .btnCreate:hover {
-  opacity: 0.88;
+  background: var(--mocha);
 }
 
 /* ── Pagination ── */
@@ -58,7 +65,7 @@
 
 .pageBtn {
   padding: 7px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--nav-border);
   background: var(--warm-white);
   color: var(--text-muted);

@@ -7,8 +7,6 @@ import UserEditModal from '../components/UserEditModal';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 import styles from './UsersPage.module.css';
 
-const PAGE_SIZE = 20;
-
 function Pagination({ page, total, size, onPageChange }) {
   const totalPages = Math.max(1, Math.ceil(total / size));
   if (totalPages <= 1) return null;
@@ -37,7 +35,7 @@ function Pagination({ page, total, size, onPageChange }) {
 export default function UsersPage() {
   const {
     items, loading, error, total,
-    page, setPage,
+    page, setPage, size,
     query, setQuery,
     filters, setFilters,
     refetch,
@@ -81,7 +79,7 @@ export default function UsersPage() {
       <Pagination
         page={page}
         total={total}
-        size={PAGE_SIZE}
+        size={size}
         onPageChange={setPage}
       />
 

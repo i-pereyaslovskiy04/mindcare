@@ -81,6 +81,7 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
                 value={values.role}
                 onChange={handleChange}
               >
+                <option value="student">Студент</option>
                 <option value="psychologist">Психолог</option>
                 <option value="admin">Администратор</option>
                 <option value="supervisor">Супервизор</option>

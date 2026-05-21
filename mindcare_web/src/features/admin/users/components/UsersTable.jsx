@@ -1,3 +1,4 @@
+import Icon from '../../../../pages/student/components/Icon';
 import styles from './UsersTable.module.css';
 
 const ROLE_LABELS = {
@@ -81,19 +82,19 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
               <td className={styles.actions}>
                 <button
                   type="button"
-                  className={styles.actionBtn}
+                  className={styles.iconBtn}
                   onClick={() => onEdit?.(item)}
                   aria-label={`Редактировать ${item.full_name}`}
                 >
-                  Изменить
+                  <Icon name="edit" size={15} />
                 </button>
                 <button
                   type="button"
-                  className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+                  className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
                   onClick={() => onDelete?.(item)}
                   aria-label={`Удалить ${item.full_name}`}
                 >
-                  Удалить
+                  <Icon name="trash" size={15} />
                 </button>
               </td>
             </tr>

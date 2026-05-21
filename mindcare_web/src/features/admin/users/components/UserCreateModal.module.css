@@ -33,7 +33,7 @@
   height: 40px;
   padding: 0 14px;
   border: 1px solid var(--nav-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--warm-white);
   font-size: 13.5px;
   color: var(--text-main);
@@ -74,7 +74,7 @@
 .formError {
   margin-bottom: 14px;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--error-bg);
   color: var(--error);
   font-size: 13px;
@@ -94,18 +94,18 @@
   height: 40px;
   padding: 0 22px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--coffee);
   color: #fff;
   font-size: 14px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: background 0.15s;
 }
 
 .btnPrimary:hover:not(:disabled) {
-  opacity: 0.88;
+  background: var(--espresso);
 }
 
 .btnPrimary:disabled {
@@ -117,7 +117,7 @@
   height: 40px;
   padding: 0 18px;
   border: 1px solid var(--nav-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text-main);
   font-size: 14px;
@@ -128,7 +128,8 @@
 }
 
 .btnSecondary:hover:not(:disabled) {
-  background: var(--cream);
+  background: var(--sand);
+  border-color: var(--latte);
 }
 
 .btnSecondary:disabled {

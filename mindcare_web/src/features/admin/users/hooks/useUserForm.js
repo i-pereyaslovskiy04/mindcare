@@ -3,7 +3,7 @@ import { getUser, createUser, updateUser } from '../../../../api/users.api';
 
 const CREATE_INITIAL = { full_name: '', email: '', role: 'psychologist' };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VALID_ROLES = ['psychologist', 'admin'];
+const VALID_ROLES = ['psychologist', 'admin', 'supervisor'];
 
 function validateCreate(values) {
   const errs = {};

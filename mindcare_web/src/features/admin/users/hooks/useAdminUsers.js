@@ -8,6 +8,7 @@ export function useAdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(null);
   const [page, setPage]     = useState(1);
+  const [size]              = useState(20);
   const [query, setQueryRaw]   = useState('');
   const [filters, setFiltersRaw] = useState({ role: '', is_active: '' });
   const [tick, setTick]     = useState(0);
@@ -35,6 +36,7 @@ export function useAdminUsers() {
 
     getUsers({
       page,
+      size,
       search:    debouncedQuery,
       role:      filters.role,
       is_active: filters.is_active,
@@ -62,6 +64,7 @@ export function useAdminUsers() {
     total,
     page,
     setPage,
+    size,
     query,
     setQuery,
     filters,

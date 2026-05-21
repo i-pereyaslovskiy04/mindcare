@@ -85,6 +85,7 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
             value={values.role}
             onChange={onChange}
           >
+            <option value="supervisor">Супервизор</option>
             <option value="psychologist">Психолог</option>
             <option value="admin">Администратор</option>
           </select>

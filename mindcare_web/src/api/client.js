@@ -3,8 +3,7 @@
  *
  * Single source for all fetch calls.
  * - Injects Authorization: Bearer <token> when a session exists.
- * - credentials: "include" for future cookie-based auth migration.
- * - On 401: dispatches auth:session-expired so AuthContext can clear state.
+ *- On 401: dispatches auth:session-expired so AuthContext can clear state.
  */
 
 const _cfg = { getToken: null };
@@ -28,11 +27,7 @@ export async function apiFetch(url, options = {}) {
     ...options.headers,
   };
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  const res = await fetch(url, { ...options, headers });
 
   if (res.status === 401) {
     window.dispatchEvent(new Event('auth:session-expired'));
