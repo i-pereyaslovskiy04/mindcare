@@ -7,10 +7,18 @@ import uuid as _uuid
 from typing import Optional
 from datetime import datetime, timezone
 
-from sqlalchemy import or_, asc, desc
+from sqlalchemy import or_, asc, desc, select, case as sa_case
 
 from app.db.session import SessionLocal
-from app.db.models import User, UserRole, Role
+from app.db.models import User, UserRole, Role, UserSession
+
+_ROLE_PRIORITY = sa_case(
+    (Role.name == "admin",        1),
+    (Role.name == "supervisor",   2),
+    (Role.name == "psychologist", 3),
+    (Role.name == "student",      4),
+    else_=5,
+)
 
 ALLOWED_SORT_FIELDS = {"created_at", "email", "full_name", "last_login"}
 
@@ -37,11 +45,18 @@ def find_users(
         sort = "created_at"
 
     with SessionLocal() as db:
-        # ── 1. Базовый запрос с JOIN к ролям ──
+        # ── 1. Базовый запрос с коррелированным подзапросом роли ──
+        role_subq = (
+            select(Role.name)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .where(UserRole.user_id == User.id)
+            .order_by(_ROLE_PRIORITY)
+            .limit(1)
+            .correlate(User)
+            .scalar_subquery()
+        )
         query = (
-            db.query(User, Role.name.label("role_name"))
-            .outerjoin(UserRole, UserRole.user_id == User.id)
-            .outerjoin(Role, Role.id == UserRole.role_id)
+            db.query(User, role_subq.label("role_name"))
             .filter(User.deleted_at.is_(None))
         )
 
@@ -56,7 +71,12 @@ def find_users(
             )
 
         if role:
-            query = query.filter(Role.name == role)
+            role_filter_subq = (
+                select(UserRole.user_id)
+                .join(Role, Role.id == UserRole.role_id)
+                .where(Role.name == role)
+            )
+            query = query.filter(User.id.in_(role_filter_subq))
 
         if is_active is not None:
             query = query.filter(User.is_active == is_active)
@@ -101,10 +121,17 @@ def get_user_by_uuid(uuid: str) -> Optional[dict]:
         return None
 
     with SessionLocal() as db:
+        role_subq = (
+            select(Role.name)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .where(UserRole.user_id == User.id)
+            .order_by(_ROLE_PRIORITY)
+            .limit(1)
+            .correlate(User)
+            .scalar_subquery()
+        )
         row = (
-            db.query(User, Role.name.label("role_name"))
-            .outerjoin(UserRole, UserRole.user_id == User.id)
-            .outerjoin(Role, Role.id == UserRole.role_id)
+            db.query(User, role_subq.label("role_name"))
             .filter(User.uuid == uuid_obj)
             .filter(User.deleted_at.is_(None))
             .first()
@@ -153,9 +180,12 @@ def update_user(
             raise ValueError(f"Пользователь {uuid} не найден")
 
         if full_name is not None:
-            user.full_name = full_name.strip()
+            stripped = full_name.strip()
+            if len(stripped) < 2:
+                raise ValueError("ФИО должно содержать минимум 2 символа")
+            user.full_name = stripped
         if phone is not None:
-            user.phone = phone
+            user.phone = phone.strip() or None
         if is_active is not None:
             user.is_active = is_active
 
@@ -216,7 +246,6 @@ def soft_delete_user(uuid: str) -> bool:
         user.deleted_at = now
         user.is_active = False
 
-        from app.db.models import UserSession
         db.query(UserSession).filter(
             UserSession.user_id == user.id,
             ~UserSession.is_revoked,
@@ -257,7 +286,7 @@ def create_user(
             email=email.lower().strip(),
             full_name=full_name.strip(),
             password_hash=password_hash,
-            phone=phone,
+            phone=phone.strip() or None if phone else None,
             is_active=True,
         )
         db.add(new_user)

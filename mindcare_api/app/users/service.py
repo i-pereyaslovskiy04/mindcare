@@ -104,6 +104,7 @@ def create_user(data: AdminUserCreate) -> dict:
             user["email"], e,
         )
 
+    user["temporary_password"] = password
     return user
 
 

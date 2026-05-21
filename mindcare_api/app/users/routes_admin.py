@@ -6,7 +6,8 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, Literal
 
-from app.auth.deps import require_role
+from app.auth import audit
+from app.auth.deps import require_role, get_current_user
 from app.users import service
 from app.users.schemas import (
     AdminUserListQuery,
@@ -21,7 +22,7 @@ from app.users.schemas import (
 router = APIRouter(
     prefix="/admin/users",
     tags=["admin: users"],
-    dependencies=[Depends(require_role("admin"))],
+    dependencies=[Depends(require_role("admin", "supervisor"))],
 )
 
 
@@ -32,7 +33,7 @@ def list_users(
         default=20, ge=1, le=100, description="Элементов на странице"
     ),
     search: Optional[str] = Query(
-        default=None, description="Поиск по email или ФИО"
+        default=None, max_length=200, description="Поиск по email или ФИО"
     ),
     role: Optional[str] = Query(
         default=None, description="Фильтр по роли"
@@ -59,7 +60,10 @@ def list_users(
 
 
 @router.post("/", response_model=AdminUserCreateResponse, status_code=201)
-def create_user(body: AdminUserCreate):
+def create_user(
+    body: AdminUserCreate,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Создание нового пользователя (психолога или админа).
     Пароль генерируется автоматически и отправляется на email.
@@ -68,6 +72,11 @@ def create_user(body: AdminUserCreate):
         user = service.create_user(body)
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
+    audit.log_auth_event(
+        event=f"admin_create_user:{user['uuid']}",
+        user_id=current_user["id"],
+        user_email=current_user["email"],
+    )
     return user
 
 
@@ -81,19 +90,32 @@ def get_user(uuid: str):
 
 
 @router.patch("/{uuid}", response_model=AdminUserRead)
-def update_user(uuid: str, body: AdminUserUpdate):
+def update_user(
+    uuid: str,
+    body: AdminUserUpdate,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Частичное обновление пользователя.
     Поддерживает: блокировку/разблокировку, смену роли, ФИО и телефон.
     """
     try:
-        return service.update_user(uuid, body)
+        result = service.update_user(uuid, body)
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
+    audit.log_auth_event(
+        event=f"admin_update_user:{uuid}",
+        user_id=current_user["id"],
+        user_email=current_user["email"],
+    )
+    return result
 
 
 @router.delete("/{uuid}", status_code=204)
-def delete_user(uuid: str):
+def delete_user(
+    uuid: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Мягкое удаление пользователя. Отзывает все сессии.
     Возвращает 204 No Content при успехе.
@@ -102,3 +124,8 @@ def delete_user(uuid: str):
         service.delete_user(uuid)
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
+    audit.log_auth_event(
+        event=f"admin_delete_user:{uuid}",
+        user_id=current_user["id"],
+        user_email=current_user["email"],
+    )

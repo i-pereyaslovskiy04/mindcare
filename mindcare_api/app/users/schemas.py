@@ -5,7 +5,7 @@ Pydantic-схемы для модуля управления пользоват�
 
 from datetime import datetime
 from typing import Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class AdminUserListQuery(BaseModel):
@@ -13,8 +13,8 @@ class AdminUserListQuery(BaseModel):
 
     page: int = Field(default=1, ge=1, description="Номер страницы, начиная с 1")
     size: int = Field(default=20, ge=1, le=100, description="Кол-во элементов на странице")
-    search: Optional[str] = Field(default=None, description="Подстрока для поиска по email или ФИО")
-    role: Optional[str] = Field(default=None, description="Фильтр по роли: student/psychologist/admin")
+    search: Optional[str] = Field(default=None, max_length=200, description="Подстрока для поиска по email или ФИО")
+    role: Optional[Literal["student", "psychologist", "admin", "supervisor"]] = Field(default=None, description="Фильтр по роли")
     is_active: Optional[bool] = Field(default=None, description="Фильтр по активности юзера")
     sort: str = Field(default="created_at", description="Поле сортировки")
     order: Literal["asc", "desc"] = Field(default="desc", description="Направление сортировки")
@@ -47,9 +47,9 @@ class PaginatedUsersResponse(BaseModel):
 class AdminUserCreate(BaseModel):
     """Тело запроса POST /api/admin/users. Пароль генерируется автоматически."""
 
-    email: str = Field(description="Email нового пользователя")
+    email: EmailStr = Field(description="Email нового пользователя")
     full_name: str = Field(min_length=2, description="ФИО пользователя")
-    role: Literal["psychologist", "admin"] = Field(
+    role: Literal["psychologist", "admin", "supervisor"] = Field(
         description="Роль нового пользователя. student регистрируется сам."
     )
     phone: Optional[str] = Field(default=None, description="Телефон (необязательно)")
@@ -64,6 +64,7 @@ class AdminUserCreateResponse(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+    temporary_password: str
 
     model_config = {"from_attributes": True}
 
@@ -74,7 +75,7 @@ class AdminUserUpdate(BaseModel):
     full_name: Optional[str] = Field(default=None, min_length=2, description="ФИО пользователя")
     phone: Optional[str] = Field(default=None, description="Телефон")
     is_active: Optional[bool] = Field(default=None, description="Активность аккаунта")
-    role: Optional[Literal["psychologist", "admin", "supervisor"]] = Field(
+    role: Optional[Literal["student", "psychologist", "admin", "supervisor"]] = Field(
         default=None, description="Новая роль пользователя"
     )
 
