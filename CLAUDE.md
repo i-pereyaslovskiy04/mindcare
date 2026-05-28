@@ -154,6 +154,12 @@ mindcare_api/
 │   │   ├── schemas.py       — Pydantic-схемы users
 │   │   ├── service.py       — бизнес-логика users
 │   │   └── storage.py       — работа с БД (find_users, create_user)
+│   ├── tags/                — управление тегами контента
+│   │   ├── routes_admin.py  — /api/admin/tags/* (admin + supervisor)
+│   │   ├── routes_public.py — /api/tags/ (autocomplete, без auth)
+│   │   ├── schemas.py       — Pydantic-схемы tags
+│   │   ├── service.py       — бизнес-логика + нормализация имени
+│   │   └── storage.py       — работа с БД, коррелированные подзапросы счётчиков
 │   └── services/
 │       ├── email_sender.py  — SMTP транспорт (dev/smtp режимы)
 │       └── email_service.py — формирование писем по событиям
@@ -191,7 +197,7 @@ mindcare_api/
 
 ### База данных: схема
 
-41 таблица в 10 модулях. Схема управляется через Alembic.
+45 таблиц в 10 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -201,6 +207,10 @@ mindcare_api/
 | `af13ad7a133c` | baseline: 38 таблиц (все кроме audit) |
 | `3a7c5e2b8f1d` | add_audit_tables: auth_log, audit_log, data_change_log |
 | `c5d8a1b4e7f2` | otp_code_varchar64: otp_verifications.code VARCHAR(6→64) для SHA-256 |
+| `e9a3d7f2b5c0` | rebuild_audit_indexes: пересоздание индексов audit-таблиц |
+| `f4b9e2c6a1d8` | audit_indexes_and_types: индексы + тип data_change_log.changed_fields |
+| `a8c3f1d9e2b5` | add_tags_tables: tags, article_tags, news_tags, test_tags |
+| `b3c5e7a9f1d2` | extend_auth_log_event: auth_log.event VARCHAR(50→150) |
 
 **Ключевые таблицы:**
 
@@ -215,6 +225,7 @@ mindcare_api/
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
+| `tags`, `article_tags`, `news_tags`, `test_tags` | Теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
 | `auth_log`, `audit_log`, `data_change_log` | Аудит. В prod могут быть партиционированы по месяцам |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
@@ -243,16 +254,21 @@ mindcare_web/src/
 ├── api/                — ВСЕ HTTP-вызовы только здесь
 │   ├── client.js       — транспорт: токен + 401 retry
 │   ├── auth.api.js
+│   ├── users.api.js    — /api/admin/users/* (CRUD пользователей)
+│   ├── tags.api.js     — /api/admin/tags/* + /api/tags (autocomplete)
 │   ├── news.api.js
 │   ├── materials.api.js
 │   └── appointments.api.js
 ├── features/           — бизнес-логика по доменам
 │   ├── auth/           — AuthContext, LoginForm, RegisterForm, forgot-password
-│   └── news/
+│   ├── news/
+│   └── admin/          — AdminLayout + модули управления
+│       ├── AdminLayout.jsx + .module.css
+│       ├── users/      — CRUD пользователей (hooks, components, pages)
+│       └── tags/       — CRUD тегов (hooks, components, pages)
 ├── components/         — domain-agnostic примитивы (Modal, Navbar, Footer)
 ├── hooks/              — переиспользуемые hooks
 ├── pages/              — только композиция, никакого fetch
-│   ├── admin/          — AdminDashboard (stub, требует реализации)
 │   ├── client/         — ClientDashboard (stub)
 │   └── consultant/     — ConsultantDashboard (stub)
 ├── data/               — только dev/mock данные
@@ -312,6 +328,11 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | PATCH | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
 | DELETE | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
 | GET | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/tags` | Admin, Supervisor | ✅ |
+| POST | `/api/admin/tags` | Admin, Supervisor | ✅ |
+| PATCH | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
+| DELETE | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
+| GET | `/api/tags` | Public | ✅ |
 
 ## Соглашения по коду
 

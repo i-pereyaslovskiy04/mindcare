@@ -1,6 +1,6 @@
 # MindCare Web — Architecture Document
 
-> Updated: 2026-05-02  
+> Updated: 2026-05-28  
 > Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)  
 > Purpose: University psychology center — public informational site with role-based dashboards and a full authentication flow.
 
@@ -24,6 +24,8 @@ mindcare_web/
     ├── api/                   ← ALL HTTP calls live here
     │   ├── client.js          ← transport: token injection + 401 refresh
     │   ├── auth.api.js
+    │   ├── users.api.js       ← /api/admin/users/* (CRUD пользователей)
+    │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (autocomplete)
     │   ├── news.api.js
     │   ├── materials.api.js
     │   └── appointments.api.js
@@ -61,13 +63,35 @@ mindcare_web/
     │   │       │   └── StepSuccess.jsx
     │   │       └── styles/
     │   │           └── forgot-password.module.css
-    │   └── news/
-    │       └── components/
-    │           ├── NewsSection.jsx
-    │           ├── NewsSection.module.css
-    │           ├── FeaturedNews.jsx
-    │           ├── NewsCardSmall.jsx
-    │           └── NewsListItem.jsx
+    │   ├── news/
+    │   │   └── components/
+    │   │       ├── NewsSection.jsx
+    │   │       ├── NewsSection.module.css
+    │   │       ├── FeaturedNews.jsx
+    │   │       ├── NewsCardSmall.jsx
+    │   │       └── NewsListItem.jsx
+    │   └── admin/             ← панель управления (role: admin, supervisor)
+    │       ├── AdminLayout.jsx + .module.css
+    │       ├── users/
+    │       │   ├── hooks/
+    │       │   │   ├── useAdminUsers.js
+    │       │   │   └── useUserForm.js
+    │       │   ├── components/
+    │       │   │   ├── UsersTable.jsx + .module.css
+    │       │   │   ├── UsersFilters.jsx + .module.css
+    │       │   │   ├── UserCreateModal.jsx
+    │       │   │   ├── UserEditModal.jsx
+    │       │   │   └── DeleteConfirmDialog.jsx
+    │       │   └── pages/
+    │       │       └── UsersPage.jsx
+    │       └── tags/
+    │           ├── hooks/
+    │           │   └── useAdminTags.js
+    │           ├── components/
+    │           │   ├── TagsTable.jsx + .module.css
+    │           │   └── TagFormModal.jsx + .module.css
+    │           └── pages/
+    │               └── TagsPage.jsx + .module.css
     │
     ├── components/            ← domain-agnostic UI primitives
     │   ├── Modal/
@@ -182,6 +206,8 @@ mindcare_web/
 src/api/
   client.js          ← transport
   auth.api.js        ← forgotPassword, resetPassword
+  users.api.js       ← getUsers, getUser, createUser, updateUser, deleteUser
+  tags.api.js        ← getTags, createTag, updateTag, deleteTag, getTagsPublic
   news.api.js        ← getNews, getNewsById
   materials.api.js   ← getMaterials, getMaterialById
   appointments.api.js
@@ -226,7 +252,7 @@ src/data/
 
 ## 3. Routing
 
-**Файл:** `src/app/AppRoutes.jsx`
+**Файл:** `src/app/router.jsx`
 
 | Route | Component | Guard |
 |---|---|---|
@@ -237,12 +263,21 @@ src/data/
 | `/news/:id` | `NewsItemPage` | Public |
 | `/materials` | `MaterialsPage` | Public |
 | `/materials/:id` | `MaterialsItemPage` | Public |
-| `/student` | `ClientDashboard` | Auth + role: student |
+| `/login` | `LoginPage` | Public |
+| `/register` | `RegisterPage` | Public |
+| `/dashboard` | `DashboardRedirect` | Auth (редирект по роли) |
+| `/profile` | `ProfilePage` | Auth |
+| `/student/*` | `ClientDashboard` + вложенные | Auth + role: student |
 | `/psychologist` | `ConsultantDashboard` | Auth + role: psychologist |
-| `/admin` | `AdminDashboard` | Auth + role: admin |
+| `/admin` | `AdminLayout` (Outlet) | Auth + role: admin, supervisor |
+| `/admin/users` | `UsersPage` | — (наследует от `/admin`) |
+| `/admin/tags` | `TagsPage` | — (наследует от `/admin`) |
 | `*` | `NotFound` | Public |
 
-`ProtectedRoute` HOC: если нет `user` → `<Navigate to="/" />`. Если роль не совпадает → `<Navigate to="/" />`.
+**Guards:**
+- `PrivateRoute` — требует аутентификации, редирект на `/login`
+- `RoleRoute` — требует указанную роль, редирект на `/profile` при несоответствии
+- Пока auth восстанавливается — рендерит `null` (без белого экрана — в бэклоге)
 
 ---
 
@@ -540,7 +575,11 @@ refetch          // ручной перезапрос
 
 `ClientDashboard` и `ConsultantDashboard` отображают только приветствие. Реальный UI не реализован.
 
-~~`AdminDashboard`~~ — закрыто: Admin-панель полностью реализована (AdminLayout + UsersPage с CRUD пользователей). Роутинг переработан: `AppRoutes.jsx` → `router.jsx`, admin-модуль переехал в `features/admin/`.
+~~`AdminDashboard`~~ — закрыто: Admin-панель полностью реализована (AdminLayout + UsersPage с CRUD пользователей + TagsPage с CRUD тегов). Роутинг переработан: `AppRoutes.jsx` → `router.jsx`, admin-модуль переехал в `features/admin/`.
+
+### 8.8 `useAdminTags` не имеет `filters` в hook-контракте
+
+`useAdminTags` возвращает `{ items, loading, error, total, page, setPage, query, setQuery, refetch }` — без `filters` и `setFilters`. Это отступление от стандартного контракта раздела 6.1 (намеренное: теги фильтруются только по имени через `query`, доменных фильтров нет). Если появятся фильтры по использованию или дате — нужно добавить `filters` в контракт.
 
 ---
 
