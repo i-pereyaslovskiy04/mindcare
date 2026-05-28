@@ -17,9 +17,7 @@
   font-size: 13.5px;
 }
 
-.table thead tr {
-  border-bottom: 1px solid var(--nav-border);
-}
+.table thead tr { border-bottom: 1px solid var(--nav-border); }
 
 .table th {
   text-align: left;
@@ -32,6 +30,8 @@
   white-space: nowrap;
 }
 
+.thCenter { text-align: center; }
+
 .table td {
   padding: 12px 16px;
   color: var(--text-main);
@@ -39,15 +39,9 @@
   vertical-align: middle;
 }
 
-.table tbody tr:last-child td {
-  border-bottom: none;
-}
+.table tbody tr:last-child td { border-bottom: none; }
+.row:hover td { background: var(--cream); }
 
-.row:hover td {
-  background: var(--cream);
-}
-
-/* ── Skeleton ── */
 .skeletonCell {
   display: block;
   height: 14px;
@@ -57,7 +51,6 @@
   animation: pulse 1.6s ease-in-out infinite;
 }
 
-/* ── State cells ── */
 .error {
   text-align: center;
   padding: 40px 16px;
@@ -72,15 +65,21 @@
   font-size: 13.5px;
 }
 
-/* ── Cell variants ── */
-.name {
+.tagBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 500;
+  background: var(--milk);
   color: var(--espresso);
-  white-space: nowrap;
 }
 
-.email {
+.count {
+  text-align: center;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .date {
@@ -88,48 +87,6 @@
   white-space: nowrap;
 }
 
-/* ── Badges ── */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.role_student {
-  background: var(--milk);
-  color: var(--espresso);
-}
-
-.role_psychologist {
-  background: #e6f2e6;
-  color: var(--success);
-}
-
-.role_admin {
-  background: var(--sand);
-  color: var(--mocha);
-}
-
-.role_supervisor {
-  background: #e8ecf5;
-  color: #4a5a8a;
-}
-
-.statusActive {
-  background: #e6f2e6;
-  color: var(--success);
-}
-
-.statusBlocked {
-  background: var(--error-bg);
-  color: var(--error);
-}
-
-/* ── Row actions ── */
 .actions {
   white-space: nowrap;
   text-align: right;
@@ -149,7 +106,6 @@
   transition: background 0.15s, color 0.15s, border-color 0.15s,
               transform 0.15s, box-shadow 0.15s;
   margin-left: 6px;
-  flex-shrink: 0;
 }
 
 .iconBtn:first-child { margin-left: 0; }
@@ -168,19 +124,4 @@
   border-color: rgba(185, 64, 64, 0.25);
   transform: translateY(-2px);
   box-shadow: 0 4px 10px rgba(185, 64, 64, 0.15);
-}
-
-/* ── Deleted rows ── */
-.rowDeleted td {
-  opacity: 0.5;
-}
-
-.rowDeleted .name {
-  text-decoration: line-through;
-  color: var(--text-light);
-}
-
-.statusDeleted {
-  background: var(--fog);
-  color: var(--text-light);
 }

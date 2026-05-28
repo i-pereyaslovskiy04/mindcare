@@ -1,0 +1,152 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page {
+  animation: fadeIn 0.25s ease;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--espresso);
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-light);
+  margin: 0;
+}
+
+.btnCreate {
+  height: 38px;
+  padding: 0 20px;
+  background: var(--espresso);
+  color: var(--warm-white);
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.btnCreate:hover { opacity: 0.85; }
+
+.toolbar {
+  margin-bottom: 16px;
+}
+
+.search {
+  width: 100%;
+  max-width: 360px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  font-size: 13px;
+  color: var(--text-main);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.search:focus { border-color: var(--coffee); }
+.search::placeholder { color: var(--text-light); }
+
+/* ── Delete dialog ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.dialog {
+  background: var(--warm-white);
+  border-radius: 16px;
+  padding: 28px 32px 24px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(74, 55, 40, 0.18);
+}
+
+.dialogTitle {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--espresso);
+  margin: 0 0 12px;
+}
+
+.dialogWarning {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+}
+
+.dialogError {
+  font-size: 13px;
+  color: var(--error);
+  margin: 0 0 16px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btnSecondary {
+  height: 36px;
+  padding: 0 16px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  border-color: var(--latte);
+  color: var(--espresso);
+}
+
+.btnDanger {
+  height: 36px;
+  padding: 0 16px;
+  background: var(--error);
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btnDanger:hover:not(:disabled) { opacity: 0.85; }
+
+.btnSecondary:disabled,
+.btnDanger:disabled { opacity: 0.6; cursor: not-allowed; }

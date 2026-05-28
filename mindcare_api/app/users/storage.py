@@ -31,6 +31,7 @@ def find_users(
     is_active: Optional[bool] = None,
     sort: str = "created_at",
     order: str = "desc",
+    include_deleted: bool = False,
 ) -> tuple[list[dict], int]:
     """
     Возвращает кортеж (items, total) для пагинированного списка юзеров.
@@ -55,10 +56,9 @@ def find_users(
             .correlate(User)
             .scalar_subquery()
         )
-        query = (
-            db.query(User, role_subq.label("role_name"))
-            .filter(User.deleted_at.is_(None))
-        )
+        query = db.query(User, role_subq.label("role_name"))
+        if not include_deleted:
+            query = query.filter(User.deleted_at.is_(None))
 
         # ── 2. Фильтры ──
         if search:
@@ -87,7 +87,10 @@ def find_users(
         # ── 4. Сортировка ──
         sort_column = getattr(User, sort, User.created_at)
         direction = desc if order == "desc" else asc
-        query = query.order_by(direction(sort_column))
+        if include_deleted:
+            query = query.order_by(User.deleted_at.is_(None).desc(), direction(sort_column))
+        else:
+            query = query.order_by(direction(sort_column))
 
         # ── 5. Пагинация (LIMIT/OFFSET) ──
         offset = (page - 1) * size
@@ -105,6 +108,7 @@ def find_users(
                 "is_active":  user.is_active,
                 "created_at": user.created_at,
                 "last_login": user.last_login,
+                "deleted_at": user.deleted_at,
             })
 
     return items, total

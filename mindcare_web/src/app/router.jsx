@@ -34,6 +34,7 @@ import ProfilePage from '../features/profile/pages/ProfilePage';
 // ── Admin ─────────────────────────────────────────────────────────────────────
 import AdminLayout from '../features/admin/AdminLayout';
 import UsersPage   from '../features/admin/users/pages/UsersPage';
+import TagsPage    from '../features/admin/tags/pages/TagsPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
 import ClientDashboard      from '../pages/client/ClientDashboard';
@@ -143,6 +144,7 @@ export default function AppRouter() {
       >
         <Route index        element={<Navigate to="users" replace />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="tags"  element={<TagsPage />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

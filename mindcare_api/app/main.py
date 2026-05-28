@@ -92,11 +92,15 @@ app.add_middleware(
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
-from app.auth.routes import router as auth_router              # noqa: E402
+from app.auth.routes import router as auth_router                # noqa: E402
 from app.users.routes_admin import router as admin_users_router  # noqa: E402
+from app.tags.routes_admin import router as admin_tags_router    # noqa: E402
+from app.tags.routes_public import router as public_tags_router  # noqa: E402
 
-app.include_router(auth_router,        prefix="/api")
-app.include_router(admin_users_router, prefix="/api")
+app.include_router(auth_router,         prefix="/api")
+app.include_router(admin_users_router,  prefix="/api")
+app.include_router(admin_tags_router,   prefix="/api")
+app.include_router(public_tags_router,  prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

@@ -32,6 +32,15 @@ export default function UsersFilters({ query, onQueryChange, filters, onFiltersC
         <option value="true">Активен</option>
         <option value="false">Заблокирован</option>
       </select>
+
+      <label className={styles.checkboxLabel}>
+        <input
+          type="checkbox"
+          checked={filters.includeDeleted}
+          onChange={() => onFiltersChange({ ...filters, includeDeleted: !filters.includeDeleted })}
+        />
+        Показать удалённых
+      </label>
     </div>
   );
 }

@@ -10,7 +10,7 @@ export function useAdminUsers() {
   const [page, setPage]     = useState(1);
   const [size]              = useState(20);
   const [query, setQueryRaw]   = useState('');
-  const [filters, setFiltersRaw] = useState({ role: '', is_active: '' });
+  const [filters, setFiltersRaw] = useState({ role: '', is_active: '', includeDeleted: false });
   const [tick, setTick]     = useState(0);
 
   const debouncedQuery = useDebounce(query, 300);
@@ -37,9 +37,10 @@ export function useAdminUsers() {
     getUsers({
       page,
       size,
-      search:    debouncedQuery,
-      role:      filters.role,
-      is_active: filters.is_active,
+      search:          debouncedQuery,
+      role:            filters.role,
+      is_active:       filters.is_active,
+      include_deleted: filters.includeDeleted,
     })
       .then((data) => {
         if (!cancelled) {

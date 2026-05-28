@@ -53,6 +53,7 @@ def get_users_list(query: AdminUserListQuery) -> PaginatedUsersResponse:
         is_active=query.is_active,
         sort=query.sort,
         order=query.order,
+        include_deleted=query.include_deleted,
     )
 
     items = [AdminUserListItem.model_validate(item) for item in items_raw]

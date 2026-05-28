@@ -64,7 +64,7 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
           )}
 
           {!loading && !error && items.map((item) => (
-            <tr key={item.uuid} className={styles.row}>
+            <tr key={item.uuid} className={`${styles.row}${item.deleted_at ? ` ${styles.rowDeleted}` : ''}`}>
               <td className={styles.name}>{item.full_name}</td>
               <td className={styles.email}>{item.email}</td>
               <td>
@@ -73,29 +73,37 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
                 </span>
               </td>
               <td>
-                <span className={`${styles.badge} ${item.is_active ? styles.statusActive : styles.statusBlocked}`}>
-                  {item.is_active ? 'Активен' : 'Заблокирован'}
-                </span>
+                {item.deleted_at ? (
+                  <span className={`${styles.badge} ${styles.statusDeleted}`}>Удалён</span>
+                ) : (
+                  <span className={`${styles.badge} ${item.is_active ? styles.statusActive : styles.statusBlocked}`}>
+                    {item.is_active ? 'Активен' : 'Заблокирован'}
+                  </span>
+                )}
               </td>
               <td className={styles.date}>{formatDate(item.created_at)}</td>
               <td className={styles.date}>{formatDate(item.last_login)}</td>
               <td className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.iconBtn}
-                  onClick={() => onEdit?.(item)}
-                  aria-label={`Редактировать ${item.full_name}`}
-                >
-                  <Icon name="edit" size={15} />
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                  onClick={() => onDelete?.(item)}
-                  aria-label={`Удалить ${item.full_name}`}
-                >
-                  <Icon name="trash" size={15} />
-                </button>
+                {!item.deleted_at && (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      onClick={() => onEdit?.(item)}
+                      aria-label={`Редактировать ${item.full_name}`}
+                    >
+                      <Icon name="edit" size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
+                      onClick={() => onDelete?.(item)}
+                      aria-label={`Удалить ${item.full_name}`}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

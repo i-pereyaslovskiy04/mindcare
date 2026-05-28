@@ -111,6 +111,49 @@ class HelpResource(Base):
     category = relationship("Category")
 
 
+class Tag(Base):
+    __tablename__ = "tags"
+
+    id         = Column(Integer, primary_key=True)
+    uuid       = Column(UUID(as_uuid=True), unique=True, nullable=False, default=_uuid.uuid4)
+    name       = Column(String(100), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    article_tags = relationship("ArticleTag", back_populates="tag", cascade="all, delete-orphan")
+    news_tags    = relationship("NewsTag",    back_populates="tag", cascade="all, delete-orphan")
+    test_tags    = relationship("TestTag",    back_populates="tag", cascade="all, delete-orphan")
+
+
+class ArticleTag(Base):
+    __tablename__ = "article_tags"
+
+    article_id = Column(Integer, ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True)
+    tag_id     = Column(Integer, ForeignKey("tags.id",    ondelete="CASCADE"), primary_key=True)
+
+    article = relationship("Article")
+    tag     = relationship("Tag", back_populates="article_tags")
+
+
+class NewsTag(Base):
+    __tablename__ = "news_tags"
+
+    news_id = Column(Integer, ForeignKey("news.id", ondelete="CASCADE"), primary_key=True)
+    tag_id  = Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+
+    news = relationship("News")
+    tag  = relationship("Tag", back_populates="news_tags")
+
+
+class TestTag(Base):
+    __tablename__ = "test_tags"
+
+    test_id = Column(Integer, ForeignKey("tests.id", ondelete="CASCADE"), primary_key=True)
+    tag_id  = Column(Integer, ForeignKey("tags.id",  ondelete="CASCADE"), primary_key=True)
+
+    test = relationship("Test")
+    tag  = relationship("Tag", back_populates="test_tags")
+
+
 class QuestionsAnswers(Base):
     __tablename__ = "questions_answers"
 

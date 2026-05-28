@@ -18,6 +18,7 @@ class AdminUserListQuery(BaseModel):
     is_active: Optional[bool] = Field(default=None, description="Фильтр по активности юзера")
     sort: str = Field(default="created_at", description="Поле сортировки")
     order: Literal["asc", "desc"] = Field(default="desc", description="Направление сортировки")
+    include_deleted: bool = Field(default=False, description="Включать удалённых пользователей")
 
 
 class AdminUserListItem(BaseModel):
@@ -31,6 +32,7 @@ class AdminUserListItem(BaseModel):
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

@@ -3,7 +3,7 @@
 Префикс: /api/admin/users
 Доступ: только с ролью 'admin' через Depends(require_role("admin")).
 """
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from typing import Optional, Literal
 
 from app.auth import audit
@@ -35,7 +35,7 @@ def list_users(
     search: Optional[str] = Query(
         default=None, max_length=200, description="Поиск по email или ФИО"
     ),
-    role: Optional[str] = Query(
+    role: Optional[Literal["student", "psychologist", "admin", "supervisor"]] = Query(
         default=None, description="Фильтр по роли"
     ),
     is_active: Optional[bool] = Query(
@@ -45,6 +45,7 @@ def list_users(
     order: Literal["asc", "desc"] = Query(
         default="desc", description="Направление сортировки"
     ),
+    include_deleted: bool = Query(default=False, description="Включать удалённых пользователей"),
 ):
     """Список всех пользователей с пагинацией, поиском и фильтрами."""
     query = AdminUserListQuery(
@@ -55,12 +56,14 @@ def list_users(
         is_active=is_active,
         sort=sort,
         order=order,
+        include_deleted=include_deleted,
     )
     return service.get_users_list(query)
 
 
 @router.post("/", response_model=AdminUserCreateResponse, status_code=201)
 def create_user(
+    request: Request,
     body: AdminUserCreate,
     current_user: dict = Depends(get_current_user),
 ):
@@ -76,6 +79,8 @@ def create_user(
         event=f"admin_create_user:{user['uuid']}",
         user_id=current_user["id"],
         user_email=current_user["email"],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
     )
     return user
 
@@ -91,6 +96,7 @@ def get_user(uuid: str):
 
 @router.patch("/{uuid}", response_model=AdminUserRead)
 def update_user(
+    request: Request,
     uuid: str,
     body: AdminUserUpdate,
     current_user: dict = Depends(get_current_user),
@@ -107,12 +113,15 @@ def update_user(
         event=f"admin_update_user:{uuid}",
         user_id=current_user["id"],
         user_email=current_user["email"],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
     )
     return result
 
 
 @router.delete("/{uuid}", status_code=204)
 def delete_user(
+    request: Request,
     uuid: str,
     current_user: dict = Depends(get_current_user),
 ):
@@ -128,4 +137,6 @@ def delete_user(
         event=f"admin_delete_user:{uuid}",
         user_id=current_user["id"],
         user_email=current_user["email"],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
     )

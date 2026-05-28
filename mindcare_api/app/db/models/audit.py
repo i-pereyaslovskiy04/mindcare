@@ -64,7 +64,7 @@ class AuthLog(Base):
     id             = Column(BigInteger, primary_key=True)
     user_id        = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     user_email     = Column(String(255))   # денормализация: email на момент события
-    event          = Column(String(50), nullable=False)
+    event          = Column(String(150), nullable=False)
     success        = Column(Boolean, nullable=False, default=True)
     failure_reason = Column(String(255))
     ip_address     = Column(INET)

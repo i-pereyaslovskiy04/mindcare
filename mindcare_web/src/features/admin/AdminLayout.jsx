@@ -5,6 +5,7 @@ import styles from './AdminLayout.module.css';
 
 const CRUMB_LABELS = {
   '/admin/users': 'Пользователи',
+  '/admin/tags':  'Теги',
 };
 
 function getInitials(name) {
@@ -56,6 +57,18 @@ export default function AdminLayout() {
               <Icon name="users" size={18} />
             </span>
             <span className={styles.navLabel}>Пользователи</span>
+          </NavLink>
+
+          <NavLink
+            to="/admin/tags"
+            className={({ isActive }) =>
+              `${styles.navItem} ${isActive ? styles.active : ''}`
+            }
+          >
+            <span className={styles.navIcon}>
+              <Icon name="tag" size={18} />
+            </span>
+            <span className={styles.navLabel}>Теги</span>
           </NavLink>
 
           <span className={styles.navItemDisabled}>
