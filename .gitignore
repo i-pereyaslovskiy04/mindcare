@@ -43,5 +43,8 @@ tmp/
 local_*/
 *.bat
 
+# --- Uploaded media files ---
+mindcare_api/media/uploads/
+
 # --- Claude Code local session data ---
 .claude/

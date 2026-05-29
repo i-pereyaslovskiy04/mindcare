@@ -24,9 +24,11 @@ Startup sequence (lifespan):
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 # Принудительно задаём кодировку клиента PostgreSQL до любых импортов SQLAlchemy.
 # На Windows с русской локалью (cp1251) psycopg2 иначе падает с UnicodeDecodeError
@@ -90,17 +92,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Static files (media uploads) ─────────────────────────────────────────────
+
+_MEDIA_DIR = Path(__file__).resolve().parent.parent / "media"
+_MEDIA_DIR.mkdir(exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(_MEDIA_DIR)), name="media")
+
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
 from app.auth.routes import router as auth_router                # noqa: E402
 from app.users.routes_admin import router as admin_users_router  # noqa: E402
 from app.tags.routes_admin import router as admin_tags_router    # noqa: E402
 from app.tags.routes_public import router as public_tags_router  # noqa: E402
+from app.media.routes import router as media_router              # noqa: E402
+from app.news.routes_admin import router as admin_news_router          # noqa: E402
+from app.news.routes_public import router as public_news_router        # noqa: E402
+from app.articles.routes_admin import router as admin_articles_router  # noqa: E402
+from app.articles.routes_public import router as public_articles_router  # noqa: E402
 
-app.include_router(auth_router,         prefix="/api")
-app.include_router(admin_users_router,  prefix="/api")
-app.include_router(admin_tags_router,   prefix="/api")
-app.include_router(public_tags_router,  prefix="/api")
+app.include_router(auth_router,             prefix="/api")
+app.include_router(admin_users_router,      prefix="/api")
+app.include_router(admin_tags_router,       prefix="/api")
+app.include_router(public_tags_router,      prefix="/api")
+app.include_router(media_router,            prefix="/api")
+app.include_router(admin_news_router,       prefix="/api")
+app.include_router(public_news_router,      prefix="/api")
+app.include_router(admin_articles_router,   prefix="/api")
+app.include_router(public_articles_router,  prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────
