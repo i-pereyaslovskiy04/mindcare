@@ -138,6 +138,36 @@
   line-height: 1.55;
 }
 
+/* Rich text content from TipTap */
+.richContent p        { margin: 0 0 1.2em; }
+.richContent h1,
+.richContent h2,
+.richContent h3       { font-weight: 700; margin: 1.2em 0 0.5em; color: var(--espresso); }
+.richContent ul,
+.richContent ol       { padding-left: 1.5em; margin-bottom: 1em; }
+.richContent li       { margin-bottom: 0.3em; }
+.richContent blockquote {
+  border-left: 3px solid var(--coffee);
+  padding-left: 1em; margin: 1em 0;
+  font-style: italic; color: var(--text-light);
+}
+.richContent code {
+  font-family: monospace; background: #f3f0ec;
+  padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.9em;
+}
+.richContent pre {
+  background: #1f2937; color: #e5e7eb;
+  padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 1em 0;
+}
+.richContent hr { border: none; border-top: 1px solid var(--nav-border); margin: 1.5em 0; }
+.richContent :global(.tiptap-image) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 1em 0;
+}
+
 /* ── States ────────────────────────────────────────────── */
 
 .stateText {

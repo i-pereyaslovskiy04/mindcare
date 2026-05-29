@@ -1,0 +1,148 @@
+.wrap {
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border, #d1d5db);
+  background: var(--color-surface, #f9fafb);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #4b5563);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--color-primary-hover, #e5e7eb);
+  color: var(--color-text, #111827);
+}
+
+.btn.active {
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.uploading {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border, #d1d5db);
+  margin: 0 4px;
+}
+
+/* ProseMirror content area */
+.content :global(.ProseMirror) {
+  min-height: 200px;
+  padding: 12px 14px;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-text, #111827);
+}
+
+.content :global(.ProseMirror) p { margin: 0 0 0.75em; }
+.content :global(.ProseMirror) h1 { font-size: 1.6em; font-weight: 700; margin: 1em 0 0.4em; }
+.content :global(.ProseMirror) h2 { font-size: 1.35em; font-weight: 700; margin: 1em 0 0.4em; }
+.content :global(.ProseMirror) h3 { font-size: 1.15em; font-weight: 700; margin: 0.8em 0 0.3em; }
+.content :global(.ProseMirror) ul,
+.content :global(.ProseMirror) ol { padding-left: 1.5em; margin: 0 0 0.75em; }
+.content :global(.ProseMirror) li { margin-bottom: 0.25em; }
+.content :global(.ProseMirror) blockquote {
+  border-left: 3px solid var(--color-primary, #6366f1);
+  padding-left: 1em;
+  margin: 0.75em 0;
+  color: var(--color-text-secondary, #4b5563);
+  font-style: italic;
+}
+.content :global(.ProseMirror) code {
+  font-family: monospace;
+  background: #f3f4f6;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.content :global(.ProseMirror) pre {
+  background: #1f2937;
+  color: #e5e7eb;
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+.content :global(.ProseMirror) pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+.content :global(.ProseMirror) hr {
+  border: none;
+  border-top: 2px solid var(--color-border, #d1d5db);
+  margin: 1em 0;
+}
+.content :global(.ProseMirror p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* Изображения внутри редактора */
+.content :global(.tiptap-image) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+  margin: 0.75em 0;
+  cursor: default;
+}
+
+.content :global(.ProseMirror-selectednode.tiptap-image) {
+  outline: 2px solid var(--color-primary, #6366f1);
+  outline-offset: 2px;
+}
+
+.imgError {
+  padding: 8px 12px;
+  background: #fee2e2;
+  border-bottom: 1px solid #fca5a5;
+  font-size: 13px;
+  color: #991b1b;
+}
+
+.hiddenInput {
+  display: none;
+}

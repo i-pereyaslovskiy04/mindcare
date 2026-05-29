@@ -32,9 +32,11 @@ import RegisterPage from '../features/auth/pages/RegisterPage';
 import ProfilePage from '../features/profile/pages/ProfilePage';
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-import AdminLayout from '../features/admin/AdminLayout';
-import UsersPage   from '../features/admin/users/pages/UsersPage';
-import TagsPage    from '../features/admin/tags/pages/TagsPage';
+import AdminLayout    from '../features/admin/AdminLayout';
+import UsersPage      from '../features/admin/users/pages/UsersPage';
+import TagsPage       from '../features/admin/tags/pages/TagsPage';
+import AdminNewsPage  from '../features/admin/news/pages/NewsPage';
+import AdminArticlesPage from '../features/admin/articles/pages/ArticlesPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
 import ClientDashboard      from '../pages/client/ClientDashboard';
@@ -142,9 +144,11 @@ export default function AppRouter() {
         path="/admin"
         element={<RoleRoute roles={['admin', 'supervisor']}><AdminLayout /></RoleRoute>}
       >
-        <Route index        element={<Navigate to="users" replace />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="tags"  element={<TagsPage />} />
+        <Route index            element={<Navigate to="users" replace />} />
+        <Route path="users"    element={<UsersPage />} />
+        <Route path="tags"     element={<TagsPage />} />
+        <Route path="news"     element={<AdminNewsPage />} />
+        <Route path="articles" element={<AdminArticlesPage />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

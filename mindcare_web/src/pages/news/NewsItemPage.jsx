@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 import { getNewsById } from '../../api/news.api';
 import styles from './NewsItemPage.module.css';
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+}
 
 const HeroPlaceholder = () => (
   <svg
@@ -34,39 +42,27 @@ const HeroPlaceholder = () => (
       d="M406 278 C406 253 426 234 450 234 C474 234 494 253 494 278"
       stroke="white" strokeOpacity="0.60" strokeWidth="1.5" strokeLinecap="round"
     />
-    <circle cx="620" cy="120" r="4" fill="white" fillOpacity="0.12" />
-    <circle cx="280" cy="350" r="3" fill="white" fillOpacity="0.10" />
-    <circle cx="700" cy="340" r="5" fill="white" fillOpacity="0.08" />
-    <circle cx="180" cy="150" r="3" fill="white" fillOpacity="0.09" />
   </svg>
 );
-
-const MOCK_PARAGRAPHS = [
-  'Психологическая служба ДонГУ — это команда дипломированных специалистов, которые помогают студентам справляться с эмоциональными трудностями, адаптироваться к учебным нагрузкам и выстраивать здоровые межличностные отношения. Ежегодно сотни студентов обращаются за поддержкой и находят её именно здесь.',
-  'На встрече будут представлены все форматы работы центра: очные консультации, групповые тренинги и онлайн-сессии. Специалисты расскажут о наиболее распространённых запросах — управлении тревогой, эмоциональном выгорании и прокрастинации — и объяснят, как центр может помочь в каждом конкретном случае.',
-  'По итогам прошлого учебного года более 87% студентов, прошедших курс поддержки, отметили заметное улучшение общего самочувствия. Центр работает в партнёрстве с профильными кафедрами факультета психологии, что обеспечивает высокий профессиональный уровень и актуальность применяемых методик.',
-  'Участие бесплатное и открыто для всех студентов, аспирантов и сотрудников университета. Для записи на индивидуальную консультацию используйте форму на сайте или свяжитесь с нами по электронной почте. Ждём вас.',
-];
-
-const MOCK_QUOTE =
-  '«Обращаться за поддержкой — это не слабость, это осознанный выбор заботы о себе. Наша задача — сделать этот шаг максимально простым.»';
 
 export default function NewsItemPage() {
   const { id } = useParams();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [news, setNews] = useState(null);
+  const [news, setNews]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
-
     getNewsById(id)
       .then((data) => setNews(data))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const tagLabel = news?.tags?.[0]?.name || null;
+  const dateLabel = formatDate(news?.published_at || news?.created_at);
 
   return (
     <>
@@ -82,33 +78,33 @@ export default function NewsItemPage() {
           {!loading && news && (
             <article className={styles.article}>
               <header className={styles.header}>
-                {news.tag && <span className={styles.tag}>{news.tag}</span>}
+                {tagLabel && <span className={styles.tag}>{tagLabel}</span>}
                 <h1 className={styles.title}>{news.title}</h1>
                 <div className={styles.meta}>
-                  {news.date && <span>{news.date}</span>}
-                  <span className={styles.metaDivider} aria-hidden="true">·</span>
-                  <span>3 мин чтения</span>
+                  {dateLabel && <span>{dateLabel}</span>}
+                  {news.created_by_name && (
+                    <>
+                      <span className={styles.metaDivider} aria-hidden="true">·</span>
+                      <span>{news.created_by_name}</span>
+                    </>
+                  )}
                 </div>
               </header>
 
               <div className={styles.heroWrap}>
-                {news.image
-                  ? <img src={news.image} alt={news.title} className={styles.heroImg} />
+                {news.cover_image_url
+                  ? <img src={news.cover_image_url} alt={news.title} className={styles.heroImg} />
                   : <HeroPlaceholder />}
               </div>
 
               <div className={styles.body}>
                 {news.content ? (
-                  <p>{news.content}</p>
+                  <div
+                    className={styles.richContent}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(news.content) }}
+                  />
                 ) : (
-                  <>
-                    <p className={styles.lead}>{news.description}</p>
-                    <p>{MOCK_PARAGRAPHS[0]}</p>
-                    <p>{MOCK_PARAGRAPHS[1]}</p>
-                    <blockquote className={styles.pullQuote}>{MOCK_QUOTE}</blockquote>
-                    <p>{MOCK_PARAGRAPHS[2]}</p>
-                    <p>{MOCK_PARAGRAPHS[3]}</p>
-                  </>
+                  <p className={styles.lead}>Содержимое новости не добавлено.</p>
                 )}
               </div>
             </article>

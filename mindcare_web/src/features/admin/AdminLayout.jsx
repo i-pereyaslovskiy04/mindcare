@@ -4,8 +4,10 @@ import Icon from '../../pages/student/components/Icon';
 import styles from './AdminLayout.module.css';
 
 const CRUMB_LABELS = {
-  '/admin/users': 'Пользователи',
-  '/admin/tags':  'Теги',
+  '/admin/users':    'Пользователи',
+  '/admin/tags':     'Теги',
+  '/admin/news':     'Новости',
+  '/admin/articles': 'Материалы',
 };
 
 function getInitials(name) {
@@ -39,7 +41,7 @@ export default function AdminLayout() {
             <div className={styles.userName}>{user?.name ?? 'Администратор'}</div>
             <div className={styles.userRole}>
               <span className={styles.roleDot} />
-              Администратор
+              {user?.role === 'supervisor' ? 'Супервизор' : 'Администратор'}
             </div>
           </div>
         </div>
@@ -71,13 +73,29 @@ export default function AdminLayout() {
             <span className={styles.navLabel}>Теги</span>
           </NavLink>
 
-          <span className={styles.navItemDisabled}>
+          <NavLink
+            to="/admin/news"
+            className={({ isActive }) =>
+              `${styles.navItem} ${isActive ? styles.active : ''}`
+            }
+          >
+            <span className={styles.navIcon}>
+              <Icon name="news" size={18} />
+            </span>
+            <span className={styles.navLabel}>Новости</span>
+          </NavLink>
+
+          <NavLink
+            to="/admin/articles"
+            className={({ isActive }) =>
+              `${styles.navItem} ${isActive ? styles.active : ''}`
+            }
+          >
             <span className={styles.navIcon}>
               <Icon name="articles" size={18} />
             </span>
-            <span className={styles.navLabel}>Контент</span>
-            <span className={styles.navItemSoon}>скоро</span>
-          </span>
+            <span className={styles.navLabel}>Материалы</span>
+          </NavLink>
 
           <span className={styles.navItemDisabled}>
             <span className={styles.navIcon}>

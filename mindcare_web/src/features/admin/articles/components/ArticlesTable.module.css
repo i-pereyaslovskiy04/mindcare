@@ -1,0 +1,81 @@
+.tableWrap { overflow-x: auto; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #6b7280);
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  white-space: nowrap;
+}
+
+.row {
+  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  transition: background 0.12s;
+}
+.row:hover { background: var(--color-surface, #f9fafb); }
+.row td { padding: 10px 12px; vertical-align: middle; }
+
+.colCover   { width: 56px; }
+.colTitle   { min-width: 200px; }
+.colCats    { width: 140px; }
+.colTags    { width: 180px; }
+.colStatus  { width: 120px; }
+.colDate    { width: 100px; white-space: nowrap; }
+.colActions { width: 80px; }
+
+.thumb {
+  width: 44px; height: 44px;
+  object-fit: cover; border-radius: 4px;
+}
+.thumbPlaceholder {
+  width: 44px; height: 44px;
+  border-radius: 4px;
+  background: var(--color-border, #e5e7eb);
+}
+
+.title   { display: block; font-weight: 500; color: var(--color-text, #111827); }
+.excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  margin-top: 2px;
+}
+.author  { display: block; font-size: 12px; color: var(--color-text-secondary, #9ca3af); margin-top: 2px; }
+
+.tags    { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.catBadge {
+  padding: 2px 8px; border-radius: 10px;
+  background: #dbeafe; color: #1e40af;
+  font-size: 12px; font-weight: 500;
+}
+
+.tag {
+  padding: 2px 8px; border-radius: 10px;
+  background: #ede9fe; color: #5b21b6;
+  font-size: 12px; font-weight: 500;
+}
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.published { background: #d1fae5; color: #065f46; }
+.draft     { background: #fef3c7; color: #92400e; }
+
+.btnEdit, .btnDelete {
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; padding: 4px 6px; border-radius: 4px; transition: background 0.12s;
+}
+.btnEdit:hover   { background: #ede9fe; }
+.btnDelete:hover { background: #fee2e2; }
+
+.empty { padding: 32px; text-align: center; color: var(--color-text-secondary, #9ca3af); }

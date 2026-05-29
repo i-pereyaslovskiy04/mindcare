@@ -1,35 +1,40 @@
-import { MOCK_NEWS } from '../data/news.mock';
+import { apiFetch } from './client';
 
-const API_BASE = process.env.REACT_APP_API_URL || '/api';
+// ── Public ────────────────────────────────────────────────────────────────────
 
-async function _handleResponse(res) {
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || body.message || `HTTP ${res.status}`);
-  }
-  return res.json();
+export function getNews({ page = 1, size = 10, search } = {}) {
+  const params = new URLSearchParams({ page, size });
+  if (search) params.set('search', search);
+  return apiFetch(`/api/news?${params}`);
 }
 
-export async function getNews(page = 1, limit = 10) {
-  try {
-    const res = await fetch(`${API_BASE}/news?page=${page}&limit=${limit}`);
-    return await _handleResponse(res);
-  } catch {
-    const start = (page - 1) * limit;
-    return {
-      items: MOCK_NEWS.slice(start, start + limit),
-      total: MOCK_NEWS.length,
-    };
-  }
+export function getNewsById(uuid) {
+  return apiFetch(`/api/news/${uuid}`);
 }
 
-export async function getNewsById(id) {
-  try {
-    const res = await fetch(`${API_BASE}/news/${id}`);
-    return await _handleResponse(res);
-  } catch {
-    const found = MOCK_NEWS.find((item) => item.id === Number(id));
-    if (!found) throw new Error('Not found');
-    return found;
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export function getAdminNews({ page = 1, size = 20, search, is_published } = {}) {
+  const params = new URLSearchParams({ page, size });
+  if (search) params.set('search', search);
+  if (is_published !== undefined && is_published !== null) {
+    params.set('is_published', String(is_published));
   }
+  return apiFetch(`/api/admin/news?${params}`);
+}
+
+export function getAdminNewsItem(uuid) {
+  return apiFetch(`/api/admin/news/${uuid}`);
+}
+
+export function createNews(data) {
+  return apiFetch('/api/admin/news', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateNews(uuid, data) {
+  return apiFetch(`/api/admin/news/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deleteNews(uuid) {
+  return apiFetch(`/api/admin/news/${uuid}`, { method: 'DELETE' });
 }
