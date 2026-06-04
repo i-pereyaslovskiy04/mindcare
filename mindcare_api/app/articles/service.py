@@ -55,7 +55,10 @@ def create_article(data: dict, created_by: int) -> dict:
 
 def update_article(uuid: str, data: dict) -> Optional[dict]:
     if "title" in data and data["title"]:
-        data["title"] = data["title"].strip()
+        stripped = data["title"].strip()
+        if not stripped:
+            raise ValueError("Заголовок не может быть пустым")
+        data["title"] = stripped
     result = storage.update_article(uuid, data)
     if result is None:
         raise ValueError("Материал не найден")

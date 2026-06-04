@@ -36,11 +36,12 @@ class ArticleUpdate(BaseModel):
 
 
 class ArticleRead(BaseModel):
-    uuid:             str
-    title:            str
-    excerpt:          Optional[str]
-    content:          Optional[str]
-    cover_image_url:  Optional[str]
+    uuid:              str
+    title:             str
+    excerpt:           Optional[str]
+    content:           Optional[str]
+    cover_image_uuid:  Optional[str]   # UUID медиафайла — нужен фронту при редактировании
+    cover_image_url:   Optional[str]
     categories:       list[CategoryRead]
     tags:             list[TagPublicRead]
     is_published:     bool

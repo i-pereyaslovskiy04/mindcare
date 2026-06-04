@@ -27,10 +27,12 @@ def _article_to_dict(article: Article, db) -> dict:
         .all()
     )
     cover_url = None
+    cover_uuid = None
     if article.cover_image:
         mf = db.query(MediaFile).filter(MediaFile.id == article.cover_image).first()
         if mf:
-            cover_url = mf.file_path
+            cover_url  = mf.file_path
+            cover_uuid = str(mf.uuid)
 
     author_name = None
     if article.created_by:
@@ -39,11 +41,12 @@ def _article_to_dict(article: Article, db) -> dict:
             author_name = user.full_name
 
     return {
-        "uuid":            str(article.uuid),
-        "title":           article.title,
-        "excerpt":         article.excerpt,
-        "content":         article.content,
-        "cover_image_url": cover_url,
+        "uuid":             str(article.uuid),
+        "title":            article.title,
+        "excerpt":          article.excerpt,
+        "content":          article.content,
+        "cover_image_uuid": cover_uuid,
+        "cover_image_url":  cover_url,
         "categories": [
             {"id": c.id, "name": c.name, "slug": c.slug} for c in categories
         ],

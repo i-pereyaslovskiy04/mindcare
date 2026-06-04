@@ -18,6 +18,9 @@ _EXT_MAP = {
     "image/webp": "webp",
 }
 
+# Соответствие PIL-форматов расширениям файлов
+_PIL_EXT = {"JPEG": "jpg", "PNG": "png", "GIF": "gif", "WEBP": "webp"}
+
 # mindcare_api/media/ — рядом с app/
 _MEDIA_ROOT = Path(__file__).resolve().parent.parent.parent / "media"
 
@@ -58,8 +61,6 @@ def upload_image(file: UploadFile, user_id: int) -> dict:
         # После verify() объект закрыт — открываем заново для размеров и формата
         img = Image.open(io.BytesIO(data))
         width_px, height_px = img.size
-        # Расширение из реального формата, а не из клиентского MIME
-        _PIL_EXT = {"JPEG": "jpg", "PNG": "png", "GIF": "gif", "WEBP": "webp"}
         if img.format and img.format in _PIL_EXT:
             img_ext = _PIL_EXT[img.format]
     except (UnidentifiedImageError, Exception):

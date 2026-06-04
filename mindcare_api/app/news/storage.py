@@ -2,8 +2,7 @@ import uuid as _uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, asc, desc
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import desc
 
 from app.db.session import SessionLocal
 from app.db.models import News, NewsTag, Tag, User, MediaFile
@@ -19,10 +18,12 @@ def _news_to_dict(news: News, db) -> dict:
         .all()
     )
     cover_url = None
+    cover_uuid = None
     if news.cover_image:
         mf = db.query(MediaFile).filter(MediaFile.id == news.cover_image).first()
         if mf:
-            cover_url = mf.file_path
+            cover_url  = mf.file_path
+            cover_uuid = str(mf.uuid)
 
     author_name = None
     if news.created_by:
@@ -31,10 +32,11 @@ def _news_to_dict(news: News, db) -> dict:
             author_name = user.full_name
 
     return {
-        "uuid":            str(news.uuid),
-        "title":           news.title,
-        "content":         news.content,
-        "cover_image_url": cover_url,
+        "uuid":             str(news.uuid),
+        "title":            news.title,
+        "content":          news.content,
+        "cover_image_uuid": cover_uuid,
+        "cover_image_url":  cover_url,
         "tags":            [{"uuid": str(t.uuid), "name": t.name} for t in tags],
         "is_published":    news.is_published,
         "published_at":    news.published_at,

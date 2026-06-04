@@ -24,16 +24,17 @@ class NewsUpdate(BaseModel):
 
 
 class NewsRead(BaseModel):
-    uuid:             str
-    title:            str
-    content:          Optional[str]
-    cover_image_url:  Optional[str]
-    tags:             list[TagPublicRead]
-    is_published:     bool
-    published_at:     Optional[datetime]
-    created_at:       datetime
-    updated_at:       datetime
-    created_by_name:  Optional[str]
+    uuid:              str
+    title:             str
+    content:           Optional[str]
+    cover_image_uuid:  Optional[str]   # UUID медиафайла — нужен фронту при редактировании
+    cover_image_url:   Optional[str]
+    tags:              list[TagPublicRead]
+    is_published:      bool
+    published_at:      Optional[datetime]
+    created_at:        datetime
+    updated_at:        datetime
+    created_by_name:   Optional[str]
 
     model_config = {"from_attributes": True}
 

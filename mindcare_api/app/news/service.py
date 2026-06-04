@@ -43,7 +43,10 @@ def create_news(data: dict, created_by: int) -> dict:
 
 def update_news(uuid: str, data: dict) -> Optional[dict]:
     if "title" in data and data["title"]:
-        data["title"] = data["title"].strip()
+        stripped = data["title"].strip()
+        if not stripped:
+            raise ValueError("Заголовок не может быть пустым")
+        data["title"] = stripped
     result = storage.update_news(uuid, data)
     if result is None:
         raise ValueError("Новость не найдена")
