@@ -160,6 +160,22 @@ mindcare_api/
 │   │   ├── schemas.py       — Pydantic-схемы tags
 │   │   ├── service.py       — бизнес-логика + нормализация имени
 │   │   └── storage.py       — работа с БД, коррелированные подзапросы счётчиков
+│   ├── media/               — загрузка изображений
+│   │   ├── routes.py        — POST /api/media/upload (auth)
+│   │   ├── schemas.py       — MediaFileRead
+│   │   └── service.py       — валидация через Pillow, сохранение в media/uploads/YYYY/MM/
+│   ├── news/                — новости
+│   │   ├── routes_admin.py  — /api/admin/news/* (admin + supervisor)
+│   │   ├── routes_public.py — /api/news/* (публичный)
+│   │   ├── schemas.py       — NewsCreate, NewsUpdate, NewsRead, NewsListItem
+│   │   ├── service.py       — бизнес-логика, title.strip()
+│   │   └── storage.py       — _news_to_dict, exclude_unset семантика через dict
+│   ├── articles/            — материалы/статьи
+│   │   ├── routes_admin.py  — /api/admin/articles/* (admin + supervisor)
+│   │   ├── routes_public.py — /api/articles/* (публичный) + /api/articles/categories
+│   │   ├── schemas.py       — ArticleCreate, ArticleUpdate, ArticleRead, CategoryRead
+│   │   ├── service.py       — бизнес-логика
+│   │   └── storage.py       — _article_to_dict, _sync_categories, _sync_tags
 │   └── services/
 │       ├── email_sender.py  — SMTP транспорт (dev/smtp режимы)
 │       └── email_service.py — формирование писем по событиям
@@ -256,22 +272,34 @@ mindcare_web/src/
 │   ├── auth.api.js
 │   ├── users.api.js    — /api/admin/users/* (CRUD пользователей)
 │   ├── tags.api.js     — /api/admin/tags/* + /api/tags (autocomplete)
-│   ├── news.api.js
-│   ├── materials.api.js
+│   ├── news.api.js     — normalizeNewsItem() экспортируется для переиспользования
+│   ├── articles.api.js — /api/articles/* + /api/admin/articles/* + categories
+│   ├── materials.api.js — реэкспорт getArticles/getArticleById из articles.api.js
 │   └── appointments.api.js
 ├── features/           — бизнес-логика по доменам
 │   ├── auth/           — AuthContext, LoginForm, RegisterForm, forgot-password
-│   ├── news/
+│   ├── news/           — FeaturedNews, NewsCardSmall, NewsListItem, NewsSection
 │   └── admin/          — AdminLayout + модули управления
 │       ├── AdminLayout.jsx + .module.css
 │       ├── users/      — CRUD пользователей (hooks, components, pages)
-│       └── tags/       — CRUD тегов (hooks, components, pages)
-├── components/         — domain-agnostic примитивы (Modal, Navbar, Footer)
+│       ├── tags/       — CRUD тегов (hooks, components, pages)
+│       ├── news/       — CRUD новостей (NewsTable, NewsFormModal, NewsPage)
+│       └── articles/   — CRUD материалов (ArticlesTable, ArticleFormModal, ArticlesPage)
+├── components/         — domain-agnostic примитивы
+│   ├── Modal/          — Modal.jsx (пропы: open, onClose, wide, zIndex)
+│   └── UI/
+│       ├── TiptapEditor/   — rich-text редактор (StarterKit, Image, TextAlign)
+│       ├── ImageUpload/    — drag-drop загрузка обложки
+│       └── ContentPreview/ — предпросмотр новости/материала (DOMPurify)
 ├── hooks/              — переиспользуемые hooks
+│   ├── useNews.js      — публичный список новостей с пагинацией
+│   └── useMaterials.js — публичный список материалов (реальный API, single-select категория)
 ├── pages/              — только композиция, никакого fetch
+│   ├── news/           — NewsItemPage (rich HTML через DOMPurify)
+│   ├── materials/      — MaterialsPage, MaterialsItemPage (rich HTML через DOMPurify)
 │   ├── client/         — ClientDashboard (stub)
 │   └── consultant/     — ConsultantDashboard (stub)
-├── data/               — только dev/mock данные
+├── data/               — только dev/mock данные (постепенно выводятся)
 └── styles/             — variables.css, global.css
 ```
 
@@ -333,6 +361,24 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | PATCH | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
 | DELETE | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
 | GET | `/api/tags` | Public | ✅ |
+| POST | `/api/media/upload` | Auth | ✅ |
+| GET | `/media/{path}` | Public (static) | ✅ |
+| GET | `/api/admin/news` | Admin, Supervisor | ✅ |
+| POST | `/api/admin/news` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/news/{uuid}` | Admin, Supervisor | ✅ |
+| PATCH | `/api/admin/news/{uuid}` | Admin, Supervisor | ✅ |
+| DELETE | `/api/admin/news/{uuid}` | Admin, Supervisor | ✅ |
+| GET | `/api/news` | Public | ✅ |
+| GET | `/api/news/{uuid}` | Public | ✅ |
+| GET | `/api/admin/articles` | Admin, Supervisor | ✅ |
+| POST | `/api/admin/articles` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/articles/{uuid}` | Admin, Supervisor | ✅ |
+| PATCH | `/api/admin/articles/{uuid}` | Admin, Supervisor | ✅ |
+| DELETE | `/api/admin/articles/{uuid}` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/articles/categories` | Admin, Supervisor | ✅ |
+| GET | `/api/articles` | Public | ✅ |
+| GET | `/api/articles/{uuid}` | Public | ✅ |
+| GET | `/api/articles/categories` | Public | ✅ |
 
 ## Соглашения по коду
 
