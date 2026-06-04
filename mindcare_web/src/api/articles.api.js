@@ -29,6 +29,10 @@ export function getAdminArticles({ page = 1, size = 20, search, is_published, ca
   return apiFetch(`/api/admin/articles?${params}`);
 }
 
+export function getAdminArticleItem(uuid) {
+  return apiFetch(`/api/admin/articles/${uuid}`);
+}
+
 export function getAdminCategories() {
   return apiFetch('/api/admin/articles/categories');
 }

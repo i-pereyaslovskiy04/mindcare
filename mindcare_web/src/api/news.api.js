@@ -1,5 +1,31 @@
 import { apiFetch } from './client';
 
+// ── Нормализация ──────────────────────────────────────────────────────────────
+// Приводит объект из API к формату который ожидают публичные компоненты
+// (FeaturedNews, NewsCardSmall, NewsListItem, NewsItemPage).
+// Используется и в useNews.js и в NewsSection.jsx — единый источник правды.
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+}
+
+export function normalizeNewsItem(item) {
+  return {
+    id:          item.uuid,         // для ссылок /news/:id
+    uuid:        item.uuid,
+    tag:         item.tags?.[0]?.name || '',
+    title:       item.title,
+    description: '',
+    date:        formatDate(item.published_at || item.created_at),
+    image:       item.cover_image_url || null,
+    content:     item.content,
+    tags:        item.tags,
+  };
+}
+
 // ── Public ────────────────────────────────────────────────────────────────────
 
 export function getNews({ page = 1, size = 10, search } = {}) {
