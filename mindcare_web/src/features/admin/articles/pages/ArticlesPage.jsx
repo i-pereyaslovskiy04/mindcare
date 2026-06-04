@@ -2,20 +2,35 @@ import { useState } from 'react';
 import { useAdminArticles } from '../hooks/useAdminArticles';
 import ArticlesTable from '../components/ArticlesTable';
 import ArticleFormModal from '../components/ArticleFormModal';
-import { deleteArticle } from '../../../../api/articles.api';
+import { deleteArticle, getAdminArticleItem } from '../../../../api/articles.api';
 import styles from './ArticlesPage.module.css';
 
 export default function ArticlesPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch } =
     useAdminArticles();
 
-  const [createOpen, setCreateOpen]   = useState(false);
-  const [editTarget, setEditTarget]   = useState(null);
+  const [createOpen, setCreateOpen]     = useState(false);
+  const [editTarget, setEditTarget]     = useState(null);
+  const [editLoadingId, setEditLoadingId] = useState(null);
+  const [editError, setEditError]         = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting]       = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting]         = useState(false);
+  const [deleteError, setDeleteError]   = useState('');
 
   const pageCount = Math.ceil(total / 20);
+
+  async function handleEdit(item) {
+    setEditLoadingId(item.uuid);
+    setEditError('');
+    try {
+      const full = await getAdminArticleItem(item.uuid);
+      setEditTarget(full);
+    } catch (err) {
+      setEditError(`Не удалось загрузить материал: ${err.message}`);
+    } finally {
+      setEditLoadingId(null);
+    }
+  }
 
   async function handleDeleteConfirm() {
     if (!deleteTarget || deleting) return;
@@ -62,16 +77,16 @@ export default function ArticlesPage() {
         </select>
       </div>
 
-      {loading && <p className={styles.status}>Загрузка…</p>}
-      {error   && <p className={styles.error}>{error}</p>}
+      {editError && <p className={styles.error}>{editError}</p>}
 
-      {!loading && (
-        <ArticlesTable
-          items={items}
-          onEdit={item => setEditTarget(item)}
-          onDelete={item => { setDeleteTarget(item); setDeleteError(''); }}
-        />
-      )}
+      <ArticlesTable
+        items={items}
+        loading={loading}
+        error={error}
+        onEdit={handleEdit}
+        onDelete={item => { setDeleteTarget(item); setDeleteError(''); }}
+        editLoadingId={editLoadingId}
+      />
 
       {pageCount > 1 && (
         <div className={styles.pagination}>

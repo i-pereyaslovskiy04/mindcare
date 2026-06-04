@@ -3,6 +3,7 @@ import Modal from '../../../../components/Modal/Modal';
 import TiptapEditor from '../../../../components/UI/TiptapEditor/TiptapEditor';
 import ImageUpload from '../../../../components/UI/ImageUpload/ImageUpload';
 import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
+import ContentPreview from '../../../../components/UI/ContentPreview/ContentPreview';
 import { getTagsPublic } from '../../../../api/tags.api';
 import { createNews, updateNews } from '../../../../api/news.api';
 import styles from './NewsFormModal.module.css';
@@ -10,7 +11,7 @@ import styles from './NewsFormModal.module.css';
 const EMPTY = {
   title: '',
   content: '',
-  cover: null,       // { uuid, url } | null
+  cover: null,
   tagUuids: [],
   isPublished: false,
   publishedAt: '',
@@ -18,10 +19,16 @@ const EMPTY = {
 
 export default function NewsFormModal({ open, news, onClose, onSaved }) {
   const isEdit = Boolean(news);
-  const [form, setForm]         = useState(EMPTY);
+  const [form, setForm]             = useState(EMPTY);
   const [tagOptions, setTagOptions] = useState([]);
-  const [errors, setErrors]     = useState({});
+  const [errors, setErrors]         = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // formReady — TiptapEditor рендерится только после заполнения формы данными.
+  // Гарантирует монтирование редактора с правильным content.
+  // ВАЖНО: работает при условном монтировании модалки ({editTarget && <Modal/>}).
+  // При persistent-mount паттерне formReady нужно сбрасывать вручную в false.
+  const [formReady, setFormReady] = useState(false);
 
   useEffect(() => {
     getTagsPublic().then(data => {
@@ -35,7 +42,7 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
       setForm({
         title:       news.title || '',
         content:     news.content || '',
-        cover:       news.cover_image_url ? { uuid: null, url: news.cover_image_url } : null,
+        cover:       news.cover_image_url ? { uuid: news.cover_image_uuid || null, url: news.cover_image_url } : null,
         tagUuids:    news.tags?.map(t => t.uuid) || [],
         isPublished: news.is_published || false,
         publishedAt: news.published_at ? news.published_at.slice(0, 16) : '',
@@ -44,6 +51,9 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
       setForm(EMPTY);
     }
     setErrors({});
+    // setForm и setFormReady батчатся React 18 в один рендер.
+    // TiptapEditor появится впервые уже с нужным form.content.
+    setFormReady(true);
   }, [open, isEdit, news]);
 
   function set(field, value) {
@@ -83,83 +93,112 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
     }
   }
 
+  const selectedTagNames = tagOptions
+    .filter(t => form.tagUuids.includes(t.value))
+    .map(t => t.label);
+
   return (
-    <Modal open={open} onClose={onClose}>
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <h2 className={styles.modalTitle}>{isEdit ? 'Редактировать новость' : 'Новая новость'}</h2>
-        <div className={styles.field}>
-          <label className={styles.label}>Заголовок *</label>
-          <input
-            className={`${styles.input} ${errors.title ? styles.inputError : ''}`}
-            value={form.title}
-            onChange={e => set('title', e.target.value)}
-            placeholder="Введите заголовок"
-            maxLength={255}
-          />
-          {errors.title && <span className={styles.hint} role="alert">{errors.title}</span>}
-        </div>
+    <>
+      <Modal open={open} onClose={onClose} wide>
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <h2 className={styles.modalTitle}>{isEdit ? 'Редактировать новость' : 'Новая новость'}</h2>
 
-        <div className={styles.field}>
-          <label className={styles.label}>Содержимое</label>
-          <TiptapEditor
-            key={news?.uuid || 'create'}
-            value={form.content}
-            onChange={val => set('content', val)}
-          />
-        </div>
-
-        <div className={styles.field}>
-          <ImageUpload
-            value={form.cover}
-            onChange={val => set('cover', val)}
-          />
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label}>Теги</label>
-          <MultiSelect
-            options={tagOptions}
-            value={form.tagUuids}
-            onChange={vals => set('tagUuids', vals)}
-            placeholder="Выберите теги..."
-          />
-        </div>
-
-        <div className={styles.row}>
           <div className={styles.field}>
-            <label className={styles.label}>Дата публикации</label>
+            <label className={styles.label}>Заголовок *</label>
             <input
-              type="datetime-local"
-              className={styles.input}
-              value={form.publishedAt}
-              onChange={e => set('publishedAt', e.target.value)}
+              className={`${styles.input} ${errors.title ? styles.inputError : ''}`}
+              value={form.title}
+              onChange={e => set('title', e.target.value)}
+              placeholder="Введите заголовок"
+              maxLength={255}
+            />
+            {errors.title && <span className={styles.hint} role="alert">{errors.title}</span>}
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Содержимое</label>
+            {/* Скелетон показывается пока форма не готова.
+                Когда formReady станет true, React заменит его на TiptapEditor
+                уже с нужным content — без промежуточного пустого состояния. */}
+            {formReady ? (
+              <TiptapEditor
+                value={form.content}
+                onChange={val => set('content', val)}
+              />
+            ) : (
+              <div className={styles.editorSkeleton} />
+            )}
+          </div>
+
+          <div className={styles.field}>
+            <ImageUpload value={form.cover} onChange={val => set('cover', val)} />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Теги</label>
+            <MultiSelect
+              options={tagOptions}
+              value={form.tagUuids}
+              onChange={vals => set('tagUuids', vals)}
+              placeholder="Выберите теги..."
             />
           </div>
-          <div className={styles.fieldCheck}>
-            <label className={styles.checkLabel}>
+
+          <div className={styles.row}>
+            <div className={styles.field}>
+              <label className={styles.label}>Дата публикации</label>
               <input
-                type="checkbox"
-                checked={form.isPublished}
-                onChange={e => set('isPublished', e.target.checked)}
+                type="datetime-local"
+                className={styles.input}
+                value={form.publishedAt}
+                onChange={e => set('publishedAt', e.target.value)}
               />
-              Опубликовать
-            </label>
+            </div>
+            <div className={styles.fieldCheck}>
+              <label className={styles.checkLabel}>
+                <input
+                  type="checkbox"
+                  checked={form.isPublished}
+                  onChange={e => set('isPublished', e.target.checked)}
+                />
+                Опубликовать
+              </label>
+            </div>
           </div>
-        </div>
 
-        {errors._form && (
-          <div className={styles.formError} role="alert">{errors._form}</div>
-        )}
+          {errors._form && (
+            <div className={styles.formError} role="alert">{errors._form}</div>
+          )}
 
-        <div className={styles.actions}>
-          <button type="button" className={styles.btnCancel} onClick={onClose} disabled={submitting}>
-            Отмена
-          </button>
-          <button type="submit" className={styles.btnSubmit} disabled={submitting}>
-            {submitting ? 'Сохранение…' : isEdit ? 'Сохранить' : 'Создать'}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <div className={styles.actions}>
+            <button type="button" className={styles.btnCancel} onClick={onClose} disabled={submitting}>
+              Отмена
+            </button>
+            <button
+              type="button"
+              className={styles.btnPreview}
+              onClick={() => setPreviewOpen(true)}
+            >
+              Предпросмотр
+            </button>
+            <button type="submit" className={styles.btnSubmit} disabled={submitting}>
+              {submitting ? 'Сохранение…' : isEdit ? 'Сохранить' : 'Создать'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {previewOpen && (
+        <ContentPreview
+          open
+          onClose={() => setPreviewOpen(false)}
+          title={form.title}
+          content={form.content}
+          coverUrl={form.cover?.url || null}
+          tags={selectedTagNames}
+          publishedAt={form.publishedAt ? new Date(form.publishedAt).toISOString() : null}
+        />
+      )}
+    </>
   );
 }

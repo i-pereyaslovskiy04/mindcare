@@ -30,11 +30,23 @@
   transform: translateY(18px) scale(0.98);
   transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
   max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.body {
   overflow-y: auto;
+  flex: 1;
+  min-height: 0; /* без этого flex-child не сожмётся ниже своего content-size */
 }
 
 .open .card {
   transform: translateY(0) scale(1);
+}
+
+.cardWide {
+  max-width: 780px;
 }
 
 .head {

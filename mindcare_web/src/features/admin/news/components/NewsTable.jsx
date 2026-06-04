@@ -1,63 +1,103 @@
+import Icon from '../../../../pages/student/components/Icon';
 import styles from './NewsTable.module.css';
+
+const SKELETON_ROWS = 6;
 
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('ru-RU');
 }
 
-export default function NewsTable({ items, onEdit, onDelete }) {
-  if (!items.length) {
-    return <p className={styles.empty}>Новостей пока нет.</p>;
-  }
-
+function SkeletonRow() {
   return (
-    <div className={styles.tableWrap}>
+    <tr>
+      {Array.from({ length: 6 }, (_, i) => (
+        <td key={i}><span className={styles.skeletonCell} /></td>
+      ))}
+    </tr>
+  );
+}
+
+export default function NewsTable({ items, loading, error, onEdit, onDelete, editLoadingId = null }) {
+  return (
+    <div className={styles.wrapper}>
       <table className={styles.table}>
         <thead>
           <tr>
             <th className={styles.colCover} />
-            <th className={styles.colTitle}>Заголовок</th>
-            <th className={styles.colTags}>Теги</th>
-            <th className={styles.colStatus}>Статус</th>
-            <th className={styles.colDate}>Дата</th>
-            <th className={styles.colActions} />
+            <th>Заголовок</th>
+            <th>Теги</th>
+            <th>Статус</th>
+            <th>Дата</th>
+            <th aria-label="Действия" />
           </tr>
         </thead>
         <tbody>
-          {items.map(item => (
+          {loading && Array.from({ length: SKELETON_ROWS }, (_, i) => (
+            <SkeletonRow key={i} />
+          ))}
+
+          {!loading && error && (
+            <tr>
+              <td colSpan={6} className={styles.stateCell}>
+                <span className={styles.errorText}>Ошибка загрузки: {error}</span>
+              </td>
+            </tr>
+          )}
+
+          {!loading && !error && items.length === 0 && (
+            <tr>
+              <td colSpan={6} className={styles.stateCell}>Новостей пока нет</td>
+            </tr>
+          )}
+
+          {!loading && !error && items.map(item => (
             <tr key={item.uuid} className={styles.row}>
               <td className={styles.colCover}>
-                {item.cover_image_url ? (
-                  <img src={item.cover_image_url} alt="" className={styles.thumb} />
-                ) : (
-                  <div className={styles.thumbPlaceholder} />
-                )}
+                {item.cover_image_url
+                  ? <img src={item.cover_image_url} alt="" className={styles.thumb} />
+                  : <div className={styles.thumbPlaceholder} />}
               </td>
-              <td className={styles.colTitle}>
+              <td>
                 <span className={styles.title}>{item.title}</span>
                 {item.created_by_name && (
-                  <span className={styles.author}>{item.created_by_name}</span>
+                  <span className={styles.meta}>{item.created_by_name}</span>
                 )}
               </td>
-              <td className={styles.colTags}>
+              <td>
                 <div className={styles.tags}>
                   {item.tags.map(t => (
                     <span key={t.uuid} className={styles.tag}>{t.name}</span>
                   ))}
                 </div>
               </td>
-              <td className={styles.colStatus}>
+              <td>
                 <span className={`${styles.badge} ${item.is_published ? styles.published : styles.draft}`}>
                   {item.is_published ? 'Опубликовано' : 'Черновик'}
                 </span>
               </td>
-              <td className={styles.colDate}>{formatDate(item.published_at || item.created_at)}</td>
-              <td className={styles.colActions}>
-                <button className={styles.btnEdit} onClick={() => onEdit(item)} title="Редактировать">
-                  ✎
+              <td className={styles.date}>
+                {formatDate(item.published_at || item.created_at)}
+              </td>
+              <td className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  onClick={() => onEdit(item)}
+                  aria-label={`Редактировать «${item.title}»`}
+                  disabled={editLoadingId === item.uuid}
+                >
+                  {editLoadingId === item.uuid
+                    ? <span className={styles.spinner}>…</span>
+                    : <Icon name="edit" size={15} />}
                 </button>
-                <button className={styles.btnDelete} onClick={() => onDelete(item)} title="Удалить">
-                  🗑
+                <button
+                  type="button"
+                  className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
+                  onClick={() => onDelete(item)}
+                  aria-label={`Удалить «${item.title}»`}
+                >
+                  <Icon name="trash" size={15} />
                 </button>
               </td>
             </tr>

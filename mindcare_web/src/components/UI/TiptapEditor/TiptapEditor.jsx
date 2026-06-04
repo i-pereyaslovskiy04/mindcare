@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
+import TextAlign from '@tiptap/extension-text-align';
 import { uploadImage } from '../../../api/media.api';
 import styles from './TiptapEditor.module.css';
 
@@ -17,18 +18,26 @@ const TOOLBAR = [
   { action: 'setHorizontalRule', isActive: null,          label: '—',   title: 'Горизонтальная линия' },
 ];
 
+// Кнопки выравнивания текста
+const ALIGN_TOOLBAR = [
+  { align: 'left',    label: '⬅',  title: 'По левому краю' },
+  { align: 'center',  label: '↔',  title: 'По центру' },
+  { align: 'right',   label: '➡',  title: 'По правому краю' },
+  { align: 'justify', label: '☰',  title: 'По ширине' },
+];
+
 export default function TiptapEditor({ value, onChange, placeholder = 'Введите текст...' }) {
   const [imgUploading, setImgUploading] = useState(false);
   const [imgError, setImgError]         = useState('');
   const fileInputRef   = useRef(null);
-  // Стабильная ссылка на insertImage — нужна для handlePaste который создаётся
-  // один раз при инициализации редактора и не перечитывает closure
   const insertImageRef = useRef(null);
 
   const editor = useEditor({
     extensions: [
       StarterKit,
       Image.configure({ HTMLAttributes: { class: 'tiptap-image' } }),
+      // TextAlign применяется к параграфам и заголовкам
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ],
     content: value || '',
     onUpdate({ editor }) {
@@ -47,7 +56,6 @@ export default function TiptapEditor({ value, onChange, placeholder = 'Введ�
         }
         return false;
       },
-      // Поддержка drag-and-drop изображений в редактор
       handleDrop(view, event) {
         const files = Array.from(event.dataTransfer?.files || []);
         const imageFile = files.find(f => f.type.startsWith('image/'));
@@ -59,8 +67,6 @@ export default function TiptapEditor({ value, onChange, placeholder = 'Введ�
     },
   });
 
-  // Всегда обновляем ссылку — insertImageRef.current будет содержать
-  // актуальную функцию с текущим editor в замыкании
   async function insertImage(file) {
     if (!file || !editor) return;
     setImgUploading(true);
@@ -106,6 +112,18 @@ export default function TiptapEditor({ value, onChange, placeholder = 'Введ�
             title={title}
             className={`${styles.btn} ${isActive && editor.isActive(isActive) ? styles.active : ''}`}
             onMouseDown={e => { e.preventDefault(); run(action); }}
+          >
+            {label}
+          </button>
+        ))}
+        <span className={styles.divider} />
+        {ALIGN_TOOLBAR.map(({ align, label, title }) => (
+          <button
+            key={align}
+            type="button"
+            title={title}
+            className={`${styles.btn} ${editor.isActive({ textAlign: align }) ? styles.active : ''}`}
+            onMouseDown={e => { e.preventDefault(); editor.chain().focus().setTextAlign(align).run(); }}
           >
             {label}
           </button>

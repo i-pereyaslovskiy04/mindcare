@@ -112,6 +112,11 @@
   border-top: 2px solid var(--color-border, #d1d5db);
   margin: 1em 0;
 }
+/* Выравнивание текста — генерируется TextAlign extension через style="text-align:..." */
+.content :global(.ProseMirror [style*="text-align: center"]) { text-align: center; }
+.content :global(.ProseMirror [style*="text-align: right"])  { text-align: right; }
+.content :global(.ProseMirror [style*="text-align: justify"]) { text-align: justify; }
+
 .content :global(.ProseMirror p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
   color: #9ca3af;

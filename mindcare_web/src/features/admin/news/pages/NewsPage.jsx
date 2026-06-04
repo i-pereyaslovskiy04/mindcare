@@ -2,20 +2,39 @@ import { useState } from 'react';
 import { useAdminNews } from '../hooks/useAdminNews';
 import NewsTable from '../components/NewsTable';
 import NewsFormModal from '../components/NewsFormModal';
-import { deleteNews } from '../../../../api/news.api';
+import { deleteNews, getAdminNewsItem } from '../../../../api/news.api';
 import styles from './NewsPage.module.css';
 
 export default function NewsPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch } =
     useAdminNews();
 
-  const [createOpen, setCreateOpen]   = useState(false);
-  const [editTarget, setEditTarget]   = useState(null);
+  const [createOpen, setCreateOpen]     = useState(false);
+  const [editTarget, setEditTarget]     = useState(null);
+  // editLoading — пока грузим полный объект новости для редактирования
+  const [editLoadingId, setEditLoadingId] = useState(null); // uuid строки которая грузится
+  const [editError, setEditError]         = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting]       = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting]         = useState(false);
+  const [deleteError, setDeleteError]   = useState('');
 
   const pageCount = Math.ceil(total / 20);
+
+  // При клике «Редактировать» запрашиваем полный объект новости (с content).
+  // Таблица хранит только NewsListItem — без поля content,
+  // поэтому нужен отдельный GET /api/admin/news/{uuid}.
+  async function handleEdit(item) {
+    setEditLoadingId(item.uuid);
+    setEditError('');
+    try {
+      const full = await getAdminNewsItem(item.uuid);
+      setEditTarget(full);
+    } catch (err) {
+      setEditError(`Не удалось загрузить новость: ${err.message}`);
+    } finally {
+      setEditLoadingId(null);
+    }
+  }
 
   async function handleDeleteConfirm() {
     if (!deleteTarget || deleting) return;
@@ -62,16 +81,16 @@ export default function NewsPage() {
         </select>
       </div>
 
-      {loading && <p className={styles.status}>Загрузка…</p>}
-      {error   && <p className={styles.error}>{error}</p>}
+      {editError && <p className={styles.error}>{editError}</p>}
 
-      {!loading && (
-        <NewsTable
-          items={items}
-          onEdit={item => setEditTarget(item)}
-          onDelete={item => { setDeleteTarget(item); setDeleteError(''); }}
-        />
-      )}
+      <NewsTable
+        items={items}
+        loading={loading}
+        error={error}
+        onEdit={handleEdit}
+        onDelete={item => { setDeleteTarget(item); setDeleteError(''); }}
+        editLoadingId={editLoadingId}
+      />
 
       {pageCount > 1 && (
         <div className={styles.pagination}>

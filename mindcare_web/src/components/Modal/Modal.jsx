@@ -6,7 +6,7 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const Modal = forwardRef(function Modal(
-  { open, onClose, ariaLabel, zIndex = 2000, children },
+  { open, onClose, ariaLabel, zIndex = 2000, wide = false, children },
   ref
 ) {
   const cardRef = useRef(null);
@@ -64,7 +64,7 @@ const Modal = forwardRef(function Modal(
       aria-hidden={!open}
     >
       <div
-        className={styles.card}
+        className={`${styles.card} ${wide ? styles.cardWide : ''}`}
         ref={cardRef}
         role="dialog"
         aria-modal="true"
@@ -90,7 +90,9 @@ const Modal = forwardRef(function Modal(
             </svg>
           </button>
         </div>
-        {children}
+        <div className={styles.body}>
+          {children}
+        </div>
       </div>
     </div>,
     document.body

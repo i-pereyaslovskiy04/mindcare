@@ -1,17 +1,15 @@
 .modalTitle {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--color-text, #111827);
-  margin: 0 0 4px;
+  margin: 0 0 8px;
 }
 
 .form {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-height: 75vh;
-  overflow-y: auto;
-  padding-right: 4px;
+  padding: 20px 28px 28px;
 }
 
 .field {
@@ -110,3 +108,28 @@
 
 .btnSubmit:disabled { opacity: 0.6; cursor: default; }
 .btnSubmit:hover:not(:disabled) { opacity: 0.9; }
+
+/* Кнопка предпросмотра — нейтральный стиль, не акцентная */
+.btnPreview {
+  padding: 9px 20px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--color-text, #374151);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btnPreview:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+/* Заглушка на месте редактора пока форма не готова */
+.editorSkeleton {
+  height: 200px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+  background: #f9fafb;
+}
