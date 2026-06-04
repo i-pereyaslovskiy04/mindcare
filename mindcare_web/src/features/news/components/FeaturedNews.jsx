@@ -17,7 +17,9 @@ export default function FeaturedNews({ news, className, style }) {
       style={style}
     >
       <div className={styles.newsImg}>
-        <PlaceholderImage />
+        {news.image
+          ? <img src={news.image} alt={news.title} className={styles.newsImgPhoto} />
+          : <PlaceholderImage />}
       </div>
       <div className={styles.newsBody}>
         <div className={styles.newsTag}>{news.tag}</div>

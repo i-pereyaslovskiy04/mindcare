@@ -1,8 +1,10 @@
 import Icon from '../components/Icon';
 import SearchBar from '../../materials/components/SearchBar';
 import { useStudentMaterials } from './useStudentMaterials';
-import { TAG_OPTIONS, TOPIC_OPTIONS } from '../../../hooks/useMaterials';
 import styles from './MaterialsPage.module.css';
+
+const TAG_OPTIONS   = ['Статья', 'Вебинар', 'Упражнение', 'Гид'].map(v => ({ value: v, label: v }));
+const TOPIC_OPTIONS = ['Тревога', 'Стресс', 'Сон', 'Отношения', 'Самооценка', 'Эмоции'].map(v => ({ value: v, label: v }));
 
 export default function MaterialsPage() {
   const {

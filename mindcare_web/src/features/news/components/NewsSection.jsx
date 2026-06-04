@@ -4,18 +4,20 @@ import styles from './NewsSection.module.css';
 import FeaturedNews from './FeaturedNews';
 import NewsCardSmall from './NewsCardSmall';
 import NewsListItem from './NewsListItem';
-import { getNews } from '../../../api/news.api';
+import { getNews, normalizeNewsItem } from '../../../api/news.api';
 
 export default function NewsSection() {
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getNews(1, 6).then((data) => {
-      const items = Array.isArray(data) ? data : (data.items || []);
-      setNews(items.slice(0, 6));
-      setLoading(false);
-    });
+    getNews({ page: 1, size: 6 })
+      .then((data) => {
+        const raw = Array.isArray(data) ? data : (data.items || []);
+        setNews(raw.map(normalizeNewsItem));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {

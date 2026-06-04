@@ -4,6 +4,19 @@
   gap: var(--grid-gap);
 }
 
+.skeleton {
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--sand) 25%, var(--warm-white) 50%, var(--sand) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  min-height: 240px;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .empty {
   text-align: center;
   color: var(--text-light);

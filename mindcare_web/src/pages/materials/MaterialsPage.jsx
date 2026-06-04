@@ -5,7 +5,7 @@ import AuthModal from '../../features/auth/ui/AuthModal';
 import PageHero from '../../components/Hero/PageHero';
 import SearchBar from './components/SearchBar';
 import MaterialsGrid from './components/MaterialsGrid';
-import { useMaterials, TAG_OPTIONS, TOPIC_OPTIONS } from '../../hooks/useMaterials';
+import { useMaterials } from '../../hooks/useMaterials';
 import styles from './MaterialsPage.module.css';
 
 export default function MaterialsPage() {
@@ -15,10 +15,14 @@ export default function MaterialsPage() {
     setQuery,
     selectedTags,   setSelectedTags,
     selectedTopics, setSelectedTopics,
-    sort, setSort,
-    visible,
+    sort,           setSort,
+    tagOptions,
+    topicOptions,
+    items,
     hasMore,
     loadMore,
+    loading,
+    error,
   } = useMaterials();
 
   return (
@@ -40,12 +44,15 @@ export default function MaterialsPage() {
             onTopicsChange={setSelectedTopics}
             sort={sort}
             onSortChange={setSort}
-            tagOptions={TAG_OPTIONS}
-            topicOptions={TOPIC_OPTIONS}
+            tagOptions={tagOptions}
+            topicOptions={topicOptions}
           />
-          <MaterialsGrid items={visible} />
 
-          {hasMore && (
+          {error && <p className={styles.error}>Ошибка загрузки: {error}</p>}
+
+          <MaterialsGrid items={items} loading={loading} />
+
+          {hasMore && !loading && (
             <div className={styles.loadMore}>
               <button className={styles.loadMoreBtn} onClick={loadMore}>
                 Загрузить ещё

@@ -1,9 +1,10 @@
-import { Fragment, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
-import { getMaterialById } from '../../api/materials.api';
+import { getArticleById } from '../../api/articles.api';
 import styles from './MaterialsItemPage.module.css';
 
 const HeroPlaceholder = () => (
@@ -44,28 +45,31 @@ const HeroPlaceholder = () => (
   </svg>
 );
 
-function readTime(item) {
-  const words = [item.description, ...(item.body ?? [])].join(' ').trim().split(/\s+/).length;
-  return `${Math.max(1, Math.ceil(words / 200))} мин чтения`;
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
 }
 
 export default function MaterialsItemPage() {
   const { id } = useParams();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [item, setItem] = useState(null);
+  const [item, setItem]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
-    getMaterialById(id)
-      .then((data) => setItem(data))
+    getArticleById(id)
+      .then(data => setItem(data))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [id]);
 
-  const quoteAfter = item?.body ? Math.floor(item.body.length * 0.6) - 1 : -1;
+  const categoryLabel = item?.categories?.[0]?.name || null;
+  const dateLabel     = formatDate(item?.published_at || item?.created_at);
 
   return (
     <>
@@ -81,33 +85,38 @@ export default function MaterialsItemPage() {
           {!loading && item && (
             <article className={styles.article}>
               <header className={styles.header}>
-                {item.tag && <span className={styles.tag}>{item.tag}</span>}
+                {categoryLabel && <span className={styles.tag}>{categoryLabel}</span>}
                 <h1 className={styles.title}>{item.title}</h1>
                 <div className={styles.meta}>
-                  {item.date && <span>{item.date}</span>}
-                  <span className={styles.metaDivider} aria-hidden="true">·</span>
-                  <span>{readTime(item)}</span>
+                  {dateLabel && <span>{dateLabel}</span>}
+                  {item.created_by_name && (
+                    <>
+                      <span className={styles.metaDivider} aria-hidden="true">·</span>
+                      <span>{item.created_by_name}</span>
+                    </>
+                  )}
                 </div>
               </header>
 
               <div className={styles.heroWrap}>
-                {item.image
-                  ? <img src={item.image} alt={item.title} className={styles.heroImg} />
+                {item.cover_image_url
+                  ? <img src={item.cover_image_url} alt={item.title} className={styles.heroImg} />
                   : <HeroPlaceholder />
                 }
               </div>
 
               <div className={styles.body}>
-                <p className={styles.lead}>{item.description}</p>
-
-                {item.body?.map((paragraph, i) => (
-                  <Fragment key={i}>
-                    <p>{paragraph}</p>
-                    {item.quote && i === quoteAfter && (
-                      <blockquote className={styles.pullQuote}>{item.quote}</blockquote>
-                    )}
-                  </Fragment>
-                ))}
+                {item.excerpt && (
+                  <p className={styles.lead}>{item.excerpt}</p>
+                )}
+                {item.content ? (
+                  <div
+                    className={styles.richContent}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.content) }}
+                  />
+                ) : (
+                  !item.excerpt && <p className={styles.lead}>Содержимое материала не добавлено.</p>
+                )}
               </div>
             </article>
           )}

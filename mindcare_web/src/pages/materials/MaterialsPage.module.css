@@ -1,3 +1,9 @@
+.error {
+  color: var(--error, #c0392b);
+  margin-bottom: 16px;
+  font-size: var(--fs-ui);
+}
+
 .loadMore {
   display: flex;
   justify-content: center;
