@@ -9,24 +9,25 @@ const PlaceholderImage = () => (
   </svg>
 );
 
+// Overlay variant: image fills the full card, text sits on a warm gradient.
+// To revert: change newsFeaturedOverlay → newsFeatured and overlay body/text
+// classes back to newsImg + newsBody + newsTag + newsH + newsDesc + newsDate + newsReadMore.
 export default function FeaturedNews({ news, className, style }) {
   return (
     <Link
       to={`/news/${news.id}`}
-      className={`${styles.newsFeatured} ${className}`}
+      className={`${styles.newsFeaturedOverlay} ${className}`}
       style={style}
     >
-      <div className={styles.newsImg}>
-        {news.image
-          ? <img src={news.image} alt={news.title} className={styles.newsImgPhoto} />
-          : <PlaceholderImage />}
-      </div>
-      <div className={styles.newsBody}>
-        <div className={styles.newsTag}>{news.tag}</div>
-        <div className={styles.newsH}>{news.title}</div>
-        <div className={styles.newsDesc}>{news.description}</div>
-        <div className={styles.newsDate}>{news.date}</div>
-        <div className={styles.newsReadMore} aria-hidden="true">
+      {news.image
+        ? <img src={news.image} alt={news.title} className={styles.newsImgFullCover} />
+        : <div className={styles.newsImgPlaceholderFull}><PlaceholderImage /></div>}
+      <div className={styles.newsBodyOverlay}>
+        <div className={styles.newsTagOverlay}>{news.tag}</div>
+        <div className={styles.newsHOverlay}>{news.title}</div>
+        <div className={styles.newsDescOverlay}>{news.description}</div>
+        <div className={styles.newsDateOverlay}>{news.date}</div>
+        <div className={styles.newsReadMoreOverlay} aria-hidden="true">
           Читать далее <ArrowRightIcon />
         </div>
       </div>

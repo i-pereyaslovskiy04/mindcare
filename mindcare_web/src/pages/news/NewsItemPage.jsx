@@ -61,7 +61,6 @@ export default function NewsItemPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const tagLabel = news?.tags?.[0]?.name || null;
   const dateLabel = formatDate(news?.published_at || news?.created_at);
 
   return (
@@ -78,7 +77,13 @@ export default function NewsItemPage() {
           {!loading && news && (
             <article className={styles.article}>
               <header className={styles.header}>
-                {tagLabel && <span className={styles.tag}>{tagLabel}</span>}
+                {news.tags?.length > 0 && (
+                  <div className={styles.tags}>
+                    {news.tags.map(t => (
+                      <span key={t.uuid} className={styles.tag}>{t.name}</span>
+                    ))}
+                  </div>
+                )}
                 <h1 className={styles.title}>{news.title}</h1>
                 <div className={styles.meta}>
                   {dateLabel && <span>{dateLabel}</span>}

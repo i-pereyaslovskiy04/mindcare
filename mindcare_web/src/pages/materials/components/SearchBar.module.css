@@ -160,12 +160,13 @@
   gap: 5px;
   padding: 4px 8px 4px 12px;
   background: var(--sand);
-  border: 1px solid var(--nav-border);
-  border-radius: 999px;
+  border: 1px solid var(--latte);
+  border-radius: 8px;
   font-family: 'Nunito', sans-serif;
   font-size: var(--fs-tag);
-  color: var(--text-muted);
+  color: var(--coffee);
   white-space: nowrap;
+  line-height: 1;
 }
 
 .chipRemove {

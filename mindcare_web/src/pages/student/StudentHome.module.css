@@ -334,7 +334,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: 8px;
   background: var(--cream);
   border: 1px solid var(--nav-border);
   font-size: 11px;
@@ -342,11 +342,14 @@
   cursor: pointer;
   font-family: inherit;
   font-weight: 500;
-  transition: background 0.15s;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .chip:hover {
   background: var(--sand);
+  border-color: var(--latte);
 }
 
 .chipActive {

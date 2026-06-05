@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import styles from './NewsSection.module.css';
-import { ArrowRightIcon } from '../../../components/icons';
 
 const ArticleIcon = () => (
   <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
@@ -18,26 +17,25 @@ const WebinarIcon = () => (
 
 const TAG_ICONS = { Статья: ArticleIcon };
 
+// Small card: lightweight secondary layout.
+// Image fills the card; gradient darkens the bottom; title + date sit directly on gradient.
+// No glass panel, no blur, no tag, no read-more — keeps hierarchy clear vs. the featured card.
+// To revert: restore tag div, read-more div, actionLabel, ArrowRightIcon import.
 export default function NewsCardSmall({ news, className, style }) {
   const TagIcon = TAG_ICONS[news.tag] ?? WebinarIcon;
-  const actionLabel = news.tag === 'Вебинар' ? 'Смотреть' : 'Читать';
 
   return (
     <Link
       to={`/news/${news.id}`}
-      className={`${styles.newsCardSm} ${className}`}
+      className={`${styles.newsCardSmOverlay} ${className}`}
       style={style}
     >
-      <div className={styles.newsImgSm}>
-        <TagIcon />
-      </div>
-      <div className={styles.newsBodySm}>
-        <div className={styles.newsTag}>{news.tag}</div>
-        <div className={`${styles.newsH} ${styles.newsHSm}`}>{news.title}</div>
-        <div className={styles.newsDate}>{news.date}</div>
-        <div className={`${styles.newsReadMore} ${styles.newsReadMoreSm}`} aria-hidden="true">
-          {actionLabel} <ArrowRightIcon width={11} height={11} strokeWidth={1.3} />
-        </div>
+      {news.image
+        ? <img src={news.image} alt={news.title} className={styles.newsImgFullCover} />
+        : <div className={styles.newsImgPlaceholderFull}><TagIcon /></div>}
+      <div className={styles.newsBodySmOverlay}>
+        <div className={`${styles.newsHOverlay} ${styles.newsHSmOverlay}`}>{news.title}</div>
+        <div className={styles.newsDateOverlay}>{news.date}</div>
       </div>
     </Link>
   );

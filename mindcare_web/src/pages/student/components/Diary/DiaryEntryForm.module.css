@@ -63,7 +63,7 @@
   display: inline-flex;
   align-items: center;
   padding: 6px 14px;
-  border-radius: 20px;
+  border-radius: 8px;
   background: var(--cream);
   border: 1px solid var(--nav-border);
   font-size: 13px;
@@ -71,6 +71,8 @@
   cursor: pointer;
   font-family: inherit;
   font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 

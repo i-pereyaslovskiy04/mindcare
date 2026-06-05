@@ -48,25 +48,37 @@
   gap: 10px;
 }
 
-/* ── Tag pill ───────────────────────────── */
+/* ── Tag chip ───────────────────────────── */
 
 .tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--fs-tag);
   font-weight: 600;
   letter-spacing: var(--ls-tag);
   text-transform: uppercase;
-  padding: 3px 10px;
-  border-radius: 20px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--latte);
+  background: var(--sand);
+  color: var(--coffee);
+  line-height: 1;
+  white-space: nowrap;
   align-self: flex-start;
 }
 
-.tagAnxiety    { background: #EDE4D3; color: var(--mocha); }
-.tagStress     { background: #DDE8E0; color: #3D6B45; }
-.tagSleep      { background: #E8EDF5; color: #2E4D7A; }
-.tagRelations  { background: #FAEBF0; color: #7A3A54; }
-.tagSelfEsteem { background: #E8E0EE; color: #5A3F7A; }
-.tagEmotions   { background: #FBF0E4; color: #7A5A3A; }
+/* All topic variants unified to brand palette */
+.tagAnxiety,
+.tagStress,
+.tagSleep,
+.tagRelations,
+.tagSelfEsteem,
+.tagEmotions {
+  background: var(--sand);
+  color: var(--coffee);
+  border-color: var(--latte);
+}
 
 /* ── Content ────────────────────────────── */
 
