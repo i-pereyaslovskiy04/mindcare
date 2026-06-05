@@ -1,0 +1,109 @@
+.page { display: flex; flex-direction: column; gap: 20px; }
+
+.header { display: flex; align-items: center; justify-content: space-between; }
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text, #111827);
+  margin: 0;
+}
+
+.btnCreate {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btnCreate:hover { opacity: 0.88; }
+
+.toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.search {
+  flex: 1;
+  min-width: 200px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+.search:focus { border-color: var(--color-primary, #6366f1); }
+
+.select {
+  padding: 9px 12px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.pagination button {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 16px;
+}
+.pagination button:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Confirm dialog ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.dialog {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+
+.dialogTitle  { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
+.dialogBody   { font-size: 14px; color: var(--color-text-secondary, #6b7280); margin: 0 0 16px; }
+.dialogError  { font-size: 13px; color: var(--color-error, #dc2626); margin-bottom: 12px; }
+.dialogActions { display: flex; justify-content: flex-end; gap: 10px; }
+
+.btnCancel {
+  padding: 9px 20px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btnDanger {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btnDanger:disabled { opacity: 0.6; }

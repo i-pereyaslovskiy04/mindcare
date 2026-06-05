@@ -83,7 +83,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 41 таблица создаётся через `alembic upgrade head`.
+> Все 45 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -160,6 +160,11 @@ mindcare_api/
 │   │   ├── schemas.py       — Pydantic-схемы tags
 │   │   ├── service.py       — бизнес-логика + нормализация имени
 │   │   └── storage.py       — работа с БД, коррелированные подзапросы счётчиков
+│   ├── categories/          — управление типами материалов (categories)
+│   │   ├── routes_admin.py  — /api/admin/categories/* (admin + supervisor)
+│   │   ├── schemas.py       — Pydantic-схемы categories
+│   │   ├── service.py       — бизнес-логика + HTTP-статусы через текущий AuthError-паттерн
+│   │   └── storage.py       — CRUD, slug generation, soft delete через is_active=False
 │   ├── media/               — загрузка изображений
 │   │   ├── routes.py        — POST /api/media/upload (auth)
 │   │   ├── schemas.py       — MediaFileRead
@@ -241,7 +246,8 @@ mindcare_api/
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
-| `tags`, `article_tags`, `news_tags`, `test_tags` | Теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
+| `categories`, `article_categories`, `test_categories` | Типы материалов/категории. В MVP плоские: `parent_id` не используется в Admin CRUD |
+| `tags`, `article_tags`, `news_tags`, `test_tags` | Темы/теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
 | `auth_log`, `audit_log`, `data_change_log` | Аудит. В prod могут быть партиционированы по месяцам |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
@@ -271,7 +277,8 @@ mindcare_web/src/
 │   ├── client.js       — транспорт: токен + 401 retry
 │   ├── auth.api.js
 │   ├── users.api.js    — /api/admin/users/* (CRUD пользователей)
-│   ├── tags.api.js     — /api/admin/tags/* + /api/tags (autocomplete)
+│   ├── tags.api.js     — /api/admin/tags/* + /api/tags (UI: «Темы»)
+│   ├── categories.api.js — /api/admin/categories/* (UI: «Типы материалов»)
 │   ├── news.api.js     — normalizeNewsItem() экспортируется для переиспользования
 │   ├── articles.api.js — /api/articles/* + /api/admin/articles/* + categories
 │   ├── materials.api.js — реэкспорт getArticles/getArticleById из articles.api.js
@@ -282,7 +289,8 @@ mindcare_web/src/
 │   └── admin/          — AdminLayout + модули управления
 │       ├── AdminLayout.jsx + .module.css
 │       ├── users/      — CRUD пользователей (hooks, components, pages)
-│       ├── tags/       — CRUD тегов (hooks, components, pages)
+│       ├── categories/ — CRUD типов материалов (hooks, components, pages)
+│       ├── tags/       — CRUD тем/тегов (hooks, components, pages)
 │       ├── news/       — CRUD новостей (NewsTable, NewsFormModal, NewsPage)
 │       └── articles/   — CRUD материалов (ArticlesTable, ArticleFormModal, ArticlesPage)
 ├── components/         — domain-agnostic примитивы
@@ -315,6 +323,11 @@ mindcare_web/src/
 ❌ Не фильтровать items на клиенте если список из БД
 ❌ Не использовать data/ как постоянный источник данных
 ```
+
+**Терминология админки:**
+- `/admin/categories` в UI называется «Типы материалов», но технически остаётся `categories`
+- `/admin/tags` в UI называется «Темы», но технически остаётся `tags`
+- Не переименовывать API paths, модели и файлы ради пользовательских label
 
 ---
 
@@ -361,6 +374,11 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | PATCH | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
 | DELETE | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
 | GET | `/api/tags` | Public | ✅ |
+| GET | `/api/admin/categories` | Admin, Supervisor | ✅ |
+| POST | `/api/admin/categories` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/categories/{id}` | Admin, Supervisor | ✅ |
+| PATCH | `/api/admin/categories/{id}` | Admin, Supervisor | ✅ |
+| DELETE | `/api/admin/categories/{id}` | Admin, Supervisor | ✅ |
 | POST | `/api/media/upload` | Auth | ✅ |
 | GET | `/media/{path}` | Public (static) | ✅ |
 | GET | `/api/admin/news` | Admin, Supervisor | ✅ |

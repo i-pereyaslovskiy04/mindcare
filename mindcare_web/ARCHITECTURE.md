@@ -1,6 +1,6 @@
 # MindCare Web — Architecture Document
 
-> Updated: 2026-05-28  
+> Updated: 2026-06-05  
 > Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)  
 > Purpose: University psychology center — public informational site with role-based dashboards and a full authentication flow.
 
@@ -19,14 +19,16 @@ mindcare_web/
     │
     ├── app/                   ← shell: providers + routing
     │   ├── App.jsx
-    │   └── AppRoutes.jsx
+    │   └── router.jsx
     │
     ├── api/                   ← ALL HTTP calls live here
     │   ├── client.js          ← transport: token injection + 401 refresh
     │   ├── auth.api.js
     │   ├── users.api.js       ← /api/admin/users/* (CRUD пользователей)
-    │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (autocomplete)
+    │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (autocomplete; UI: «Темы»)
+    │   ├── categories.api.js  ← /api/admin/categories/* (UI: «Типы материалов»)
     │   ├── news.api.js
+    │   ├── articles.api.js
     │   ├── materials.api.js
     │   └── appointments.api.js
     │
@@ -84,7 +86,15 @@ mindcare_web/
     │       │   │   └── DeleteConfirmDialog.jsx
     │       │   └── pages/
     │       │       └── UsersPage.jsx
-    │       └── tags/
+    │       ├── categories/      ← UI: «Типы материалов»
+    │       │   ├── hooks/
+    │       │   │   └── useAdminCategories.js
+    │       │   ├── components/
+    │       │   │   ├── CategoriesTable.jsx + .module.css
+    │       │   │   └── CategoryFormModal.jsx + .module.css
+    │       │   └── pages/
+    │       │       └── CategoriesPage.jsx + .module.css
+    │       └── tags/            ← UI: «Темы»
     │           ├── hooks/
     │           │   └── useAdminTags.js
     │           ├── components/
@@ -208,7 +218,9 @@ src/api/
   auth.api.js        ← forgotPassword, resetPassword
   users.api.js       ← getUsers, getUser, createUser, updateUser, deleteUser
   tags.api.js        ← getTags, createTag, updateTag, deleteTag, getTagsPublic
+  categories.api.js  ← getAdminCategories, createCategory, updateCategory, deleteCategory
   news.api.js        ← getNews, getNewsById
+  articles.api.js    ← getArticles, getArticleById, admin CRUD материалов
   materials.api.js   ← getMaterials, getMaterialById
   appointments.api.js
 ```
@@ -271,7 +283,10 @@ src/data/
 | `/psychologist` | `ConsultantDashboard` | Auth + role: psychologist |
 | `/admin` | `AdminLayout` (Outlet) | Auth + role: admin, supervisor |
 | `/admin/users` | `UsersPage` | — (наследует от `/admin`) |
-| `/admin/tags` | `TagsPage` | — (наследует от `/admin`) |
+| `/admin/categories` | `CategoriesPage` | — (наследует от `/admin`; UI: «Типы материалов») |
+| `/admin/tags` | `TagsPage` | — (наследует от `/admin`; UI: «Темы») |
+| `/admin/news` | `AdminNewsPage` | — (наследует от `/admin`) |
+| `/admin/articles` | `AdminArticlesPage` | — (наследует от `/admin`) |
 | `*` | `NotFound` | Public |
 
 **Guards:**
@@ -374,6 +389,15 @@ DashboardLayout (components/layouts/)
 
 Used by: ClientDashboard, ConsultantDashboard, AdminDashboard
 ```
+
+### Admin UI terminology
+
+В пользовательском интерфейсе админки используются продуктовые названия:
+- `/admin/categories` отображается как «Типы материалов»
+- `/admin/tags` отображается как «Темы»
+
+Технические имена API, модулей и моделей остаются `categories` и `tags`.
+Не переименовывать файлы и URL ради UI-терминов.
 
 ---
 
@@ -527,26 +551,13 @@ refetch          // ручной перезапрос
 
 ## 8. Open Issues
 
-### 8.1 useMaterials импортирует mock напрямую
+### 8.1 ~~useMaterials импортирует mock напрямую~~ — закрыто
 
-`hooks/useMaterials.js` импортирует `MOCK_MATERIALS` из `data/` напрямую и 
-выполняет фильтрацию/сортировку/пагинацию локально на клиенте.
+`hooks/useMaterials.js` переведён на реальный API: `getArticles()` + `getPublicCategories()`.
+`materials.api.js` реэкспортирует функции из `articles.api.js`, прямой импорт mock-данных убран.
 
-**Статус:** временное решение, унаследованное из ранней разработки UI.
-
-**Что нарушается:** правило из раздела 6 (data flow всегда через API) и 
-правило из раздела 6.1 (фильтрация списков длиннее 50 элементов на сервере).
-
-**План перехода:**
-1. Реализовать на бэке `GET /api/materials` с параметрами `page`, `size`, 
-   `search`, фильтрами по категориям и сортировкой. Ответ в формате 
-   `{ items, total, page, size }`.
-2. Обновить `useMaterials`: убрать импорт из `data/`, использовать 
-   `getMaterials` из `api/materials.api.js`.
-3. Удалить локальную фильтрацию из hook — всё делает бэк.
-4. Закрыть этот пункт в Open Issues.
-
-**Дедлайн:** до конца MVP (этап 1).
+**Осталось ограничение:** сортировка материалов в публичном UI всё ещё клиентская, а фильтр тем
+(`topicOptions`) пустой, потому что публичный API не поддерживает фильтрацию по тегам.
 
 
 ### 8.2 NewsListItem без CSS модуля
@@ -575,7 +586,7 @@ refetch          // ручной перезапрос
 
 `ClientDashboard` и `ConsultantDashboard` отображают только приветствие. Реальный UI не реализован.
 
-~~`AdminDashboard`~~ — закрыто: Admin-панель полностью реализована (AdminLayout + UsersPage с CRUD пользователей + TagsPage с CRUD тегов). Роутинг переработан: `AppRoutes.jsx` → `router.jsx`, admin-модуль переехал в `features/admin/`.
+~~`AdminDashboard`~~ — закрыто: Admin-панель реализована через `AdminLayout` + CRUD пользователей, типов материалов, тем, новостей и материалов. Роутинг переработан: `AppRoutes.jsx` → `router.jsx`, admin-модуль переехал в `features/admin/`.
 
 ### 8.8 `useAdminTags` не имеет `filters` в hook-контракте
 
@@ -611,14 +622,11 @@ class ErrorBoundary extends React.Component { ... }
 
 Реализовать OAuth для Telegram/VK/Yandex, либо убрать кнопки. Не оставлять нефункциональный UI.
 
-### 9.5 Подключить useMaterials к API
+### 9.5 Серверная сортировка материалов
 
-Когда бэкенд поддержит фильтрацию:
-```js
-// hooks/useMaterials.js
-import { getMaterials } from '../api/materials.api';
-// убрать прямой импорт из data/
-```
+Публичный `useMaterials` уже подключён к API, но сортировка в UI остаётся клиентской.
+Если список материалов вырастет, добавить серверные параметры `sort`/`order` в `GET /api/articles`
+и убрать клиентский `.reverse()` из hook.
 
 ### 9.6 Lazy loading страниц
 

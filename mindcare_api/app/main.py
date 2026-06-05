@@ -107,18 +107,20 @@ from app.tags.routes_public import router as public_tags_router  # noqa: E402
 from app.media.routes import router as media_router              # noqa: E402
 from app.news.routes_admin import router as admin_news_router          # noqa: E402
 from app.news.routes_public import router as public_news_router        # noqa: E402
-from app.articles.routes_admin import router as admin_articles_router  # noqa: E402
+from app.articles.routes_admin import router as admin_articles_router    # noqa: E402
 from app.articles.routes_public import router as public_articles_router  # noqa: E402
+from app.categories.routes_admin import router as admin_categories_router  # noqa: E402
 
-app.include_router(auth_router,             prefix="/api")
-app.include_router(admin_users_router,      prefix="/api")
-app.include_router(admin_tags_router,       prefix="/api")
-app.include_router(public_tags_router,      prefix="/api")
-app.include_router(media_router,            prefix="/api")
-app.include_router(admin_news_router,       prefix="/api")
-app.include_router(public_news_router,      prefix="/api")
-app.include_router(admin_articles_router,   prefix="/api")
-app.include_router(public_articles_router,  prefix="/api")
+app.include_router(auth_router,               prefix="/api")
+app.include_router(admin_users_router,        prefix="/api")
+app.include_router(admin_tags_router,         prefix="/api")
+app.include_router(public_tags_router,        prefix="/api")
+app.include_router(media_router,              prefix="/api")
+app.include_router(admin_news_router,         prefix="/api")
+app.include_router(public_news_router,        prefix="/api")
+app.include_router(admin_articles_router,     prefix="/api")
+app.include_router(public_articles_router,    prefix="/api")
+app.include_router(admin_categories_router,   prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

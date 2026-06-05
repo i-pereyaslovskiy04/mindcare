@@ -6,9 +6,9 @@ import TagFormModal from '../components/TagFormModal';
 import styles from './TagsPage.module.css';
 
 function pluralTag(n) {
-  if (n % 10 === 1 && n % 100 !== 11) return 'тег';
-  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'тега';
-  return 'тегов';
+  if (n % 10 === 1 && n % 100 !== 11) return 'тема';
+  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'темы';
+  return 'тем';
 }
 
 function pluralMaterial(n) {
@@ -52,7 +52,7 @@ export default function TagsPage() {
       setDeleteTarget(null);
       refetch();
     } catch (err) {
-      setDeleteError(err.message || 'Не удалось удалить тег');
+      setDeleteError(err.message || 'Не удалось удалить тему');
     } finally {
       setDeleting(false);
     }
@@ -62,13 +62,13 @@ export default function TagsPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <h1 className={styles.title}>Теги</h1>
+          <h1 className={styles.title}>Темы</h1>
           <p className={styles.subtitle}>
             {total} {pluralTag(total)}
           </p>
         </div>
         <button className={styles.btnCreate} onClick={() => setCreateOpen(true)}>
-          + Новый тег
+          + Новая тема
         </button>
       </div>
 
@@ -111,11 +111,11 @@ export default function TagsPage() {
         <div className={styles.overlay} onClick={closeDelete}>
           <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.dialogTitle}>
-              Удалить тег «{deleteTarget.name}»?
+              Удалить тему «{deleteTarget.name}»?
             </h3>
             {deleteUsages > 0 && (
               <p className={styles.dialogWarning}>
-                Тег используется в {deleteUsages} {pluralMaterial(deleteUsages)}.
+                Тема используется в {deleteUsages} {pluralMaterial(deleteUsages)}.
                 Все связи будут удалены автоматически.
               </p>
             )}
