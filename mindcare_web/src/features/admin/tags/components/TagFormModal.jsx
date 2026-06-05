@@ -21,7 +21,7 @@ export default function TagFormModal({ mode, tag, onSuccess, onClose }) {
 
     const trimmed = name.trim();
     if (!trimmed) {
-      setError('Введите название тега');
+      setError('Введите название темы');
       return;
     }
 
@@ -42,7 +42,7 @@ export default function TagFormModal({ mode, tag, onSuccess, onClose }) {
     <Modal open onClose={onClose}>
       <div className={styles.body}>
         <h2 className={styles.title}>
-          {isEdit ? 'Переименовать тег' : 'Новый тег'}
+          {isEdit ? 'Переименовать тему' : 'Новая тема'}
         </h2>
 
         <form onSubmit={handleSubmit}>
