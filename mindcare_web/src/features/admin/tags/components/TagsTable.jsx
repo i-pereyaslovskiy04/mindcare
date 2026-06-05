@@ -50,7 +50,7 @@ export default function TagsTable({ items, loading, error, onEdit, onDelete }) {
           {!loading && !error && items.length === 0 && (
             <tr>
               <td colSpan={cols} className={styles.empty}>
-                Теги не найдены
+                Темы не найдены
               </td>
             </tr>
           )}
