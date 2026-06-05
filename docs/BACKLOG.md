@@ -143,6 +143,24 @@
 - Регистрация идёт через `registerInit` + `registerConfirm`; `register` — остаток ранней реализации
 - Файл: `mindcare_web/src/features/auth/AuthContext.jsx`
 
+**`create_category` открывает вторую DB-сессию после создания**
+- `storage.create_category()` после `commit()` вызывает `get_category_by_id(cat.id)`, который открывает новую сессию
+- Для MVP это не критично, но это лишний round-trip к БД на каждое создание типа материалов
+- Позже вернуть dict прямо из первой сессии после `db.refresh(cat)` или вынести общий mapper
+- Файл: `mindcare_api/app/categories/storage.py`
+
+**`find_categories` считает `total` на запросе с коррелированным подзапросом**
+- `query.count()` выполняется поверх запроса, который уже содержит `article_count` subquery
+- На больших объёмах это может быть лишней нагрузкой; такой же паттерн есть в `tags/storage.py`
+- Позже выделить отдельный count-запрос без subquery и исправить сразу categories + tags
+- Файлы: `mindcare_api/app/categories/storage.py`, `mindcare_api/app/tags/storage.py`
+
+**Domain-сервисы используют `AuthError` из auth-модуля**
+- `categories`, `tags`, `users` используют `AuthError` как generic service error
+- Это cross-domain зависимость: content/admin модули зависят от `app/auth/service.py` ради HTTP-статуса
+- Позже вынести общий `ServiceError` / `NotFoundError` / `ConflictError` в `app/core/exceptions.py` и заменить во всех service-слоях
+- Файлы: `mindcare_api/app/categories/service.py`, `mindcare_api/app/tags/service.py`, `mindcare_api/app/users/service.py`
+
 ---
 
 **Кодировка категорий в БД**
@@ -186,11 +204,10 @@
 - Требует передачи `current_user` из роутера в сервис
 - Файлы: `mindcare_api/app/users/service.py`, `mindcare_api/app/users/routes_admin.py`
 
-**Admin Categories CRUD** ← следующий приоритет
-- Таблица `categories` в БД есть, модель `Category` есть
-- Нет UI управления категориями в AdminLayout
-- Нужно: `GET/POST/PATCH/DELETE /api/admin/categories`, страница `/admin/categories`
-- Связано с: материалы используют категории при создании/редактировании
+**Следующий крупный модуль после Admin Content**
+- Admin Categories CRUD закрыт: `/api/admin/categories` и `/admin/categories` реализованы
+- Нужно выбрать следующий приоритет с владельцем проекта: Appointments, Admin Tests или личные кабинеты
+- При выборе учитывать ФЗ-152: appointments и результаты тестов затрагивают чувствительные психологические данные
 
 **Белый экран при загрузке роутов (PrivateRoute / RoleRoute)**
 - `router.jsx`: `if (loading) return null` — пустая страница пока AuthContext восстанавливает сессию

@@ -36,7 +36,8 @@ import AdminLayout    from '../features/admin/AdminLayout';
 import UsersPage      from '../features/admin/users/pages/UsersPage';
 import TagsPage       from '../features/admin/tags/pages/TagsPage';
 import AdminNewsPage  from '../features/admin/news/pages/NewsPage';
-import AdminArticlesPage from '../features/admin/articles/pages/ArticlesPage';
+import AdminArticlesPage   from '../features/admin/articles/pages/ArticlesPage';
+import AdminCategoriesPage from '../features/admin/categories/pages/CategoriesPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
 import ClientDashboard      from '../pages/client/ClientDashboard';
@@ -144,11 +145,12 @@ export default function AppRouter() {
         path="/admin"
         element={<RoleRoute roles={['admin', 'supervisor']}><AdminLayout /></RoleRoute>}
       >
-        <Route index            element={<Navigate to="users" replace />} />
-        <Route path="users"    element={<UsersPage />} />
-        <Route path="tags"     element={<TagsPage />} />
-        <Route path="news"     element={<AdminNewsPage />} />
-        <Route path="articles" element={<AdminArticlesPage />} />
+        <Route index              element={<Navigate to="users" replace />} />
+        <Route path="users"      element={<UsersPage />} />
+        <Route path="tags"       element={<TagsPage />} />
+        <Route path="news"       element={<AdminNewsPage />} />
+        <Route path="articles"   element={<AdminArticlesPage />} />
+        <Route path="categories" element={<AdminCategoriesPage />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />
