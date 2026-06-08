@@ -12,11 +12,11 @@ const PlaceholderImage = () => (
 // Overlay variant: image fills the full card, text sits on a warm gradient.
 // To revert: change newsFeaturedOverlay → newsFeatured and overlay body/text
 // classes back to newsImg + newsBody + newsTag + newsH + newsDesc + newsDate + newsReadMore.
-export default function FeaturedNews({ news, className, style }) {
+export default function FeaturedNews({ news, className, style, compact }) {
   return (
     <Link
       to={`/news/${news.id}`}
-      className={`${styles.newsFeaturedOverlay} ${className}`}
+      className={`${styles.newsFeaturedOverlay}${compact ? ` ${styles.newsFeaturedCompact}` : ''} ${className}`}
       style={style}
     >
       {news.image

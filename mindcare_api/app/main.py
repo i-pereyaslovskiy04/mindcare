@@ -137,3 +137,15 @@ def health():
     """
     from app.db.init_db import health_check
     return health_check()
+
+
+@app.get("/api/public/config", tags=["meta"])
+def public_config():
+    """
+    Публичная конфигурация для фронтенда (без авторизации).
+    Позволяет избежать дублирования ENV-переменных между backend и frontend.
+    """
+    from app.core.config import settings
+    return {
+        "newsImageMaxSizeMb": settings.NEWS_IMAGE_MAX_SIZE_MB,
+    }

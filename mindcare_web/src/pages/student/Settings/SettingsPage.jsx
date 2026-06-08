@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLogout } from '../../../features/auth/AuthContext';
 import Icon from '../components/Icon';
 import styles from './SettingsPage.module.css';
 
@@ -28,6 +29,7 @@ function NotifRow({ label, desc, on, onToggle }) {
 }
 
 export default function SettingsPage() {
+  const logout = useLogout();
   const [notif, setNotif] = useState({
     session:  true,
     tasks:    true,
@@ -229,7 +231,7 @@ export default function SettingsPage() {
               <div className={styles.logoutLabel}>Выйти из аккаунта</div>
               <div className={styles.logoutSub}>Сессия будет завершена на этом устройстве</div>
             </div>
-            <button className={`${styles.btn} ${styles.btnGhost}`}>
+            <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={logout}>
               <Icon name="logout" size={14} /> Выйти
             </button>
           </div>

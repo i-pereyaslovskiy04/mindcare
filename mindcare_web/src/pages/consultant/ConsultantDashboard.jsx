@@ -1,8 +1,9 @@
-import { useAuth } from '../../features/auth/AuthContext';
+import { useAuth, useLogout } from '../../features/auth/AuthContext';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 
 export default function ConsultantDashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const logout = useLogout();
 
   return (
     <DashboardLayout>

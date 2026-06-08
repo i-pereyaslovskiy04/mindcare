@@ -20,6 +20,7 @@ import {
   useRef,
 } from 'react';
 import { flushSync } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { configureClient } from '../../api/client';
 import * as authApi from '../../api/auth.api';
 
@@ -127,4 +128,20 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
   return ctx;
+}
+
+/**
+ * useLogout — единая logout-функция для всех кабинетов.
+ *
+ * Сначала навигирует на `/`, потом очищает сессию.
+ * Порядок важен: если сначала очистить сессию, RoleRoute успевает
+ * отредиректить на /login до того, как сработает наш navigate('/').
+ */
+export function useLogout() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  return useCallback(async () => {
+    navigate('/', { replace: true });
+    await logout();
+  }, [logout, navigate]);
 }

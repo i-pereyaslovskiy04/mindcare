@@ -11,7 +11,7 @@ export default function NewsGrid({ items }) {
 
   return (
     <div className={styles.grid}>
-      <FeaturedNews news={featured} className="" />
+      <FeaturedNews news={featured} className="" compact />
       {rest.length > 0 && (
         <ul className={styles.list}>
           {rest.map((item) => (
