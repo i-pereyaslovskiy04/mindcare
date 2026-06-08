@@ -1,4 +1,5 @@
 import { useLocation, Outlet } from 'react-router-dom';
+import { useLogout } from '../../features/auth/AuthContext';
 import Sidebar from './components/Sidebar/Sidebar';
 import Icon from './components/Icon';
 import styles from './StudentLayout.module.css';
@@ -17,6 +18,7 @@ const CRUMB_LABELS = {
 export default function StudentLayout() {
   const { pathname } = useLocation();
   const crumb = CRUMB_LABELS[pathname] ?? 'Кабинет';
+  const logout = useLogout();
 
   return (
     <div className={styles.app}>
@@ -39,7 +41,7 @@ export default function StudentLayout() {
             <button className={styles.iconBtn} aria-label="Почта">
               <Icon name="mail" size={16} />
             </button>
-            <button className={styles.iconBtn} aria-label="Выйти">
+            <button type="button" className={styles.iconBtn} aria-label="Выйти" onClick={logout}>
               <Icon name="logout" size={16} />
             </button>
           </div>

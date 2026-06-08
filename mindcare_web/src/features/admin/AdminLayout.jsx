@@ -1,5 +1,5 @@
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
+import { useAuth, useLogout } from '../auth/AuthContext';
 import Icon from '../../pages/student/components/Icon';
 import styles from './AdminLayout.module.css';
 
@@ -21,7 +21,8 @@ function getInitials(name) {
 
 export default function AdminLayout() {
   const { pathname } = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const logout = useLogout();
   const crumb = CRUMB_LABELS[pathname] ?? 'Панель';
 
   return (

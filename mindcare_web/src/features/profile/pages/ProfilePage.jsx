@@ -1,4 +1,4 @@
-import { useAuth } from '../../auth/AuthContext';
+import { useAuth, useLogout } from '../../auth/AuthContext';
 import styles from './ProfilePage.module.css';
 
 const ROLE_LABELS = {
@@ -9,7 +9,8 @@ const ROLE_LABELS = {
 };
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const logout = useLogout();
 
   if (!user) return null;
 
