@@ -825,6 +825,14 @@
   margin-top: 4px;
 }
 
+/* Compact variant — /news page (editorial catalogue, not hero).
+   Overrides min-height and forces 21:9 aspect ratio so the card is
+   ~25% shorter than 16:9 at full width; falls back to min-height on mobile. */
+.newsFeaturedCompact {
+  aspect-ratio: 21 / 9;
+  min-height: clamp(200px, 22vw, 360px);
+}
+
 @media (hover: none) {
   .newsFeaturedOverlay:hover,
   .newsCardSmOverlay:hover {

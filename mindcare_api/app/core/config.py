@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
+    # --- MEDIA ---
+    NEWS_IMAGE_MAX_SIZE_MB: int = 20
     # --- APP ---
     DEBUG: bool = False
     ENV: str = "production"
