@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../../../features/auth/AuthContext';
-import Icon from '../Icon';
+import Icon from '../../../../components/Icon/Icon';
 import styles from './Sidebar.module.css';
 
 const NAV_SECTIONS = [

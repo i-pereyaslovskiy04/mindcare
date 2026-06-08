@@ -22,11 +22,13 @@ export default function AssignModal({ mode, student, onConfirm, onClose }) {
 
   useEffect(() => {
     if (!needsPsychologist) return;
+    let cancelled = false;
     setPsyLoading(true);
     getSupervisorPsychologists({ size: 200 })
-      .then(data => setPsychologists(data.items))
-      .catch(err => setError(err.message))
-      .finally(() => setPsyLoading(false));
+      .then(data => { if (!cancelled) setPsychologists(data.items); })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setPsyLoading(false); });
+    return () => { cancelled = true; };
   }, [needsPsychologist]);
 
   async function handleSubmit(e) {

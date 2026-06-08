@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLogout } from '../../../features/auth/AuthContext';
-import Icon from '../components/Icon';
+import Icon from '../../../components/Icon/Icon';
 import styles from './SettingsPage.module.css';
 
 const SOCIAL_TYPES = ['Telegram', 'Instagram', 'LinkedIn', 'VK', 'Facebook', 'X (Twitter)', 'Сайт'];

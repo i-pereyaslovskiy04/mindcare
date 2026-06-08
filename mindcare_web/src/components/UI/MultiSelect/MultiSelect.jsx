@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import styles from './multiSelect.module.css';
 
 const XIcon = () => (
@@ -41,6 +41,7 @@ export default function MultiSelect({
   const [search, setSearch] = useState('');
   const wrapRef = useRef(null);
   const searchRef = useRef(null);
+  const listboxId = useId();
 
   const selected = single
     ? (value ? [value] : [])
@@ -104,6 +105,7 @@ export default function MultiSelect({
         role="combobox"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-controls={listboxId}
       >
         <div className={styles.valueArea}>
           {selectedOptions.length > 0 ? (
@@ -152,7 +154,7 @@ export default function MultiSelect({
           />
         </div>
 
-        <ul className={styles.list} role="listbox" aria-multiselectable={!single}>
+        <ul id={listboxId} className={styles.list} role="listbox" aria-multiselectable={!single}>
           {filteredOptions.length > 0 ? (
             filteredOptions.map(opt => (
               <li key={opt.value} role="none">

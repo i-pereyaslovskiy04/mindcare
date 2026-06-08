@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import Icon from '../../components/Icon';
+import Icon from '../../../../components/Icon/Icon';
 import styles from './SessionPopover.module.css';
 
 export default function SessionPopover({ session, style, arrowLeft, onClose }) {

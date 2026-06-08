@@ -1,7 +1,7 @@
 import { useLocation, Outlet } from 'react-router-dom';
 import { useLogout } from '../../features/auth/AuthContext';
 import Sidebar from './components/Sidebar/Sidebar';
-import Icon from './components/Icon';
+import Icon from '../../components/Icon/Icon';
 import styles from './StudentLayout.module.css';
 
 const CRUMB_LABELS = {

@@ -1,20 +1,13 @@
 import { useState } from 'react';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
-import Icon from '../../pages/student/components/Icon';
+import Icon from '../Icon/Icon';
+import { getInitials } from '../../shared/lib/utils';
 import styles from './CabinetSettingsPage.module.css';
 
 const ROLE_LABELS = {
   psychologist: 'Психолог',
   supervisor:   'Супервизор',
 };
-
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  return parts.length >= 2
-    ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : parts[0].slice(0, 2).toUpperCase();
-}
 
 function Toggle({ on, onToggle }) {
   return (

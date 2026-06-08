@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import Icon from '../student/components/Icon';
+import Icon from '../../components/Icon/Icon';
 import { useStudents } from '../../features/supervisor/hooks/useStudents';
 import AssignModal from '../../features/supervisor/components/AssignModal';
 import {

@@ -1,4 +1,4 @@
-import Icon from '../../../../pages/student/components/Icon';
+import Icon from '../../../../components/Icon/Icon';
 import styles from './TagsTable.module.css';
 
 const SKELETON_ROWS = 5;

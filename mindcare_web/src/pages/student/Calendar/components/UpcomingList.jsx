@@ -1,4 +1,4 @@
-import Icon from '../../components/Icon';
+import Icon from '../../../../components/Icon/Icon';
 import { MONTH_NAMES_GENITIVE } from '../utils/calendarUtils';
 import styles from './UpcomingList.module.css';
 

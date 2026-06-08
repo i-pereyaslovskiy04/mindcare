@@ -1,4 +1,4 @@
-import Icon from '../../components/Icon';
+import Icon from '../../../../components/Icon/Icon';
 import styles from './ChatWindow.module.css';
 
 export default function ChatHeader({ contact }) {

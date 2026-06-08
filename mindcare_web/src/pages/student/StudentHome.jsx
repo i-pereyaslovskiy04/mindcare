@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import MoodChart from './components/MoodChart/MoodChart';
 import StatCard from './components/StatCard/StatCard';
-import Icon from './components/Icon';
+import Icon from '../../components/Icon/Icon';
 import styles from './StudentHome.module.css';
 
 const MOOD_WORDS = [
