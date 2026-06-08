@@ -3,7 +3,14 @@ import { useAdminNews } from '../hooks/useAdminNews';
 import NewsTable from '../components/NewsTable';
 import NewsFormModal from '../components/NewsFormModal';
 import { deleteNews, getAdminNewsItem } from '../../../../api/news.api';
+import Select from '../../../../components/UI/Select/Select';
 import styles from './NewsPage.module.css';
+
+const STATUS_OPTIONS = [
+  { value: '',      label: 'Все статусы' },
+  { value: 'true',  label: 'Опубликованные' },
+  { value: 'false', label: 'Черновики' },
+];
 
 export default function NewsPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch } =
@@ -67,18 +74,13 @@ export default function NewsPage() {
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
-        <select
-          className={styles.select}
+        <Select
+          style={{ minWidth: 160 }}
           value={filters.is_published === null ? '' : String(filters.is_published)}
-          onChange={e => {
-            const v = e.target.value;
-            setFilters({ is_published: v === '' ? null : v === 'true' });
-          }}
-        >
-          <option value="">Все статусы</option>
-          <option value="true">Опубликованные</option>
-          <option value="false">Черновики</option>
-        </select>
+          options={STATUS_OPTIONS}
+          onChange={val => setFilters({ is_published: val === '' ? null : val === 'true' })}
+          placeholder="Все статусы"
+        />
       </div>
 
       {editError && <p className={styles.error}>{editError}</p>}

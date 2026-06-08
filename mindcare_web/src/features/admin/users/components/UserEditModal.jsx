@@ -1,6 +1,14 @@
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
+import Select from '../../../../components/UI/Select/Select';
 import styles from './UserEditModal.module.css';
+
+const ROLE_OPTIONS = [
+  { value: 'student',      label: 'Студент' },
+  { value: 'psychologist', label: 'Психолог' },
+  { value: 'admin',        label: 'Администратор' },
+  { value: 'supervisor',   label: 'Супервизор' },
+];
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
@@ -73,22 +81,14 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="uem-role">Роль</label>
-              <select
-                id="uem-role"
-                className={`${styles.select} ${errors.role ? styles.inputError : ''}`}
-                name="role"
+              <label className={styles.label}>Роль</label>
+              <Select
                 value={values.role}
-                onChange={handleChange}
-              >
-                <option value="student">Студент</option>
-                <option value="psychologist">Психолог</option>
-                <option value="admin">Администратор</option>
-                <option value="supervisor">Супервизор</option>
-              </select>
-              {errors.role && (
-                <span className={styles.hint} role="alert">{errors.role}</span>
-              )}
+                options={ROLE_OPTIONS}
+                onChange={(val) => handleChange({ target: { name: 'role', value: val } })}
+                error={errors.role}
+                panelZIndex={2300}
+              />
             </div>
 
             <div className={styles.checkboxField}>

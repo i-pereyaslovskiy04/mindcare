@@ -117,8 +117,7 @@
   font-weight: 700;
 }
 
-.input,
-.select {
+.input {
   border: 1px solid var(--nav-border);
   background: var(--cream);
   border-radius: 10px;
@@ -131,8 +130,7 @@
   width: 100%;
 }
 
-.input:focus,
-.select:focus {
+.input:focus {
   border-color: var(--coffee);
   background: var(--warm-white);
   box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.08);
@@ -170,10 +168,6 @@
   align-items: center;
 }
 
-.socialType {
-  padding: 9px 10px;
-  font-size: 12.5px;
-}
 
 .socialUrl {
   padding: 10px 12px;

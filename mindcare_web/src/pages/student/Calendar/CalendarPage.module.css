@@ -87,25 +87,6 @@
   letter-spacing: var(--ls-label);
 }
 
-.select {
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px solid var(--nav-border);
-  border-radius: 8px;
-  font-size: var(--fs-ui);
-  color: var(--text-main);
-  background: var(--warm-white);
-  appearance: none;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.select:focus {
-  border-color: var(--latte);
-  border-radius: 8px 8px 0 0;
-  border-bottom-color: transparent;
-}
 
 .chips {
   display: flex;

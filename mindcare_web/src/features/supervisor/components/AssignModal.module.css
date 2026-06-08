@@ -68,7 +68,6 @@
   color: var(--text-main, #2c2218);
 }
 
-.select,
 .textarea {
   width: 100%;
   padding: 9px 12px;
@@ -83,12 +82,6 @@
   box-sizing: border-box;
 }
 
-.select {
-  height: 40px;
-  cursor: pointer;
-}
-
-.select:focus,
 .textarea:focus {
   border-color: var(--coffee);
 }

@@ -1,0 +1,205 @@
+/* ── Wrapper ──────────────────────────────────────── */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* ── Label ───────────────────────────────────────── */
+
+.label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* ── Control (trigger button) ────────────────────── */
+
+.control {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px 0 12px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.875rem;
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 3px rgba(42, 26, 16, 0.05);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.control:hover:not(:disabled) {
+  border-color: var(--latte);
+  box-shadow: 0 2px 6px rgba(42, 26, 16, 0.08);
+}
+
+.control:focus-visible {
+  border-color: var(--coffee);
+  box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.15);
+}
+
+.controlOpen {
+  border-color: var(--coffee);
+  box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.12);
+}
+
+.controlError {
+  border-color: var(--error);
+}
+
+.control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--cream);
+}
+
+/* ── Value text ──────────────────────────────────── */
+
+.value {
+  flex: 1;
+  color: var(--espresso);
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.placeholder {
+  flex: 1;
+  color: var(--text-light);
+  font-size: 0.875rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Chevron ─────────────────────────────────────── */
+
+.chevron {
+  flex-shrink: 0;
+  margin-left: 8px;
+  display: flex;
+  align-items: center;
+  color: var(--text-light);
+  pointer-events: none;
+  transition: transform 0.18s ease, color 0.15s;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+  color: var(--coffee);
+}
+
+/* ── Dropdown panel (portal, position:fixed) ─────── */
+/* Rendered in document.body to escape modal overflow:hidden */
+
+.panel {
+  position: fixed;
+  z-index: 2100;
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px 6px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  box-shadow:
+    0 4px 12px rgba(42, 26, 16, 0.08),
+    0 8px 28px rgba(42, 26, 16, 0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  animation: dropIn 0.14s ease both;
+  scrollbar-width: thin;
+  scrollbar-color: var(--latte) transparent;
+  box-sizing: border-box;
+}
+
+.panel::-webkit-scrollbar       { width: 4px; }
+.panel::-webkit-scrollbar-track { background: transparent; }
+.panel::-webkit-scrollbar-thumb { background: var(--latte); border-radius: 4px; }
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Option ──────────────────────────────────────── */
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.875rem;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.1s;
+}
+
+.optionActive {
+  background: rgba(42, 26, 16, 0.06);
+}
+
+.optionSelected {
+  color: var(--mocha);
+  font-weight: 600;
+}
+
+.optionSelected.optionActive {
+  background: rgba(107, 79, 53, 0.08);
+}
+
+/* Label — fills remaining space, truncates with ellipsis on overflow */
+.optionLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Check icon slot — always 14px wide so text stays aligned */
+.optionCheck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--mocha);
+}
+
+/* ── Empty state ─────────────────────────────────── */
+
+.empty {
+  padding: 14px 10px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.875rem;
+  color: var(--text-light);
+  text-align: center;
+}
+
+/* ── Error message ───────────────────────────────── */
+
+.error {
+  font-size: 12px;
+  color: var(--error);
+  line-height: 1.3;
+}

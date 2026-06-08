@@ -3,7 +3,14 @@ import { useAdminCategories } from '../hooks/useAdminCategories';
 import CategoriesTable from '../components/CategoriesTable';
 import CategoryFormModal from '../components/CategoryFormModal';
 import { deleteCategory } from '../../../../api/categories.api';
+import Select from '../../../../components/UI/Select/Select';
 import styles from './CategoriesPage.module.css';
+
+const STATUS_OPTIONS = [
+  { value: '',      label: 'Все типы' },
+  { value: 'true',  label: 'Активные' },
+  { value: 'false', label: 'Скрытые' },
+];
 
 export default function CategoriesPage() {
   const {
@@ -62,18 +69,13 @@ export default function CategoriesPage() {
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
-        <select
-          className={styles.select}
+        <Select
+          style={{ minWidth: 150 }}
           value={filters.is_active === null ? '' : String(filters.is_active)}
-          onChange={e => {
-            const v = e.target.value;
-            setFilters({ is_active: v === '' ? null : v === 'true' });
-          }}
-        >
-          <option value="">Все типы</option>
-          <option value="true">Активные</option>
-          <option value="false">Скрытые</option>
-        </select>
+          options={STATUS_OPTIONS}
+          onChange={val => setFilters({ is_active: val === '' ? null : val === 'true' })}
+          placeholder="Все типы"
+        />
       </div>
 
       <CategoriesTable

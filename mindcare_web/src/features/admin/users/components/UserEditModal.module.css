@@ -36,8 +36,7 @@
   color: var(--text-main);
 }
 
-.input,
-.select {
+.input {
   height: 40px;
   padding: 0 14px;
   border: 1px solid var(--nav-border);
@@ -50,8 +49,7 @@
   transition: border-color 0.15s;
 }
 
-.input:focus,
-.select:focus {
+.input:focus {
   border-color: var(--coffee);
 }
 
@@ -65,10 +63,6 @@
 
 .inputError:focus {
   border-color: var(--error);
-}
-
-.select {
-  cursor: pointer;
 }
 
 /* ── Ошибки ── */

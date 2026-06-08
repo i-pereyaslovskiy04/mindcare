@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
+import Select from '../../../../components/UI/Select/Select';
 import styles from './UserCreateModal.module.css';
+
+const ROLE_OPTIONS = [
+  { value: 'supervisor',   label: 'Супервизор' },
+  { value: 'psychologist', label: 'Психолог' },
+  { value: 'admin',        label: 'Администратор' },
+];
 
 export default function UserCreateModal({ open, onClose, onCreated }) {
   const [createdUser, setCreatedUser] = useState(null);
@@ -77,21 +84,14 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="ucm-role">Роль</label>
-          <select
-            id="ucm-role"
-            className={`${styles.select} ${errors.role ? styles.inputError : ''}`}
-            name="role"
+          <label className={styles.label}>Роль</label>
+          <Select
             value={values.role}
-            onChange={onChange}
-          >
-            <option value="supervisor">Супервизор</option>
-            <option value="psychologist">Психолог</option>
-            <option value="admin">Администратор</option>
-          </select>
-          {errors.role && (
-            <span className={styles.hint} role="alert">{errors.role}</span>
-          )}
+            options={ROLE_OPTIONS}
+            onChange={(val) => onChange({ target: { name: 'role', value: val } })}
+            error={errors.role}
+            panelZIndex={2300}
+          />
         </div>
 
         {errors._form && (

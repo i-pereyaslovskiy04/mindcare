@@ -1,4 +1,19 @@
+import Select from '../../../../components/UI/Select/Select';
 import styles from './UsersFilters.module.css';
+
+const ROLE_OPTIONS = [
+  { value: '',             label: 'Все роли' },
+  { value: 'student',      label: 'Студент' },
+  { value: 'psychologist', label: 'Психолог' },
+  { value: 'admin',        label: 'Администратор' },
+  { value: 'supervisor',   label: 'Супервизор' },
+];
+
+const STATUS_OPTIONS = [
+  { value: '',      label: 'Все' },
+  { value: 'true',  label: 'Активен' },
+  { value: 'false', label: 'Заблокирован' },
+];
 
 export default function UsersFilters({ query, onQueryChange, filters, onFiltersChange }) {
   return (
@@ -11,27 +26,21 @@ export default function UsersFilters({ query, onQueryChange, filters, onFiltersC
         onChange={(e) => onQueryChange(e.target.value)}
       />
 
-      <select
-        className={styles.select}
+      <Select
+        style={{ minWidth: 160 }}
         value={filters.role}
-        onChange={(e) => onFiltersChange({ ...filters, role: e.target.value })}
-      >
-        <option value="">Все роли</option>
-        <option value="student">Студент</option>
-        <option value="psychologist">Психолог</option>
-        <option value="admin">Администратор</option>
-        <option value="supervisor">Супервизор</option>
-      </select>
+        options={ROLE_OPTIONS}
+        onChange={(val) => onFiltersChange({ ...filters, role: val })}
+        placeholder="Все роли"
+      />
 
-      <select
-        className={styles.select}
+      <Select
+        style={{ minWidth: 140 }}
         value={filters.is_active}
-        onChange={(e) => onFiltersChange({ ...filters, is_active: e.target.value })}
-      >
-        <option value="">Все</option>
-        <option value="true">Активен</option>
-        <option value="false">Заблокирован</option>
-      </select>
+        options={STATUS_OPTIONS}
+        onChange={(val) => onFiltersChange({ ...filters, is_active: val })}
+        placeholder="Все"
+      />
 
       <label className={styles.checkboxLabel}>
         <input

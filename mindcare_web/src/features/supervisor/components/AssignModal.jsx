@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from '../../../components/Modal/Modal';
+import Select from '../../../components/UI/Select/Select';
 import { getSupervisorPsychologists } from '../../../api/supervisor.api';
 import styles from './AssignModal.module.css';
 
@@ -91,26 +92,20 @@ export default function AssignModal({ mode, student, onConfirm, onClose }) {
         {/* Выбор нового психолога */}
         {needsPsychologist && (
           <div className={styles.field}>
-            <label className={styles.label}>
-              {mode === 'transfer' ? 'Новый психолог' : 'Психолог'}
-            </label>
             {psyLoading ? (
               <div className={styles.psyLoading}>Загрузка психологов…</div>
             ) : (
-              <select
-                className={styles.select}
+              <Select
+                label={mode === 'transfer' ? 'Новый психолог' : 'Психолог'}
+                placeholder="— Выберите психолога —"
                 value={selectedPsyId}
-                onChange={e => setSelectedPsyId(e.target.value)}
-                required
-              >
-                <option value="">— Выберите психолога —</option>
-                {psychologists.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name}
-                    {p.is_accepting === false ? ' (не принимает)' : ''}
-                  </option>
-                ))}
-              </select>
+                options={psychologists.map(p => ({
+                  value: p.id,
+                  label: p.full_name + (p.is_accepting === false ? ' (не принимает)' : ''),
+                }))}
+                onChange={setSelectedPsyId}
+                disabled={submitting}
+              />
             )}
           </div>
         )}

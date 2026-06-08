@@ -5,7 +5,7 @@
 .title {
   font-size: 22px;
   font-weight: 700;
-  color: var(--color-text, #111827);
+  color: var(--espresso);
   margin: 0;
 }
 
@@ -13,14 +13,15 @@
   padding: 9px 20px;
   border: none;
   border-radius: 8px;
-  background: var(--color-primary, #6366f1);
-  color: #fff;
+  background: var(--espresso);
+  color: var(--milk);
   font-size: 14px;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: background 0.15s;
 }
-.btnCreate:hover { opacity: 0.88; }
+.btnCreate:hover { background: var(--mocha); }
 
 .toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
 
@@ -28,22 +29,18 @@
   flex: 1;
   min-width: 200px;
   padding: 9px 12px;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--nav-border);
   border-radius: 8px;
   font-size: 14px;
+  font-family: inherit;
+  background: var(--warm-white);
+  color: var(--text-main);
   outline: none;
+  transition: border-color 0.15s;
 }
-.search:focus { border-color: var(--color-primary, #6366f1); }
+.search:focus { border-color: var(--coffee); }
+.search::placeholder { color: var(--text-light); }
 
-.select {
-  padding: 9px 12px;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 8px;
-  font-size: 14px;
-  background: #fff;
-  cursor: pointer;
-  outline: none;
-}
 
 .pagination {
   display: flex;
@@ -54,11 +51,18 @@
 }
 .pagination button {
   padding: 6px 12px;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--nav-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--warm-white);
+  color: var(--text-muted);
+  font-family: inherit;
   cursor: pointer;
   font-size: 16px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pagination button:hover:not(:disabled) {
+  background: var(--sand);
+  border-color: var(--latte);
 }
 .pagination button:disabled { opacity: 0.4; cursor: default; }
 
@@ -83,27 +87,38 @@
 }
 
 .dialogTitle  { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
-.dialogBody   { font-size: 14px; color: var(--color-text-secondary, #6b7280); margin: 0 0 16px; }
-.dialogError  { font-size: 13px; color: var(--color-error, #dc2626); margin-bottom: 12px; }
+.dialogBody   { font-size: 14px; color: var(--text-muted); margin: 0 0 16px; }
+.dialogError  { font-size: 13px; color: var(--error); margin-bottom: 12px; }
 .dialogActions { display: flex; justify-content: flex-end; gap: 10px; }
 
 .btnCancel {
   padding: 9px 20px;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--nav-border);
   border-radius: 8px;
   background: transparent;
   font-size: 14px;
+  font-family: inherit;
+  color: var(--text-main);
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btnCancel:hover:not(:disabled) {
+  background: var(--cream);
+  border-color: var(--latte);
 }
 
 .btnDanger {
   padding: 9px 20px;
   border: none;
   border-radius: 8px;
-  background: #dc2626;
+  background: var(--error);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
+  transition: opacity 0.15s;
 }
-.btnDanger:disabled { opacity: 0.6; }
+.btnDanger:hover:not(:disabled) { opacity: 0.85; }
+.btnDanger:disabled { opacity: 0.6; cursor: not-allowed; }

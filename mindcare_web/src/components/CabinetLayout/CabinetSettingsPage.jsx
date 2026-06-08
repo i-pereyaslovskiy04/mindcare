@@ -2,12 +2,19 @@ import { useState } from 'react';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
 import Icon from '../Icon/Icon';
 import { getInitials } from '../../shared/lib/utils';
+import Select from '../UI/Select/Select';
 import styles from './CabinetSettingsPage.module.css';
 
 const ROLE_LABELS = {
   psychologist: 'Психолог',
   supervisor:   'Супервизор',
 };
+
+const TIMEZONE_OPTIONS = [
+  { value: 'msk', label: 'Москва (UTC+3)' },
+  { value: 'ekb', label: 'Екатеринбург (UTC+5)' },
+  { value: 'nsk', label: 'Новосибирск (UTC+7)' },
+];
 
 function Toggle({ on, onToggle }) {
   return (
@@ -35,6 +42,8 @@ function NotifRow({ label, desc, on, onToggle }) {
 export default function CabinetSettingsPage() {
   const { user } = useAuth();
   const logout   = useLogout();
+
+  const [timezone, setTimezone] = useState('msk');
 
   const [notif, setNotif] = useState({
     sessions: true,
@@ -92,11 +101,11 @@ export default function CabinetSettingsPage() {
             </div>
             <div className={styles.field}>
               <label>Часовой пояс</label>
-              <select className={styles.select} defaultValue="msk">
-                <option value="msk">Москва (UTC+3)</option>
-                <option value="ekb">Екатеринбург (UTC+5)</option>
-                <option value="nsk">Новосибирск (UTC+7)</option>
-              </select>
+              <Select
+                value={timezone}
+                options={TIMEZONE_OPTIONS}
+                onChange={setTimezone}
+              />
             </div>
 
             <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} style={{ marginTop: 6 }}>

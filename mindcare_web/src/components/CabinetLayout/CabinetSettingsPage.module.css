@@ -109,8 +109,7 @@
   text-transform: uppercase;
   font-weight: 700;
 }
-.input,
-.select {
+.input {
   border: 1px solid var(--nav-border);
   background: var(--cream);
   border-radius: 10px;
@@ -122,8 +121,7 @@
   font-family: 'Nunito', sans-serif;
   width: 100%;
 }
-.input:focus,
-.select:focus {
+.input:focus {
   border-color: var(--coffee);
   background: var(--warm-white);
   box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.08);
