@@ -1,0 +1,159 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 380px;
+  max-width: 500px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--espresso);
+  line-height: 1.2;
+}
+
+/* Student block */
+.studentBlock {
+  background: var(--cream, #faf7f4);
+  border: 1px solid var(--nav-border, #ede8e3);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.studentLabel,
+.currentLabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #9a8e86);
+  margin-bottom: 4px;
+}
+
+.studentName,
+.currentName {
+  font-weight: 600;
+  color: var(--espresso);
+  font-size: 0.95rem;
+}
+
+.studentEmail {
+  font-size: 0.82rem;
+  color: var(--text-muted, #9a8e86);
+  margin-top: 2px;
+}
+
+/* Current psychologist block */
+.currentBlock {
+  background: var(--warm-white, #fdfaf7);
+  border: 1px solid var(--nav-border, #ede8e3);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+/* Fields */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main, #2c2218);
+}
+
+.select,
+.textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--nav-border, #ede8e3);
+  border-radius: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.88rem;
+  color: var(--espresso, #3b2a1a);
+  background: var(--warm-white, #fdfaf7);
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.select:focus,
+.textarea:focus {
+  border-color: var(--coffee, #7c5c42);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.psyLoading {
+  font-size: 0.82rem;
+  color: var(--text-muted, #9a8e86);
+  padding: 8px 0;
+}
+
+/* Error */
+.error {
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnGhost {
+  background: transparent;
+  border: 1px solid var(--nav-border, #ede8e3);
+  color: var(--text-muted, #9a8e86);
+}
+
+.btnGhost:hover:not(:disabled) {
+  background: var(--cream, #faf7f4);
+}
+
+.btnPrimary {
+  background: var(--espresso, #3b2a1a);
+  color: var(--milk, #fdf6ed);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--coffee, #7c5c42);
+}
+
+.btnDanger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btnDanger:hover:not(:disabled) {
+  background: #b91c1c;
+}

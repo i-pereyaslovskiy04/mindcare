@@ -55,8 +55,9 @@ import PsychologistLayout from '../pages/psychologist/PsychologistLayout';
 import PsychologistHome   from '../pages/psychologist/PsychologistHome';
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
-import SupervisorLayout from '../pages/supervisor/SupervisorLayout';
-import SupervisorHome   from '../pages/supervisor/SupervisorHome';
+import SupervisorLayout    from '../pages/supervisor/SupervisorLayout';
+import SupervisorHome      from '../pages/supervisor/SupervisorHome';
+import EngagementsPage     from '../pages/supervisor/EngagementsPage';
 
 // ── Shared cabinet pages ──────────────────────────────────────────────────────
 import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage';
@@ -156,8 +157,9 @@ export default function AppRouter() {
         path="/supervisor"
         element={<RoleRoute roles={['supervisor']}><SupervisorLayout /></RoleRoute>}
       >
-        <Route index             element={<SupervisorHome />} />
-        <Route path="settings"  element={<CabinetSettingsPage />} />
+        <Route index                  element={<SupervisorHome />} />
+        <Route path="engagements"     element={<EngagementsPage />} />
+        <Route path="settings"        element={<CabinetSettingsPage />} />
       </Route>
 
       {/* Admin */}

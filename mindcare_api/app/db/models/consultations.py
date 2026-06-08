@@ -11,17 +11,27 @@ import uuid as _uuid
 
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, ForeignKey,
-    Integer, String, Text, Time,
+    Index, Integer, String, Text, Time,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text as sa_text
 
 from app.db.base import Base
 
 
 class TherapyEngagement(Base):
     __tablename__ = "therapy_engagements"
+    __table_args__ = (
+        # Partial unique index: один клиент — не более одной активной связи.
+        # Создаётся migration d2e5f8a1b4c7.
+        Index(
+            "ux_therapy_engagements_active_client",
+            "client_id",
+            unique=True,
+            postgresql_where=sa_text("status = 'active' AND ended_at IS NULL"),
+        ),
+    )
 
     id              = Column(Integer, primary_key=True)
     uuid            = Column(
