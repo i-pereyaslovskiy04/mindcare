@@ -9,11 +9,13 @@ const ROLE_LABELS = {
   supervisor:   'Супервизор',
 };
 
-export default function CabinetLayout({ navSections, crumbLabels }) {
+export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs }) {
   const { pathname } = useLocation();
   const { user }     = useAuth();
   const logout       = useLogout();
-  const crumb        = crumbLabels?.[pathname] ?? 'Личный кабинет';
+  const crumb        = crumbLabels?.[pathname]
+    ?? dynamicCrumbs?.find(({ prefix }) => pathname.startsWith(prefix))?.label
+    ?? 'Личный кабинет';
   const roleLabel    = ROLE_LABELS[user?.role] ?? '';
 
   return (

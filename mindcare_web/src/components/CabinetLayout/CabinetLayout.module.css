@@ -312,7 +312,9 @@
   padding: 28px 36px 48px;
 }
 .contentInner {
+  width: 100%;
   max-width: 1180px;
+  margin: 0 auto;
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────── */
