@@ -7,7 +7,7 @@
  *
  * Public routes: /, /about, /services, /news, /materials, /login, /register, /health
  * Private routes: /dashboard, /profile
- * Role routes:   /student/*, /psychologist, /admin/*, /supervisor
+ * Role routes:   /student/*, /psychologist/*, /supervisor/*, /admin/*
  */
 
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -51,10 +51,15 @@ import CalendarPage         from '../pages/student/Calendar/CalendarPage';
 import SettingsPage         from '../pages/student/Settings/SettingsPage';
 
 // ── Psychologist ──────────────────────────────────────────────────────────────
-import ConsultantDashboard from '../pages/consultant/ConsultantDashboard';
+import PsychologistLayout from '../pages/psychologist/PsychologistLayout';
+import PsychologistHome   from '../pages/psychologist/PsychologistHome';
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
-import SupervisorPage from '../pages/supervisor/SupervisorPage';
+import SupervisorLayout from '../pages/supervisor/SupervisorLayout';
+import SupervisorHome   from '../pages/supervisor/SupervisorHome';
+
+// ── Shared cabinet pages ──────────────────────────────────────────────────────
+import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage';
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 
@@ -140,14 +145,20 @@ export default function AppRouter() {
       {/* Psychologist */}
       <Route
         path="/psychologist"
-        element={<RoleRoute roles={['psychologist']}><ConsultantDashboard /></RoleRoute>}
-      />
+        element={<RoleRoute roles={['psychologist']}><PsychologistLayout /></RoleRoute>}
+      >
+        <Route index             element={<PsychologistHome />} />
+        <Route path="settings"  element={<CabinetSettingsPage />} />
+      </Route>
 
       {/* Supervisor */}
       <Route
         path="/supervisor"
-        element={<RoleRoute roles={['supervisor']}><SupervisorPage /></RoleRoute>}
-      />
+        element={<RoleRoute roles={['supervisor']}><SupervisorLayout /></RoleRoute>}
+      >
+        <Route index             element={<SupervisorHome />} />
+        <Route path="settings"  element={<CabinetSettingsPage />} />
+      </Route>
 
       {/* Admin */}
       <Route
