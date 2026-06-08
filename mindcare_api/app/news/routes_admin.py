@@ -14,7 +14,7 @@ from app.news.schemas import (
 router = APIRouter(
     prefix="/admin/news",
     tags=["admin-news"],
-    dependencies=[Depends(require_role("admin", "supervisor"))],
+    dependencies=[Depends(require_role("admin"))],
 )
 
 
@@ -24,7 +24,7 @@ def list_news(
     size:         int            = Query(default=20, ge=1, le=100),
     search:       Optional[str]  = Query(default=None),
     is_published: Optional[bool] = Query(default=None),
-    current_user: dict = Depends(require_role("admin", "supervisor")),
+    current_user: dict = Depends(require_role("admin")),
 ):
     items, total = service.list_news(
         page=page, size=size, search=search, is_published=is_published,
@@ -35,7 +35,7 @@ def list_news(
 @router.get("/{uuid}", response_model=NewsRead)
 def get_news(
     uuid: str,
-    current_user: dict = Depends(require_role("admin", "supervisor")),
+    current_user: dict = Depends(require_role("admin")),
 ):
     news = service.get_news(uuid)
     if not news:
@@ -47,7 +47,7 @@ def get_news(
 def create_news(
     body: NewsCreate,
     request: Request,
-    current_user: dict = Depends(require_role("admin", "supervisor")),
+    current_user: dict = Depends(require_role("admin")),
 ):
     news = service.create_news(body.model_dump(), created_by=current_user["id"])
     log_auth_event(
@@ -65,7 +65,7 @@ def update_news(
     uuid: str,
     body: NewsUpdate,
     request: Request,
-    current_user: dict = Depends(require_role("admin", "supervisor")),
+    current_user: dict = Depends(require_role("admin")),
 ):
     try:
         news = service.update_news(uuid, body.model_dump(exclude_unset=True))
@@ -85,7 +85,7 @@ def update_news(
 def delete_news(
     uuid: str,
     request: Request,
-    current_user: dict = Depends(require_role("admin", "supervisor")),
+    current_user: dict = Depends(require_role("admin")),
 ):
     try:
         service.delete_news(uuid)

@@ -7,7 +7,7 @@ export const ROLE_HOME = {
   student:      '/student',
   psychologist: '/psychologist',
   admin:        '/admin/users',
-  supervisor:   '/admin/users',
+  supervisor:   '/supervisor',
 };
 
 /** Returns the home URL for a given role, defaulting to /profile. */

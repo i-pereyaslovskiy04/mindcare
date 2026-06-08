@@ -7,7 +7,7 @@
  *
  * Public routes: /, /about, /services, /news, /materials, /login, /register, /health
  * Private routes: /dashboard, /profile
- * Role routes:   /student/*, /psychologist, /admin/*
+ * Role routes:   /student/*, /psychologist, /admin/*, /supervisor
  */
 
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -53,6 +53,9 @@ import SettingsPage         from '../pages/student/Settings/SettingsPage';
 // ── Psychologist ──────────────────────────────────────────────────────────────
 import ConsultantDashboard from '../pages/consultant/ConsultantDashboard';
 
+// ── Supervisor ────────────────────────────────────────────────────────────────
+import SupervisorPage from '../pages/supervisor/SupervisorPage';
+
 // ── Route guards ──────────────────────────────────────────────────────────────
 
 /**
@@ -91,7 +94,7 @@ function DashboardRedirect() {
     student:      '/student',
     psychologist: '/psychologist',
     admin:        '/admin/users',
-    supervisor:   '/admin/users',
+    supervisor:   '/supervisor',
   };
   return <Navigate to={destinations[user.role] ?? '/profile'} replace />;
 }
@@ -140,10 +143,16 @@ export default function AppRouter() {
         element={<RoleRoute roles={['psychologist']}><ConsultantDashboard /></RoleRoute>}
       />
 
+      {/* Supervisor */}
+      <Route
+        path="/supervisor"
+        element={<RoleRoute roles={['supervisor']}><SupervisorPage /></RoleRoute>}
+      />
+
       {/* Admin */}
       <Route
         path="/admin"
-        element={<RoleRoute roles={['admin', 'supervisor']}><AdminLayout /></RoleRoute>}
+        element={<RoleRoute roles={['admin']}><AdminLayout /></RoleRoute>}
       >
         <Route index              element={<Navigate to="users" replace />} />
         <Route path="users"      element={<UsersPage />} />

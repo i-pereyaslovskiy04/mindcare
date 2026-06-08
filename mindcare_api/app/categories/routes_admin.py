@@ -15,7 +15,7 @@ from app.categories.schemas import (
 router = APIRouter(
     prefix="/admin/categories",
     tags=["admin: categories"],
-    dependencies=[Depends(require_role("admin", "supervisor"))],
+    dependencies=[Depends(require_role("admin"))],
 )
 
 

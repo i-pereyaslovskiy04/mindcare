@@ -15,7 +15,7 @@ from app.tags.schemas import (
 router = APIRouter(
     prefix="/admin/tags",
     tags=["admin: tags"],
-    dependencies=[Depends(require_role("admin", "supervisor"))],
+    dependencies=[Depends(require_role("admin"))],
 )
 
 

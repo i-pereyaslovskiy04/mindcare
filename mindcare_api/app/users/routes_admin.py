@@ -22,7 +22,7 @@ from app.users.schemas import (
 router = APIRouter(
     prefix="/admin/users",
     tags=["admin: users"],
-    dependencies=[Depends(require_role("admin", "supervisor"))],
+    dependencies=[Depends(require_role("admin"))],
 )
 
 
