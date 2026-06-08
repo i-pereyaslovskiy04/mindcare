@@ -6,7 +6,7 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const Modal = forwardRef(function Modal(
-  { open, onClose, ariaLabel, zIndex = 2000, wide = false, children },
+  { open, onClose, ariaLabel, zIndex = 2000, wide = false, size = 'sm', children },
   ref
 ) {
   const cardRef = useRef(null);
@@ -64,7 +64,7 @@ const Modal = forwardRef(function Modal(
       aria-hidden={!open}
     >
       <div
-        className={`${styles.card} ${wide ? styles.cardWide : ''}`}
+        className={`${styles.card} ${wide ? styles.cardWide : size === 'md' ? styles.cardMd : size === 'lg' ? styles.cardLg : ''}`}
         ref={cardRef}
         role="dialog"
         aria-modal="true"

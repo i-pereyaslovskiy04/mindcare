@@ -1,6 +1,5 @@
 .body {
-  padding: 28px 32px 24px;
-  min-width: 380px;
+  padding: 28px 28px 24px;
 }
 
 .title {
@@ -94,3 +93,18 @@
 }
 
 .btnSecondary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+  .body {
+    padding: 22px 18px 22px;
+  }
+
+  .footer {
+    flex-direction: column-reverse;
+  }
+
+  .btnPrimary,
+  .btnSecondary {
+    width: 100%;
+  }
+}

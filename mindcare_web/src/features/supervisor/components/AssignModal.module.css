@@ -1,55 +1,58 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  min-width: 380px;
-  max-width: 500px;
+  gap: 18px;
+  padding: 24px 28px 28px;
 }
 
 .title {
   font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   font-weight: 600;
   color: var(--espresso);
   line-height: 1.2;
+  margin: 0;
 }
 
 /* Student block */
 .studentBlock {
-  background: var(--cream, #faf7f4);
-  border: 1px solid var(--nav-border, #ede8e3);
-  border-radius: 8px;
-  padding: 12px 14px;
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 14px 16px;
 }
 
 .studentLabel,
 .currentLabel {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted, #9a8e86);
-  margin-bottom: 4px;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 5px;
 }
 
 .studentName,
 .currentName {
   font-weight: 600;
   color: var(--espresso);
-  font-size: 0.95rem;
+  font-size: 0.94rem;
+  line-height: 1.3;
 }
 
 .studentEmail {
-  font-size: 0.82rem;
-  color: var(--text-muted, #9a8e86);
-  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  word-break: break-all;
 }
 
 /* Current psychologist block */
 .currentBlock {
-  background: var(--warm-white, #fdfaf7);
-  border: 1px solid var(--nav-border, #ede8e3);
-  border-radius: 8px;
-  padding: 10px 14px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 12px 16px;
 }
 
 /* Fields */
@@ -69,25 +72,31 @@
 .textarea {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--nav-border, #ede8e3);
-  border-radius: 8px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
   font-family: 'Nunito', sans-serif;
-  font-size: 0.88rem;
-  color: var(--espresso, #3b2a1a);
-  background: var(--warm-white, #fdfaf7);
+  font-size: 0.875rem;
+  color: var(--espresso);
+  background: var(--warm-white);
   outline: none;
   transition: border-color 0.15s;
   box-sizing: border-box;
 }
 
+.select {
+  height: 40px;
+  cursor: pointer;
+}
+
 .select:focus,
 .textarea:focus {
-  border-color: var(--coffee, #7c5c42);
+  border-color: var(--coffee);
 }
 
 .textarea {
   resize: vertical;
-  min-height: 72px;
+  min-height: 76px;
+  line-height: 1.5;
 }
 
 .psyLoading {
@@ -99,11 +108,12 @@
 /* Error */
 .error {
   padding: 10px 14px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
+  background: var(--error-bg);
+  border: 1px solid rgba(185, 64, 64, 0.25);
+  border-radius: 10px;
   font-size: 0.85rem;
-  color: #b91c1c;
+  color: var(--error);
+  line-height: 1.45;
 }
 
 /* Actions */
@@ -111,18 +121,21 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 4px;
+  padding-top: 4px;
 }
 
 .btn {
-  padding: 9px 20px;
-  border-radius: 8px;
+  height: 40px;
+  padding: 0 22px;
+  border-radius: 10px;
   font-family: 'Nunito', sans-serif;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   border: none;
   transition: background 0.15s, opacity 0.15s;
+  display: inline-flex;
+  align-items: center;
 }
 
 .btn:disabled {
@@ -132,28 +145,46 @@
 
 .btnGhost {
   background: transparent;
-  border: 1px solid var(--nav-border, #ede8e3);
-  color: var(--text-muted, #9a8e86);
+  border: 1px solid var(--nav-border);
+  color: var(--text-muted);
 }
 
 .btnGhost:hover:not(:disabled) {
-  background: var(--cream, #faf7f4);
+  background: var(--cream);
+  border-color: var(--latte);
 }
 
 .btnPrimary {
-  background: var(--espresso, #3b2a1a);
-  color: var(--milk, #fdf6ed);
+  background: var(--espresso);
+  color: var(--milk);
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: var(--coffee, #7c5c42);
+  background: var(--coffee);
 }
 
 .btnDanger {
-  background: #dc2626;
+  background: var(--error);
   color: #fff;
 }
 
 .btnDanger:hover:not(:disabled) {
-  background: #b91c1c;
+  opacity: 0.88;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .form {
+    padding: 20px 18px 24px;
+    gap: 16px;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }

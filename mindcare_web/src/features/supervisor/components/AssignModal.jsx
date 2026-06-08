@@ -67,9 +67,9 @@ export default function AssignModal({ mode, student, onConfirm, onClose }) {
   };
 
   return (
-    <Modal open onClose={onClose}>
+    <Modal open onClose={onClose} size="md" ariaLabel={titles[mode]}>
       <form onSubmit={handleSubmit} className={styles.form}>
-        <div className={styles.title}>{titles[mode]}</div>
+        <h2 className={styles.title}>{titles[mode]}</h2>
 
         {/* Информация о студенте */}
         <div className={styles.studentBlock}>

@@ -20,6 +20,7 @@
 
 .card {
   background: var(--warm-white);
+  border: 1px solid var(--nav-border);
   border-radius: 22px;
   width: 100%;
   max-width: 440px;
@@ -34,6 +35,9 @@
   flex-direction: column;
   overflow: hidden;
 }
+
+.cardMd { max-width: 560px; }
+.cardLg { max-width: 720px; }
 
 .body {
   overflow-y: auto;
