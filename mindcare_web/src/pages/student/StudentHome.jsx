@@ -11,11 +11,25 @@ const MOOD_WORDS = [
   'Нейтрально', 'Спокойно', 'Хорошо', 'Светло', 'Радостно', 'Прекрасно',
 ];
 
-const CHART_DATA = [
+const CHART_DATA_14D = [
   { l: 'Пн', v: 5 }, { l: 'Вт', v: 4 }, { l: 'Ср', v: 6 }, { l: 'Чт', v: 5 },
   { l: 'Пт', v: 7 }, { l: 'Сб', v: 8 }, { l: 'Вс', v: 6 }, { l: 'Пн', v: 7 },
   { l: 'Вт', v: 5 }, { l: 'Ср', v: 6 }, { l: 'Чт', v: 7 }, { l: 'Пт', v: 8 },
   { l: 'Сб', v: 7 },
+];
+const CHART_DATA_MONTH = [
+  { l: 'Нед 1', v: 5 }, { l: 'Нед 2', v: 6 }, { l: 'Нед 3', v: 7 }, { l: 'Нед 4', v: 6 },
+];
+const CHART_DATA_YEAR = [
+  { l: 'Янв', v: 4 }, { l: 'Фев', v: 5 }, { l: 'Мар', v: 6 }, { l: 'Апр', v: 7 },
+  { l: 'Май', v: 6 }, { l: 'Июн', v: 7 }, { l: 'Июл', v: 8 }, { l: 'Авг', v: 7 },
+  { l: 'Сен', v: 6 }, { l: 'Окт', v: 5 }, { l: 'Ноя', v: 6 }, { l: 'Дек', v: 7 },
+];
+
+const MOOD_PERIODS = [
+  { key: '14d',   label: '14 дней' },
+  { key: 'month', label: 'Месяц'   },
+  { key: 'year',  label: 'Год'     },
 ];
 
 const QUICK_ACTIONS = [
@@ -42,8 +56,13 @@ export default function StudentHome() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [moodValue, setMoodValue] = useState(7);
+  const [activePeriod, setActivePeriod] = useState('14d');
 
-  const chartData = [...CHART_DATA, { l: 'Сегодня', v: moodValue }];
+  const chartData = activePeriod === '14d'
+    ? [...CHART_DATA_14D, { l: 'Сегодня', v: moodValue }]
+    : activePeriod === 'month'
+      ? CHART_DATA_MONTH
+      : CHART_DATA_YEAR;
   const todayLabel = formatTodayLabel();
 
   return (
@@ -144,9 +163,17 @@ export default function StudentHome() {
           <div className={styles.chartHeader}>
             <h2 className={styles.sectionTitle}>Динамика настроения</h2>
             <div className={styles.periodChips}>
-              <button className={styles.chipActive}>14 дней</button>
-              <button className={styles.chip}>Месяц</button>
-              <button className={styles.chip}>Год</button>
+              {MOOD_PERIODS.map((period) => (
+                <button
+                  key={period.key}
+                  type="button"
+                  className={activePeriod === period.key ? styles.chipActive : styles.chip}
+                  aria-pressed={activePeriod === period.key}
+                  onClick={() => setActivePeriod(period.key)}
+                >
+                  {period.label}
+                </button>
+              ))}
             </div>
           </div>
           <MoodChart data={chartData} height={160} />
