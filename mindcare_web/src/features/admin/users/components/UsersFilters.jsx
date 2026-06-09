@@ -1,4 +1,5 @@
 import Select from '../../../../components/UI/Select/Select';
+import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import styles from './UsersFilters.module.css';
 
 const ROLE_OPTIONS = [
@@ -42,14 +43,11 @@ export default function UsersFilters({ query, onQueryChange, filters, onFiltersC
         placeholder="Все"
       />
 
-      <label className={styles.checkboxLabel}>
-        <input
-          type="checkbox"
-          checked={filters.includeDeleted}
-          onChange={() => onFiltersChange({ ...filters, includeDeleted: !filters.includeDeleted })}
-        />
-        Показать удалённых
-      </label>
+      <Checkbox
+        checked={filters.includeDeleted}
+        onChange={() => onFiltersChange({ ...filters, includeDeleted: !filters.includeDeleted })}
+        label="Показать удалённых"
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import ImageUpload from '../../../../components/UI/ImageUpload/ImageUpload';
 import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
 import ContentPreview from '../../../../components/UI/ContentPreview/ContentPreview';
 import Button from '../../../../components/UI/Button/Button';
+import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import { getTagsPublic } from '../../../../api/tags.api';
 import { getAdminCategories, createArticle, updateArticle } from '../../../../api/articles.api';
 import styles from './ArticleFormModal.module.css';
@@ -182,14 +183,11 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
               />
             </div>
             <div className={styles.fieldCheck}>
-              <label className={styles.checkLabel}>
-                <input
-                  type="checkbox"
-                  checked={form.isPublished}
-                  onChange={e => set('isPublished', e.target.checked)}
-                />
-                Опубликовать
-              </label>
+              <Checkbox
+                checked={form.isPublished}
+                onChange={(val) => set('isPublished', val)}
+                label="Опубликовать"
+              />
             </div>
           </div>
 

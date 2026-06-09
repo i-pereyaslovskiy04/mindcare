@@ -2,6 +2,7 @@ import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
+import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import styles from './UserEditModal.module.css';
 
 const ROLE_OPTIONS = [
@@ -93,16 +94,11 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             </div>
 
             <div className={styles.checkboxField}>
-              <label className={styles.checkboxLabel}>
-                <input
-                  className={styles.checkbox}
-                  type="checkbox"
-                  name="is_active"
-                  checked={values.is_active}
-                  onChange={handleChange}
-                />
-                Активен
-              </label>
+              <Checkbox
+                checked={values.is_active}
+                onChange={(val) => handleChange({ target: { name: 'is_active', type: 'checkbox', checked: val } })}
+                label="Активен"
+              />
             </div>
 
             {errors._form && (

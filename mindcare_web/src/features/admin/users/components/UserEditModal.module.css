@@ -145,24 +145,6 @@
   margin-bottom: 20px;
 }
 
-.checkboxLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  color: var(--text-main);
-  cursor: pointer;
-  user-select: none;
-}
-
-.checkbox {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--coffee);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
 /* ── Скелетон ── */
 
 .skeleton {

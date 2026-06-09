@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
 import Icon from '../Icon/Icon';
 import Button from '../UI/Button/Button';
+import Toggle from '../UI/Toggle/Toggle';
 import { getInitials } from '../../shared/lib/utils';
 import Select from '../UI/Select/Select';
 import styles from './CabinetSettingsPage.module.css';
@@ -17,17 +18,6 @@ const TIMEZONE_OPTIONS = [
   { value: 'nsk', label: 'Новосибирск (UTC+7)' },
 ];
 
-function Toggle({ on, onToggle }) {
-  return (
-    <button
-      type="button"
-      className={`${styles.toggle} ${on ? styles.toggleOn : ''}`}
-      onClick={onToggle}
-      aria-pressed={on}
-    />
-  );
-}
-
 function NotifRow({ label, desc, on, onToggle }) {
   return (
     <div className={styles.notifRow}>
@@ -35,7 +25,7 @@ function NotifRow({ label, desc, on, onToggle }) {
         <div className={styles.notifLabel}>{label}</div>
         <div className={styles.notifDesc}>{desc}</div>
       </div>
-      <Toggle on={on} onToggle={onToggle} />
+      <Toggle checked={on} onChange={onToggle} label={label} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useLogout } from '../../../features/auth/AuthContext';
 import Icon from '../../../components/Icon/Icon';
 import Select from '../../../components/UI/Select/Select';
 import Button from '../../../components/UI/Button/Button';
+import Toggle from '../../../components/UI/Toggle/Toggle';
 import styles from './SettingsPage.module.css';
 
 const SOCIAL_TYPES = ['Telegram', 'Instagram', 'LinkedIn', 'VK', 'Facebook', 'X (Twitter)', 'Сайт'];
@@ -13,17 +14,6 @@ const TIMEZONE_OPTIONS = [
   { value: 'ekb', label: 'Екатеринбург (UTC+5)' },
 ];
 
-function Toggle({ on, onToggle }) {
-  return (
-    <button
-      className={`${styles.toggle} ${on ? styles.toggleOn : ''}`}
-      onClick={onToggle}
-      aria-pressed={on}
-      type="button"
-    />
-  );
-}
-
 function NotifRow({ label, desc, on, onToggle }) {
   return (
     <div className={styles.notifRow}>
@@ -31,7 +21,7 @@ function NotifRow({ label, desc, on, onToggle }) {
         <div className={styles.notifLabel}>{label}</div>
         <div className={styles.notifDesc}>{desc}</div>
       </div>
-      <Toggle on={on} onToggle={onToggle} />
+      <Toggle checked={on} onChange={onToggle} label={label} />
     </div>
   );
 }
