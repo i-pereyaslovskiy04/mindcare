@@ -1,14 +1,6 @@
 import { Link } from 'react-router-dom';
+import Tag from '../../../components/UI/Tag/Tag';
 import styles from './MaterialCard.module.css';
-
-const TOPIC_CLASS = {
-  'Тревога':    'tagAnxiety',
-  'Стресс':     'tagStress',
-  'Сон':        'tagSleep',
-  'Отношения':  'tagRelations',
-  'Самооценка': 'tagSelfEsteem',
-  'Эмоции':     'tagEmotions',
-};
 
 const PlaceholderIcon = () => (
   <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
@@ -22,8 +14,6 @@ const PlaceholderIcon = () => (
 );
 
 export default function MaterialCard({ item }) {
-  const topicCls = TOPIC_CLASS[item.topic] ?? 'tagAnxiety';
-
   return (
     <article className={styles.card}>
       <div className={styles.imgWrap}>
@@ -34,7 +24,7 @@ export default function MaterialCard({ item }) {
       </div>
 
       <div className={styles.body}>
-        <span className={`${styles.tag} ${styles[topicCls]}`}>{item.topic}</span>
+        <Tag variant="card">{item.topic}</Tag>
         <h3 className={styles.title}>{item.title}</h3>
         <p className={styles.desc}>{item.description}</p>
         <time className={styles.date}>{item.date}</time>

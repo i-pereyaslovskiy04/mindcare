@@ -1,6 +1,7 @@
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Badge from '../../../../components/UI/Badge/Badge';
+import Tag from '../../../../components/UI/Tag/Tag';
 import styles from './NewsTable.module.css';
 
 const SKELETON_ROWS = 6;
@@ -69,7 +70,7 @@ export default function NewsTable({ items, loading, error, onEdit, onDelete, edi
               <td>
                 <div className={styles.tags}>
                   {item.tags.map(t => (
-                    <span key={t.uuid} className={styles.tag}>{t.name}</span>
+                    <Tag key={t.uuid} variant="admin">{t.name}</Tag>
                   ))}
                 </div>
               </td>
