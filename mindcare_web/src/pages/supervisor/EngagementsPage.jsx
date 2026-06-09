@@ -10,6 +10,12 @@ import {
 } from '../../api/supervisor.api';
 import styles from './EngagementsPage.module.css';
 
+const STATUS_LABELS = {
+  active:      'Активна',
+  completed:   'Завершена',
+  transferred: 'Переназначена',
+};
+
 export default function EngagementsPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, refetch } =
     useStudents();
@@ -155,7 +161,7 @@ export default function EngagementsPage() {
                       <td>
                         {eng ? (
                           <span className={`${styles.badge} ${styles[`badge_${eng.status}`]}`}>
-                            {eng.status === 'active' ? 'Активна' : eng.status}
+                            {STATUS_LABELS[eng.status] || eng.status}
                           </span>
                         ) : (
                           <span className={styles.badge}>—</span>
