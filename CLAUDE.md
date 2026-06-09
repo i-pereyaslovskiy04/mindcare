@@ -11,7 +11,7 @@
 - Онлайн-психодиагностика (тесты с автоподсчётом результатов)
 - Блог, новости, справочник ресурсов помощи
 - Модуль вопросов и ответов (Q&A)
-- Личные кабинеты по ролям (студент, психолог, админ)
+- Личные кабинеты по ролям (студент, психолог, супервизор, админ)
 - Административная панель
 
 **Критически важно:** платформа работает с психологическими и медицинскими данными.
@@ -334,6 +334,166 @@ mindcare_web/src/
 - `/admin/categories` в UI называется «Типы материалов», но технически остаётся `categories`
 - `/admin/tags` в UI называется «Темы», но технически остаётся `tags`
 - Не переименовывать API paths, модели и файлы ради пользовательских label
+
+---
+
+### Frontend: UI governance
+
+Полные правила shared UI и аудитов описаны в:
+
+- `docs/UI_COMPONENTS_GUIDE.md`
+- `docs/UI_TECH_DEBT.md`
+- `docs/FRONTEND_CHECKLIST.md`
+- `docs/AUDIT_RULES.md`
+
+Перед любыми изменениями frontend UI сначала проверить:
+
+```text
+src/components/UI
+```
+
+Текущие shared UI-компоненты:
+
+```text
+src/components/UI/Button
+src/components/UI/Checkbox
+src/components/UI/Toggle
+src/components/UI/FilterChip
+src/components/UI/Badge
+src/components/UI/Tag
+src/components/UI/Select
+src/components/UI/MultiSelect
+```
+
+Правила использования:
+
+```text
+✅ Button — обычные action-кнопки: сохранить, отменить, удалить, загрузить ещё, назначить, повторить, применить.
+✅ Checkbox — настоящие form-checkbox: согласие, active/inactive, published/unpublished, include deleted.
+✅ Toggle — on/off переключатели: уведомления, настройки, включить/выключить.
+✅ FilterChip — интерактивные фильтр-чипы с active/inactive состоянием.
+✅ Badge — display-only статусы, роли и состояния: опубликовано, черновик, активен, заблокирован, роль пользователя.
+✅ Tag — display-only теги контента: тема материала, тег новости, категория статьи.
+✅ Select / MultiSelect — выбор одного или нескольких значений.
+```
+
+Запрещено без отдельного обоснования:
+
+```text
+❌ Создавать локальные .btn*, .checkbox*, .toggle*, .chip*, .badge*, .tag*, если уже есть подходящий shared-компонент.
+❌ Писать локальный UI-контрол, не проверив src/components/UI.
+❌ Дублировать стили Button / Checkbox / Toggle / FilterChip / Badge / Tag в CSS Modules.
+❌ Использовать button там, где элемент display-only и должен быть span.
+❌ Использовать span/div там, где элемент интерактивный и должен быть button/input.
+```
+
+Feature-specific UI разрешён только с обоснованием в финальном отчёте.
+
+Осознанные исключения (не мигрировать без отдельного решения):
+
+```text
+- Calendar time slots / time picker
+- Calendar format chips
+- CabinetLayout nav badges
+- CabinetLayout navBadgeSoon
+- CabinetLayout notification dot
+- SearchBar count overlay
+- SearchBar removable chips
+- TaskItem badges
+- Chat controls
+- DiaryEntryForm emotion chips
+- FeaturedNews newsTagOverlay
+- ContentPreview category/tag
+- Student MaterialsPage articleTopic
+- StudentHome period chips
+- StudentHome dark-card buttons
+- MultiSelect selected tags внутри shared MultiSelect
+```
+
+Если задача затрагивает похожий UI-элемент, сначала свериться с `docs/UI_TECH_DEBT.md`.
+Если элемент там числится как feature-specific — не мигрировать без отдельного решения.
+
+---
+
+### Audit mode
+
+Любой аудит в проекте MindCare выполняется только в режиме READ-ONLY.
+
+Обязательные строки для любого промпта на аудит:
+
+```text
+Режим READ-ONLY.
+
+Не менять код.
+Не создавать файлы.
+Не редактировать JSX/CSS/Python.
+Не удалять стили.
+Не делать рефакторинг.
+Не запускать миграцию.
+Только анализ и финальный отчёт.
+```
+
+Аудит может:
+
+```text
+✅ искать файлы;
+✅ классифицировать компоненты;
+✅ описывать риски;
+✅ находить дубли;
+✅ предлагать API будущего компонента;
+✅ предлагать план миграции;
+✅ давать рекомендации.
+```
+
+Аудит не может:
+
+```text
+❌ менять JSX;
+❌ менять CSS;
+❌ менять Python;
+❌ создавать компоненты;
+❌ удалять классы;
+❌ запускать миграцию;
+❌ исправлять найденные проблемы без отдельного разрешения.
+```
+
+Аудит и миграция — разные этапы:
+
+```text
+1. Аудит — только анализ.
+2. Миграция — изменение кода только по отдельному промпту.
+3. Контрольный отчёт — build, grep, visual risks, accessibility risks.
+```
+
+---
+
+### Frontend task checklist
+
+Перед завершением любой frontend-задачи проверить:
+
+```text
+- Использованы shared UI-компоненты там, где они подходят.
+- Не добавлены новые локальные .btn*, .badge*, .tag*, .chip*, .toggle*, .checkbox* без причины.
+- Feature-specific элементы явно обоснованы.
+- Интерактивные button имеют type="button", если это не submit.
+- Toggle / FilterChip / choice-like controls имеют aria-pressed или корректную семантику.
+- Декоративные элементы имеют aria-hidden="true".
+- Display-only элементы не рендерятся как button.
+- Цвета берутся из CSS variables проекта, а не из случайных hex.
+- Проверен responsive для затронутых страниц.
+- Запущен build.
+```
+
+В финальном отчёте по frontend-задаче обязательно указать:
+
+```text
+1. Какие файлы изменены.
+2. Какие shared UI-компоненты использованы.
+3. Какие feature-specific элементы намеренно оставлены.
+4. Какие CSS-классы удалены.
+5. Прошёл ли build.
+6. Есть ли visual/accessibility risks.
+```
 
 ---
 
