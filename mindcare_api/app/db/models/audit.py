@@ -2,12 +2,14 @@
 Модели: таблицы аудита.
 
 Схема управляется через Alembic migration 3a7c5e2b8f1d.
-В dev-среде — обычные таблицы (без партиций).
+Таблицы партиционированы по RANGE (created_at), месячные партиции.
 
-PRODUCTION RISK: если в production-БД эти таблицы партиционированы
-по месяцам, партиции захардкожены до 31.12.2026. После этой даты
-INSERT в auth_log/audit_log/data_change_log упадёт → логин сломается.
-Нужен скрипт автогенерации новых партиций — см. BACKLOG.md.
+Партиции управляются через maintenance-скрипт:
+  cd mindcare_api/
+  python scripts/ensure_audit_partitions.py --months-ahead 24
+
+PRIMARY KEY составной (id, created_at) — требование PostgreSQL для
+partitioned tables: partition key должен входить в PRIMARY KEY.
 
 Примечание по отношениям:
   AuditLog/AuthLog/DataChangeLog не имеют ORM-relationship к User —
@@ -46,7 +48,7 @@ class AuditLog(Base):
     session_id     = Column(String(255))
     request_url    = Column(String(500))
     request_method = Column(String(10))
-    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    created_at     = Column(DateTime(timezone=True), primary_key=True, server_default=func.now())
 
 
 class AuthLog(Base):
@@ -71,11 +73,11 @@ class AuthLog(Base):
     user_agent     = Column(Text)
     session_id     = Column(String(255))
     mfa_method     = Column(String(20))
-    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    created_at     = Column(DateTime(timezone=True), primary_key=True, server_default=func.now())
 
 
 class DataChangeLog(Base):
-    """Лог изменений данных (who changed what)."""
+    """Лог изменений данных (who changed what, ФЗ-152)."""
     __tablename__ = "data_change_log"
     __table_args__ = (
         Index("idx_dcl_actor",     "actor_id",   "created_at"),
@@ -93,4 +95,4 @@ class DataChangeLog(Base):
     new_values     = Column(JSONB)
     changed_fields = Column(ARRAY(Text()))   # TEXT[] — совместимо с PostgreSQL reflection
     ip_address     = Column(INET)
-    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    created_at     = Column(DateTime(timezone=True), primary_key=True, server_default=func.now())
