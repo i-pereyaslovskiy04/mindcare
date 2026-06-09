@@ -30,6 +30,7 @@ export default function MessageInput({ onSend }) {
         onKeyDown={handleKeyDown}
       />
       <button
+        type="button"
         className={styles.sendBtn}
         onClick={handleSend}
         disabled={!text.trim()}

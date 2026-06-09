@@ -14,7 +14,7 @@ export default function ChatHeader({ contact }) {
         </div>
       </div>
 
-      <button className={styles.videoBtn} aria-label="Видеозвонок">
+      <button type="button" className={styles.videoBtn} aria-label="Видеозвонок">
         <Icon name="video" size={16} />
       </button>
     </div>
