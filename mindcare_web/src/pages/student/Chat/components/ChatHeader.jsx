@@ -9,7 +9,7 @@ export default function ChatHeader({ contact }) {
       <div className={styles.headerInfo}>
         <div className={styles.headerName}>{contact.name}</div>
         <div className={styles.headerStatus}>
-          {contact.online && <span className={styles.statusDot} />}
+          {contact.online && <span className={styles.statusDot} aria-hidden="true" />}
           {contact.online ? 'в сети · отвечает обычно за 30 мин' : contact.role}
         </div>
       </div>
