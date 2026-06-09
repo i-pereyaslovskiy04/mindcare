@@ -162,7 +162,7 @@ export default function StudentHome() {
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate(item.to)}
-                onKeyDown={(e) => e.key === 'Enter' && navigate(item.to)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(item.to); } }}
               >
                 <div className={styles.liIcon}>
                   <Icon name={item.icon} size={18} />
