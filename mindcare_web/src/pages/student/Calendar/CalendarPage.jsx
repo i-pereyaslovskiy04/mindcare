@@ -7,6 +7,7 @@ import CalendarGrid from './components/CalendarGrid';
 import CalendarDayPopup from './components/CalendarDayPopup';
 import UpcomingList from './components/UpcomingList';
 import SessionHistory from './components/SessionHistory';
+import Select from '../../../components/UI/Select/Select';
 import styles from './CalendarPage.module.css';
 
 const _today = new Date();
@@ -118,9 +119,11 @@ export default function CalendarPage() {
 
           <div className={styles.field}>
             <label className={styles.fieldLabel}>Специалист</label>
-            <select className={styles.select}>
-              <option>Мария Ковалёва</option>
-            </select>
+            <Select
+              value="Мария Ковалёва"
+              options={[{ value: 'Мария Ковалёва', label: 'Мария Ковалёва' }]}
+              onChange={() => {}}
+            />
           </div>
 
           <div className={styles.field}>

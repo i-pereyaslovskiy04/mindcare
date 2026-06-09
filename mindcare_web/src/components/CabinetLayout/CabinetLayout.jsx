@@ -1,6 +1,7 @@
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
-import Icon from '../../pages/student/components/Icon';
+import Icon from '../Icon/Icon';
+import { getInitials } from '../../shared/lib/utils';
 import styles from './CabinetLayout.module.css';
 
 const ROLE_LABELS = {
@@ -8,19 +9,13 @@ const ROLE_LABELS = {
   supervisor:   'Супервизор',
 };
 
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  return parts.length >= 2
-    ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : parts[0].slice(0, 2).toUpperCase();
-}
-
-export default function CabinetLayout({ navSections, crumbLabels }) {
+export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs }) {
   const { pathname } = useLocation();
   const { user }     = useAuth();
   const logout       = useLogout();
-  const crumb        = crumbLabels?.[pathname] ?? 'Личный кабинет';
+  const crumb        = crumbLabels?.[pathname]
+    ?? dynamicCrumbs?.find(({ prefix }) => pathname.startsWith(prefix))?.label
+    ?? 'Личный кабинет';
   const roleLabel    = ROLE_LABELS[user?.role] ?? '';
 
   return (

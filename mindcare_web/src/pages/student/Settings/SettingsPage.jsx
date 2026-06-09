@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { useLogout } from '../../../features/auth/AuthContext';
-import Icon from '../components/Icon';
+import Icon from '../../../components/Icon/Icon';
+import Select from '../../../components/UI/Select/Select';
 import styles from './SettingsPage.module.css';
 
 const SOCIAL_TYPES = ['Telegram', 'Instagram', 'LinkedIn', 'VK', 'Facebook', 'X (Twitter)', 'Сайт'];
+const SOCIAL_TYPE_OPTIONS = SOCIAL_TYPES.map(t => ({ value: t, label: t }));
+
+const TIMEZONE_OPTIONS = [
+  { value: 'msk', label: 'Москва (UTC+3)' },
+  { value: 'ekb', label: 'Екатеринбург (UTC+5)' },
+];
 
 function Toggle({ on, onToggle }) {
   return (
@@ -36,6 +43,8 @@ export default function SettingsPage() {
     articles: false,
     weekly:   true,
   });
+
+  const [timezone, setTimezone] = useState('msk');
 
   const [socials, setSocials] = useState([
     { id: 1, type: 'Telegram',   url: '@anna_polina' },
@@ -104,10 +113,11 @@ export default function SettingsPage() {
             </div>
             <div className={styles.field}>
               <label>Часовой пояс</label>
-              <select className={styles.select} defaultValue="msk">
-                <option value="msk">Москва (UTC+3)</option>
-                <option value="ekb">Екатеринбург (UTC+5)</option>
-              </select>
+              <Select
+                value={timezone}
+                options={TIMEZONE_OPTIONS}
+                onChange={setTimezone}
+              />
             </div>
 
             <button className={`${styles.btn} ${styles.btnPrimary}`} style={{ marginTop: 6 }}>
@@ -137,15 +147,11 @@ export default function SettingsPage() {
 
             {socials.map((s) => (
               <div key={s.id} className={styles.socialRow}>
-                <select
-                  className={`${styles.select} ${styles.socialType}`}
+                <Select
                   value={s.type}
-                  onChange={(e) => updateSocial(s.id, 'type', e.target.value)}
-                >
-                  {SOCIAL_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                  options={SOCIAL_TYPE_OPTIONS}
+                  onChange={(val) => updateSocial(s.id, 'type', val)}
+                />
                 <input
                   className={`${styles.input} ${styles.socialUrl}`}
                   placeholder="@username или ссылка"

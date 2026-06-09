@@ -50,6 +50,11 @@ python scripts/create_admin.py
 
 # Диагностика SMTP
 python scripts/test_smtp.py
+
+# Создание будущих партиций audit-таблиц (запускать отдельно, не из FastAPI)
+# Рекомендуется запускать раз в год с запасом 24+ месяца
+python scripts/ensure_audit_partitions.py --months-ahead 24
+python scripts/ensure_audit_partitions.py --months-ahead 24 --dry-run  # проверка без DDL
 ```
 
 ### База данных
@@ -251,9 +256,10 @@ mindcare_api/
 | `auth_log`, `audit_log`, `data_change_log` | Аудит. В prod могут быть партиционированы по месяцам |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
-> **Критический риск:** если в prod-БД `auth_log`/`audit_log`/`data_change_log`
-> партиционированы, партиции захардкожены до **31.12.2026**. После этой даты
-> INSERT упадёт и логин сломается. Нужен скрипт автогенерации партиций — в бэклоге.
+> **Партиционирование audit-таблиц:** `auth_log`/`audit_log`/`data_change_log`
+> создаются как `PARTITION BY RANGE (created_at)` с начальными партициями 2026-01..2028-12.
+> Будущие партиции управляются через `scripts/ensure_audit_partitions.py`.
+> Запускать заблаговременно (не из FastAPI).
 
 **Роли в системе:**
 
@@ -558,7 +564,7 @@ Conventional Commits:
 **Не «исправляй» эти вещи без явного запроса** — они отложены осознанно.
 
 Критические риски (прочитай перед любой работой с auth или БД):
-- Партиции `auth_log`, `audit_log`, `data_change_log` (если партиционированы в prod) захардкожены до **31.12.2026** → после этой даты логин сломается (silent fail в audit.py, но потеря аудита)
+- ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ — закрыто: миграция `3a7c5e2b8f1d` создаёт partitioned tables, `scripts/ensure_audit_partitions.py` управляет будущими партициями
 - `session_notes.content` хранится открытым текстом — шифрование не реализовано (нарушение ФЗ-152 для специальных категорий ПДн)
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 

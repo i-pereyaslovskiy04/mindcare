@@ -109,8 +109,7 @@
   text-transform: uppercase;
   font-weight: 700;
 }
-.input,
-.select {
+.input {
   border: 1px solid var(--nav-border);
   background: var(--cream);
   border-radius: 10px;
@@ -122,8 +121,7 @@
   font-family: 'Nunito', sans-serif;
   width: 100%;
 }
-.input:focus,
-.select:focus {
+.input:focus {
   border-color: var(--coffee);
   background: var(--warm-white);
   box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.08);
@@ -198,44 +196,6 @@
   font-size: 12px;
   color: var(--text-light);
   margin-top: 2px;
-}
-
-/* ---- buttons ---- */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  font-family: 'Nunito', sans-serif;
-  text-decoration: none;
-}
-.btnPrimary {
-  background: var(--espresso);
-  color: var(--milk);
-  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.18);
-}
-.btnPrimary:hover {
-  background: var(--mocha, #6B4F35);
-  box-shadow: 0 4px 14px rgba(74, 55, 40, 0.22);
-}
-.btnGhost {
-  background: transparent;
-  color: var(--coffee);
-  border: 1px solid var(--nav-border);
-}
-.btnGhost:hover {
-  background: var(--sand, #E8DFD0);
-  border-color: var(--latte);
-  color: var(--espresso);
 }
 
 /* ---- responsive ---- */

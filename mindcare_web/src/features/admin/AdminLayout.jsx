@@ -1,6 +1,7 @@
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../auth/AuthContext';
-import Icon from '../../pages/student/components/Icon';
+import Icon from '../../components/Icon/Icon';
+import { getInitials } from '../../shared/lib/utils';
 import styles from './AdminLayout.module.css';
 
 const CRUMB_LABELS = {
@@ -10,14 +11,6 @@ const CRUMB_LABELS = {
   '/admin/news':       'Новости',
   '/admin/articles':   'Материалы',
 };
-
-function getInitials(name) {
-  if (!name) return 'А';
-  const parts = name.trim().split(' ');
-  return parts.length >= 2
-    ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : parts[0][0].toUpperCase();
-}
 
 export default function AdminLayout() {
   const { pathname } = useLocation();

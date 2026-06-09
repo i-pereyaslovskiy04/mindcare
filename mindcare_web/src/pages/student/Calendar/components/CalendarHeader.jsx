@@ -1,4 +1,4 @@
-import Icon from '../../components/Icon';
+import Icon from '../../../../components/Icon/Icon';
 import { MONTH_NAMES } from '../utils/calendarUtils';
 import styles from './CalendarHeader.module.css';
 

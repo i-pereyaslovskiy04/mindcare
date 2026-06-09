@@ -5,6 +5,7 @@ import UsersTable from '../components/UsersTable';
 import UserCreateModal from '../components/UserCreateModal';
 import UserEditModal from '../components/UserEditModal';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './UsersPage.module.css';
 
 function Pagination({ page, total, size, onPageChange }) {
@@ -52,13 +53,9 @@ export default function UsersPage() {
           <h1 className={styles.title}>Пользователи</h1>
           {!loading && <span className={styles.total}>{total} всего</span>}
         </div>
-        <button
-          type="button"
-          className={styles.btnCreate}
-          onClick={() => setCreateOpen(true)}
-        >
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
           + Добавить
-        </button>
+        </Button>
       </div>
 
       <UsersFilters

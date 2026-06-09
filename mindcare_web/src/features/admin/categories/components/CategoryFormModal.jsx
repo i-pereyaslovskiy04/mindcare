@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../../../../components/Modal/Modal';
 import { createCategory, updateCategory } from '../../../../api/categories.api';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './CategoryFormModal.module.css';
 
 const EMPTY = {
@@ -151,21 +152,12 @@ export default function CategoryFormModal({ open, category, onClose, onSaved }) 
         )}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.btnCancel}
-            onClick={onClose}
-            disabled={submitting}
-          >
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
             Отмена
-          </button>
-          <button
-            type="submit"
-            className={styles.btnSubmit}
-            disabled={submitting}
-          >
+          </Button>
+          <Button variant="primary" type="submit" disabled={submitting}>
             {submitting ? 'Сохранение…' : isEdit ? 'Сохранить' : 'Создать'}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

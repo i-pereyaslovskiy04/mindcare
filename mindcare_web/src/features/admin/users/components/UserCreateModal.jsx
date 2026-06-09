@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
+import Select from '../../../../components/UI/Select/Select';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './UserCreateModal.module.css';
+
+const ROLE_OPTIONS = [
+  { value: 'supervisor',   label: 'Супервизор' },
+  { value: 'psychologist', label: 'Психолог' },
+  { value: 'admin',        label: 'Администратор' },
+];
 
 export default function UserCreateModal({ open, onClose, onCreated }) {
   const [createdUser, setCreatedUser] = useState(null);
@@ -77,21 +85,14 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="ucm-role">Роль</label>
-          <select
-            id="ucm-role"
-            className={`${styles.select} ${errors.role ? styles.inputError : ''}`}
-            name="role"
+          <label className={styles.label}>Роль</label>
+          <Select
             value={values.role}
-            onChange={onChange}
-          >
-            <option value="supervisor">Супервизор</option>
-            <option value="psychologist">Психолог</option>
-            <option value="admin">Администратор</option>
-          </select>
-          {errors.role && (
-            <span className={styles.hint} role="alert">{errors.role}</span>
-          )}
+            options={ROLE_OPTIONS}
+            onChange={(val) => onChange({ target: { name: 'role', value: val } })}
+            error={errors.role}
+            panelZIndex={2300}
+          />
         </div>
 
         {errors._form && (
@@ -99,12 +100,12 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
         )}
 
         <div className={styles.actions}>
-          <button type="button" className={styles.btnSecondary} onClick={onCancel} disabled={submitting}>
+          <Button variant="secondary" onClick={onCancel} disabled={submitting}>
             Отмена
-          </button>
-          <button type="submit" className={styles.btnPrimary} disabled={submitting}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={submitting}>
             {submitting ? 'Создаём…' : 'Создать'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
@@ -126,9 +127,9 @@ function SuccessScreen({ user, onClose }) {
       </div>
 
       <div className={styles.actions}>
-        <button type="button" className={styles.btnPrimary} onClick={onClose}>
+        <Button variant="primary" onClick={onClose}>
           Закрыть
-        </button>
+        </Button>
       </div>
     </div>
   );

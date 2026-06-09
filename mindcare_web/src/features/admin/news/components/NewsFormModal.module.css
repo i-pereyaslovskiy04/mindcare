@@ -1,7 +1,7 @@
 .modalTitle {
   font-size: 20px;
   font-weight: 700;
-  color: var(--color-text, #111827);
+  color: var(--espresso);
   margin: 0 0 8px;
 }
 
@@ -28,26 +28,29 @@
 .label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-text-secondary, #4b5563);
+  color: var(--text-main);
 }
 
 .input {
   padding: 9px 12px;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--nav-border);
   border-radius: 8px;
   font-size: 14px;
+  font-family: inherit;
   outline: none;
   transition: border-color 0.15s;
   width: 100%;
   box-sizing: border-box;
+  background: var(--warm-white);
+  color: var(--text-main);
 }
 
-.input:focus { border-color: var(--color-primary, #6366f1); }
-.inputError  { border-color: var(--color-error, #dc2626); }
+.input:focus { border-color: var(--coffee); }
+.inputError  { border-color: var(--error); }
 
 .hint {
   font-size: 12px;
-  color: var(--color-error, #dc2626);
+  color: var(--error);
 }
 
 .fieldCheck {
@@ -62,17 +65,18 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text, #111827);
+  color: var(--text-main);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .formError {
   padding: 10px 14px;
-  background: #fee2e2;
+  background: var(--error-bg);
   border-radius: 8px;
   font-size: 13px;
-  color: #991b1b;
+  color: var(--error);
+  line-height: 1.4;
 }
 
 .actions {
@@ -82,54 +86,9 @@
   padding-top: 4px;
 }
 
-.btnCancel {
-  padding: 9px 20px;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btnCancel:hover:not(:disabled) { background: var(--color-surface, #f3f4f6); }
-
-.btnSubmit {
-  padding: 9px 24px;
-  border: none;
-  border-radius: 8px;
-  background: var(--color-primary, #6366f1);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btnSubmit:disabled { opacity: 0.6; cursor: default; }
-.btnSubmit:hover:not(:disabled) { opacity: 0.9; }
-
-/* Кнопка предпросмотра — нейтральный стиль, не акцентная */
-.btnPreview {
-  padding: 9px 20px;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  cursor: pointer;
-  color: var(--color-text, #374151);
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.btnPreview:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
-/* Заглушка на месте редактора пока форма не готова */
 .editorSkeleton {
   height: 200px;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--nav-border);
   border-radius: 8px;
-  background: #f9fafb;
+  background: var(--fog);
 }

@@ -1,94 +1,143 @@
-# MindCare Project
+# MindCare Web
 
-React + FastAPI проект. Структура организована для удобной разработки и масштабирования.
+Frontend-часть платформы психологической службы Донецкого государственного университета.
 
----
-
-## 📁 Структура проекта
-
-```plaintext
-mindcare/
-├── mindcare_api/              # FastAPI backend
-│   ├── app/
-│   │   ├── main.py
-│   │   └── ...                # остальные модули backend
-│   ├── venv/                  # виртуальное окружение (игнорируется Git)
-│   └── requirements.txt
-├── mindcare_web/              # React frontend
-│   ├── public/
-│   │   └── index.html
-│   ├── src/
-│   │   ├── api/
-│   │   │   └── api.js
-│   │   ├── assets/
-│   │   │   ├── fonts/
-│   │   │   ├── images/
-│   │   │   └── icons/
-│   │   ├── components/
-│   │   │   └── UserCard/
-│   │   │       ├── UserCard.jsx
-│   │   │       └── UserCard.module.css
-│   │   ├── features/
-│   │   │   └── auth/
-│   │   │       ├── Login.jsx
-│   │   │       └── authSlice.js
-│   │   ├── hooks/
-│   │   │   └── useAuth.js
-│   │   ├── layouts/
-│   │   │   └── MainLayout.jsx
-│   │   ├── pages/
-│   │   │   ├── Home/
-│   │   │   │   ├── Home.jsx
-│   │   │   │   └── Home.module.css
-│   │   │   ├── UsersList/
-│   │   │   │   ├── UsersList.jsx
-│   │   │   │   └── UsersList.module.css
-│   │   │   ├── UserDetails/
-│   │   │   │   ├── UserDetails.jsx
-│   │   │   │   └── UserDetails.module.css
-│   │   │   └── NotFound/
-│   │   │       ├── NotFound.jsx
-│   │   │       └── NotFound.module.css
-│   │   ├── routes/
-│   │   │   └── AppRoutes.jsx
-│   │   ├── store/
-│   │   │   └── store.js
-│   │   ├── styles/
-│   │   │   ├── global.css
-│   │   │   └── theme.js
-│   │   ├── utils/
-│   │   │   └── formatDate.js
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── .env
-│   ├── package.json
-│   └── package-lock.json
-├── .gitignore
-└── start-all.bat
+**Стек:** React 19 · React Router 7 · CSS Modules · CRA (Create React App)
+**Порт:** 3000 (в dev режиме проксирует `/api/*` на backend порт 8000)
 
 ---
 
-## 🔹 Краткое описание папок
+## Роли и кабинеты
 
-- **public/** — статические файлы, включая `index.html`  
-- **src/api/** — функции для работы с бэкендом  
-- **src/assets/** — шрифты, картинки, иконки  
-- **src/components/** — переиспользуемые UI-компоненты  
-- **src/features/** — бизнес-логика и состояние отдельных фич  
-- **src/hooks/** — кастомные React-хуки  
-- **src/layouts/** — шаблоны страниц (например MainLayout с Header/Sidebar)  
-- **src/pages/** — отдельные страницы приложения  
-- **src/routes/** — маршрутизация приложения  
-- **src/store/** — глобальное состояние (Redux, Zustand и т.д.)  
-- **src/styles/** — глобальные стили и темы  
-- **src/utils/** — вспомогательные функции  
+| Роль | Маршрут | Статус |
+|------|---------|--------|
+| `student` | `/student/*` | Реализован (частично stub) |
+| `psychologist` | `/psychologist/*` | Реализован (частично stub) |
+| `supervisor` | `/supervisor/*` | Реализован |
+| `admin` | `/admin/*` | Реализован |
+
+После входа `/dashboard` автоматически перенаправляет пользователя в его кабинет по роли.
 
 ---
 
-## 🚀 Быстрый старт (Windows)
+## Быстрый старт
 
-### Backend (FastAPI)
-```powershell
-cd mindcare\mindcare_api
-venv\Scripts\activate
-uvicorn app.main:app --reload
+```bash
+# Установить зависимости
+npm install
+
+# Запустить dev-сервер (порт 3000)
+npm start
+
+# Продакшен-сборка
+npm run build
+
+# Запустить тесты
+npm test
+```
+
+> Для работы с API нужен запущенный backend (`mindcare_api/`).
+> Dev-сервер автоматически проксирует `/api/*` на `http://localhost:8000`.
+
+---
+
+## Структура проекта
+
+```
+src/
+├── app/            — shell (App.jsx, router.jsx, providers.jsx)
+├── api/            — ВСЕ HTTP-вызовы только здесь
+├── shared/lib/     — общие утилиты (getInitials и т.д.)
+├── hooks/          — переиспользуемые hooks
+├── features/       — функциональные модули по доменам
+│   ├── auth/       — авторизация, формы входа/регистрации
+│   ├── supervisor/ — назначение психологов студентам
+│   ├── admin/      — административная панель
+│   ├── news/       — компоненты новостей
+│   └── profile/    — страница профиля
+├── components/     — domain-agnostic UI-примитивы
+│   ├── Icon/       — общий SVG Icon-компонент
+│   ├── CabinetLayout/ — общий layout для psychologist и supervisor кабинетов
+│   ├── Modal/
+│   └── UI/         — TiptapEditor, MultiSelect, ImageUpload, ContentPreview
+├── pages/          — только композиция страниц, никакого fetch
+│   ├── home / about / services / news / materials
+│   ├── student/    — кабинет студента (собственный layout)
+│   ├── psychologist/ — кабинет психолога
+│   └── supervisor/ — кабинет супервизора
+└── styles/         — variables.css, global.css
+```
+
+Полная структура с описанием — [ARCHITECTURE.md](ARCHITECTURE.md).
+Диаграммы — [DIAGRAM.md](DIAGRAM.md).
+
+---
+
+## Реализовано
+
+**Публичная часть:**
+- Главная страница, раздел «О нас», «Услуги»
+- Лента новостей с пагинацией и страницами новостей
+- Каталог материалов с фильтрацией, поиском и страницами материалов
+
+**Авторизация:**
+- Регистрация с OTP-подтверждением по email
+- Вход / выход
+- Восстановление пароля (OTP + новый пароль)
+- Role-based routing (PrivateRoute / RoleRoute)
+
+**Кабинет студента** (`/student/*`):
+- Sidebar-навигация
+- Главная, дневник настроения, тесты, материалы, задачи, чат, календарь, настройки
+- Основные страницы в stub-состоянии (приветствие, mock-данные)
+
+**Кабинет психолога** (`/psychologist/*`):
+- Shared CabinetLayout с навигацией
+- Главная и настройки
+- Клиенты, сессии, чат — отключены (в планах)
+
+**Кабинет супервизора** (`/supervisor/*`):
+- Shared CabinetLayout с навигацией
+- Главная, настройки
+- Страница назначения психологов (`/supervisor/engagements`):
+  - Список студентов с серверным поиском и пагинацией
+  - Текущий психолог и статус связи
+  - Назначить / переназначить / закрыть связь через AssignModal
+
+**Административная панель** (`/admin/*`):
+- Управление пользователями (CRUD, фильтры по роли/статусу)
+- Управление типами материалов (categories)
+- Управление темами (tags)
+- Управление новостями (rich-text, обложка)
+- Управление материалами/статьями (rich-text, категории, теги, обложка)
+
+**Общие компоненты:**
+- `components/Icon/Icon.jsx` — единый SVG Icon для всех кабинетов
+- `shared/lib/utils.js` — getInitials и другие утилиты
+- `components/CabinetLayout/` — shared layout для psychologist и supervisor
+
+---
+
+## В планах
+
+- Список назначенных клиентов в кабинете психолога (`/psychologist/clients`)
+- Отображение текущего психолога в кабинете студента
+- Чат student ↔ psychologist
+- Страницы сессий и отчётов в кабинете супервизора
+- Страницы для психолога: сессии, чат с клиентами, материалы
+- Реальные тесты с автоподсчётом результатов (вместо stub)
+- Серверная сортировка материалов (сейчас клиентская)
+- ErrorBoundary на уровне приложения
+- Lazy loading страниц (код-сплиттинг)
+
+---
+
+## Архитектурные правила
+
+- Все HTTP-запросы — только через `api/*.api.js`, никогда `fetch()` напрямую в компонентах
+- Pages — только композиция, никакого fetch, никакой логики
+- Серверная фильтрация и пагинация для всех списков из БД
+- Один CSS Module на компонент, классы в camelCase
+- Роли проверяются и на бэкенде (через `require_role`), frontend guards — UX, не security
+
+Подробнее — [ARCHITECTURE.md](ARCHITECTURE.md).

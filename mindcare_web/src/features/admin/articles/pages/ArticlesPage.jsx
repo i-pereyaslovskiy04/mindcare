@@ -3,7 +3,15 @@ import { useAdminArticles } from '../hooks/useAdminArticles';
 import ArticlesTable from '../components/ArticlesTable';
 import ArticleFormModal from '../components/ArticleFormModal';
 import { deleteArticle, getAdminArticleItem } from '../../../../api/articles.api';
+import Select from '../../../../components/UI/Select/Select';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './ArticlesPage.module.css';
+
+const STATUS_OPTIONS = [
+  { value: '',      label: 'Все статусы' },
+  { value: 'true',  label: 'Опубликованные' },
+  { value: 'false', label: 'Черновики' },
+];
 
 export default function ArticlesPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch } =
@@ -51,9 +59,9 @@ export default function ArticlesPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Материалы</h1>
-        <button className={styles.btnCreate} onClick={() => setCreateOpen(true)}>
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
           + Добавить
-        </button>
+        </Button>
       </div>
 
       <div className={styles.toolbar}>
@@ -63,18 +71,13 @@ export default function ArticlesPage() {
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
-        <select
-          className={styles.select}
+        <Select
+          style={{ minWidth: 160 }}
           value={filters.is_published === null ? '' : String(filters.is_published)}
-          onChange={e => {
-            const v = e.target.value;
-            setFilters({ is_published: v === '' ? null : v === 'true' });
-          }}
-        >
-          <option value="">Все статусы</option>
-          <option value="true">Опубликованные</option>
-          <option value="false">Черновики</option>
-        </select>
+          options={STATUS_OPTIONS}
+          onChange={val => setFilters({ is_published: val === '' ? null : val === 'true' })}
+          placeholder="Все статусы"
+        />
       </div>
 
       {editError && <p className={styles.error}>{editError}</p>}
@@ -120,12 +123,12 @@ export default function ArticlesPage() {
             <p className={styles.dialogBody}>«{deleteTarget.title}» будет удалён. Действие необратимо.</p>
             {deleteError && <p className={styles.dialogError}>{deleteError}</p>}
             <div className={styles.dialogActions}>
-              <button className={styles.btnCancel} onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
                 Отмена
-              </button>
-              <button className={styles.btnDanger} onClick={handleDeleteConfirm} disabled={deleting}>
+              </Button>
+              <Button variant="danger" onClick={handleDeleteConfirm} disabled={deleting}>
                 {deleting ? 'Удаление…' : 'Удалить'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

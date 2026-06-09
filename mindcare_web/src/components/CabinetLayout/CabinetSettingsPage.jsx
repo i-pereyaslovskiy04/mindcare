@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
-import Icon from '../../pages/student/components/Icon';
+import Icon from '../Icon/Icon';
+import Button from '../UI/Button/Button';
+import { getInitials } from '../../shared/lib/utils';
+import Select from '../UI/Select/Select';
 import styles from './CabinetSettingsPage.module.css';
 
 const ROLE_LABELS = {
@@ -8,13 +11,11 @@ const ROLE_LABELS = {
   supervisor:   'Супервизор',
 };
 
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  return parts.length >= 2
-    ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : parts[0].slice(0, 2).toUpperCase();
-}
+const TIMEZONE_OPTIONS = [
+  { value: 'msk', label: 'Москва (UTC+3)' },
+  { value: 'ekb', label: 'Екатеринбург (UTC+5)' },
+  { value: 'nsk', label: 'Новосибирск (UTC+7)' },
+];
 
 function Toggle({ on, onToggle }) {
   return (
@@ -42,6 +43,8 @@ function NotifRow({ label, desc, on, onToggle }) {
 export default function CabinetSettingsPage() {
   const { user } = useAuth();
   const logout   = useLogout();
+
+  const [timezone, setTimezone] = useState('msk');
 
   const [notif, setNotif] = useState({
     sessions: true,
@@ -75,13 +78,13 @@ export default function CabinetSettingsPage() {
               <div>
                 <div className={styles.profileName}>{user?.name ?? '—'}</div>
                 <div className={styles.profileRole}>{roleLabel}</div>
-                <button
-                  type="button"
-                  className={`${styles.btn} ${styles.btnGhost}`}
-                  style={{ padding: '4px 10px', fontSize: 11.5, marginTop: 8 }}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  style={{ marginTop: 8 }}
                 >
                   Изменить фото
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -99,16 +102,16 @@ export default function CabinetSettingsPage() {
             </div>
             <div className={styles.field}>
               <label>Часовой пояс</label>
-              <select className={styles.select} defaultValue="msk">
-                <option value="msk">Москва (UTC+3)</option>
-                <option value="ekb">Екатеринбург (UTC+5)</option>
-                <option value="nsk">Новосибирск (UTC+7)</option>
-              </select>
+              <Select
+                value={timezone}
+                options={TIMEZONE_OPTIONS}
+                onChange={setTimezone}
+              />
             </div>
 
-            <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} style={{ marginTop: 6 }}>
+            <Button variant="primary" style={{ marginTop: 6 }}>
               Сохранить изменения
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -141,9 +144,9 @@ export default function CabinetSettingsPage() {
               <div className={styles.logoutLabel}>Выйти из аккаунта</div>
               <div className={styles.logoutSub}>Сессия будет завершена на этом устройстве</div>
             </div>
-            <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={logout}>
+            <Button variant="ghost" onClick={logout}>
               <Icon name="logout" size={14} /> Выйти
-            </button>
+            </Button>
           </div>
         </div>
       </div>

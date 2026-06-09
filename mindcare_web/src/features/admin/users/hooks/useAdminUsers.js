@@ -56,7 +56,7 @@ export function useAdminUsers() {
       });
 
     return () => { cancelled = true; };
-  }, [debouncedQuery, filters, page, tick]);
+  }, [debouncedQuery, filters, page, size, tick]);
 
   return {
     items,

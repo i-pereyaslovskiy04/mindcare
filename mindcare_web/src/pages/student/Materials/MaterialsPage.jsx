@@ -1,4 +1,4 @@
-import Icon from '../components/Icon';
+import Icon from '../../../components/Icon/Icon';
 import SearchBar from '../../materials/components/SearchBar';
 import { useStudentMaterials } from './useStudentMaterials';
 import styles from './MaterialsPage.module.css';

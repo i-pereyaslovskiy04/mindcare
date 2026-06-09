@@ -1,7 +1,7 @@
 # MindCare Web — Architecture Document
 
-> Updated: 2026-06-05  
-> Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)  
+> Updated: 2026-06-08
+> Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)
 > Purpose: University psychology center — public informational site with role-based dashboards and a full authentication flow.
 
 ---
@@ -19,18 +19,26 @@ mindcare_web/
     │
     ├── app/                   ← shell: providers + routing
     │   ├── App.jsx
+    │   ├── providers.jsx
     │   └── router.jsx
     │
     ├── api/                   ← ALL HTTP calls live here
-    │   ├── client.js          ← transport: token injection + 401 refresh
+    │   ├── client.js          ← transport: token injection + 401 retry
     │   ├── auth.api.js
     │   ├── users.api.js       ← /api/admin/users/* (CRUD пользователей)
-    │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (autocomplete; UI: «Темы»)
+    │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (UI: «Темы»)
     │   ├── categories.api.js  ← /api/admin/categories/* (UI: «Типы материалов»)
     │   ├── news.api.js
     │   ├── articles.api.js
     │   ├── materials.api.js
-    │   └── appointments.api.js
+    │   ├── supervisor.api.js  ← /api/supervisor/* (students, psychologists, engagements)
+    │   ├── appointments.api.js
+    │   ├── media.api.js       ← /api/media/upload
+    │   └── health.api.js      ← /health
+    │
+    ├── shared/
+    │   └── lib/
+    │       └── utils.js       ← getInitials() и другие общие утилиты
     │
     ├── data/                  ← dev/mock data only
     │   ├── news.mock.js
@@ -44,12 +52,13 @@ mindcare_web/
     ├── features/
     │   ├── auth/
     │   │   ├── AuthContext.jsx
-    │   │   ├── authUtils.js
     │   │   ├── ui/
-    │   │   │   ├── AuthModal.jsx
-    │   │   │   ├── AuthModal.module.css
+    │   │   │   ├── AuthModal.jsx + .module.css
     │   │   │   ├── LoginForm.jsx
     │   │   │   └── RegisterForm.jsx
+    │   │   ├── pages/
+    │   │   │   ├── LoginPage.jsx
+    │   │   │   └── RegisterPage.jsx
     │   │   └── forgot-password/
     │   │       ├── ForgotPasswordModal.jsx
     │   │       ├── ForgotPasswordStepper.jsx
@@ -58,21 +67,26 @@ mindcare_web/
     │   │       ├── components/
     │   │       │   ├── OTPInput.jsx
     │   │       │   └── PasswordStrength.jsx
-    │   │       ├── steps/
-    │   │       │   ├── StepEmail.jsx
-    │   │       │   ├── StepOTP.jsx
-    │   │       │   ├── StepNewPassword.jsx
-    │   │       │   └── StepSuccess.jsx
-    │   │       └── styles/
-    │   │           └── forgot-password.module.css
+    │   │       └── steps/
+    │   │           ├── StepEmail.jsx
+    │   │           ├── StepOTP.jsx
+    │   │           ├── StepNewPassword.jsx
+    │   │           └── StepSuccess.jsx
     │   ├── news/
     │   │   └── components/
-    │   │       ├── NewsSection.jsx
-    │   │       ├── NewsSection.module.css
+    │   │       ├── NewsSection.jsx + .module.css
     │   │       ├── FeaturedNews.jsx
     │   │       ├── NewsCardSmall.jsx
     │   │       └── NewsListItem.jsx
-    │   └── admin/             ← панель управления (role: admin, supervisor)
+    │   ├── profile/
+    │   │   └── pages/
+    │   │       └── ProfilePage.jsx
+    │   ├── supervisor/          ← модуль назначения психологов (роль: supervisor)
+    │   │   ├── hooks/
+    │   │   │   └── useStudents.js
+    │   │   └── components/
+    │   │       └── AssignModal.jsx + .module.css
+    │   └── admin/             ← панель управления (role: admin)
     │       ├── AdminLayout.jsx + .module.css
     │       ├── users/
     │       │   ├── hooks/
@@ -94,19 +108,34 @@ mindcare_web/
     │       │   │   └── CategoryFormModal.jsx + .module.css
     │       │   └── pages/
     │       │       └── CategoriesPage.jsx + .module.css
-    │       └── tags/            ← UI: «Темы»
-    │           ├── hooks/
-    │           │   └── useAdminTags.js
-    │           ├── components/
-    │           │   ├── TagsTable.jsx + .module.css
-    │           │   └── TagFormModal.jsx + .module.css
-    │           └── pages/
-    │               └── TagsPage.jsx + .module.css
+    │       ├── tags/            ← UI: «Темы»
+    │       │   ├── hooks/
+    │       │   │   └── useAdminTags.js
+    │       │   ├── components/
+    │       │   │   ├── TagsTable.jsx + .module.css
+    │       │   │   └── TagFormModal.jsx + .module.css
+    │       │   └── pages/
+    │       │       └── TagsPage.jsx + .module.css
+    │       ├── news/
+    │       │   ├── hooks/useAdminNews.js
+    │       │   ├── components/NewsFormModal.jsx + NewsTable.jsx
+    │       │   └── pages/NewsPage.jsx
+    │       └── articles/
+    │           ├── hooks/useAdminArticles.js
+    │           ├── components/ArticleFormModal.jsx + ArticlesTable.jsx
+    │           └── pages/ArticlesPage.jsx
     │
     ├── components/            ← domain-agnostic UI primitives
+    │   ├── Icon/
+    │   │   └── Icon.jsx       ← общий SVG-компонент (name, size, stroke)
+    │   ├── CabinetLayout/     ← общий layout для кабинетов psychologist и supervisor
+    │   │   ├── CabinetLayout.jsx + .module.css
+    │   │   └── CabinetSettingsPage.jsx + .module.css
     │   ├── Modal/
     │   │   ├── Modal.jsx
     │   │   └── Modal.module.css
+    │   ├── CodeInput/
+    │   │   └── CodeInput.jsx + .module.css
     │   ├── Navbar/
     │   │   ├── Navbar.jsx
     │   │   └── Navbar.module.css
@@ -119,69 +148,73 @@ mindcare_web/
     │   ├── CookieBanner/
     │   │   ├── CookieBanner.jsx
     │   │   └── CookieBanner.module.css
-    │   ├── layouts/
-    │   │   ├── DashboardLayout.jsx
-    │   │   └── DashboardLayout.module.css
     │   ├── UI/
-    │   │   └── MultiSelect/
-    │   │       ├── MultiSelect.jsx
-    │   │       └── multiSelect.module.css
+    │   │   ├── MultiSelect/
+    │   │   │   ├── MultiSelect.jsx
+    │   │   │   └── multiSelect.module.css
+    │   │   ├── TiptapEditor/
+    │   │   │   └── TiptapEditor.jsx + .module.css
+    │   │   ├── ImageUpload/
+    │   │   │   └── ImageUpload.jsx + .module.css
+    │   │   └── ContentPreview/
+    │   │       └── ContentPreview.jsx + .module.css
     │   └── icons/
-    │       └── index.jsx
+    │       └── index.jsx      ← старый набор иконок (публичная часть сайта)
     │
     ├── pages/                 ← composition only, no business logic
     │   ├── home/
     │   │   ├── Home.jsx
     │   │   └── components/
-    │   │       ├── Hero.jsx
-    │   │       ├── Hero.module.css
-    │   │       ├── QuickActions.jsx
-    │   │       └── QuickActions.module.css
+    │   │       ├── Hero.jsx + .module.css
+    │   │       └── QuickActions.jsx + .module.css
     │   ├── about/
     │   │   ├── About.jsx
     │   │   └── components/
-    │   │       ├── AboutIntro.jsx + .module.css
-    │   │       ├── AboutMission.jsx + .module.css
-    │   │       ├── AboutApproach.jsx + .module.css
-    │   │       ├── AboutServicesPreview.jsx + .module.css
-    │   │       ├── AboutTrust.jsx + .module.css
-    │   │       └── AboutMedia.jsx + .module.css
+    │   │       └── (AboutIntro, AboutMission, AboutApproach, AboutServicesPreview, AboutTrust, AboutMedia)
     │   ├── services/
-    │   │   ├── Services.jsx
-    │   │   ├── Services.module.css
+    │   │   ├── Services.jsx + .module.css
     │   │   └── components/
-    │   │       ├── ServicesSlider.jsx + .module.css
-    │   │       ├── ServiceCard.jsx + .module.css
-    │   │       ├── ProcessBlock.jsx + .module.css
-    │   │       └── PrinciplesBlock.jsx + .module.css
+    │   │       └── (ServicesSlider, ServiceCard, ProcessBlock, PrinciplesBlock)
     │   ├── news/
     │   │   ├── NewsPage.jsx
-    │   │   ├── NewsItemPage.jsx
-    │   │   ├── NewsItemPage.module.css
+    │   │   ├── NewsItemPage.jsx + .module.css
     │   │   └── components/
     │   │       ├── NewsGrid.jsx
-    │   │       ├── NewsPage.module.css
     │   │       └── Pagination.jsx
     │   ├── materials/
-    │   │   ├── MaterialsPage.jsx
-    │   │   ├── MaterialsPage.module.css
-    │   │   ├── MaterialsItemPage.jsx
-    │   │   ├── MaterialsItemPage.module.css
+    │   │   ├── MaterialsPage.jsx + .module.css
+    │   │   ├── MaterialsItemPage.jsx + .module.css
     │   │   └── components/
-    │   │       ├── SearchBar.jsx + .module.css
-    │   │       ├── FiltersDropdown.jsx + .module.css
-    │   │       ├── FilterSheet.jsx + .module.css
-    │   │       ├── MaterialsGrid.jsx + .module.css
-    │   │       └── MaterialCard.jsx + .module.css
+    │   │       └── (SearchBar, FiltersDropdown, FilterSheet, MaterialsGrid, MaterialCard)
+    │   ├── health/
+    │   │   └── HealthPage.jsx
+    │   ├── not-found/
+    │   │   ├── NotFound.jsx
+    │   │   └── NotFound.module.css
     │   ├── client/
-    │   │   └── ClientDashboard.jsx
-    │   ├── consultant/
-    │   │   └── ConsultantDashboard.jsx
-    │   ├── admin/
-    │   │   └── AdminDashboard.jsx
-    │   └── not-found/
-    │       ├── NotFound.jsx
-    │       └── NotFound.module.css
+    │   │   └── ClientDashboard.jsx  ← Router Outlet-обёртка для /student/*
+    │   ├── student/             ← кабинет студента (собственный layout с Sidebar)
+    │   │   ├── StudentLayout.jsx
+    │   │   ├── StudentHome.jsx
+    │   │   ├── DiaryPage.jsx
+    │   │   ├── components/
+    │   │   │   ├── Sidebar/Sidebar.jsx + .module.css
+    │   │   │   ├── MoodChart/MoodChart.jsx
+    │   │   │   ├── StatCard/StatCard.jsx
+    │   │   │   └── Diary/ (MoodSelector, DiaryEntryForm, DiaryHistoryList, DiaryEntryItem)
+    │   │   ├── Tests/TestsPage.jsx
+    │   │   ├── Materials/MaterialsPage.jsx + useStudentMaterials.js
+    │   │   ├── Tasks/TasksPage.jsx + components/TaskItem.jsx
+    │   │   ├── Chat/ChatPage.jsx + components/
+    │   │   ├── Calendar/CalendarPage.jsx + components/ + utils/ + data/
+    │   │   └── Settings/SettingsPage.jsx
+    │   ├── psychologist/        ← кабинет психолога (использует CabinetLayout)
+    │   │   ├── PsychologistLayout.jsx
+    │   │   └── PsychologistHome.jsx
+    │   └── supervisor/          ← кабинет супервизора (использует CabinetLayout)
+    │       ├── SupervisorLayout.jsx
+    │       ├── SupervisorHome.jsx
+    │       └── EngagementsPage.jsx  ← страница назначения психологов
     │
     └── styles/
         ├── variables.css      ← CSS custom properties (colors, spacing)
@@ -197,7 +230,7 @@ mindcare_web/
 ```
 ✅ компонуют UI секции
 ✅ вызывают hooks для получения данных
-✅ открывают модальные окна (isAuthOpen)
+✅ открывают модальные окна
 ❌ не делают fetch напрямую
 ❌ не содержат фильтрацию/сортировку
 ❌ не импортируют из data/ напрямую
@@ -205,8 +238,8 @@ mindcare_web/
 
 ### Features — бизнес-логика
 
-Каждый домен (`auth`, `news`, `materials`) содержит компоненты, которые:
-- знают о доменных концепциях (user, news article, material)
+Каждый домен (`auth`, `news`, `admin`, `supervisor`) содержит компоненты, которые:
+- знают о доменных концепциях (user, engagement, psychologist)
 - могут вызывать hooks и Context
 - не переиспользуются за пределами своего feature
 
@@ -214,18 +247,24 @@ mindcare_web/
 
 ```
 src/api/
-  client.js          ← transport
-  auth.api.js        ← forgotPassword, resetPassword
-  users.api.js       ← getUsers, getUser, createUser, updateUser, deleteUser
-  tags.api.js        ← getTags, createTag, updateTag, deleteTag, getTagsPublic
-  categories.api.js  ← getAdminCategories, createCategory, updateCategory, deleteCategory
-  news.api.js        ← getNews, getNewsById
-  articles.api.js    ← getArticles, getArticleById, admin CRUD материалов
-  materials.api.js   ← getMaterials, getMaterialById
+  client.js           ← transport (token injection + 401 retry)
+  auth.api.js
+  users.api.js        ← getUsers, getUser, createUser, updateUser, deleteUser
+  tags.api.js         ← getTags, createTag, updateTag, deleteTag, getTagsPublic
+  categories.api.js   ← getAdminCategories, createCategory, updateCategory, deleteCategory
+  news.api.js         ← getNews, getNewsById + admin CRUD
+  articles.api.js     ← getArticles, getArticleById + admin CRUD
+  materials.api.js    ← реэкспорт getArticles/getArticleById из articles.api.js
+  supervisor.api.js   ← getSupervisorStudents, getSupervisorPsychologists,
+                         getSupervisorEngagements, createEngagement,
+                         transferEngagement, closeEngagement
   appointments.api.js
+  media.api.js        ← uploadMedia
+  health.api.js
 ```
 
-До реализации соответствующего бэкенд-эндпоинта *.api.js может импортировать mock из data/. После подключения к API импорт удаляется. См. раздел 6 для полных правил работы с моками.
+До реализации соответствующего бэкенд-эндпоинта `*.api.js` может импортировать mock из `data/`. После подключения к API импорт удаляется. См. раздел 6 для полных правил работы с моками.
+
 **Запрещено:** API в `services/`, API внутри `pages/`, API внутри `components/`
 
 **Исключение — `features/auth/AuthContext.jsx`:** использует нативный `fetch()` напрямую (не через `apiFetch`). Это намеренно: `AuthContext` сам настраивает `client.js` через `configureClient()` и обрабатывает событие `auth:session-expired`. Использование `apiFetch` внутри `AuthContext` создало бы циклическую зависимость при 401-обработке. Все остальные модули используют только `apiFetch`.
@@ -236,8 +275,22 @@ src/api/
 ✅ принимают всё через props
 ✅ без fetch, без Context (кроме AuthContext в Navbar)
 ✅ переиспользуются в любом feature или page
-❌ без доменных концепций ("user", "news")
+❌ без доменных концепций ("user", "news", "engagement")
 ```
+
+**Icon** (`components/Icon/Icon.jsx`) — единственный общий SVG-компонент для иконок в кабинетах и adminпанели. Props: `name`, `size=18`, `stroke=1.5`. Не имеет CSS-модуля (чистый SVG).
+
+**CabinetLayout** (`components/CabinetLayout/`) — общий layout для кабинетов psychologist и supervisor. Принимает `navSections` и `crumbLabels` как конфигурацию. Не используется в student cabinet.
+
+### Shared — общие утилиты
+
+```
+src/shared/lib/utils.js
+  getInitials(name)  ← единственная каноническая версия.
+                        Используется в CabinetLayout, AdminLayout, CabinetSettingsPage.
+```
+
+Не размещать утилиты в `components/` или `hooks/` если они не связаны с React.
 
 ### Hooks — переиспользуемая логика
 
@@ -245,7 +298,7 @@ src/api/
 src/hooks/
   useDebounce.js     ← generic utility
   useNews.js         ← data fetching + pagination state
-  useMaterials.js    ← filter/sort/pagination state
+  useMaterials.js    ← filter/sort/pagination state (подключён к API)
 ```
 
 Pages используют **только hooks**, никогда не делают fetch самостоятельно.
@@ -275,19 +328,40 @@ src/data/
 | `/news/:id` | `NewsItemPage` | Public |
 | `/materials` | `MaterialsPage` | Public |
 | `/materials/:id` | `MaterialsItemPage` | Public |
+| `/health` | `HealthPage` | Public |
 | `/login` | `LoginPage` | Public |
 | `/register` | `RegisterPage` | Public |
 | `/dashboard` | `DashboardRedirect` | Auth (редирект по роли) |
 | `/profile` | `ProfilePage` | Auth |
-| `/student/*` | `ClientDashboard` + вложенные | Auth + role: student |
-| `/psychologist` | `ConsultantDashboard` | Auth + role: psychologist |
-| `/admin` | `AdminLayout` (Outlet) | Auth + role: admin, supervisor |
+| `/student` | `ClientDashboard` (Outlet) | Auth + role: student |
+| `/student/diary` | `DiaryPage` | — (наследует от `/student`) |
+| `/student/tests` | `TestsPage` | — |
+| `/student/materials` | `StudentMaterialsPage` | — |
+| `/student/tasks` | `TasksPage` | — |
+| `/student/chat` | `ChatPage` | — |
+| `/student/calendar` | `CalendarPage` | — |
+| `/student/settings` | `SettingsPage` | — |
+| `/psychologist` | `PsychologistLayout` (Outlet) | Auth + role: psychologist |
+| `/psychologist/settings` | `CabinetSettingsPage` | — |
+| `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role: supervisor |
+| `/supervisor/engagements` | `EngagementsPage` | — |
+| `/supervisor/settings` | `CabinetSettingsPage` | — |
+| `/admin` | `AdminLayout` (Outlet) | Auth + role: admin |
 | `/admin/users` | `UsersPage` | — (наследует от `/admin`) |
-| `/admin/categories` | `CategoriesPage` | — (наследует от `/admin`; UI: «Типы материалов») |
-| `/admin/tags` | `TagsPage` | — (наследует от `/admin`; UI: «Темы») |
-| `/admin/news` | `AdminNewsPage` | — (наследует от `/admin`) |
-| `/admin/articles` | `AdminArticlesPage` | — (наследует от `/admin`) |
+| `/admin/categories` | `CategoriesPage` | — (UI: «Типы материалов») |
+| `/admin/tags` | `TagsPage` | — (UI: «Темы») |
+| `/admin/news` | `AdminNewsPage` | — |
+| `/admin/articles` | `AdminArticlesPage` | — |
 | `*` | `NotFound` | Public |
+
+**DashboardRedirect** — умный редирект по роли:
+
+| Роль | Редирект |
+|------|----------|
+| `student` | `/student` |
+| `psychologist` | `/psychologist` |
+| `supervisor` | `/supervisor` |
+| `admin` | `/admin/users` |
 
 **Guards:**
 - `PrivateRoute` — требует аутентификации, редирект на `/login`
@@ -306,22 +380,20 @@ LoginForm → POST /api/auth/login
                ▼
          AuthContext.login(token, user)
                │
-               ├─▶ localStorage: access_token, refresh_token
+               ├─▶ localStorage: access_token
                └─▶ setState({ user }) → App re-renders
 ```
 
-### 401 Refresh (api/client.js)
+### 401 Retry (api/client.js)
 
 ```
 apiFetch() → 401
                │
                ▼
-         POST /api/auth/refresh
+         logout() + dispatch auth:session-expired
                │
-       ┌───────┴───────┐
-      200              401/error
-       │                 │
-  retry request    logout() + redirect /
+               ▼
+         redirect → /login
 ```
 
 ### Session Restore
@@ -335,13 +407,33 @@ AuthProvider mount → read localStorage
 ### ProtectedRoute
 
 ```jsx
-if (!user) return <Navigate to="/" />;
-if (roles && !roles.includes(user.role)) return <Navigate to="/" />;
+if (!user) return <Navigate to="/login" />;
+if (roles && !roles.includes(user.role)) return <Navigate to="/profile" />;
 ```
 
 ---
 
 ## 5. Key Modules
+
+### CabinetLayout
+
+Общий layout, используемый кабинетами **psychologist** и **supervisor**.
+
+```
+CabinetLayout (components/CabinetLayout/)
+├── Sidebar с navSections (конфигурируется каждым Layout)
+├── Breadcrumbs через crumbLabels
+├── Avatar с getInitials() из shared/lib/utils.js
+└── <Outlet /> для вложенных маршрутов
+
+PsychologistLayout → CabinetLayout (navSections = рабочие секции психолога)
+SupervisorLayout   → CabinetLayout (navSections = секции супервизии)
+
+CabinetSettingsPage — общая страница настроек, подключается в обоих кабинетах
+  через /psychologist/settings и /supervisor/settings
+```
+
+Student cabinet **не использует** CabinetLayout — у него собственный `StudentLayout` со своим Sidebar.
 
 ### Modal System
 
@@ -353,8 +445,9 @@ Modal.jsx (primitive)
 ├── Saves/restores focus
 └── exposes focusFirst() via useImperativeHandle
 
-AuthModal (zIndex=2000)  →  <Modal>  →  LoginForm / RegisterForm
-ForgotPasswordModal (zIndex=2100)  →  <Modal>  →  ForgotPasswordStepper
+AuthModal (zIndex=2000)         → <Modal> → LoginForm / RegisterForm
+ForgotPasswordModal (zIndex=2100) → <Modal> → ForgotPasswordStepper
+AssignModal                     → <Modal> → форма назначения психолога
 ```
 
 ### Forgot Password Flow
@@ -368,6 +461,33 @@ ForgotPasswordModal
     └── StepSuccess
 ```
 
+### Supervisor Engagements
+
+Модуль управления связями студент ↔ психолог. Доступен только роли `supervisor`.
+
+```
+/supervisor/engagements
+└── EngagementsPage (pages/supervisor/)
+    ├── useStudents (features/supervisor/hooks/)
+    │   └── getSupervisorStudents() → api/supervisor.api.js
+    ├── таблица студентов (имя, email, текущий психолог, статус)
+    ├── поиск с debounce 300ms
+    ├── пагинация (серверная)
+    └── AssignModal (features/supervisor/components/)
+        ├── mode="assign"   → createEngagement()
+        ├── mode="transfer" → transferEngagement()
+        └── mode="close"    → closeEngagement()
+```
+
+**Три сценария в AssignModal:**
+- `assign` — назначить психолога (engagement не существует)
+- `transfer` — переназначить (смена психолога в активном engagement)
+- `close` — закрыть связь (завершить engagement)
+
+После успешного действия: `closeModal() → refetch()`.
+
+Список психологов для выбора загружается через `getSupervisorPsychologists()` при открытии modal режима assign/transfer. Применяется `cancelled`-флаг для защиты от race condition при размонтировании.
+
 ### Materials Filter (SearchBar)
 
 ```
@@ -377,17 +497,6 @@ SearchBar
 
 Both share: tag multiselect + sort radio + clear
 State lives in: useMaterials hook → MaterialsPage props → SearchBar
-```
-
-### Dashboard Layout
-
-```
-DashboardLayout (components/layouts/)
-├── Navbar
-├── <main>{children}</main>
-└── Footer
-
-Used by: ClientDashboard, ConsultantDashboard, AdminDashboard
 ```
 
 ### Admin UI terminology
@@ -406,7 +515,7 @@ Used by: ClientDashboard, ConsultantDashboard, AdminDashboard
 ```
 User interaction
        ↓
-Custom hook (useNews, useMaterials, useAdminUsers, ...)
+Custom hook (useStudents, useAdminUsers, ...)
        ↓
 api/<domain>.api.js
        ↓
@@ -421,32 +530,31 @@ setState in hook → Page re-renders
 
 `data/` содержит mock-данные только для разработки UI компонентов в момент, когда соответствующий API-эндпоинт ещё не реализован на бэке.
 
-Hook может временно импортировать из `data/` напрямую — но это всегда временное состояние, помеченное в Open Issues этого документа.
+Hook может временно импортировать из `data/` напрямую — но это всегда временное состояние.
 
 **Как только бэк-эндпоинт готов:**
 
 - Hook переводится на `api/<domain>.api.js`
 - Прямой импорт из `data/` удаляется из hook
-- Соответствующий пункт в Open Issues закрывается
 
-**Запрещено:** оставлять `try API → catch fallback to mock` как постоянный паттерн в production-коде. Это маскирует проблемы интеграции и не даёт увидеть реальные ошибки API.
+**Запрещено:** оставлять `try API → catch fallback to mock` как постоянный паттерн в production-коде.
 
-**Все новые модули после `2026-05-20`** (дата принятия этого правила) реализуются сразу через API — без промежуточного этапа с моками.
+**Все новые модули после 2026-05-20** реализуются сразу через API — без промежуточного этапа с моками.
 
 ---
 
 ## 6.1 Server-side filtering & pagination
 
-**Правило:** Любой список из БД фильтруется, сортируется и пагинируется 
+**Правило:** Любой список из БД фильтруется, сортируется и пагинируется
 **на сервере**, не на клиенте. Клиент отображает то что прислал бэк.
 
-**Исключение:** статические списки (список факультетов, ролей, типов 
-консультаций) — отдаются целиком и могут фильтроваться на клиенте, 
+**Исключение:** статические списки (список факультетов, ролей, типов
+консультаций) — отдаются целиком и могут фильтроваться на клиенте,
 если их меньше 50 элементов.
 
 ---
 
-### Единый формат запроса 
+### Единый формат запроса
 
 ```
 GET /api/<resource>?page=1&size=20&search=...&<filters>
@@ -462,26 +570,18 @@ GET /api/<resource>?page=1&size=20&search=...&<filters>
 | `sort`   | str | Поле сортировки (например, `created_at`) | зависит от ресурса |
 | `order`  | str | `asc` или `desc` | `desc` |
 
-**Доменные фильтры** добавляются по необходимости конкретного эндпоинта:
-- Юзеры: `role`, `is_active`
-- Записи: `status`, `psychologist_id`, `date_from`, `date_to`
-- Тесты: `is_active`, `category_id`
-
 ---
 
 ### Единый формат ответа
 
 ```json
 {
-"items": [...],
-"total": 142,
-"page": 1,
-"size": 20
+  "items": [...],
+  "total": 142,
+  "page": 1,
+  "size": 20
 }
 ```
-
-`total` — общее число элементов с учётом фильтров, не общее число 
-в БД. Нужно для отображения «Стр. 1 из 8» и пагинатора.
 
 ---
 
@@ -489,21 +589,20 @@ GET /api/<resource>?page=1&size=20&search=...&<filters>
 
 ```js
 const {
-items,           // массив текущей страницы (от бэка, без .filter)
-loading,         // флаг загрузки
-error,           // объект ошибки или null
-total,           // общее число (для пагинатора)
-page, setPage,   // текущая страница и сеттер
-query, setQuery, // поисковая строка
-filters, setFilters, // объект доменных фильтров: { role, is_active, ... }
-refetch          // ручной перезапрос
+  items,           // массив текущей страницы (от бэка, без .filter)
+  loading,         // флаг загрузки
+  error,           // объект ошибки или null
+  total,           // общее число (для пагинатора)
+  page, setPage,   // текущая страница и сеттер
+  query, setQuery, // поисковая строка
+  filters, setFilters, // объект доменных фильтров: { role, is_active, ... }
+  refetch          // ручной перезапрос
 } = useResource();
 ```
 
 **Внутри hook:**
 - При изменении `page`, `query`, `filters` — делается новый запрос к API
-- На `setQuery` навешен debounce 300ms (чтобы не дёргать API на каждой 
-  клавише)
+- На `setQuery` навешен debounce 300ms
 - При смене `query` или `filters` — `page` сбрасывается на 1
 - Hook **не делает** локальной фильтрации над `items`
 
@@ -540,12 +639,14 @@ refetch          // ручной перезапрос
 
 | Level | Location | Knows domain? | Has fetch? | Example |
 |---|---|---|---|---|
-| Shell | `app/` | No | No | `App.jsx`, `AppRoutes.jsx` |
-| Page | `pages/` | No | No | `MaterialsPage`, `NewsPage` |
-| Feature | `features/<domain>/` | Yes | Via hooks | `AuthModal`, `NewsSection` |
-| Primitive | `components/` | No | No | `Modal`, `Navbar`, `PageHero` |
+| Shell | `app/` | No | No | `App.jsx`, `router.jsx` |
+| Page | `pages/` | No | No | `MaterialsPage`, `EngagementsPage` |
+| Feature | `features/<domain>/` | Yes | Via hooks | `AuthModal`, `AssignModal` |
+| Primitive | `components/` | No | No | `Modal`, `Icon`, `CabinetLayout` |
 
 **Правило:** если компонент вызывает `useAuth()`, делает API call или знает о доменной модели → он в `features/`, не в `components/`.
+
+**CabinetLayout** — исключение: это primitive layout-компонент, который принимает всю конфигурацию через props (`navSections`, `crumbLabels`). Он не знает о конкретных ролях и маршрутах.
 
 ---
 
@@ -553,44 +654,45 @@ refetch          // ручной перезапрос
 
 ### 8.1 ~~useMaterials импортирует mock напрямую~~ — закрыто
 
-`hooks/useMaterials.js` переведён на реальный API: `getArticles()` + `getPublicCategories()`.
-`materials.api.js` реэкспортирует функции из `articles.api.js`, прямой импорт mock-данных убран.
+`hooks/useMaterials.js` переведён на реальный API. `materials.api.js` реэкспортирует из `articles.api.js`.
 
-**Осталось ограничение:** сортировка материалов в публичном UI всё ещё клиентская, а фильтр тем
-(`topicOptions`) пустой, потому что публичный API не поддерживает фильтрацию по тегам.
-
+**Осталось ограничение:** сортировка материалов в публичном UI всё ещё клиентская.
 
 ### 8.2 NewsListItem без CSS модуля
 
-`features/news/components/NewsListItem.jsx` не имеет своего `.module.css`. Стили живут в `NewsSection.module.css`, создавая скрытую связь. Если компонент когда-либо переедет — стили потеряются.
+`features/news/components/NewsListItem.jsx` не имеет своего `.module.css`. Стили живут в `NewsSection.module.css`.
 
 ### 8.3 Дублирование в filter компонентах
 
-`FiltersDropdown.jsx` и `FilterSheet.jsx` содержат одинаковые константы (`SORT_OPTIONS`) и SVG иконки (`XIcon`, `CheckIcon`). Если фильтр опций изменится — нужно обновить два файла.
+`FiltersDropdown.jsx` и `FilterSheet.jsx` содержат одинаковые константы (`SORT_OPTIONS`) и SVG иконки.
 
 ### 8.4 LoginForm использует устаревший паттерн ошибок
 
-`LoginForm.jsx` хранит ошибки полей как булевы значения (`errors.email: true`) и серверную ошибку в отдельном `apiError`. Это противоречит стандарту из раздела 10 (единый `errors` со строками + `errors._form`).
-
-**Что сделать:** переписать `LoginForm` без `apiError`, перевести `errors` на строки-сообщения, убрать хардкод текстов из JSX.
+`LoginForm.jsx` хранит ошибки полей как булевы значения. Это противоречит стандарту раздела 10 (единый `errors` со строками + `errors._form`).
 
 ### 8.5 Social login buttons — нефункциональные
 
-`LoginForm` и `RegisterForm` рендерят кнопки Telegram / VK / Yandex без `onClick`. Это dead UI, вводящий пользователей в заблуждение.
+`LoginForm` и `RegisterForm` рендерят кнопки Telegram / VK / Yandex без `onClick`. Dead UI.
 
 ### 8.6 Нет глобального ErrorBoundary
 
-Любая render-ошибка в `AppRoutes` крэшит всё приложение. `App.jsx` не оборачивает дерево в `ErrorBoundary`.
+Любая render-ошибка крэшит всё приложение.
 
-### 8.7 Dashboard pages — stubs
+### 8.7 Кабинеты студента и психолога — частично в stub-состоянии
 
-`ClientDashboard` и `ConsultantDashboard` отображают только приветствие. Реальный UI не реализован.
+- `StudentHome` и `PsychologistHome` отображают только приветствие.
+- В кабинете психолога навигационные пункты «Клиенты», «Сессии», «Чат», «Материалы» — `disabled: true` (заглушки в навигации).
+- В кабинете супервизора пункты «Психологи», «Сессии супервизии», «Отчёты» — также заглушки.
 
-~~`AdminDashboard`~~ — закрыто: Admin-панель реализована через `AdminLayout` + CRUD пользователей, типов материалов, тем, новостей и материалов. Роутинг переработан: `AppRoutes.jsx` → `router.jsx`, admin-модуль переехал в `features/admin/`.
+~~`ConsultantDashboard.jsx` и `DashboardLayout.jsx`~~ — удалены как мёртвый код.
 
 ### 8.8 `useAdminTags` не имеет `filters` в hook-контракте
 
-`useAdminTags` возвращает `{ items, loading, error, total, page, setPage, query, setQuery, refetch }` — без `filters` и `setFilters`. Это отступление от стандартного контракта раздела 6.1 (намеренное: теги фильтруются только по имени через `query`, доменных фильтров нет). Если появятся фильтры по использованию или дате — нужно добавить `filters` в контракт.
+`useAdminTags` возвращает контракт без `filters` и `setFilters` — намеренное отступление (теги фильтруются только по имени).
+
+### 8.9 Кабинет студента использует собственный layout, не CabinetLayout
+
+`StudentLayout.jsx` и `ClientDashboard.jsx` образуют собственную структуру, отличную от psychologist/supervisor. При будущем рефакторинге — рассмотреть унификацию.
 
 ---
 
@@ -598,43 +700,41 @@ refetch          // ручной перезапрос
 
 ### 9.1 Вынести SORT_OPTIONS и иконки из filter компонентов
 
-Создать `pages/materials/components/_filterConstants.js` с `SORT_OPTIONS`, `XIcon`, `CheckIcon`. Импортировать в `FiltersDropdown` и `FilterSheet`. Устраняет дублирование без добавления нового слоя.
+Создать `pages/materials/components/_filterConstants.js`.
 
 ### 9.2 Co-locate NewsListItem styles
 
-Создать `features/news/components/NewsListItem.module.css`. Перенести соответствующие правила из `NewsSection.module.css`.
+Создать `features/news/components/NewsListItem.module.css`.
 
 ### 9.3 Добавить ErrorBoundary
 
 ```jsx
 // src/app/ErrorBoundary.jsx
 class ErrorBoundary extends React.Component { ... }
-
-// src/app/App.jsx
-<ErrorBoundary>
-  <AuthProvider>
-    <AppRoutes />
-  </AuthProvider>
-</ErrorBoundary>
 ```
 
 ### 9.4 Wire или удалить social login
 
-Реализовать OAuth для Telegram/VK/Yandex, либо убрать кнопки. Не оставлять нефункциональный UI.
+Реализовать OAuth для Telegram/VK/Yandex, либо убрать кнопки.
 
 ### 9.5 Серверная сортировка материалов
 
-Публичный `useMaterials` уже подключён к API, но сортировка в UI остаётся клиентской.
-Если список материалов вырастет, добавить серверные параметры `sort`/`order` в `GET /api/articles`
-и убрать клиентский `.reverse()` из hook.
+Добавить серверные параметры `sort`/`order` в `GET /api/articles` и убрать клиентский `.reverse()`.
 
 ### 9.6 Lazy loading страниц
 
 ```jsx
-// app/AppRoutes.jsx
 const Home = lazy(() => import('../pages/home/Home'));
 // + <Suspense fallback={<PageSkeleton />}>
 ```
+
+### 9.7 Список назначенных клиентов в кабинете психолога
+
+Реализовать страницу `/psychologist/clients` с серверным списком клиентов психолога (через новый эндпоинт). Hook по контракту server-side list.
+
+### 9.8 Отображение психолога у студента
+
+Показать текущего назначенного психолога в `StudentHome` / `StudentSettings`.
 
 ---
 
@@ -644,119 +744,64 @@ const Home = lazy(() => import('../pages/home/Home'));
 
 | Тип | Конвенция | Пример |
 |---|---|---|
-| React компонент | PascalCase | `MaterialCard.jsx` |
-| Hook | camelCase, префикс `use` | `useMaterials.js` |
-| API модуль | camelCase, суффикс `.api.js` | `news.api.js` |
-| CSS Module | camelCase, совпадает с компонентом | `MaterialCard.module.css` |
+| React компонент | PascalCase | `AssignModal.jsx` |
+| Hook | camelCase, префикс `use` | `useStudents.js` |
+| API модуль | camelCase, суффикс `.api.js` | `supervisor.api.js` |
+| CSS Module | camelCase, совпадает с компонентом | `AssignModal.module.css` |
 | Mock данные | camelCase, суффикс `.mock.js` | `materials.mock.js` |
+| Утилиты | camelCase | `utils.js` |
 
 ### Hook контракт
 
-В проекте используются три-четыре стандартных контракта для hooks. 
-Каждый новый hook должен соответствовать одному из них.
-
 #### 1. Data-fetching (один объект или короткий список)
-
-Для запроса данных без пагинации — например, профиль юзера, текущий 
-набор настроек, статичный справочник.
-
-```js
-return { items, loading, error, refetch }
-```
-
-или для одного объекта:
 
 ```js
 return { data, loading, error, refetch }
+// или
+return { items, loading, error, refetch }
 ```
 
----
-
 #### 2. Form
-
-Для управления состоянием формы.
 
 ```js
 return { values, errors, handleChange, handleSubmit }
 ```
 
----
-
-#### 3. Server-side list (пагинация админки и личных кабинетов)
-
-Для списков с серверной фильтрацией и пагинацией. См. раздел 6.1.
+#### 3. Server-side list (пагинация)
 
 ```js
-return { 
+return {
   items, loading, error, total,
   page, setPage,
   query, setQuery,
   filters, setFilters,
-  refetch 
+  refetch
 }
 ```
 
-**Используется для:** списка юзеров в админке, списка записей на 
-консультации, журнала аудита и т.д.
-
----
-
-#### 4. Infinite scroll (опционально, для длинных лент)
-
-Для бесконечных лент в публичной части — например, лента новостей.
+#### 4. Infinite scroll (опционально)
 
 ```js
 return { items, loading, error, hasMore, loadMore }
 ```
 
-**Используется для:** новостной ленты, ленты публичных вопросов в Q&A.
-
-**НЕ используется для:** админских списков. У админа должен быть 
-классический пагинатор с возможностью прыгнуть на нужную страницу.
-
----
-
-**Если задача не подходит ни под один контракт** — обсуждай с командой 
-до создания нового. Лучше расширить существующий контракт, чем плодить 
-их.
-
 ### CSS Modules
 
-- Один `.module.css` на один компонент — никогда не шарить стили между двумя компонентами
+- Один `.module.css` на один компонент
 - Классы в camelCase: `.cardTitle`, `.btnPrimary`
 - Никаких глобальных селекторов внутри модуля
 
 ### Error handling в формах
 
-В проекте единый стандарт: один объект `errors` со строками-сообщениями.
-
 ```js
 const [errors, setErrors] = useState({});
-
-// Клиентская ошибка поля:
-// { full_name: 'Минимум 2 символа', email: 'Введите корректный email' }
-
-// Серверная / общая ошибка (не привязана к полю):
-// { _form: 'Email уже занят' }
-
-// Оба типа одновременно:
 // { email: 'Некорректный формат', _form: 'Сервер недоступен' }
 ```
-
-В компоненте:
 
 ```jsx
 {errors.email && <span className={styles.hint} role="alert">{errors.email}</span>}
 {errors._form && <div className={styles.formError} role="alert">{errors._form}</div>}
 ```
-
-**Правила:**
-- Значение поля в `errors` — всегда строка с сообщением или `undefined`
-- `errors._form` — серверные и общие ошибки формы
-- Булевы значения в `errors` и отдельный `apiError` — **устаревший паттерн** (только `LoginForm`, рефакторинг в бэклоге)
-- Hooks возвращают `errors` в контракте, компонент не хранит ошибки отдельно
-
----
 
 ### Порядок imports
 
@@ -766,11 +811,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 // 2. Внутренние (features, components, api, hooks)
-import { useNews } from '../../hooks/useNews';
+import { useStudents } from '../../features/supervisor/hooks/useStudents';
 import Modal from '../../components/Modal/Modal';
 
 // 3. Локальные (тот же или дочерний folder)
-import styles from './NewsPage.module.css';
+import styles from './EngagementsPage.module.css';
 ```
 
 ---
@@ -783,6 +828,8 @@ import styles from './NewsPage.module.css';
 | `react-dom` | 19.2 | DOM renderer + `createPortal` |
 | `react-router-dom` | 7.14.2 | Client-side routing |
 | `react-scripts` | 5.0.1 | CRA build toolchain |
-| `@testing-library/react` | — | Component testing |
+| `@tiptap/react` | 3.x | Rich-text editor (admin: articles, news) |
+| `dompurify` | 3.x | HTML sanitization (ContentPreview) |
+| `@testing-library/react` | 16.x | Component testing |
 
-**Backend proxy:** `package.json` → `"proxy": "http://localhost:8000"`. Все `/api/*` запросы проксируются на FastAPI сервер (порт 8000) во время разработки.
+**Backend proxy:** `package.json` → `"proxy": "http://localhost:8000"`. Все `/api/*` запросы проксируются на FastAPI во время разработки.

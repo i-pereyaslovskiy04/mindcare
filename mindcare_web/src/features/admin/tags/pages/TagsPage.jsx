@@ -3,6 +3,7 @@ import { useAdminTags } from '../hooks/useAdminTags';
 import { deleteTag } from '../../../../api/tags.api';
 import TagsTable from '../components/TagsTable';
 import TagFormModal from '../components/TagFormModal';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './TagsPage.module.css';
 
 function pluralTag(n) {
@@ -67,9 +68,9 @@ export default function TagsPage() {
             {total} {pluralTag(total)}
           </p>
         </div>
-        <button className={styles.btnCreate} onClick={() => setCreateOpen(true)}>
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
           + Новая тема
-        </button>
+        </Button>
       </div>
 
       <div className={styles.toolbar}>
@@ -123,20 +124,12 @@ export default function TagsPage() {
               <p className={styles.dialogError}>{deleteError}</p>
             )}
             <div className={styles.dialogActions}>
-              <button
-                className={styles.btnSecondary}
-                onClick={closeDelete}
-                disabled={deleting}
-              >
+              <Button variant="secondary" onClick={closeDelete} disabled={deleting}>
                 Отмена
-              </button>
-              <button
-                className={styles.btnDanger}
-                onClick={confirmDelete}
-                disabled={deleting}
-              >
+              </Button>
+              <Button variant="danger" onClick={confirmDelete} disabled={deleting}>
                 {deleting ? 'Удаление...' : 'Удалить'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

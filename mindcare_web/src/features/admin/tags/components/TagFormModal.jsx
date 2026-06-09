@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../../../../components/Modal/Modal';
 import { createTag, updateTag } from '../../../../api/tags.api';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './TagFormModal.module.css';
 
 export default function TagFormModal({ mode, tag, onSuccess, onClose }) {
@@ -68,21 +69,12 @@ export default function TagFormModal({ mode, tag, onSuccess, onClose }) {
           {error && <p className={styles.formError}>{error}</p>}
 
           <div className={styles.footer}>
-            <button
-              type="button"
-              className={styles.btnSecondary}
-              onClick={onClose}
-              disabled={submitting}
-            >
+            <Button variant="secondary" onClick={onClose} disabled={submitting}>
               Отмена
-            </button>
-            <button
-              type="submit"
-              className={styles.btnPrimary}
-              disabled={submitting}
-            >
+            </Button>
+            <Button variant="primary" type="submit" disabled={submitting}>
               {submitting ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

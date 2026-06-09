@@ -1,0 +1,130 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 28px 28px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--espresso);
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* Student block */
+.studentBlock {
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.studentLabel,
+.currentLabel {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.studentName,
+.currentName {
+  font-weight: 600;
+  color: var(--espresso);
+  font-size: 0.94rem;
+  line-height: 1.3;
+}
+
+.studentEmail {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  word-break: break-all;
+}
+
+/* Current psychologist block */
+.currentBlock {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+/* Fields */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main, #2c2218);
+}
+
+.textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.875rem;
+  color: var(--espresso);
+  background: var(--warm-white);
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.textarea:focus {
+  border-color: var(--coffee);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 76px;
+  line-height: 1.5;
+}
+
+.psyLoading {
+  font-size: 0.82rem;
+  color: var(--text-muted, #9a8e86);
+  padding: 8px 0;
+}
+
+/* Error */
+.error {
+  padding: 10px 14px;
+  background: var(--error-bg);
+  border: 1px solid rgba(185, 64, 64, 0.25);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: var(--error);
+  line-height: 1.45;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .form {
+    padding: 20px 18px 24px;
+    gap: 16px;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+}

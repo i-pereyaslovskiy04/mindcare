@@ -51,12 +51,15 @@ import CalendarPage         from '../pages/student/Calendar/CalendarPage';
 import SettingsPage         from '../pages/student/Settings/SettingsPage';
 
 // ── Psychologist ──────────────────────────────────────────────────────────────
-import PsychologistLayout from '../pages/psychologist/PsychologistLayout';
-import PsychologistHome   from '../pages/psychologist/PsychologistHome';
+import PsychologistLayout          from '../pages/psychologist/PsychologistLayout';
+import PsychologistHome            from '../pages/psychologist/PsychologistHome';
+import PsychologistStudentsPage    from '../pages/psychologist/PsychologistStudentsPage';
+import PsychologistStudentCardPage from '../pages/psychologist/PsychologistStudentCardPage';
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
-import SupervisorLayout from '../pages/supervisor/SupervisorLayout';
-import SupervisorHome   from '../pages/supervisor/SupervisorHome';
+import SupervisorLayout    from '../pages/supervisor/SupervisorLayout';
+import SupervisorHome      from '../pages/supervisor/SupervisorHome';
+import EngagementsPage     from '../pages/supervisor/EngagementsPage';
 
 // ── Shared cabinet pages ──────────────────────────────────────────────────────
 import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage';
@@ -147,8 +150,10 @@ export default function AppRouter() {
         path="/psychologist"
         element={<RoleRoute roles={['psychologist']}><PsychologistLayout /></RoleRoute>}
       >
-        <Route index             element={<PsychologistHome />} />
-        <Route path="settings"  element={<CabinetSettingsPage />} />
+        <Route index                          element={<PsychologistHome />} />
+        <Route path="students"              element={<PsychologistStudentsPage />} />
+        <Route path="students/:studentId"   element={<PsychologistStudentCardPage />} />
+        <Route path="settings"              element={<CabinetSettingsPage />} />
       </Route>
 
       {/* Supervisor */}
@@ -156,8 +161,9 @@ export default function AppRouter() {
         path="/supervisor"
         element={<RoleRoute roles={['supervisor']}><SupervisorLayout /></RoleRoute>}
       >
-        <Route index             element={<SupervisorHome />} />
-        <Route path="settings"  element={<CabinetSettingsPage />} />
+        <Route index                  element={<SupervisorHome />} />
+        <Route path="engagements"     element={<EngagementsPage />} />
+        <Route path="settings"        element={<CabinetSettingsPage />} />
       </Route>
 
       {/* Admin */}

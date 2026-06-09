@@ -43,7 +43,7 @@ export function useAdminTags() {
       });
 
     return () => { cancelled = true; };
-  }, [debouncedQuery, page, tick]);
+  }, [debouncedQuery, page, size, tick]);
 
   return { items, loading, error, total, page, setPage, size, query, setQuery, refetch };
 }
