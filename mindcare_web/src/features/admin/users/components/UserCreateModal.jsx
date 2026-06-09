@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
 import Select from '../../../../components/UI/Select/Select';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './UserCreateModal.module.css';
 
 const ROLE_OPTIONS = [
@@ -99,12 +100,12 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
         )}
 
         <div className={styles.actions}>
-          <button type="button" className={styles.btnSecondary} onClick={onCancel} disabled={submitting}>
+          <Button variant="secondary" onClick={onCancel} disabled={submitting}>
             Отмена
-          </button>
-          <button type="submit" className={styles.btnPrimary} disabled={submitting}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={submitting}>
             {submitting ? 'Создаём…' : 'Создать'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
@@ -126,9 +127,9 @@ function SuccessScreen({ user, onClose }) {
       </div>
 
       <div className={styles.actions}>
-        <button type="button" className={styles.btnPrimary} onClick={onClose}>
+        <Button variant="primary" onClick={onClose}>
           Закрыть
-        </button>
+        </Button>
       </div>
     </div>
   );

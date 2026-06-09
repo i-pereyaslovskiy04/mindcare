@@ -4,6 +4,7 @@ import TiptapEditor from '../../../../components/UI/TiptapEditor/TiptapEditor';
 import ImageUpload from '../../../../components/UI/ImageUpload/ImageUpload';
 import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
 import ContentPreview from '../../../../components/UI/ContentPreview/ContentPreview';
+import Button from '../../../../components/UI/Button/Button';
 import { getTagsPublic } from '../../../../api/tags.api';
 import { getAdminCategories, createArticle, updateArticle } from '../../../../api/articles.api';
 import styles from './ArticleFormModal.module.css';
@@ -197,19 +198,15 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
           )}
 
           <div className={styles.actions}>
-            <button type="button" className={styles.btnCancel} onClick={onClose} disabled={submitting}>
+            <Button variant="secondary" onClick={onClose} disabled={submitting}>
               Отмена
-            </button>
-            <button
-              type="button"
-              className={styles.btnPreview}
-              onClick={() => setPreviewOpen(true)}
-            >
+            </Button>
+            <Button variant="ghost" onClick={() => setPreviewOpen(true)}>
               Предпросмотр
-            </button>
-            <button type="submit" className={styles.btnSubmit} disabled={submitting}>
+            </Button>
+            <Button variant="primary" type="submit" disabled={submitting}>
               {submitting ? 'Сохранение…' : isEdit ? 'Сохранить' : 'Создать'}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

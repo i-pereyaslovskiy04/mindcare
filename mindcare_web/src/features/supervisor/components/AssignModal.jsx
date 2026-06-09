@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from '../../../components/Modal/Modal';
+import Button from '../../../components/UI/Button/Button';
 import Select from '../../../components/UI/Select/Select';
 import { getSupervisorPsychologists } from '../../../api/supervisor.api';
 import styles from './AssignModal.module.css';
@@ -146,21 +147,20 @@ export default function AssignModal({ mode, student, onConfirm, onClose }) {
         {error && <div className={styles.error}>{error}</div>}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnGhost}`}
+          <Button
+            variant="ghost"
             onClick={onClose}
             disabled={submitting}
           >
             Отмена
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className={`${styles.btn} ${styles.btnPrimary} ${mode === 'close' ? styles.btnDanger : ''}`}
+            variant={mode === 'close' ? 'danger' : 'primary'}
             disabled={submitting}
           >
             {submitting ? 'Выполняется…' : confirmLabels[mode]}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

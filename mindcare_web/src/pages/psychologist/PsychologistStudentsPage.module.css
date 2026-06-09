@@ -237,23 +237,6 @@
   line-height: 1.5;
 }
 
-.btnRetry {
-  padding: 8px 22px;
-  border: 1px solid var(--nav-border);
-  border-radius: 8px;
-  background: var(--cream);
-  color: var(--espresso);
-  font-family: 'Nunito', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btnRetry:hover {
-  background: var(--sand);
-}
-
 .emptyBox {
   display: flex;
   flex-direction: column;

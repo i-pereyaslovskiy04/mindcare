@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
+import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import { useMyStudents } from '../../features/psychologist/hooks/useMyStudents';
 import styles from './PsychologistStudentsPage.module.css';
@@ -67,7 +68,7 @@ export default function PsychologistStudentsPage() {
           </div>
           <div className={styles.stateTitle}>Не удалось загрузить данные</div>
           <div className={styles.stateText}>{error}</div>
-          <button className={styles.btnRetry} onClick={refetch}>Повторить</button>
+          <Button variant="secondary" onClick={refetch}>Повторить</Button>
         </div>
       )}
 

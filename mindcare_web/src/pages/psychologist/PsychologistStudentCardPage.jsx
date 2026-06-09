@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
+import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
 import styles from './PsychologistStudentCardPage.module.css';
@@ -107,7 +108,7 @@ export default function PsychologistStudentCardPage() {
               : error}
           </div>
           {!is404 && (
-            <button className={styles.btnRetry} onClick={refetch}>Повторить</button>
+            <Button variant="secondary" onClick={refetch}>Повторить</Button>
           )}
         </div>
       )}

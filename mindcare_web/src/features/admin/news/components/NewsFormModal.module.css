@@ -86,58 +86,6 @@
   padding-top: 4px;
 }
 
-.btnCancel {
-  padding: 9px 20px;
-  border: 1px solid var(--nav-border);
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--text-main);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.btnCancel:hover:not(:disabled) {
-  background: var(--cream);
-  border-color: var(--latte);
-}
-
-.btnCancel:disabled { opacity: 0.55; cursor: not-allowed; }
-
-.btnSubmit {
-  padding: 9px 24px;
-  border: none;
-  border-radius: 8px;
-  background: var(--espresso);
-  color: var(--warm-white);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btnSubmit:hover:not(:disabled) { background: var(--coffee); }
-.btnSubmit:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.btnPreview {
-  padding: 9px 20px;
-  border: 1px solid var(--nav-border);
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.btnPreview:hover:not(:disabled) {
-  background: var(--cream);
-  border-color: var(--latte);
-}
-
 .editorSkeleton {
   height: 200px;
   border: 1px solid var(--nav-border);

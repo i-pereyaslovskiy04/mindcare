@@ -130,44 +130,17 @@
 }
 
 /* ── Row actions ── */
-.actions {
-  white-space: nowrap;
+.actionsCell {
   text-align: right;
+  white-space: nowrap;
+  width: 1%;
 }
 
-.iconBtn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--nav-border);
-  background: transparent;
-  color: var(--text-muted);
+.actions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s,
-              transform 0.15s, box-shadow 0.15s;
-  margin-left: 6px;
-  flex-shrink: 0;
-}
-
-.iconBtn:first-child { margin-left: 0; }
-
-.iconBtn:hover {
-  background: var(--cream);
-  color: var(--espresso);
-  border-color: var(--latte);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(74, 55, 40, 0.12);
-}
-
-.iconBtnDanger:hover {
-  background: var(--error-bg);
-  color: var(--error);
-  border-color: rgba(185, 64, 64, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(185, 64, 64, 0.15);
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 /* ── Deleted rows ── */

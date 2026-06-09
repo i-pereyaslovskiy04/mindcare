@@ -83,13 +83,13 @@
 .notice_success {
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
-  color: #15803d;
+  color: var(--success);
 }
 
 .notice_error {
   background: #fef2f2;
   border: 1px solid #fecaca;
-  color: #b91c1c;
+  color: var(--error);
 }
 
 /* State boxes */
@@ -115,19 +115,8 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.errorText { color: var(--error, #b91c1c); text-align: center; }
+.errorText { color: var(--error); text-align: center; }
 .emptyText { color: var(--text-muted, #9a8e86); }
-
-.btnRetry {
-  padding: 7px 18px;
-  border: 1px solid var(--nav-border, #ede8e3);
-  border-radius: 8px;
-  background: var(--cream, #faf7f4);
-  color: var(--espresso, #3b2a1a);
-  font-family: 'Nunito', sans-serif;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
 
 /* Table */
 .tableWrap {
@@ -227,7 +216,7 @@
 
 .badge_active {
   background: #dcfce7;
-  color: #15803d;
+  color: var(--success);
   border-color: #bbf7d0;
 }
 
@@ -238,9 +227,9 @@
 }
 
 .badge_transferred {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border-color: #bfdbfe;
+  background: var(--sand);
+  color: var(--text-muted);
+  border-color: var(--fog);
 }
 
 /* Action buttons */
@@ -248,48 +237,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.btn {
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-family: 'Nunito', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: background 0.15s, opacity 0.15s;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.btnPrimary {
-  background: var(--espresso, #3b2a1a);
-  color: var(--milk, #fdf6ed);
-}
-
-.btnPrimary:hover { background: var(--coffee, #7c5c42); }
-
-.btnSecondary {
-  background: var(--cream, #faf7f4);
-  color: var(--espresso, #3b2a1a);
-  border: 1px solid var(--nav-border, #ede8e3);
-}
-
-.btnSecondary:hover { background: var(--sand, #e8ddd5); }
-
-.btnGhost {
-  background: transparent;
-  color: var(--text-muted, #9a8e86);
-  border: 1px solid var(--nav-border, #ede8e3);
-  padding: 7px 10px;
-}
-
-.btnGhost:hover {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
 }
 
 /* Pagination */

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Icon from '../../components/Icon/Icon';
+import Button from '../../components/UI/Button/Button';
 import { useStudents } from '../../features/supervisor/hooks/useStudents';
 import AssignModal from '../../features/supervisor/components/AssignModal';
 import {
@@ -95,7 +96,7 @@ export default function EngagementsPage() {
       {!loading && error && (
         <div className={styles.stateBox}>
           <div className={styles.errorText}>{error}</div>
-          <button className={styles.btnRetry} onClick={refetch}>Повторить</button>
+          <Button variant="secondary" onClick={refetch}>Повторить</Button>
         </div>
       )}
 
@@ -164,27 +165,32 @@ export default function EngagementsPage() {
                       {/* Actions */}
                       <td className={styles.actionsCell}>
                         {!eng ? (
-                          <button
-                            className={`${styles.btn} ${styles.btnPrimary}`}
+                          <Button
+                            variant="primary"
+                            size="sm"
                             onClick={() => openModal('assign', student)}
                           >
                             Назначить
-                          </button>
+                          </Button>
                         ) : (
                           <div className={styles.btnGroup}>
-                            <button
-                              className={`${styles.btn} ${styles.btnSecondary}`}
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => openModal('transfer', student)}
                             >
                               Переназначить
-                            </button>
-                            <button
-                              className={`${styles.btn} ${styles.btnGhost}`}
+                            </Button>
+                            <Button
+                              variant="icon"
+                              size="sm"
+                              tone="danger"
                               onClick={() => openModal('close', student)}
                               title="Закрыть связь"
+                              aria-label="Закрыть связь"
                             >
                               <Icon name="trash" size={15} />
-                            </button>
+                            </Button>
                           </div>
                         )}
                       </td>

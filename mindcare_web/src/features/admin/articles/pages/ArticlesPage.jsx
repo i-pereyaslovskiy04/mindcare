@@ -4,6 +4,7 @@ import ArticlesTable from '../components/ArticlesTable';
 import ArticleFormModal from '../components/ArticleFormModal';
 import { deleteArticle, getAdminArticleItem } from '../../../../api/articles.api';
 import Select from '../../../../components/UI/Select/Select';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './ArticlesPage.module.css';
 
 const STATUS_OPTIONS = [
@@ -58,9 +59,9 @@ export default function ArticlesPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Материалы</h1>
-        <button className={styles.btnCreate} onClick={() => setCreateOpen(true)}>
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
           + Добавить
-        </button>
+        </Button>
       </div>
 
       <div className={styles.toolbar}>
@@ -122,12 +123,12 @@ export default function ArticlesPage() {
             <p className={styles.dialogBody}>«{deleteTarget.title}» будет удалён. Действие необратимо.</p>
             {deleteError && <p className={styles.dialogError}>{deleteError}</p>}
             <div className={styles.dialogActions}>
-              <button className={styles.btnCancel} onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
                 Отмена
-              </button>
-              <button className={styles.btnDanger} onClick={handleDeleteConfirm} disabled={deleting}>
+              </Button>
+              <Button variant="danger" onClick={handleDeleteConfirm} disabled={deleting}>
                 {deleting ? 'Удаление…' : 'Удалить'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

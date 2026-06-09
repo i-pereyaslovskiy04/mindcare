@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Modal from '../../../../components/Modal/Modal';
 import { deleteUser } from '../../../../api/users.api';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './DeleteConfirmDialog.module.css';
 
 export default function DeleteConfirmDialog({ open, userInfo, onClose, onDeleted }) {
@@ -33,22 +34,12 @@ export default function DeleteConfirmDialog({ open, userInfo, onClose, onDeleted
         {error && <p className={styles.error} role="alert">{error}</p>}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.btnCancel}
-            onClick={handleClose}
-            disabled={deleting}
-          >
+          <Button variant="secondary" onClick={handleClose} disabled={deleting}>
             Отмена
-          </button>
-          <button
-            type="button"
-            className={styles.btnDelete}
-            onClick={handleDelete}
-            disabled={deleting}
-          >
+          </Button>
+          <Button variant="danger" onClick={handleDelete} disabled={deleting}>
             {deleting ? 'Удаляем…' : 'Удалить'}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

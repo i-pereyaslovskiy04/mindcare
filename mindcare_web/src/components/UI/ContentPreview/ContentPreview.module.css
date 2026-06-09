@@ -116,7 +116,7 @@
 .content ol       { padding-left: 1.5em; margin: 0 0 1em; }
 .content li       { margin-bottom: 0.3em; }
 .content blockquote {
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid var(--coffee);
   padding-left: 1em;
   margin: 1em 0;
   color: #4b5563;

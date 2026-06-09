@@ -1,4 +1,5 @@
 import Icon from '../../../../components/Icon/Icon';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './NewsTable.module.css';
 
 const SKELETON_ROWS = 6;
@@ -79,26 +80,29 @@ export default function NewsTable({ items, loading, error, onEdit, onDelete, edi
               <td className={styles.date}>
                 {formatDate(item.published_at || item.created_at)}
               </td>
-              <td className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.iconBtn}
-                  onClick={() => onEdit(item)}
-                  aria-label={`Редактировать «${item.title}»`}
-                  disabled={editLoadingId === item.uuid}
-                >
-                  {editLoadingId === item.uuid
-                    ? <span className={styles.spinner}>…</span>
-                    : <Icon name="edit" size={15} />}
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                  onClick={() => onDelete(item)}
-                  aria-label={`Удалить «${item.title}»`}
-                >
-                  <Icon name="trash" size={15} />
-                </button>
+              <td className={styles.actionsCell}>
+                <div className={styles.actions}>
+                  <Button
+                    variant="icon"
+                    size="sm"
+                    onClick={() => onEdit(item)}
+                    aria-label={`Редактировать «${item.title}»`}
+                    disabled={editLoadingId === item.uuid}
+                  >
+                    {editLoadingId === item.uuid
+                      ? <span className={styles.spinner}>…</span>
+                      : <Icon name="edit" size={15} />}
+                  </Button>
+                  <Button
+                    variant="icon"
+                    size="sm"
+                    tone="danger"
+                    onClick={() => onDelete(item)}
+                    aria-label={`Удалить «${item.title}»`}
+                  >
+                    <Icon name="trash" size={15} />
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}

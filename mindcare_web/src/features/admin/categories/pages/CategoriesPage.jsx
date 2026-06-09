@@ -4,6 +4,7 @@ import CategoriesTable from '../components/CategoriesTable';
 import CategoryFormModal from '../components/CategoryFormModal';
 import { deleteCategory } from '../../../../api/categories.api';
 import Select from '../../../../components/UI/Select/Select';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './CategoriesPage.module.css';
 
 const STATUS_OPTIONS = [
@@ -57,9 +58,9 @@ export default function CategoriesPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Типы материалов</h1>
-        <button className={styles.btnCreate} onClick={() => setCreateOpen(true)}>
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
           + Добавить тип
-        </button>
+        </Button>
       </div>
 
       <div className={styles.toolbar}>
@@ -125,20 +126,12 @@ export default function CategoriesPage() {
               <p className={styles.dialogError}>{deleteError}</p>
             )}
             <div className={styles.dialogActions}>
-              <button
-                className={styles.btnCancel}
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-              >
+              <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
                 Отмена
-              </button>
-              <button
-                className={styles.btnDanger}
-                onClick={handleDeleteConfirm}
-                disabled={deleting}
-              >
+              </Button>
+              <Button variant="danger" onClick={handleDeleteConfirm} disabled={deleting}>
                 {deleting ? 'Скрытие…' : 'Скрыть'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

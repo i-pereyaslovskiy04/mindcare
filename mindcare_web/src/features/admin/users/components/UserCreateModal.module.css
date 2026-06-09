@@ -84,53 +84,6 @@
   margin-top: 8px;
 }
 
-.btnPrimary {
-  height: 40px;
-  padding: 0 22px;
-  border: none;
-  border-radius: 10px;
-  background: var(--coffee);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btnPrimary:hover:not(:disabled) {
-  background: var(--espresso);
-}
-
-.btnPrimary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.btnSecondary {
-  height: 40px;
-  padding: 0 18px;
-  border: 1px solid var(--nav-border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-main);
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btnSecondary:hover:not(:disabled) {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-
-.btnSecondary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* ── Экран успеха ── */
 
 .successIcon {

@@ -1,4 +1,5 @@
 import Icon from '../../../../components/Icon/Icon';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './UsersTable.module.css';
 
 const ROLE_LABELS = {
@@ -83,27 +84,30 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
               </td>
               <td className={styles.date}>{formatDate(item.created_at)}</td>
               <td className={styles.date}>{formatDate(item.last_login)}</td>
-              <td className={styles.actions}>
-                {!item.deleted_at && (
-                  <>
-                    <button
-                      type="button"
-                      className={styles.iconBtn}
-                      onClick={() => onEdit?.(item)}
-                      aria-label={`Редактировать ${item.full_name}`}
-                    >
-                      <Icon name="edit" size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                      onClick={() => onDelete?.(item)}
-                      aria-label={`Удалить ${item.full_name}`}
-                    >
-                      <Icon name="trash" size={15} />
-                    </button>
-                  </>
-                )}
+              <td className={styles.actionsCell}>
+                <div className={styles.actions}>
+                  {!item.deleted_at && (
+                    <>
+                      <Button
+                        variant="icon"
+                        size="sm"
+                        onClick={() => onEdit?.(item)}
+                        aria-label={`Редактировать ${item.full_name}`}
+                      >
+                        <Icon name="edit" size={15} />
+                      </Button>
+                      <Button
+                        variant="icon"
+                        size="sm"
+                        tone="danger"
+                        onClick={() => onDelete?.(item)}
+                        aria-label={`Удалить ${item.full_name}`}
+                      >
+                        <Icon name="trash" size={15} />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </td>
             </tr>
           ))}

@@ -17,21 +17,6 @@
   margin: 0;
 }
 
-.btnCreate {
-  padding: 9px 20px;
-  border: none;
-  border-radius: 8px;
-  background: var(--espresso);
-  color: var(--milk);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btnCreate:hover { background: var(--mocha); }
-
 .toolbar {
   display: flex;
   gap: 12px;
@@ -138,36 +123,3 @@
   gap: 10px;
 }
 
-.btnCancel {
-  padding: 9px 20px;
-  border: 1px solid var(--nav-border);
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--text-main);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.btnCancel:hover:not(:disabled) {
-  background: var(--cream);
-  border-color: var(--latte);
-}
-
-.btnDanger {
-  padding: 9px 20px;
-  border: none;
-  border-radius: 8px;
-  background: var(--error);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btnDanger:hover:not(:disabled) { opacity: 0.85; }
-
-.btnDanger:disabled { opacity: 0.6; }

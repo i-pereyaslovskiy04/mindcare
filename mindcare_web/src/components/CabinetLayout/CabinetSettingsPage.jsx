@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
 import Icon from '../Icon/Icon';
+import Button from '../UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import Select from '../UI/Select/Select';
 import styles from './CabinetSettingsPage.module.css';
@@ -77,13 +78,13 @@ export default function CabinetSettingsPage() {
               <div>
                 <div className={styles.profileName}>{user?.name ?? '—'}</div>
                 <div className={styles.profileRole}>{roleLabel}</div>
-                <button
-                  type="button"
-                  className={`${styles.btn} ${styles.btnGhost}`}
-                  style={{ padding: '4px 10px', fontSize: 11.5, marginTop: 8 }}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  style={{ marginTop: 8 }}
                 >
                   Изменить фото
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -108,9 +109,9 @@ export default function CabinetSettingsPage() {
               />
             </div>
 
-            <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} style={{ marginTop: 6 }}>
+            <Button variant="primary" style={{ marginTop: 6 }}>
               Сохранить изменения
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -143,9 +144,9 @@ export default function CabinetSettingsPage() {
               <div className={styles.logoutLabel}>Выйти из аккаунта</div>
               <div className={styles.logoutSub}>Сессия будет завершена на этом устройстве</div>
             </div>
-            <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={logout}>
+            <Button variant="ghost" onClick={logout}>
               <Icon name="logout" size={14} /> Выйти
-            </button>
+            </Button>
           </div>
         </div>
       </div>

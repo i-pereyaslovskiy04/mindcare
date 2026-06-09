@@ -1,6 +1,7 @@
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
 import Select from '../../../../components/UI/Select/Select';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './UserEditModal.module.css';
 
 const ROLE_OPTIONS = [
@@ -109,12 +110,12 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             )}
 
             <div className={styles.actions}>
-              <button type="button" className={styles.btnSecondary} onClick={onClose} disabled={submitting}>
+              <Button variant="secondary" onClick={onClose} disabled={submitting}>
                 Отмена
-              </button>
-              <button type="submit" className={styles.btnPrimary} disabled={submitting || loading}>
+              </Button>
+              <Button variant="primary" type="submit" disabled={submitting || loading}>
                 {submitting ? 'Сохраняем…' : 'Сохранить'}
-              </button>
+              </Button>
             </div>
           </form>
         )}

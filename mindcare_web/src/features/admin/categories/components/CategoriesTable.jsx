@@ -1,4 +1,5 @@
 import Icon from '../../../../components/Icon/Icon';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './CategoriesTable.module.css';
 
 const SKELETON_ROWS = 6;
@@ -83,26 +84,29 @@ export default function CategoriesTable({
               <td className={styles.date}>
                 {formatDate(item.created_at)}
               </td>
-              <td className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.iconBtn}
-                  onClick={() => onEdit(item)}
-                  aria-label={`Редактировать «${item.name}»`}
-                  disabled={editLoadingId === item.id}
-                >
-                  {editLoadingId === item.id
-                    ? <span className={styles.spinner}>…</span>
-                    : <Icon name="edit" size={15} />}
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                  onClick={() => onDelete(item)}
-                  aria-label={`Деактивировать «${item.name}»`}
-                >
-                  <Icon name="trash" size={15} />
-                </button>
+              <td className={styles.actionsCell}>
+                <div className={styles.actions}>
+                  <Button
+                    variant="icon"
+                    size="sm"
+                    onClick={() => onEdit(item)}
+                    aria-label={`Редактировать «${item.name}»`}
+                    disabled={editLoadingId === item.id}
+                  >
+                    {editLoadingId === item.id
+                      ? <span className={styles.spinner}>…</span>
+                      : <Icon name="edit" size={15} />}
+                  </Button>
+                  <Button
+                    variant="icon"
+                    size="sm"
+                    tone="danger"
+                    onClick={() => onDelete(item)}
+                    aria-label={`Деактивировать «${item.name}»`}
+                  >
+                    <Icon name="trash" size={15} />
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}
