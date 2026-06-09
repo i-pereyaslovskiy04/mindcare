@@ -11,7 +11,7 @@
 
 ## TaskItem badges
 
-- **Где:** `features/student/Tasks/TaskItem.jsx` (или аналог)
+- **Где:** `pages/student/Tasks/components/TaskItem.jsx`
 - **Похоже на:** `Badge`
 - **Почему оставлено:** task-card badge имеет уникальный визуал, привязанный к task-specific layout (цвет фона таска, приоритет). Мигрировать без аудита TaskItem нельзя.
 - **Что делать дальше:** сначала аудит TaskItem, определить нужные тоны, потом отдельная миграция.
@@ -44,7 +44,7 @@
 
 ## CabinetLayout nav badges
 
-- **Где:** `features/client/CabinetLayout/CabinetLayout.jsx`, `CabinetLayout.module.css`
+- **Где:** `components/CabinetLayout/CabinetLayout.jsx`, `CabinetLayout.module.css`
 - **Похоже на:** `Badge`
 - **Почему оставлено:** nav badge привязан к sidebar layout, имеет абсолютное позиционирование относительно nav-item. Не является отдельным display-only статусом — это layout элемент.
 - **Что делать дальше:** при рефакторинге CabinetLayout решить отдельно.
@@ -55,7 +55,7 @@
 
 ## CabinetLayout navBadgeSoon
 
-- **Где:** `features/client/CabinetLayout/CabinetLayout.module.css`
+- **Где:** `components/CabinetLayout/CabinetLayout.module.css`
 - **Похоже на:** `Badge` (tone: warning)
 - **Почему оставлено:** это "скоро" label-плашка на nav-item, семантически ближе к feature flag чем к статусу. Уникальный визуал.
 - **Что делать дальше:** при добавлении реальных фич — убрать или стандартизировать.
@@ -66,7 +66,7 @@
 
 ## CabinetLayout notification dot
 
-- **Где:** `features/client/CabinetLayout/CabinetLayout.jsx`
+- **Где:** `components/CabinetLayout/CabinetLayout.jsx`
 - **Похоже на:** count overlay badge
 - **Почему оставлено:** декоративный dot-индикатор, не статус сущности. Отсутствует `aria-hidden="true"` — это accessibility debt.
 - **Что делать дальше:** добавить `aria-hidden="true"` при задаче на CabinetLayout. Не мигрировать в Badge.
@@ -77,7 +77,7 @@
 
 ## SearchBar count badge
 
-- **Где:** `features/search/SearchBar.jsx` (или аналог)
+- **Где:** `pages/materials/components/SearchBar.jsx`
 - **Похоже на:** `Badge` (neutral)
 - **Почему оставлено:** count badge внутри поисковой строки — inline layout контрол, не статус сущности.
 - **Что делать дальше:** не мигрировать в Badge. Если нужен общий компонент — CountBadge отдельно.
@@ -88,7 +88,7 @@
 
 ## SearchBar removable chips
 
-- **Где:** `features/search/SearchBar.jsx`
+- **Где:** `pages/materials/components/SearchBar.jsx`
 - **Похоже на:** `Tag` / `FilterChip`
 - **Почему оставлено:** removable chip — интерактивный элемент с × для удаления. Ни Tag (display-only), ни FilterChip (toggle-фильтр) не покрывают эту семантику.
 - **Что делать дальше:** при задаче на SearchBar — оценить создание RemovableChip компонента.
@@ -121,7 +121,7 @@
 
 ## Student MaterialsPage articleTopic
 
-- **Где:** `pages/student/Materials/StudentMaterialsPage.jsx` (или аналог)
+- **Где:** `pages/student/Materials/MaterialsPage.jsx`
 - **Похоже на:** `Tag` (variant: public)
 - **Почему оставлено:** стиль `.articleTopic` на студенческой странице материалов — отдельный контекст. Не мигрирован в ходе текущего этапа (аудит scope не включал Student pages).
 - **Что делать дальше:** при задаче на Student Materials — включить в миграцию.
@@ -132,7 +132,7 @@
 
 ## DiaryEntryForm emotion chips
 
-- **Где:** `features/student/Diary/DiaryEntryForm.jsx` (или аналог)
+- **Где:** `pages/student/components/Diary/DiaryEntryForm.jsx`
 - **Похоже на:** `FilterChip` / ChoiceChip
 - **Почему оставлено:** emotion chip — интерактивный выбор эмоции с emoji, иконкой или иллюстрацией. Это domain-specific контрол для дневника настроения, семантически отличается от фильтра.
 - **Что делать дальше:** не мигрировать в FilterChip. Если нужна унификация — отдельный EmotionChip или ChoiceChip компонент.
@@ -187,7 +187,7 @@
 
 ## EngagementsPage badges
 
-- **Где:** `pages/admin/EngagementsPage.jsx` (или аналог)
+- **Где:** `pages/supervisor/EngagementsPage.jsx`
 - **Похоже на:** `Badge`
 - **Почему оставлено:** не мигрированы, потому что сначала нужно нормализовать тексты статусов — API возвращает raw English values (`completed`, `transferred`), а не локализованные строки. Мигрировать Badge до исправления локализации бессмысленно.
 - **Что делать дальше:** 1) исправить локализацию статусов в EngagementsPage; 2) мигрировать на Badge.

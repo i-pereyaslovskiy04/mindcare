@@ -191,6 +191,27 @@ Tag — это display-only `<span>`, не button.
 
 ---
 
+## Shared content utilities
+
+В `src/components/UI` есть компоненты, которые не являются governance controls, но переиспользуются в нескольких местах:
+
+| Компонент | Путь | Назначение |
+|---|---|---|
+| `ContentPreview` | `src/components/UI/ContentPreview/` | Предпросмотр HTML-контента новости или материала. Использует DOMPurify. |
+| `ImageUpload` | `src/components/UI/ImageUpload/` | Drag-drop загрузка изображения обложки. |
+| `TiptapEditor` | `src/components/UI/TiptapEditor/` | Rich-text редактор (StarterKit, Image, TextAlign). |
+
+Эти компоненты **не являются** заменой Button / Checkbox / Toggle / FilterChip / Badge / Tag.
+
+Правила при работе с ними:
+- Не заменять их на Button/Tag/Badge.
+- Не считать их нарушением governance.
+- Перед созданием своей логики preview/upload/editor — проверить эти компоненты на переиспользование.
+- Изменять только после отдельного анализа задачи.
+- Не создавать дубль без явного обоснования.
+
+---
+
 ## Общее правило
 
 Перед созданием нового контрола:

@@ -352,7 +352,7 @@ mindcare_web/src/
 src/components/UI
 ```
 
-Текущие shared UI-компоненты:
+Базовые shared UI controls, которые обязательно учитывать при создании локальных контролов:
 
 ```text
 src/components/UI/Button
@@ -364,6 +364,14 @@ src/components/UI/Tag
 src/components/UI/Select
 src/components/UI/MultiSelect
 ```
+
+В `src/components/UI` также есть более сложные shared utilities:
+
+- `ContentPreview` — предпросмотр HTML-контента новости/материала (DOMPurify).
+- `ImageUpload` — drag-drop загрузка обложки.
+- `TiptapEditor` — rich-text редактор.
+
+Они не являются заменой Button/Checkbox/Toggle/FilterChip/Badge/Tag, но перед созданием preview/upload/editor-логики нужно проверить их повторное использование.
 
 Правила использования:
 
@@ -408,6 +416,7 @@ Feature-specific UI разрешён только с обоснованием в
 - StudentHome period chips
 - StudentHome dark-card buttons
 - MultiSelect selected tags внутри shared MultiSelect
+- EngagementsPage badges — сначала нормализовать тексты статусов completed/transferred, потом решать миграцию
 ```
 
 Если задача затрагивает похожий UI-элемент, сначала свериться с `docs/UI_TECH_DEBT.md`.
