@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Icon from '../../components/Icon/Icon';
 import Button from '../../components/UI/Button/Button';
+import Badge from '../../components/UI/Badge/Badge';
 import { useStudents } from '../../features/supervisor/hooks/useStudents';
 import AssignModal from '../../features/supervisor/components/AssignModal';
 import {
@@ -14,6 +15,12 @@ const STATUS_LABELS = {
   active:      'Активна',
   completed:   'Завершена',
   transferred: 'Переназначена',
+};
+
+const STATUS_TONES = {
+  active:      'success',
+  completed:   'neutral',
+  transferred: 'warning',
 };
 
 export default function EngagementsPage() {
@@ -160,11 +167,11 @@ export default function EngagementsPage() {
                       {/* Status */}
                       <td>
                         {eng ? (
-                          <span className={`${styles.badge} ${styles[`badge_${eng.status}`]}`}>
+                          <Badge tone={STATUS_TONES[eng.status] || 'neutral'}>
                             {STATUS_LABELS[eng.status] || eng.status}
-                          </span>
+                          </Badge>
                         ) : (
-                          <span className={styles.badge}>—</span>
+                          <Badge tone="neutral">—</Badge>
                         )}
                       </td>
 

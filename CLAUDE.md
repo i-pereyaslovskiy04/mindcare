@@ -416,7 +416,6 @@ Feature-specific UI разрешён только с обоснованием в
 - StudentHome period chips
 - StudentHome dark-card buttons
 - MultiSelect selected tags внутри shared MultiSelect
-- EngagementsPage badges — сначала нормализовать тексты статусов completed/transferred, потом решать миграцию
 ```
 
 Если задача затрагивает похожий UI-элемент, сначала свериться с `docs/UI_TECH_DEBT.md`.
