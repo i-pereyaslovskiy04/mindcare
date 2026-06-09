@@ -88,47 +88,6 @@
   white-space: nowrap;
 }
 
-/* ── Badges ── */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.role_student {
-  background: var(--milk);
-  color: var(--espresso);
-}
-
-.role_psychologist {
-  background: #e6f2e6;
-  color: var(--success);
-}
-
-.role_admin {
-  background: var(--sand);
-  color: var(--mocha);
-}
-
-.role_supervisor {
-  background: #e8ecf5;
-  color: #4a5a8a;
-}
-
-.statusActive {
-  background: #e6f2e6;
-  color: var(--success);
-}
-
-.statusBlocked {
-  background: var(--error-bg);
-  color: var(--error);
-}
-
 /* ── Row actions ── */
 .actionsCell {
   text-align: right;
@@ -150,10 +109,5 @@
 
 .rowDeleted .name {
   text-decoration: line-through;
-  color: var(--text-light);
-}
-
-.statusDeleted {
-  background: var(--fog);
   color: var(--text-light);
 }

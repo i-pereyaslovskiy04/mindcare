@@ -147,26 +147,6 @@
   white-space: nowrap;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.published {
-  background: #e6f2e6;
-  color: var(--success, #2e7d32);
-}
-
-.draft {
-  background: var(--sand, #fef3c7);
-  color: var(--mocha, #92400e);
-}
-
 /* ── Actions ── */
 .actionsCell {
   text-align: right;

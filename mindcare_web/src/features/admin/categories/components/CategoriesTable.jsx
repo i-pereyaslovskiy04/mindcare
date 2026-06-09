@@ -1,5 +1,6 @@
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
+import Badge from '../../../../components/UI/Badge/Badge';
 import styles from './CategoriesTable.module.css';
 
 const SKELETON_ROWS = 6;
@@ -74,9 +75,9 @@ export default function CategoriesTable({
                 {item.display_order}
               </td>
               <td>
-                <span className={`${styles.badge} ${item.is_active ? styles.active : styles.inactive}`}>
+                <Badge tone={item.is_active ? 'success' : 'warning'}>
                   {item.is_active ? 'Активна' : 'Скрыта'}
-                </span>
+                </Badge>
               </td>
               <td className={`${styles.colCenter} ${styles.count}`}>
                 {item.article_count}

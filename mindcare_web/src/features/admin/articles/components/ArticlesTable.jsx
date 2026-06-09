@@ -1,5 +1,6 @@
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
+import Badge from '../../../../components/UI/Badge/Badge';
 import styles from './ArticlesTable.module.css';
 
 const SKELETON_ROWS = 6;
@@ -84,9 +85,9 @@ export default function ArticlesTable({ items, loading, error, onEdit, onDelete,
                 </div>
               </td>
               <td>
-                <span className={`${styles.badge} ${item.is_published ? styles.published : styles.draft}`}>
+                <Badge tone={item.is_published ? 'success' : 'warning'}>
                   {item.is_published ? 'Опубликовано' : 'Черновик'}
-                </span>
+                </Badge>
               </td>
               <td className={styles.date}>
                 {formatDate(item.published_at || item.created_at)}

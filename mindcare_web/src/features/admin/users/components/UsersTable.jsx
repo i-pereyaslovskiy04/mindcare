@@ -1,5 +1,6 @@
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
+import Badge from '../../../../components/UI/Badge/Badge';
 import styles from './UsersTable.module.css';
 
 const ROLE_LABELS = {
@@ -7,6 +8,13 @@ const ROLE_LABELS = {
   psychologist: 'Психолог',
   admin:        'Администратор',
   supervisor:   'Супервизор',
+};
+
+const ROLE_BADGE_TONES = {
+  student:      'role-student',
+  psychologist: 'role-psychologist',
+  admin:        'role-admin',
+  supervisor:   'role-supervisor',
 };
 
 const SKELETON_ROWS = 7;
@@ -69,17 +77,17 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
               <td className={styles.name}>{item.full_name}</td>
               <td className={styles.email}>{item.email}</td>
               <td>
-                <span className={`${styles.badge} ${styles[`role_${item.role}`]}`}>
+                <Badge tone={ROLE_BADGE_TONES[item.role] ?? 'neutral'}>
                   {ROLE_LABELS[item.role] ?? item.role}
-                </span>
+                </Badge>
               </td>
               <td>
                 {item.deleted_at ? (
-                  <span className={`${styles.badge} ${styles.statusDeleted}`}>Удалён</span>
+                  <Badge tone="neutral">Удалён</Badge>
                 ) : (
-                  <span className={`${styles.badge} ${item.is_active ? styles.statusActive : styles.statusBlocked}`}>
+                  <Badge tone={item.is_active ? 'success' : 'error'}>
                     {item.is_active ? 'Активен' : 'Заблокирован'}
-                  </span>
+                  </Badge>
                 )}
               </td>
               <td className={styles.date}>{formatDate(item.created_at)}</td>

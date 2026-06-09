@@ -1,0 +1,28 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Status tones ── */
+.success { background: #e6f2e6;          color: var(--success);     }
+.warning { background: var(--sand);      color: var(--mocha);       }
+.error   { background: var(--error-bg);  color: var(--error);       }
+.neutral { background: var(--fog);       color: var(--text-light);  }
+
+/* ── Role tones ── */
+/* role-student: neutral warm, clearly non-status */
+.roleStudent     { background: var(--milk);  color: var(--espresso);  }
+
+/* role-psychologist: same visual as success for now — candidate for own token */
+.rolePsychologist{ background: #e6f2e6;      color: var(--success);   }
+
+/* role-admin: same visual as warning for now — candidate for own token */
+.roleAdmin       { background: var(--sand);  color: var(--mocha);     }
+
+/* role-supervisor: hardcoded hex from original UsersTable — candidate for CSS variable */
+.roleSupervisor  { background: #e8ecf5;      color: #4a5a8a;          }
