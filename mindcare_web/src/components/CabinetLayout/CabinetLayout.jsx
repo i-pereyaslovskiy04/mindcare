@@ -34,7 +34,7 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
           <div className={styles.userInfo}>
             <div className={styles.userName}>{user?.name ?? roleLabel}</div>
             <div className={styles.userRole}>
-              <span className={styles.roleDot} />
+              <span className={styles.roleDot} aria-hidden="true" />
               {roleLabel}
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
             </div>
             <button className={styles.iconBtn} aria-label="Уведомления" type="button">
               <Icon name="bell" size={16} />
-              <span className={styles.dot} />
+              <span className={styles.dot} aria-hidden="true" />
             </button>
             <button className={styles.iconBtn} aria-label="Почта" type="button">
               <Icon name="mail" size={16} />
