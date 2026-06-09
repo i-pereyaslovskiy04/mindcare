@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import Icon from '../../../../components/Icon/Icon';
+import Button from '../../../../components/UI/Button/Button';
 import styles from './SessionPopover.module.css';
 
 export default function SessionPopover({ session, style, arrowLeft, onClose }) {
@@ -26,7 +27,7 @@ export default function SessionPopover({ session, style, arrowLeft, onClose }) {
         <p className={styles.time}>{session.time}</p>
         {session.desc && <p className={styles.desc}>{session.desc}</p>}
         {session.status === 'upcoming' && (
-          <button className={styles.joinBtn}>Присоединиться</button>
+          <Button variant="primary" style={{ width: '100%', marginTop: 6 }}>Присоединиться</Button>
         )}
       </div>
     </>

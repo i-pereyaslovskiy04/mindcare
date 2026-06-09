@@ -184,46 +184,6 @@
   margin: 12px 0 14px;
 }
 
-/* ---- buttons ---- */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  border: none;
-  cursor: pointer;
-  letter-spacing: 0.03em;
-  transition: opacity 0.15s, transform 0.1s;
-  white-space: nowrap;
-}
-
-.btnPrimary {
-  background: var(--coffee);
-  color: #fff;
-}
-
-.btnPrimary:hover {
-  opacity: 0.88;
-  transform: translateY(-1px);
-}
-
-.btnSoft {
-  background: var(--cream);
-  color: var(--espresso);
-  border: 1px solid var(--nav-border);
-  width: 100%;
-  justify-content: center;
-}
-
-.btnSoft:hover {
-  border-color: var(--latte);
-  background: var(--sand);
-}
-
 /* ---- responsive ---- */
 @media (max-width: 860px) {
   .g2 { grid-template-columns: 1fr; }

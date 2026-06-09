@@ -1,6 +1,7 @@
 import Icon from '../../../components/Icon/Icon';
 import SearchBar from '../../materials/components/SearchBar';
 import { useStudentMaterials } from './useStudentMaterials';
+import Button from '../../../components/UI/Button/Button';
 import styles from './MaterialsPage.module.css';
 
 const TAG_OPTIONS   = ['Статья', 'Вебинар', 'Упражнение', 'Гид'].map(v => ({ value: v, label: v }));
@@ -82,9 +83,9 @@ export default function MaterialsPage() {
 
       {hasMore && (
         <div className={styles.loadMoreWrap}>
-          <button className={styles.loadMoreBtn} onClick={loadMore}>
+          <Button variant="secondary" onClick={loadMore}>
             Загрузить ещё
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -348,29 +348,6 @@
   text-decoration: none;
 }
 
-.btnPrimary {
-  background: var(--espresso);
-  color: var(--milk);
-  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.18);
-}
-
-.btnPrimary:hover {
-  background: var(--mocha, #6B4F35);
-  box-shadow: 0 4px 14px rgba(74, 55, 40, 0.22);
-}
-
-.btnGhost {
-  background: transparent;
-  color: var(--coffee);
-  border: 1px solid var(--nav-border);
-}
-
-.btnGhost:hover {
-  background: var(--sand);
-  border-color: var(--latte);
-  color: var(--espresso);
-}
-
 .btnSoft {
   background: var(--cream);
   color: var(--espresso);

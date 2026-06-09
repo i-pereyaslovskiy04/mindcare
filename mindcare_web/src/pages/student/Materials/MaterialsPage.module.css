@@ -205,27 +205,6 @@
   margin-top: 28px;
 }
 
-.loadMoreBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 28px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  background: var(--cream);
-  color: var(--espresso);
-  border: 1px solid var(--nav-border);
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.loadMoreBtn:hover {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-
 /* ---- responsive ---- */
 @media (max-width: 1200px) {
   .g4 { grid-template-columns: repeat(3, 1fr); }

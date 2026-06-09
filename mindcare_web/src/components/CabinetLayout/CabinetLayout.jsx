@@ -7,6 +7,7 @@ import styles from './CabinetLayout.module.css';
 const ROLE_LABELS = {
   psychologist: 'Психолог',
   supervisor:   'Супервизор',
+  student:      'Пациент',
 };
 
 export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs }) {

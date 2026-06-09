@@ -8,6 +8,7 @@ import CalendarDayPopup from './components/CalendarDayPopup';
 import UpcomingList from './components/UpcomingList';
 import SessionHistory from './components/SessionHistory';
 import Select from '../../../components/UI/Select/Select';
+import Button from '../../../components/UI/Button/Button';
 import styles from './CalendarPage.module.css';
 
 const _today = new Date();
@@ -156,7 +157,7 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <button className={styles.bookBtn} disabled={!activeSlot}>Записаться</button>
+          <Button variant="primary" disabled={!activeSlot} style={{ width: '100%', marginTop: 4 }}>Записаться</Button>
         </section>
       </div>
     </div>
