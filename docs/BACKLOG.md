@@ -33,14 +33,15 @@
 
 ---
 
-## 🔴 Критические (влияют на прод)
+## 🟠 Backend quality / security backlog
 
 **`auth_log.id` SAWarning (open)**
+- Severity: Medium
 - ORM-модель `AuthLog` не объявляет `server_default` или `Sequence` для `id` на партиционированных таблицах
 - SQLAlchemy выдаёт SAWarning при старте: `Implying autoincrement for column...` для партиционированных таблиц
-- Функционально не нарушает работу (PostgreSQL sequence работает), но может вызвать проблемы при миграциях
-- Severity: Medium
-- Stage 14a audit: completed (диагностика). Следующий шаг: Stage 14b — live DB inspection перед любым fix
+- Причина: ORM не отражает DB-side sequence generator для `id` в partitioned audit table
+- Риск: основной auth/admin flow не падает (`log_auth_event()` ловит исключения), но audit events могут теряться
+- Next: Stage 14b — live DB inspection (`information_schema`, `pg_inherits`) перед любым ORM/Alembic fix
 - Файл: `mindcare_api/app/db/models/audit.py`
 
 ---
