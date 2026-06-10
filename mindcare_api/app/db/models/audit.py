@@ -35,7 +35,7 @@ class AuditLog(Base):
         Index("idx_audit_entity", "entity_type", "entity_id"),
     )
 
-    id             = Column(BigInteger, primary_key=True)
+    id             = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id        = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     user_role      = Column(String(50))
     event_type     = Column(String(100), nullable=False)
@@ -63,7 +63,7 @@ class AuthLog(Base):
         Index("idx_auth_failures", "ip_address", "created_at"),
     )
 
-    id             = Column(BigInteger, primary_key=True)
+    id             = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id        = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     user_email     = Column(String(255))   # денормализация: email на момент события
     event          = Column(String(150), nullable=False)
@@ -85,7 +85,7 @@ class DataChangeLog(Base):
         Index("idx_dcl_operation", "operation",  "created_at"),
     )
 
-    id             = Column(BigInteger, primary_key=True)
+    id             = Column(BigInteger, primary_key=True, autoincrement=True)
     actor_id       = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     actor_role     = Column(String(50))
     table_name     = Column(String(100), nullable=False)
