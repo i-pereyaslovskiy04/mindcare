@@ -1,4 +1,5 @@
 import Icon from '../../../components/Icon/Icon';
+import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
 import styles from './TestsPage.module.css';
 
@@ -79,7 +80,7 @@ export default function TestsPage() {
                 <div className={styles.labelTag}>{r.name}</div>
                 <h3 className={styles.hCard}>{r.full}</h3>
               </div>
-              <span className={`${styles.badge} ${styles.badgeDone}`}>пройден</span>
+              <Badge tone="success">пройден</Badge>
             </div>
             <div className={styles.testDateRow}>
               <div className={styles.testDate}>{r.date}</div>

@@ -1,6 +1,7 @@
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../auth/AuthContext';
 import Icon from '../../components/Icon/Icon';
+import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import styles from './AdminLayout.module.css';
 
@@ -36,7 +37,7 @@ export default function AdminLayout() {
             <div className={styles.userName}>{user?.name ?? 'Администратор'}</div>
             <div className={styles.userRole}>
               <span className={styles.roleDot} />
-              {user?.role === 'supervisor' ? 'Супервизор' : 'Администратор'}
+              Администратор
             </div>
           </div>
         </div>
@@ -127,14 +128,15 @@ export default function AdminLayout() {
             Администратор / <span>{crumb}</span>
           </div>
           <div className={styles.actions}>
-            <button
+            <Button
               type="button"
-              className={styles.iconBtn}
+              variant="icon"
+              size="sm"
               aria-label="Выйти"
               onClick={logout}
             >
               <Icon name="logout" size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 

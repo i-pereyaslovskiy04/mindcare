@@ -352,20 +352,6 @@
   color: var(--text-muted);
 }
 
-.badgeActive {
-  display: inline-block;
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
-  border-radius: 20px;
-  padding: 2px 9px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
 /* ── Card action buttons ─────────────────────────────────────────── */
 
 .cardActions {
@@ -377,47 +363,6 @@
   flex-wrap: wrap;
 }
 
-.actionBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-family: 'Nunito', sans-serif;
-  font-size: 0.78rem;
-  font-weight: 600;
-  border: 1px solid var(--nav-border);
-  background: var(--cream);
-  color: var(--text-muted);
-  cursor: not-allowed;
-  opacity: 0.55;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.actionBtnLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-family: 'Nunito', sans-serif;
-  font-size: 0.78rem;
-  font-weight: 600;
-  border: 1px solid var(--latte);
-  background: var(--cream);
-  color: var(--coffee);
-  text-decoration: none;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.actionBtnLink:hover {
-  background: var(--sand);
-  border-color: var(--coffee);
-  color: var(--espresso);
-}
 
 .soonTag {
   font-size: 0.65rem;
@@ -440,28 +385,6 @@
   margin-top: 20px;
 }
 
-.pageBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid var(--nav-border);
-  background: var(--warm-white);
-  color: var(--espresso);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.pageBtn:hover:not(:disabled) {
-  background: var(--cream);
-}
-
-.pageBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 .pageInfo {
   font-size: 0.85rem;
@@ -500,8 +423,5 @@
     width: 100%;
   }
 
-  .actionBtn {
-    padding: 8px 14px;
-    font-size: 0.82rem;
-  }
+
 }

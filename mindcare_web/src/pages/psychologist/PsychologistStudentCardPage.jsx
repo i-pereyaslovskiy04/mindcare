@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
+import Badge from '../../components/UI/Badge/Badge';
 import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
@@ -144,7 +145,7 @@ export default function PsychologistStudentCardPage() {
             <div className={styles.infoCard}>
               <div className={styles.infoLabel}>Статус</div>
               <div className={styles.infoValue}>
-                <span className={styles.badgeActive}>Активен</span>
+                <Badge tone="success">Активен</Badge>
               </div>
             </div>
             <div className={styles.infoCard}>

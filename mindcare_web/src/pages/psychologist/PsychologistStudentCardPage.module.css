@@ -287,19 +287,6 @@
   font-weight: 500;
 }
 
-.badgeActive {
-  display: inline-block;
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
-  border-radius: 20px;
-  padding: 2px 9px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 /* ── Section ─────────────────────────────────────────────────── */
 
 .section {

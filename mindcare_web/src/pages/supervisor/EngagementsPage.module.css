@@ -216,22 +216,6 @@
   margin-top: 20px;
 }
 
-.pageBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid var(--nav-border, #ede8e3);
-  background: var(--warm-white, #fdfaf7);
-  color: var(--espresso, #3b2a1a);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.pageBtn:hover:not(:disabled) { background: var(--cream, #faf7f4); }
-.pageBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .pageInfo {
   font-size: 0.85rem;

@@ -1,5 +1,6 @@
 import Icon from '../../../../components/Icon/Icon';
 import { MONTH_NAMES_GENITIVE } from '../utils/calendarUtils';
+import Badge from '../../../../components/UI/Badge/Badge';
 import Button from '../../../../components/UI/Button/Button';
 import styles from './UpcomingList.module.css';
 
@@ -32,7 +33,7 @@ export default function UpcomingList({ sessions }) {
                 </span>
               </div>
               <div className={styles.right}>
-                <span className={styles.badge}>Подтверждена</span>
+                <Badge tone="success">Подтверждена</Badge>
                 {i === 0 && (
                   <Button variant="primary" size="sm">Подключиться</Button>
                 )}

@@ -217,23 +217,29 @@ export default function EngagementsPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className={styles.pagination}>
-              <button
-                className={styles.pageBtn}
+              <Button
+                type="button"
+                variant="icon"
+                size="sm"
+                aria-label="Предыдущая страница"
                 disabled={page === 1}
                 onClick={() => setPage(p => p - 1)}
               >
                 <Icon name="chevron-left" size={16} />
-              </button>
+              </Button>
               <span className={styles.pageInfo}>
                 {page} / {totalPages}
               </span>
-              <button
-                className={styles.pageBtn}
+              <Button
+                type="button"
+                variant="icon"
+                size="sm"
+                aria-label="Следующая страница"
                 disabled={page === totalPages}
                 onClick={() => setPage(p => p + 1)}
               >
                 <Icon name="chevron-right" size={16} />
-              </button>
+              </Button>
             </div>
           )}
 

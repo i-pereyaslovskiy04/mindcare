@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useAuth, useLogout } from '../../features/auth/AuthContext';
-import Icon from '../Icon/Icon';
+import { useAuth } from '../../features/auth/AuthContext';
 import Button from '../UI/Button/Button';
 import Toggle from '../UI/Toggle/Toggle';
 import { getInitials } from '../../shared/lib/utils';
@@ -32,7 +31,6 @@ function NotifRow({ label, desc, on, onToggle }) {
 
 export default function CabinetSettingsPage() {
   const { user } = useAuth();
-  const logout   = useLogout();
 
   const [timezone, setTimezone] = useState('msk');
 
@@ -105,7 +103,7 @@ export default function CabinetSettingsPage() {
           </div>
         </div>
 
-        {/* RIGHT — Notifications + Logout */}
+        {/* RIGHT — Notifications */}
         <div className={styles.rightCol}>
           <div className={styles.card}>
             <h2 className={styles.sectionTitle} style={{ marginBottom: 14 }}>Уведомления</h2>
@@ -129,15 +127,6 @@ export default function CabinetSettingsPage() {
             />
           </div>
 
-          <div className={`${styles.card} ${styles.logoutCard}`}>
-            <div>
-              <div className={styles.logoutLabel}>Выйти из аккаунта</div>
-              <div className={styles.logoutSub}>Сессия будет завершена на этом устройстве</div>
-            </div>
-            <Button variant="ghost" onClick={logout}>
-              <Icon name="logout" size={14} /> Выйти
-            </Button>
-          </div>
         </div>
       </div>
     </div>

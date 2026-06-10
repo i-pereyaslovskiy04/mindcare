@@ -14,21 +14,25 @@ function Pagination({ page, total, size, onPageChange }) {
 
   return (
     <div className={styles.pagination}>
-      <button
-        className={styles.pageBtn}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
         disabled={page === 1}
         onClick={() => onPageChange(page - 1)}
       >
         ← Назад
-      </button>
+      </Button>
       <span className={styles.pageInfo}>Стр. {page} из {totalPages}</span>
-      <button
-        className={styles.pageBtn}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
         disabled={page === totalPages}
         onClick={() => onPageChange(page + 1)}
       >
         Вперёд →
-      </button>
+      </Button>
     </div>
   );
 }

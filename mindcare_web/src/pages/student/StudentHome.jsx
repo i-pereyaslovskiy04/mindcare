@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import MoodChart from './components/MoodChart/MoodChart';
 import StatCard from './components/StatCard/StatCard';
@@ -183,13 +183,10 @@ export default function StudentHome() {
           <h2 className={styles.sectionTitle}>Быстрые действия</h2>
           <div>
             {QUICK_ACTIONS.map((item) => (
-              <div
+              <Link
                 key={item.icon}
+                to={item.to}
                 className={styles.liRow}
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(item.to)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(item.to); } }}
               >
                 <div className={styles.liIcon}>
                   <Icon name={item.icon} size={18} />
@@ -202,7 +199,7 @@ export default function StudentHome() {
                   ? <span className={styles.liBadge}>{item.badge}</span>
                   : <span className={styles.liArrow}><Icon name="arrow-right" size={16} /></span>
                 }
-              </div>
+              </Link>
             ))}
           </div>
         </div>
