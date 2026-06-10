@@ -133,6 +133,8 @@ export default function CalendarPage() {
               {FORMAT_OPTIONS.map(f => (
                 <button
                   key={f}
+                  type="button"
+                  aria-pressed={activeFormat === f}
                   className={activeFormat === f ? `${styles.chip} ${styles.chipActive}` : styles.chip}
                   onClick={() => setActiveFormat(f)}
                 >
@@ -148,6 +150,8 @@ export default function CalendarPage() {
               {SLOT_OPTIONS.map(t => (
                 <button
                   key={t}
+                  type="button"
+                  aria-pressed={activeSlot === t}
                   className={activeSlot === t ? `${styles.slot} ${styles.slotActive}` : styles.slot}
                   onClick={() => setActiveSlot(prev => prev === t ? null : t)}
                 >

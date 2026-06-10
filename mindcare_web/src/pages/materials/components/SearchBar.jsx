@@ -127,6 +127,7 @@ export default function SearchBar({
           />
           {inputValue && (
             <button
+              type="button"
               className={styles.clearInputBtn}
               onClick={clearInput}
               aria-label="Очистить поиск"
@@ -139,6 +140,7 @@ export default function SearchBar({
         {/* position:relative — FiltersDropdown (absolute) anchors to this div */}
         <div className={styles.filterBtnWrap} ref={filterWrapRef}>
           <button
+            type="button"
             className={[
               styles.filterBtn,
               activeFilterCount > 0 ? styles.filterBtnActive : '',
@@ -169,6 +171,7 @@ export default function SearchBar({
             <span key={`tag-${tag}`} className={styles.chip}>
               {tag}
               <button
+                type="button"
                 className={styles.chipRemove}
                 onClick={() => removeTag(tag)}
                 aria-label={`Убрать фильтр «${tag}»`}
@@ -181,6 +184,7 @@ export default function SearchBar({
             <span key={`topic-${topic}`} className={styles.chip}>
               {topic}
               <button
+                type="button"
                 className={styles.chipRemove}
                 onClick={() => removeTopic(topic)}
                 aria-label={`Убрать фильтр «${topic}»`}
