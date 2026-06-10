@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../features/auth/AuthContext';
+import { getRoleHome } from '../../shared/lib/routes';
 import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
@@ -35,6 +37,8 @@ const CloseIcon = () => (
 
 export default function Navbar({ onOpenAuth }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, isAuthenticated, loading } = useAuth();
+  const cabinetTo = getRoleHome(user?.role);
 
   // Close menu when resizing back to desktop
   useEffect(() => {
@@ -70,16 +74,28 @@ export default function Navbar({ onOpenAuth }) {
           ))}
         </ul>
 
-        {/* Right side: user icon (always) + burger (mobile only) */}
+        {/* Right side: user icon (auth-aware) + burger (mobile only) */}
         <div className={styles.navRight}>
-          <button
-            className={styles.navUserIcon}
-            onClick={onOpenAuth}
-            aria-label="Войти в аккаунт"
-            type="button"
-          >
-            <UserIcon />
-          </button>
+          {!loading && (
+            isAuthenticated ? (
+              <Link
+                to={cabinetTo}
+                className={styles.navUserIcon}
+                aria-label="Личный кабинет"
+              >
+                <UserIcon />
+              </Link>
+            ) : (
+              <button
+                className={styles.navUserIcon}
+                onClick={onOpenAuth}
+                aria-label="Войти в аккаунт"
+                type="button"
+              >
+                <UserIcon />
+              </button>
+            )
+          )}
           <button
             className={styles.navBurger}
             onClick={() => setIsMenuOpen((prev) => !prev)}
@@ -108,9 +124,21 @@ export default function Navbar({ onOpenAuth }) {
             </li>
           ))}
         </ul>
-        <button className={styles.mobileAuthBtn} onClick={handleAuthClick} type="button">
-          Войти в аккаунт
-        </button>
+        {!loading && (
+          isAuthenticated ? (
+            <Link
+              to={cabinetTo}
+              className={styles.mobileAuthBtn}
+              onClick={closeMenu}
+            >
+              Личный кабинет
+            </Link>
+          ) : (
+            <button className={styles.mobileAuthBtn} onClick={handleAuthClick} type="button">
+              Войти в аккаунт
+            </button>
+          )
+        )}
       </div>
     </nav>
   );

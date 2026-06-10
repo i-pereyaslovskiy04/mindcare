@@ -15,7 +15,10 @@ export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const handleOpenAuth = () => setIsAuthModalOpen(true);
+  const handleOpenAuth = () => {
+    if (isAuthenticated) return;
+    setIsAuthModalOpen(true);
+  };
   const handleCloseAuth = () => setIsAuthModalOpen(false);
   const handleGoToDashboard = () => navigate(getRoleHome(user?.role));
 
@@ -28,7 +31,9 @@ export default function Home() {
       )}
       <NewsSection />
       <Footer />
-      <AuthModal isOpen={isAuthModalOpen} onClose={handleCloseAuth} />
+      {!isAuthenticated && (
+        <AuthModal isOpen={isAuthModalOpen} onClose={handleCloseAuth} />
+      )}
       <CookieBanner />
     </>
   );
