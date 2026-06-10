@@ -12,6 +12,7 @@
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
+import { getRoleHome } from '../shared/lib/routes';
 
 // ── Public pages ──────────────────────────────────────────────────────────────
 import Home              from '../pages/home/Home';
@@ -98,13 +99,7 @@ function DashboardRedirect() {
   if (loading) return null;
   if (!user)   return <Navigate to="/login" replace />;
 
-  const destinations = {
-    student:      '/student',
-    psychologist: '/psychologist',
-    admin:        '/admin/users',
-    supervisor:   '/supervisor',
-  };
-  return <Navigate to={destinations[user.role] ?? '/profile'} replace />;
+  return <Navigate to={getRoleHome(user.role)} replace />;
 }
 
 // ── Route tree ────────────────────────────────────────────────────────────────
