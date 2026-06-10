@@ -125,14 +125,27 @@ class SessionNote(Base):
     """
     Заметки после сеанса.
 
-    SECURITY RISK: content хранится plaintext.
-    Это нарушает требования ФЗ-152 к хранению специальных категорий ПДн
-    (психологические данные = чувствительная категория).
+    SECURITY NOTE: поле content физически остаётся TEXT-колонкой, но application
+    layer хранит в нём только Fernet ciphertext с префиксом "enc:v1:".
 
-    TODO (BACKLOG): реализовать encryption-at-rest для поля content.
-    Предпочтительный подход: Fernet (cryptography.fernet) с ключом из env.
-    Шифрование на уровне приложения, не PostgreSQL.
-    Не менять схему БД — поле остаётся TEXT, шифрование в app-слое.
+    Шифрование/расшифровка реализованы в app/core/encryption.py и подключены
+    через app/session_notes/storage.py:
+    - encrypt_text(plaintext) вызывается перед записью в БД;
+    - decrypt_text(ciphertext) вызывается при чтении для API response.
+
+    ORM-объект SessionNote.content всегда содержит ciphertext и никогда не
+    мутируется plaintext-значением (SQLAlchemy не делает flush plaintext).
+
+    Ограничения и ответственность:
+    - Не записывать plaintext напрямую в SessionNote.content.
+    - Не логировать content в audit/data_change_log/stdout.
+    - Plaintext fallback намеренно отсутствует — decrypt упадёт если значение
+      не начинается с "enc:v1:".
+    - Безопасность данных зависит от корректного хранения DATA_ENCRYPTION_KEY
+      (см. .env.example, раздел ENCRYPTION). Потеря ключа = потеря всех заметок.
+
+    ФЗ-152: данный подход устраняет риск хранения психологических данных
+    (специальная категория ПДн) в открытом виде на уровне БД.
     """
     __tablename__ = "session_notes"
 

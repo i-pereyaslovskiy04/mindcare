@@ -19,11 +19,17 @@
 - Файлы: `mindcare_api/alembic/versions/3a7c5e2b8f1d_add_audit_tables.py`,
   `mindcare_api/scripts/ensure_audit_partitions.py`
 
-**`session_notes.content` не шифруется**
-- В схеме БД написано «шифруется на уровне приложения» — это не реализовано
-- Клинические заметки хранятся открытым текстом
-- Нужен `cryptography.fernet` с ключом из env
-- Файл: будущий модуль `app/appointments/`
+**~~`session_notes.content` не шифруется~~** ✅ Закрыто
+- Реализовано Fernet application-layer шифрование в `app/core/encryption.py`
+- `DATA_ENCRYPTION_KEY` env-переменная; алгоритм AES-128-CBC + HMAC-SHA256
+- Ciphertext хранится с prefix `enc:v1:` в TEXT-колонке без изменения схемы БД
+- encrypt-on-write / decrypt-on-read в `app/session_notes/storage.py`
+- Plaintext fallback намеренно отсутствует; ORM-объект не мутируется plaintext
+- Live API/DB verification прошла: DB хранит ciphertext, API возвращает plaintext
+- Минимальные unit-тесты: `mindcare_api/tests/test_encryption.py` (21 passed)
+- **Операционное требование:** `DATA_ENCRYPTION_KEY` должен быть настроен и резервно скопирован
+  в каждой среде, хранящей заметки. Потеря ключа = потеря всех зашифрованных заметок.
+- Файлы: `mindcare_api/app/core/encryption.py`, `mindcare_api/app/session_notes/`
 
 ---
 

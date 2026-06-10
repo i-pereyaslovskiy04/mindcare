@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     SMTP_FROM: str = ""
     # --- MEDIA ---
     NEWS_IMAGE_MAX_SIZE_MB: int = 20
+    # --- CORS ---
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
+    # --- ENCRYPTION ---
+    DATA_ENCRYPTION_KEY: str | None = None
     # --- APP ---
     DEBUG: bool = False
     ENV: str = "production"
