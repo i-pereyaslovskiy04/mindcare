@@ -148,10 +148,19 @@ mindcare_web/
     │   ├── CookieBanner/
     │   │   ├── CookieBanner.jsx
     │   │   └── CookieBanner.module.css
-    │   ├── UI/
+    │   ├── UI/                    ← shared UI primitives (see docs/UI_COMPONENTS_GUIDE.md)
+    │   │   ├── Button/
+    │   │   │   ├── Button.jsx + .module.css
+    │   │   │   └── ButtonLink.jsx     ← router <Link> styled as Button
+    │   │   ├── Badge/
+    │   │   ├── Checkbox/
+    │   │   ├── FilterChip/
+    │   │   ├── Select/
     │   │   ├── MultiSelect/
     │   │   │   ├── MultiSelect.jsx
     │   │   │   └── multiSelect.module.css
+    │   │   ├── Tag/
+    │   │   ├── Toggle/
     │   │   ├── TiptapEditor/
     │   │   │   └── TiptapEditor.jsx + .module.css
     │   │   ├── ImageUpload/

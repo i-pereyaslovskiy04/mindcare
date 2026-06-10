@@ -33,6 +33,18 @@
 
 ---
 
+## 🔴 Критические (влияют на прод)
+
+**`auth_log.id` SAWarning (open)**
+- ORM-модель `AuthLog` не объявляет `server_default` или `Sequence` для `id` на партиционированных таблицах
+- SQLAlchemy выдаёт SAWarning при старте: `Implying autoincrement for column...` для партиционированных таблиц
+- Функционально не нарушает работу (PostgreSQL sequence работает), но может вызвать проблемы при миграциях
+- Severity: Medium
+- Stage 14a audit: completed (диагностика). Следующий шаг: Stage 14b — live DB inspection перед любым fix
+- Файл: `mindcare_api/app/db/models/audit.py`
+
+---
+
 ## 🟡 Важные (влияют на качество)
 
 **~~OTP-коды хранятся в открытом виде~~** ✅ Закрыто

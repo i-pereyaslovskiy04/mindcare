@@ -19,7 +19,7 @@
 - Все данные пользователей хранятся на серверах в РФ
 - Согласие на обработку ПДн фиксируется в `consent_records` при регистрации
 - Перед каждым тестом и записью на консультацию проверяется актуальность согласия
-- Заметки сессий (`session_notes`) должны шифроваться на уровне приложения (TODO: не реализовано)
+- Заметки сессий (`session_notes`) шифруются на уровне приложения: Fernet, `enc:v1:` prefix, `app/core/encryption.py`; не писать plaintext в `SessionNote.content`, не логировать `content`
 - IP-адреса анонимизируются через 90 дней (`anonymize_old_ips()` в БД)
 
 **Монорепо с двумя проектами:**
@@ -237,6 +237,7 @@ mindcare_api/
 | `f4b9e2c6a1d8` | audit_indexes_and_types: индексы + тип data_change_log.changed_fields |
 | `a8c3f1d9e2b5` | add_tags_tables: tags, article_tags, news_tags, test_tags |
 | `b3c5e7a9f1d2` | extend_auth_log_event: auth_log.event VARCHAR(50→150) |
+| `d2e5f8a1b4c7` | add_supervisor_engagement_index: partial unique index — **head** |
 
 **Ключевые таблицы:**
 
@@ -732,9 +733,9 @@ Conventional Commits:
 **Не «исправляй» эти вещи без явного запроса** — они отложены осознанно.
 
 Критические риски (прочитай перед любой работой с auth или БД):
-- ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ — закрыто: миграция `3a7c5e2b8f1d` создаёт partitioned tables, `scripts/ensure_audit_partitions.py` управляет будущими партициями
-- `session_notes.content` хранится открытым текстом — шифрование не реализовано (нарушение ФЗ-152 для специальных категорий ПДн)
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
 Исправлено (больше не критично):
+- ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ — закрыто: миграция `3a7c5e2b8f1d` создаёт partitioned tables, `scripts/ensure_audit_partitions.py` управляет будущими партициями
+- ~~`session_notes.content` хранится открытым текстом~~ — закрыто: Fernet application-layer encryption в `app/core/encryption.py`; `DATA_ENCRYPTION_KEY` обязателен в `.env`
 - OTP-коды теперь хранятся как SHA-256 хеш (migration `c5d8a1b4e7f2`, otp_service.py)

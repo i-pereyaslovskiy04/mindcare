@@ -1,5 +1,12 @@
 # Backend Architecture — MindCare API
-> Last updated: 2026-05-21
+
+> **Historical snapshot.** This document reflects backend architecture as of 2026-05-21 and is not the current source of truth.
+> For current status see `README.md`, `docs/BACKLOG.md`, `docs/DECISIONS.md`, and `alembic history`.
+> Known stale items: "41 tables" (actual: 45), head revision `e9a3d7f2b5c0` (actual: `d2e5f8a1b4c7`),
+> missing modules: tags, categories, news, articles, media, session_notes, supervisor, psychologist, core/encryption.py.
+> Known security debt section below is also stale — both issues have been closed (see BACKLOG.md).
+
+> Last snapshot: 2026-05-21
 
 ---
 
@@ -187,9 +194,9 @@ alembic downgrade -1
 | `audit.py` | auth_log, audit_log, data_change_log | Audit trail (ФЗ-152) |
 | `otp.py` | otp_verifications | SHA-256 hashed OTP codes, TTL 10 min |
 
-**Known security debt:**
-- `session_notes.content` — stored plaintext, needs Fernet encryption (BACKLOG, ФЗ-152 violation)
-- Audit table partitions (if prod) expire 2026-12-31 — need auto-generation script (BACKLOG)
+**Known security debt** *(snapshot status — see BACKLOG.md for current status)*:
+- ~~`session_notes.content` — stored plaintext~~ ✅ Closed: Fernet encryption implemented in `app/core/encryption.py`
+- ~~Audit table partitions expire 2026-12-31~~ ✅ Closed: `scripts/ensure_audit_partitions.py` manages future partitions
 
 ---
 

@@ -59,13 +59,14 @@ mindcare/
 │   ├── app/
 │   │   ├── main.py                  # Точка входа: FastAPI app, CORS, lifespan, роутеры
 │   │   ├── core/
-│   │   │   └── config.py            # Настройки из .env (pydantic-settings)
+│   │   │   ├── config.py            # Настройки из .env (pydantic-settings)
+│   │   │   └── encryption.py        # Fernet encrypt/decrypt для session_notes
 │   │   ├── db/
 │   │   │   ├── base.py              # Base = declarative_base()  ← единственный источник
 │   │   │   ├── session.py           # engine, SessionLocal, get_db()
 │   │   │   ├── init_db.py           # Startup: ensure_database + check_migrations + seed
 │   │   │   ├── seed.py              # Идемпотентный seed: роли, permissions, consents
-│   │   │   └── models/              # ORM-модели (10 модулей, 41 таблица)
+│   │   │   └── models/              # ORM-модели (10 модулей, 45 таблиц)
 │   │   │       ├── auth.py          # users, roles, user_roles, permissions, user_sessions
 │   │   │       ├── profiles.py      # student_profiles, psychologist_profiles
 │   │   │       ├── consents.py      # consents, consent_records
@@ -86,16 +87,27 @@ mindcare/
 │   │   │   ├── security.py          # generate_session_token()
 │   │   │   └── schemas.py           # Pydantic-схемы /api/auth/*
 │   │   ├── users/
-│   │   │   ├── routes_admin.py      # /api/admin/users/* (только admin)
+│   │   │   ├── routes_admin.py      # /api/admin/users/* (admin, supervisor)
 │   │   │   ├── service.py           # Бизнес-логика: CRUD пользователей
 │   │   │   ├── storage.py           # DB-запросы: поиск, создание, обновление
 │   │   │   └── schemas.py           # Pydantic-схемы admin user management
+│   │   ├── tags/                    # /api/admin/tags/* + /api/tags/ (public)
+│   │   ├── categories/              # /api/admin/categories/*
+│   │   ├── news/                    # /api/admin/news/* + /api/news/* (public)
+│   │   ├── articles/                # /api/admin/articles/* + /api/articles/* (public)
+│   │   ├── media/                   # POST /api/media/upload + Pillow resize/WebP
+│   │   ├── session_notes/           # /api/session-notes/* + Fernet encrypt-on-write
+│   │   ├── supervisor/              # /api/supervisor/* (supervisor role)
+│   │   ├── psychologist/            # /api/psychologist/* (psychologist role)
 │   │   └── services/
 │   │       ├── email_service.py     # Публичный API: send_registration_otp() и др.
-│   │       └── _smtp.py             # Внутренний SMTP-транспорт (не импортировать напрямую)
+│   │       └── email_sender.py      # Внутренний SMTP-транспорт (не импортировать напрямую)
 │   ├── scripts/
-│   │   ├── create_admin.py          # Создание первого администратора (интерактивный CLI)
-│   │   └── test_smtp.py             # Диагностика SMTP-соединения
+│   │   ├── create_admin.py              # Создание первого администратора (интерактивный CLI)
+│   │   ├── ensure_audit_partitions.py   # Создание будущих партиций audit-таблиц
+│   │   └── test_smtp.py                 # Диагностика SMTP-соединения
+│   ├── tests/
+│   │   └── test_encryption.py       # Unit-тесты для app/core/encryption.py (21 test)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -137,11 +149,17 @@ pip install -r requirements.txt
 
 ### Настройка .env
 
-Создать файл `mindcare_api/.env`:
+Создать файл `mindcare_api/.env` (образец: `mindcare_api/.env.example`):
 
 ```env
 # Обязательные
 DATABASE_URL=postgresql://MindcareUser:password@localhost/mindcare
+
+# Шифрование заметок сессий (Fernet, обязателен при наличии данных)
+# Генерация нового ключа:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Хранить отдельно от резервных копий БД. Потеря ключа = потеря зашифрованных заметок.
+DATA_ENCRYPTION_KEY=
 
 # Email: "dev" — печатает в stdout, "smtp" — реальная отправка
 EMAIL_MODE=dev
@@ -152,10 +170,20 @@ EMAIL_MODE=dev
 # SMTP_USER=user@example.com
 # SMTP_PASSWORD=secret
 # SMTP_FROM=noreply@example.com
+# SMTP_TLS=True
+# SMTP_SSL=False
+
+# CORS: разрешённые origin'ы фронтенда (через запятую)
+ALLOWED_ORIGINS=http://localhost:3000
+
+# Максимальный размер загружаемого изображения в МБ (JPEG/PNG/WebP)
+# При nginx: client_max_body_size должен быть NEWS_IMAGE_MAX_SIZE_MB + 5
+NEWS_IMAGE_MAX_SIZE_MB=20
 
 # Опциональные
 SESSION_EXPIRE_DAYS=7
 DEBUG=false
+ENV=development
 ```
 
 ### PostgreSQL
@@ -219,7 +247,7 @@ Alembic хранит текущую ревизию в одной строке:
 alembic_version
 ───────────────────
 version_num
-e9a3d7f2b5c0      ← текущий head
+d2e5f8a1b4c7      ← текущий head
 ```
 
 Каждая команда `alembic upgrade head` применяет все недостающие ревизии по цепочке и обновляет эту строку.
@@ -229,12 +257,15 @@ e9a3d7f2b5c0      ← текущий head
 | Revision | Описание |
 |----------|----------|
 | `af13ad7a133c` | Baseline: 38 таблиц (всё кроме audit) |
-| `3a7c5e2b8f1d` | Audit tables: auth_log, audit_log, data_change_log |
+| `3a7c5e2b8f1d` | Audit tables: auth_log, audit_log, data_change_log (партиционированные) |
 | `c5d8a1b4e7f2` | otp_verifications.code VARCHAR(6→64) для SHA-256 хешей |
 | `f4b9e2c6a1d8` | Audit indexes + ARRAY(Text) fix |
-| `e9a3d7f2b5c0` | Rebuild audit indexes (согласовано с ORM) — **head** |
+| `e9a3d7f2b5c0` | Rebuild audit indexes (согласованы с ORM) |
+| `a8c3f1d9e2b5` | Tags tables: tags, article_tags, news_tags, test_tags |
+| `b3c5e7a9f1d2` | auth_log.event VARCHAR(50→150) |
+| `d2e5f8a1b4c7` | Supervisor engagement unique index — **head** |
 
-### ORM-модели (41 таблица, 10 модулей)
+### ORM-модели (45 таблиц, 10 модулей)
 
 | Модуль | Таблицы |
 |--------|---------|
@@ -311,7 +342,7 @@ lifespan() startup
 
 **OTP-коды.** Plaintext-код отправляется пользователю по email. В БД хранится только `SHA-256(code)` в `otp_verifications`. Код действителен 10 минут. Верификация — сравнение хешей. После успешной верификации запись удаляется.
 
-**Пароли.** bcrypt через passlib. Никакого MD5/SHA для паролей.
+**Пароли.** bcrypt напрямую (`import bcrypt`). Никакого MD5/SHA для паролей.
 
 **Аудит.** Все auth-события (login, logout, failed_login, register, password_reset) пишутся в `auth_log` через `audit.log_auth_event()`. Fire-and-forget, ошибки записи не влияют на основной ответ.
 
@@ -321,9 +352,13 @@ lifespan() startup
 
 **Soft delete.** Физического удаления пользователей нет — `deleted_at` timestamp + отзыв всех сессий.
 
-**Известные риски (бэклог):**
-- `session_notes.content` хранится открытым текстом — шифрование Fernet не реализовано (ФЗ-152)
-- Партиции audit-таблиц (если применимо в prod) захардкожены до 31.12.2026
+**Закрытые риски:**
+- ~~`session_notes.content` не шифруется~~ ✅ Закрыто — реализовано Fernet application-layer шифрование:
+  `app/core/encryption.py`, `enc:v1:` prefix, encrypt-on-write/decrypt-on-read в `app/session_notes/storage.py`.
+  **Операционное требование:** `DATA_ENCRYPTION_KEY` должен быть настроен и резервно скопирован отдельно от бэкапов БД.
+  Потеря ключа = невозможность восстановить зашифрованные заметки.
+- ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ ✅ Закрыто — `scripts/ensure_audit_partitions.py` управляет
+  будущими партициями; начальные партиции 2026-01..2028-12 созданы миграцией `3a7c5e2b8f1d`.
 
 ---
 
@@ -337,28 +372,26 @@ lifespan() startup
 {
   "status": "ok",
   "db": "connected",
-  "tables": 41,
-  "revision": "e9a3d7f2b5c0"
+  "tables": 45,
+  "revision": "d2e5f8a1b4c7"
 }
 ```
 
-**Реализованные эндпоинты:**
+**Реализованные эндпоинты** (полный список — `/docs` Swagger UI)**:**
 
-| Метод | URL | Доступ |
-|-------|-----|--------|
-| POST | `/api/auth/register/init` | Public |
-| POST | `/api/auth/register/confirm` | Public |
-| POST | `/api/auth/login` | Public |
-| POST | `/api/auth/logout` | Authenticated |
-| GET | `/api/auth/me` | Authenticated |
-| POST | `/api/auth/password/reset/init` | Public |
-| POST | `/api/auth/password/reset/confirm` | Public |
-| GET | `/api/admin/users` | Admin |
-| POST | `/api/admin/users` | Admin |
-| GET | `/api/admin/users/{uuid}` | Admin |
-| PATCH | `/api/admin/users/{uuid}` | Admin |
-| DELETE | `/api/admin/users/{uuid}` | Admin |
-| GET | `/api/health` | Public |
+| Группа | Методы | Доступ |
+|--------|--------|--------|
+| `/api/auth/*` | register/init, register/confirm, login, logout, me, password reset | Public / Auth |
+| `/api/admin/users/*` | GET list, GET one, POST, PATCH, DELETE | Admin, Supervisor |
+| `/api/admin/tags/*` + `/api/tags` | CRUD tags + public autocomplete | Admin, Supervisor / Public |
+| `/api/admin/categories/*` | CRUD categories | Admin, Supervisor |
+| `/api/admin/news/*` + `/api/news/*` | CRUD news + public list/item | Admin, Supervisor / Public |
+| `/api/admin/articles/*` + `/api/articles/*` | CRUD articles + public list/item | Admin, Supervisor / Public |
+| `/api/media/upload` | POST upload image | Auth |
+| `/api/session-notes/*` | CRUD session notes (enc:v1: ciphertext) | Psychologist (own) / Admin, Supervisor |
+| `/api/supervisor/*` | Student list, psychologist list, engagements | Supervisor |
+| `/api/psychologist/*` | Cabinet: clients, schedule, appointments | Psychologist |
+| `/api/health` | Health check: status, tables, revision | Public |
 
 ---
 
