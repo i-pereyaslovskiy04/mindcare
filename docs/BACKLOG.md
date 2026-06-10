@@ -35,13 +35,9 @@
 
 ## 🟠 Backend quality / security backlog
 
-**`auth_log.id` SAWarning (open)**
-- Severity: Medium
-- ORM-модель `AuthLog` не объявляет `server_default` или `Sequence` для `id` на партиционированных таблицах
-- SQLAlchemy выдаёт SAWarning при старте: `Implying autoincrement for column...` для партиционированных таблиц
-- Причина: ORM не отражает DB-side sequence generator для `id` в partitioned audit table
-- Риск: основной auth/admin flow не падает (`log_auth_event()` ловит исключения), но audit events могут теряться
-- Next: Stage 14b — live DB inspection (`information_schema`, `pg_inherits`) перед любым ORM/Alembic fix
+**~~`auth_log.id` SAWarning~~** ✅ Закрыто
+- Исправлено: `autoincrement=True` добавлен в `AuditLog.id`, `AuthLog.id`, `DataChangeLog.id`
+- DB schema не менялась — sequences существовали; проблема была только в ORM metadata
 - Файл: `mindcare_api/app/db/models/audit.py`
 
 ---
