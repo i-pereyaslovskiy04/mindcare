@@ -1,0 +1,105 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.page {
+  animation: fadeIn 0.25s ease-out;
+  max-width: 520px;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 30px;
+  font-weight: 400;
+  color: var(--espresso);
+  margin-bottom: 24px;
+}
+
+/* ── card ── */
+.card {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+}
+
+.cardTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin-bottom: 6px;
+}
+
+.cardDesc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-bottom: 20px;
+}
+
+/* ── form ── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.input {
+  border: 1px solid var(--nav-border);
+  background: var(--cream);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: 'Nunito', sans-serif;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: var(--coffee);
+  background: var(--warm-white);
+  box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.08);
+}
+
+.input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── feedback ── */
+.formError {
+  font-size: 13px;
+  color: var(--error);
+  background: rgba(185, 64, 64, 0.07);
+  border: 1px solid rgba(185, 64, 64, 0.2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.formSuccess {
+  font-size: 13px;
+  color: #3a7a4a;
+  background: rgba(58, 122, 74, 0.07);
+  border: 1px solid rgba(58, 122, 74, 0.2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}

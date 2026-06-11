@@ -39,6 +39,7 @@ import TagsPage       from '../features/admin/tags/pages/TagsPage';
 import AdminNewsPage  from '../features/admin/news/pages/NewsPage';
 import AdminArticlesPage   from '../features/admin/articles/pages/ArticlesPage';
 import AdminCategoriesPage from '../features/admin/categories/pages/CategoriesPage';
+import AdminSettingsPage   from '../features/admin/settings/pages/AdminSettingsPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
 import ClientDashboard      from '../pages/client/ClientDashboard';
@@ -172,6 +173,7 @@ export default function AppRouter() {
         <Route path="news"       element={<AdminNewsPage />} />
         <Route path="articles"   element={<AdminArticlesPage />} />
         <Route path="categories" element={<AdminCategoriesPage />} />
+        <Route path="settings"   element={<AdminSettingsPage />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />
