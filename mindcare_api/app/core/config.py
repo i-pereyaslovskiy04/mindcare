@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     # --- ENCRYPTION ---
     DATA_ENCRYPTION_KEY: str | None = None
     # --- APP ---
+    # DEBUG is a boolean flag only (true/false, 1/0, yes/no, on/off).
+    # Use ENV for environment names — do not put "release"/"production" into DEBUG.
     DEBUG: bool = False
-    ENV: str = "production"
+    ENV: str = "production"  # development | staging | production | release
 
     model_config = SettingsConfigDict(
         env_file=".env",
