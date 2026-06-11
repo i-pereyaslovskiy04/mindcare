@@ -51,12 +51,10 @@
 - ~~Использует `.first()` без `ORDER BY`~~
 - Закрыто: заменено коррелированным подзапросом с `ROLE_PRIORITY` в `users/storage.py`
 
-**Email без нормализации в `register_init`**
-- `save_user` нормализует email (`.lower().strip()`)
-- Но `otp_verifications.email` сохраняется как есть (без нормализации)
-- Если юзер введёт `Ivan@MAIL.ru` при init и `ivan@mail.ru` при confirm — не найдёт OTP
-- Нужна нормализация в `otp_service.create_or_update_otp`
-- Файл: `app/auth/otp_service.py`
+**~~Email без нормализации в `register_init`~~** ✅ Закрыто
+- Добавлен единый helper `normalize_email()` в `app/core/normalization.py`
+- Применён в `otp_service` (create/verify/delete), `auth/storage` (find/save/reactivate), `users/storage` (create_user), `scripts/create_admin.py`
+- 16 unit-тестов в `tests/test_normalization.py`; Stage 17c: API/integration tests
 
 **Нет `consent_records` для юзеров созданных через `POST /api/admin/users`**
 - Психологи и админы создаются без фиксации согласия на ПДн
