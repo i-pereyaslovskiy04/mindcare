@@ -7,6 +7,15 @@ import { TelegramIcon, VKIcon, YandexIcon } from '../../../components/icons';
 
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
+const AUTH_ERRORS_RU = {
+  'Invalid email or password':   'Неверный email или пароль',
+  'Invalid or expired session':  'Сессия истекла. Войдите снова.',
+  'Not authenticated':           'Необходимо войти в аккаунт',
+  'Insufficient permissions':    'Недостаточно прав',
+  'User not found':              'Пользователь не найден',
+};
+const toRu = (msg) => AUTH_ERRORS_RU[msg] ?? msg;
+
 export default function LoginForm({ onSuccess, onForgotPassword }) {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -40,7 +49,7 @@ export default function LoginForm({ onSuccess, onForgotPassword }) {
       onSuccess();
       navigate(getRoleHome(role));
     } catch (err) {
-      setApiError(err.message || 'Ошибка входа. Попробуйте снова.');
+      setApiError(toRu(err.message) || 'Ошибка входа. Попробуйте снова.');
     } finally {
       setIsLoading(false);
     }

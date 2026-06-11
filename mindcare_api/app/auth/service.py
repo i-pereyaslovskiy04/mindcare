@@ -37,11 +37,11 @@ REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
 def register_init(name: str, email: str, password: str) -> None:
     """Валидация данных -> OTP в БД -> отправка письма."""
     if not name or len(name.strip()) < 2:
-        raise AuthError("Name must be at least 2 characters", 422)
+        raise AuthError("Имя должно содержать не менее 2 символов", 422)
     if len(password) < 8:
-        raise AuthError("Password must be at least 8 characters", 422)
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
     if storage.find_user_by_email(email):
-        raise AuthError("Email already registered", 409)
+        raise AuthError("Email уже зарегистрирован", 409)
 
     from app.auth import otp_service
     from app.services.email_service import send_registration_otp
@@ -118,7 +118,7 @@ def register_confirm(
 def authenticate_user(email: str, password: str) -> dict:
     user = storage.find_user_by_email(email)
     if not user or not _verify(password, user["hashed_password"]):
-        raise AuthError("Invalid email or password", 401)
+        raise AuthError("Неверный email или пароль", 401)
     storage.update_last_login(user["id"])
     return user
 
@@ -159,7 +159,7 @@ def password_reset_confirm(
 ) -> None:
     """Проверяет OTP, обновляет пароль, отзывает все сессии пользователя."""
     if len(new_password) < 8:
-        raise AuthError("Password must be at least 8 characters", 422)
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
 
     from app.auth import otp_service
 
@@ -187,6 +187,29 @@ def create_session(
 ) -> tuple[str, datetime]:
     """Создаёт сессию, возвращает (session_token, expires_at)."""
     return storage.create_session(user_id, ip=ip, user_agent=user_agent)
+
+
+def change_password(
+    user_id: str,
+    current_password: str,
+    new_password: str,
+    new_password_confirm: str,
+) -> None:
+    """Меняет пароль авторизованного пользователя и отзывает все его сессии."""
+    if new_password != new_password_confirm:
+        raise AuthError("Новый пароль и подтверждение не совпадают", 422)
+    if len(new_password) < 8:
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
+
+    user = storage.find_user_by_id(user_id)
+    if not user:
+        raise AuthError("Пользователь не найден", 404)
+
+    if not _verify(current_password, user["hashed_password"]):
+        raise AuthError("Неверный текущий пароль", 400)
+
+    storage.update_user_password(user_id, _hash(new_password))
+    storage.revoke_all_user_sessions(user_id)
 
 
 def terminate_session(token: str) -> None:

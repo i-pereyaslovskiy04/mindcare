@@ -189,3 +189,60 @@ Supervisor не должен роутиться в `/admin/*`.
 - Не менять startup/seed и auth/session в одном PR.
 - Не добавлять supervisor в admin routes без ADR.
 - Не удалять `.env` без отдельного подтверждения.
+
+---
+
+## 11. Testing strategy / Стратегия тестирования
+
+Проект не имеет полного покрытия тестами — это MVP, покрытие добавляется поэтапно.
+
+### Правила добавления тестов
+
+- Новые **auth/security/backend-critical** изменения должны сопровождаться минимум unit-тестами.
+- Для **endpoint/session/permissions/encryption** flows — желательно API/integration tests.
+- **Legacy-код** покрывается тестами при изменении, не раньше.
+- Если тесты не добавлены — в финальном отчёте **явно объяснить причину**.
+- Тесты не заменяют manual smoke для пользовательских сценариев.
+- "Тесты прошли" ≠ "всё работает" — только покрытые зоны гарантированы.
+
+### Уровни тестов
+
+| Уровень | Что тестирует | Текущий статус |
+|---------|---------------|----------------|
+| **Unit** | Service/helper business logic, без реальной БД | `test_change_password.py` (13), `test_encryption.py` (21) |
+| **API/Integration** | Route → deps → service → storage → DB | Не реализованы — задел на будущее |
+| **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
+| **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
+
+### Обязательные проверки перед PR
+
+**Backend:**
+
+```bash
+cd mindcare_api
+.venv\Scripts\python.exe -m compileall app -q
+.venv\Scripts\python.exe -m pytest tests/ -v
+```
+
+**Frontend:**
+
+```bash
+cd mindcare_web
+npm run lint
+npm run build
+```
+
+**Быстрый запуск через start.ps1:**
+
+```powershell
+.\start.ps1 -Tests      # compileall + test_change_password.py
+.\start.ps1 -FullCheck  # compileall + все тесты + lint + build
+```
+
+### Manual smoke — пример для смены пароля
+
+1. Войти в кабинет (студент / психолог / супервизор).
+2. Перейти в Settings → Безопасность → сменить пароль.
+3. Убедиться, что произошёл автоматический выход и открылась AuthModal с сообщением «Пароль изменён. Войдите снова.»
+4. Ввести **старый** пароль → получить «Неверный email или пароль».
+5. Ввести **новый** пароль → успешный вход.

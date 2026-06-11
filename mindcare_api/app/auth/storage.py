@@ -170,7 +170,10 @@ def update_last_login(user_id: str) -> None:
 def update_user_password(user_id: str, password_hash: str) -> None:
     with SessionLocal() as db:
         db.query(User).filter(User.id == int(user_id)).update(
-            {"password_hash": password_hash},
+            {
+                "password_hash": password_hash,
+                "updated_at": datetime.now(timezone.utc),
+            },
             synchronize_session=False,
         )
         db.commit()

@@ -14,7 +14,7 @@ def get_session_token(
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Необходимо войти в аккаунт",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return credentials.credentials
@@ -26,7 +26,7 @@ def get_current_user(token: str = Depends(get_session_token)) -> dict:
     if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session",
+            detail="Сессия истекла. Войдите снова.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -36,7 +36,7 @@ def get_current_user(token: str = Depends(get_session_token)) -> dict:
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+            detail="Пользователь не найден",
         )
     return user
 
@@ -47,7 +47,7 @@ def require_role(*roles: str):
         if current_user["role"] not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions",
+                detail="Недостаточно прав для выполнения действия",
             )
         return current_user
     return checker

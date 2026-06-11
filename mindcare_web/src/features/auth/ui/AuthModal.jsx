@@ -5,7 +5,7 @@ import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import ForgotPasswordModal from '../forgot-password/ForgotPasswordModal';
 
-export default function AuthModal({ isOpen, onClose }) {
+export default function AuthModal({ isOpen, onClose, message }) {
   const [activeTab, setActiveTab] = useState('login');
   const [forgotOpen, setForgotOpen] = useState(false);
 
@@ -55,6 +55,7 @@ export default function AuthModal({ isOpen, onClose }) {
               aria-labelledby="tab-login"
               hidden={activeTab !== 'login'}
             >
+              {message && <div className={styles.infoMessage}>{message}</div>}
               <LoginForm onSuccess={onClose} onForgotPassword={handleForgotPassword} />
             </div>
             <div

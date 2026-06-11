@@ -9,6 +9,7 @@ from app.auth.schemas import (
     MessageResponse,
     PasswordResetInitRequest,
     PasswordResetConfirmRequest,
+    ChangePasswordRequest,
 )
 from app.auth import service, audit
 from app.auth.deps import get_current_user, get_session_token
@@ -128,6 +129,32 @@ def password_reset_init(body: PasswordResetInitRequest):
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return {"message": "Если аккаунт с таким email существует, код отправлен на него"}
+
+
+@router.post("/change-password", response_model=MessageResponse)
+def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        service.change_password(
+            user_id=current_user["id"],
+            current_password=body.current_password,
+            new_password=body.new_password,
+            new_password_confirm=body.new_password_confirm,
+        )
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    audit.log_auth_event(
+        event="password_change",
+        success=True,
+        user_id=int(current_user["id"]),
+        user_email=current_user["email"],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    return {"message": "Пароль изменён. Войдите снова."}
 
 
 @router.post("/password/reset/confirm", response_model=MessageResponse)

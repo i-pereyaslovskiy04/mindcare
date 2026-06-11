@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getRoleHome } from '../../shared/lib/routes';
 import Navbar from '../../components/Navbar/Navbar';
@@ -11,15 +11,31 @@ import AuthModal from '../../features/auth/ui/AuthModal';
 import CookieBanner from '../../components/CookieBanner/CookieBanner';
 
 export default function Home() {
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const location = useLocation();
   const { user, loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  // Router state set by password-change redirect or route guards
+  const { openAuth, message: routerMessage } = location.state ?? {};
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(openAuth === 'login');
+  const [authMessage, setAuthMessage] = useState(routerMessage ?? '');
+
+  // Clear router state so back-navigation doesn't re-trigger the modal
+  useEffect(() => {
+    if (openAuth) {
+      window.history.replaceState({}, '');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpenAuth = () => {
     if (isAuthenticated) return;
     setIsAuthModalOpen(true);
   };
-  const handleCloseAuth = () => setIsAuthModalOpen(false);
+  const handleCloseAuth = () => {
+    setIsAuthModalOpen(false);
+    setAuthMessage('');
+  };
   const handleGoToDashboard = () => navigate(getRoleHome(user?.role));
 
   return (
@@ -32,7 +48,7 @@ export default function Home() {
       <NewsSection />
       <Footer />
       {!isAuthenticated && (
-        <AuthModal isOpen={isAuthModalOpen} onClose={handleCloseAuth} />
+        <AuthModal isOpen={isAuthModalOpen} onClose={handleCloseAuth} message={authMessage} />
       )}
       <CookieBanner />
     </>

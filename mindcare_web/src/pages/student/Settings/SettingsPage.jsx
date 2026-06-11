@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../../../components/Icon/Icon';
 import Select from '../../../components/UI/Select/Select';
 import Button from '../../../components/UI/Button/Button';
 import Toggle from '../../../components/UI/Toggle/Toggle';
+import { useAuth } from '../../../features/auth/AuthContext';
+import * as authApi from '../../../api/auth.api';
 import styles from './SettingsPage.module.css';
 
 const SOCIAL_TYPES = ['Telegram', 'Instagram', 'LinkedIn', 'VK', 'Facebook', 'X (Twitter)', 'Сайт'];
@@ -26,6 +29,37 @@ function NotifRow({ label, desc, on, onToggle }) {
 }
 
 export default function SettingsPage() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [pwForm, setPwForm] = useState({
+    current_password: '',
+    new_password: '',
+    new_password_confirm: '',
+  });
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    setPwError('');
+    setPwSuccess(false);
+    setPwLoading(true);
+    try {
+      await authApi.changePassword(pwForm);
+      setPwSuccess(true);
+      setTimeout(async () => {
+        navigate('/', { replace: true, state: { openAuth: 'login', message: 'Пароль изменён. Войдите снова.' } });
+        await logout();
+      }, 1500);
+    } catch (err) {
+      setPwError(err.message || 'Ошибка смены пароля');
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
   const [notif, setNotif] = useState({
     session:  true,
     tasks:    true,
@@ -112,6 +146,60 @@ export default function SettingsPage() {
             <Button variant="primary" style={{ marginTop: 6 }}>
               Сохранить изменения
             </Button>
+          </div>
+
+          {/* Security */}
+          <div className={styles.card}>
+            <h2 className={styles.sectionTitle}>Безопасность</h2>
+            <form onSubmit={handleChangePassword}>
+              <div className={styles.field}>
+                <label>Текущий пароль</label>
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={pwForm.current_password}
+                  onChange={(e) => setPwForm(f => ({ ...f, current_password: e.target.value }))}
+                  required
+                  disabled={pwLoading || pwSuccess}
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className={styles.field}>
+                <label>Новый пароль</label>
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={pwForm.new_password}
+                  onChange={(e) => setPwForm(f => ({ ...f, new_password: e.target.value }))}
+                  required
+                  disabled={pwLoading || pwSuccess}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className={styles.field}>
+                <label>Подтверждение нового пароля</label>
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={pwForm.new_password_confirm}
+                  onChange={(e) => setPwForm(f => ({ ...f, new_password_confirm: e.target.value }))}
+                  required
+                  disabled={pwLoading || pwSuccess}
+                  autoComplete="new-password"
+                />
+              </div>
+              {pwError && <div className={styles.formError}>{pwError}</div>}
+              {pwSuccess && <div className={styles.formSuccess}>Пароль изменён. Войдите снова.</div>}
+              <Button
+                type="submit"
+                variant="primary"
+                style={{ marginTop: 6 }}
+                loading={pwLoading}
+                disabled={pwSuccess}
+              >
+                Изменить пароль
+              </Button>
+            </form>
           </div>
         </div>
 

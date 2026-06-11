@@ -2,7 +2,7 @@
  * router.jsx — application route tree.
  *
  * Route guards:
- *   <PrivateRoute>   — requires authentication, redirects to /login on 401.
+ *   <PrivateRoute>   — requires authentication, redirects to / (with login modal) when unauthenticated.
  *   <RoleRoute>      — requires specific role(s), redirects to /profile on mismatch.
  *
  * Public routes: /, /about, /services, /news, /materials, /login, /register, /health
@@ -75,7 +75,7 @@ import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user)   return <Navigate to="/login" replace />;
+  if (!user)   return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
   return children;
 }
 
@@ -86,7 +86,7 @@ function PrivateRoute({ children }) {
 function RoleRoute({ roles, children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user)                        return <Navigate to="/login" replace />;
+  if (!user)                        return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
   if (!roles.includes(user.role))   return <Navigate to="/profile" replace />;
   return children;
 }
@@ -97,7 +97,7 @@ function RoleRoute({ roles, children }) {
 function DashboardRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user)   return <Navigate to="/login" replace />;
+  if (!user)   return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
 
   return <Navigate to={getRoleHome(user.role)} replace />;
 }

@@ -117,6 +117,61 @@ npm test -- --testPathPattern=App.test.js
 > **Важно:** для full-stack разработки нужно запустить **оба** сервера одновременно.
 > Фронт проксирует `/api/*` запросы на `http://localhost:8000` через настройку в `package.json`.
 
+## Тестирование
+
+### Правила для Claude Code
+
+При изменении backend/security/auth:
+
+```
+✅ Проверить, есть ли релевантные тесты в mindcare_api/tests/
+✅ Добавить или обновить тесты для изменённой логики
+✅ Запустить релевантный pytest перед завершением задачи
+✅ Если тесты не добавлены — объяснить причину в финальном отчёте
+❌ Не утверждать "покрыто тестами", если покрыта только конкретная зона
+```
+
+### Команды
+
+**Backend:**
+```bash
+cd mindcare_api
+.venv\Scripts\python.exe -m compileall app -q
+.venv\Scripts\python.exe -m pytest tests/test_change_password.py -v
+.venv\Scripts\python.exe -m pytest tests/ -v
+```
+
+**Frontend:**
+```bash
+cd mindcare_web
+npm run lint
+npm run build
+```
+
+**Через start.ps1:**
+```powershell
+.\start.ps1 -Tests      # compileall + test_change_password.py, затем запуск
+.\start.ps1 -FullCheck  # compileall + все тесты + lint + build, затем запуск
+```
+
+### Уровни тестов
+
+| Уровень | Что покрывает | Когда добавлять |
+|---------|---------------|-----------------|
+| Unit | Service/helper logic, без реальной БД | Обязательно для новых auth/security/critical изменений |
+| API/Integration | Route → deps → service → storage → DB | Желательно для auth/session/permissions/encryption |
+| Manual smoke | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
+| E2E | Полный browser flow | Позже, после стабилизации UI |
+
+### Текущее покрытие
+
+| Файл | Что покрыто |
+|------|-------------|
+| `tests/test_change_password.py` | `service.change_password` — 13 сценариев |
+| `tests/test_encryption.py` | `app.core.encryption` — 21 сценарий |
+
+---
+
 ## Архитектура
 
 ### Стек

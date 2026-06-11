@@ -63,3 +63,12 @@ export function passwordResetConfirm({ email, code, new_password }) {
     body: JSON.stringify({ email, code, new_password }),
   });
 }
+
+/** POST /api/auth/change-password — changes password for the authenticated user.
+ *  Revokes all sessions including current; client must logout after success. */
+export function changePassword({ current_password, new_password, new_password_confirm }) {
+  return apiFetch(`${BASE}/change-password`, {
+    method: 'POST',
+    body: JSON.stringify({ current_password, new_password, new_password_confirm }),
+  });
+}

@@ -32,6 +32,7 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
   const tokenRef              = useRef(null);
+  const navigate              = useNavigate();
 
   /** Expose token to the HTTP client. */
   const getToken = useCallback(() => tokenRef.current, []);
@@ -60,10 +61,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    const handler = () => _clearSession();
+    const currentUser = user;
+    const handler = () => {
+      if (currentUser) {
+        // User was logged in — navigate to home with login modal + message
+        navigate('/', {
+          replace: true,
+          state: { openAuth: 'login', message: 'Сессия истекла. Войдите снова.' },
+        });
+      }
+      _clearSession();
+    };
     window.addEventListener('auth:session-expired', handler);
     return () => window.removeEventListener('auth:session-expired', handler);
-  }, [_clearSession]);
+  }, [_clearSession, user, navigate]);
 
   // ── Restore session on page load ──────────────────────────────────────────
 
