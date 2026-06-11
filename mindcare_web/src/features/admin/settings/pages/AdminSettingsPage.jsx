@@ -27,6 +27,14 @@ export default function AdminSettingsPage() {
       setPwError('Заполните все поля.');
       return;
     }
+    if (pwForm.new_password.length < 8) {
+      setPwError('Пароль должен быть не короче 8 символов.');
+      return;
+    }
+    if (pwForm.new_password !== pwForm.new_password_confirm) {
+      setPwError('Новый пароль и подтверждение не совпадают.');
+      return;
+    }
 
     setPwLoading(true);
     try {
