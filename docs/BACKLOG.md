@@ -55,6 +55,7 @@
 - Добавлен единый helper `normalize_email()` в `app/core/normalization.py`
 - Применён в `otp_service` (create/verify/delete), `auth/storage` (find/save/reactivate), `users/storage` (create_user), `scripts/create_admin.py`
 - 16 unit-тестов в `tests/test_normalization.py`; Stage 17c: API/integration tests
+- DB-level защита: migration `e5a8f3c1d2b6` добавляет `ux_users_email_normalized` — functional unique index `lower(trim(email))` на таблице `users`
 
 **Нет `consent_records` для юзеров созданных через `POST /api/admin/users`**
 - Психологи и админы создаются без фиксации согласия на ПДн
