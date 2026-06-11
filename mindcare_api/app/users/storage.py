@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import or_, asc, desc, select, case as sa_case
 
+from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.db.models import User, UserRole, Role, UserSession
 
@@ -279,7 +280,7 @@ def create_user(
     with SessionLocal() as db:
         existing = (
             db.query(User)
-            .filter(User.email == email.lower().strip())
+            .filter(User.email == normalize_email(email))
             .filter(User.deleted_at.is_(None))
             .first()
         )
@@ -287,7 +288,7 @@ def create_user(
             raise ValueError(f"Пользователь с email {email} уже существует")
 
         new_user = User(
-            email=email.lower().strip(),
+            email=normalize_email(email),
             full_name=full_name.strip(),
             password_hash=password_hash,
             phone=phone.strip() or None if phone else None,

@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.auth import storage, service
+from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.db.models import User, UserRole, Role, Consent, ConsentRecord
 
@@ -35,7 +36,7 @@ def prompt_user_data() -> dict:
     """Запрашивает у разработчика данные нового админа."""
     print("\n=== Создание администратора ===\n")
 
-    email = input("Email: ").strip().lower()
+    email = normalize_email(input("Email: "))
     if not email or "@" not in email:
         print("[ERROR] Невалидный email")
         sys.exit(1)

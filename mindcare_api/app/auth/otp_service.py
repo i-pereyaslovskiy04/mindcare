@@ -21,6 +21,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta
 
+from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.db.models import OtpVerification
 
@@ -62,6 +63,7 @@ def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
     - Возвращает plaintext-код для отправки по email.
       В БД хранится ТОЛЬКО хеш — plaintext нигде не сохраняется.
     """
+    email = normalize_email(email)
     plaintext_code = str(secrets.randbelow(1_000_000)).zfill(6)
     code_hash      = _hash_code(plaintext_code)
     now            = _utcnow()
@@ -119,6 +121,7 @@ def verify_otp(email: str, code: str) -> dict:
       3. Превышены попытки   → запись удаляется
       4. Неверный код        → attempts++; удаляется на последней попытке
     """
+    email = normalize_email(email)
     now = _utcnow()
 
     with SessionLocal() as db:
@@ -168,6 +171,7 @@ def verify_otp(email: str, code: str) -> dict:
 
 def delete_otp(email: str) -> None:
     """Удаляет OTP-запись для email. No-op если записи нет."""
+    email = normalize_email(email)
     with SessionLocal() as db:
         db.query(OtpVerification).filter(OtpVerification.email == email).delete(
             synchronize_session=False

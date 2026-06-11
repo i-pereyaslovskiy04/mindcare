@@ -8,6 +8,7 @@ PostgreSQL storage via SQLAlchemy ORM.
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.db.models import (
     User, UserRole, Role, UserSession, Consent, ConsentRecord,
@@ -62,7 +63,7 @@ def find_user_by_email(email: str) -> Optional[dict]:
         user = (
             db.query(User)
             .filter(
-                User.email == email.lower().strip(),
+                User.email == normalize_email(email),
                 User.deleted_at.is_(None),
             )
             .first()
@@ -87,7 +88,7 @@ def save_user(user: dict) -> dict:
     with SessionLocal() as db:
         db_user = User(
             full_name=user["name"],
-            email=user["email"].lower().strip(),
+            email=normalize_email(user["email"]),
             password_hash=user["hashed_password"],
         )
         db.add(db_user)
@@ -112,7 +113,7 @@ def reactivate_user(
         user = (
             db.query(User)
             .filter(
-                User.email == email.lower().strip(),
+                User.email == normalize_email(email),
                 User.deleted_at.isnot(None),
             )
             .first()
