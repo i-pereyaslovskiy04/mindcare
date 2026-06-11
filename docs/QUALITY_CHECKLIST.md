@@ -216,7 +216,7 @@ Supervisor не должен роутиться в `/admin/*`.
 
 ### Обязательные проверки перед PR
 
-**Backend:**
+**Backend (вручную):**
 
 ```bash
 cd mindcare_api
@@ -224,7 +224,7 @@ cd mindcare_api
 .venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-**Frontend:**
+**Frontend (при изменениях .js/.jsx):**
 
 ```bash
 cd mindcare_web
@@ -232,12 +232,15 @@ npm run lint
 npm run build
 ```
 
-**Быстрый запуск через start.ps1:**
+**Через скрипты в корне проекта:**
 
 ```powershell
-.\start.ps1 -Tests      # compileall + test_change_password.py
-.\start.ps1 -FullCheck  # compileall + все тесты + lint + build
+.\test.ps1    # compileall + все backend-тесты (без запуска проекта)
+.\start.ps1   # backend-тесты, затем запуск проекта
 ```
+
+`start.ps1` всегда запускает `test.ps1` перед стартом серверов — проект не стартует если тесты упали.
+`test.ps1` используется для ручной проверки в любой момент без запуска серверов.
 
 ### Manual smoke — пример для смены пароля
 

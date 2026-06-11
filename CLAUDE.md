@@ -148,10 +148,10 @@ npm run lint
 npm run build
 ```
 
-**Через start.ps1:**
+**Через скрипты в корне проекта:**
 ```powershell
-.\start.ps1 -Tests      # compileall + test_change_password.py, затем запуск
-.\start.ps1 -FullCheck  # compileall + все тесты + lint + build, затем запуск
+.\test.ps1    # compileall + все backend-тесты (без запуска проекта)
+.\start.ps1   # backend-тесты, затем запуск проекта
 ```
 
 ### Уровни тестов
