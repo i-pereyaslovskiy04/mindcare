@@ -2,10 +2,13 @@
  * AuthContext — session state and auth actions.
  *
  * Token lifecycle:
- *   - Stored in memory (React ref) — never in localStorage.
- *   - Also mirrored to sessionStorage so the session survives a page
- *     refresh within the same tab.  sessionStorage is tab-scoped and
- *     cleared when the tab/window closes.
+ *   - Stored in memory (React ref) for synchronous access.
+ *   - Also persisted to localStorage so the session survives page reloads
+ *     and is shared across tabs (MVP convenience).
+ *   - Production-grade alternative: HttpOnly Secure SameSite cookie + CSRF
+ *     (eliminates XSS token theft risk) — kept as a future stage.
+ *   - Backend sessions are server-side and can be revoked on logout /
+ *     change-password regardless of storage mechanism.
  *
  * All HTTP calls go through api/auth.api.js → api/client.js.
  * No raw fetch() in this file.
@@ -26,6 +29,16 @@ import * as authApi from '../../api/auth.api';
 
 const SESSION_KEY = 'mindcare_session';
 
+function getStoredToken() {
+  return localStorage.getItem(SESSION_KEY);
+}
+function setStoredToken(token) {
+  localStorage.setItem(SESSION_KEY, token);
+}
+function clearStoredToken() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -45,12 +58,12 @@ export function AuthProvider({ children }) {
 
   const _saveToken = (token) => {
     tokenRef.current = token;
-    sessionStorage.setItem(SESSION_KEY, token);
+    setStoredToken(token);
   };
 
   const _clearToken = () => {
     tokenRef.current = null;
-    sessionStorage.removeItem(SESSION_KEY);
+    clearStoredToken();
   };
 
   // ── Session-expired event (fired by apiFetch on 401) ─────────────────────
@@ -82,7 +95,7 @@ export function AuthProvider({ children }) {
     let cancelled = false;
 
     async function restore() {
-      const stored = sessionStorage.getItem(SESSION_KEY);
+      const stored = getStoredToken();
       if (!stored) {
         if (!cancelled) setLoading(false);
         return;

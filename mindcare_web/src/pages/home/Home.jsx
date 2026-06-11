@@ -47,7 +47,7 @@ export default function Home() {
       )}
       <NewsSection />
       <Footer />
-      {!isAuthenticated && (
+      {!loading && !isAuthenticated && (
         <AuthModal isOpen={isAuthModalOpen} onClose={handleCloseAuth} message={authMessage} />
       )}
       <CookieBanner />
