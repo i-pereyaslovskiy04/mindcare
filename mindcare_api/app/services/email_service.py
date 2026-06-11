@@ -3,7 +3,7 @@ Email message layer — формирует письма для конкретн�
 Не знает про SMTP, режимы доставки или конфиг.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.services._smtp import send_email
 
@@ -163,7 +163,7 @@ def _send_otp_email(
     description_html: str,
     description_plain: str,
 ) -> None:
-    year = datetime.utcnow().year
+    year = datetime.now(timezone.utc).year
     send_email(
         to=to_email,
         subject=subject,

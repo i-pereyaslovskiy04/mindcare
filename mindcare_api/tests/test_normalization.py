@@ -12,7 +12,7 @@ deferred to Stage 17c API/integration tests.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from app.core.normalization import normalize_email
@@ -94,7 +94,7 @@ class TestOTPEmailNormalization:
         """verify_otp normalizes email; a matching record is found and returned."""
         code = "654321"
         fake_record = MagicMock()
-        fake_record.expires_at = datetime.utcnow() + timedelta(hours=1)
+        fake_record.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
         fake_record.attempts = 0
         fake_record.code = _hash_code(code)
         fake_record.name = "Alice"
@@ -188,7 +188,7 @@ class TestUsersStorageEmailNormalization:
         mock_new_user.email = "user@mail.ru"
         mock_new_user.full_name = "Test"
         mock_new_user.is_active = True
-        mock_new_user.created_at = datetime.utcnow()
+        mock_new_user.created_at = datetime.now(timezone.utc).replace(tzinfo=None)
         str(mock_new_user.uuid)  # pre-warm the mock attribute
 
         with patch("app.users.storage.SessionLocal", _mock_session(mock_db)), \

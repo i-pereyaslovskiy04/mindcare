@@ -90,10 +90,9 @@
 - Заодно выровнять статусы: сейчас `users` возвращает 400 для конфликтов, `tags` — 409
 - Файлы: `app/users/service.py`, `app/tags/service.py`, создать `app/core/exceptions.py`
 
-**`datetime.utcnow()` в `otp_service.py`**
-- Deprecated в Python 3.12+, удалён в 3.14
-- Заменить на `datetime.now(timezone.utc)` везде
-- Файл: `app/auth/otp_service.py`
+**~~`datetime.utcnow()` в `otp_service.py`~~** ✅ Закрыто
+- Исправлено: `_utcnow()` → `datetime.now(timezone.utc).replace(tzinfo=None)` (naive UTC, совместимо с `DateTime` без timezone в `OtpVerification`); `email_service.py` → `datetime.now(timezone.utc).year`
+- Файлы: `app/auth/otp_service.py`, `app/services/email_service.py`, `tests/test_normalization.py`
 
 **`print()` вместо `logging`**
 - Весь проект использует `print()` для диагностики

@@ -19,7 +19,7 @@ Safe for multi-instance deployments and server restarts.
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
@@ -34,7 +34,7 @@ MAX_ATTEMPTS    = 5
 
 def _utcnow() -> datetime:
     """Naive UTC timestamp — совместимо с DateTime (без timezone) в ORM."""
-    return datetime.utcnow()
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _hash_code(plaintext_code: str) -> str:
