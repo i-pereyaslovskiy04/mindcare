@@ -3,6 +3,7 @@ Email transport layer.
 Переключение режима: EMAIL_MODE=dev|smtp в .env
 """
 
+import logging
 import smtplib
 import ssl
 from email.header import Header
@@ -12,6 +13,8 @@ from email.utils import formataddr
 from typing import Optional
 
 from app.core.config import settings
+
+log = logging.getLogger(__name__)
 
 _SENDER_NAME = "Психология ДонГУ"
 
@@ -41,6 +44,9 @@ def _send_dev(to: str, subject: str, body: str, html: Optional[str]) -> None:
 
 
 def _send_smtp(to: str, subject: str, body: str, html: Optional[str]) -> None:
+    if settings.SMTP_TLS and settings.SMTP_SSL:
+        raise RuntimeError("SMTP_TLS and SMTP_SSL cannot both be enabled")
+
     # Build MIME message: multipart/alternative when HTML is provided,
     # plain text otherwise.
     if html:
@@ -56,45 +62,31 @@ def _send_smtp(to: str, subject: str, body: str, html: Optional[str]) -> None:
     msg["To"]      = to
     msg["Subject"] = subject
 
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    log.info("[SMTP] connecting host=%s port=%d tls=%s ssl=%s",
+             settings.SMTP_HOST, settings.SMTP_PORT,
+             settings.SMTP_TLS, settings.SMTP_SSL)
 
-    stage = "init"
-    print(f"[SMTP] host={settings.SMTP_HOST} port={settings.SMTP_PORT} user={settings.SMTP_USER}")
+    if settings.SMTP_SSL:
+        conn = smtplib.SMTP_SSL(
+            settings.SMTP_HOST, settings.SMTP_PORT,
+            timeout=30,
+            context=ssl.create_default_context(),
+        )
+    else:
+        if not settings.SMTP_TLS:
+            log.warning(
+                "[SMTP] SMTP is configured without TLS/SSL. "
+                "Credentials may be exposed if SMTP_USER/SMTP_PASSWORD are used."
+            )
+        conn = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=30)
 
-    try:
-        stage = "connect"
-        print("[SMTP] stage: connect")
-        server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=30)
-        server.set_debuglevel(1)
-        print("[SMTP] connect OK")
-
-        stage = "ehlo"
-        print("[SMTP] stage: ehlo")
-        server.ehlo()
-
-        stage = "starttls"
-        print("[SMTP] stage: starttls")
-        server.starttls(context=ctx)
-
-        stage = "ehlo_after_tls"
-        print("[SMTP] stage: ehlo after TLS")
-        server.ehlo()
-
-        stage = "login"
-        print("[SMTP] stage: login")
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-
-        stage = "send"
-        print(f"[SMTP] stage: send -> {to}")
+    with conn as server:
+        if settings.SMTP_TLS and not settings.SMTP_SSL:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+        if settings.SMTP_USER:
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         server.send_message(msg)
 
-        server.quit()
-        print("[SMTP] OK")
-
-    except Exception as e:
-        import traceback
-        print(f"[SMTP] FAIL at stage [{stage}]: {type(e).__name__}: {e}")
-        traceback.print_exc()
-        raise
+    log.info("[SMTP] message sent to %s", to)

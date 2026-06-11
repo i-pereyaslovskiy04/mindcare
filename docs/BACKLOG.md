@@ -100,11 +100,13 @@
 - Нужен переход на `logging` с уровнями (DEBUG/INFO/WARNING/ERROR)
 - Менять везде сразу, не по одному файлу
 
-**`ssl.CERT_NONE` в email_sender.py**
-- Отключена проверка SSL-сертификата SMTP-сервера
-- Уязвимость к MITM-атаке на SMTP
-- Вернуть нормальную проверку перед деплоем в прод
-- Файл: `app/services/email_sender.py`
+**~~`ssl.CERT_NONE` в `app/services/_smtp.py`~~** ✅ Закрыто (Stage 18d)
+- Удалены `ctx.check_hostname = False` и `ctx.verify_mode = ssl.CERT_NONE`
+- Удалён `server.set_debuglevel(1)` из runtime transport
+- Добавлена явная поддержка `SMTP_TLS` / `SMTP_SSL` в `Settings` и `.env.example`
+- STARTTLS и implicit SSL используют `ssl.create_default_context()` без мутации
+- 21 тест в `tests/test_smtp_transport.py`
+- Остаток: `scripts/test_smtp.py` сохраняет `set_debuglevel(1)` намеренно (diagnostic tool) — помечено WARNING в docstring
 
 **`_hash` приватная функция используется снаружи**
 - `app/users/service.py` импортирует `_hash` из `app/auth/service.py`

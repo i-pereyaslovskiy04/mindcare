@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
+    # SMTP_TLS=True  → STARTTLS (port 587). Cannot combine with SMTP_SSL.
+    # SMTP_SSL=True  → implicit SSL (port 465). Cannot combine with SMTP_TLS.
+    SMTP_TLS: bool = True
+    SMTP_SSL: bool = False
     # --- MEDIA ---
     NEWS_IMAGE_MAX_SIZE_MB: int = 20
     # --- CORS ---
