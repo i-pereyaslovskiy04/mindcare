@@ -114,6 +114,15 @@ def enforce(action: str, *, email: str | None = None, ip: str | None = None) -> 
             _limiter.check(f"{action}:email:{normalize_email(email)}", *rule)
 
 
+def check(key: str, limit: int, window_seconds: float) -> None:
+    """
+    Прямая проверка произвольного ключа через общий module-level limiter
+    (например, "chat_send:user:<id>"). Auth-логика enforce() не затрагивается.
+    Бросает RateLimitExceeded при превышении.
+    """
+    _limiter.check(key, limit, window_seconds)
+
+
 def reset() -> None:
     """Сброс всех счётчиков (используется тестами между кейсами)."""
     _limiter.reset()
