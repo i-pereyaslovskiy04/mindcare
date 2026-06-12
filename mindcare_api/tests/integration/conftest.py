@@ -21,7 +21,10 @@ from starlette.testclient import TestClient
 from app.main import app
 from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
-from app.db.models import User, OtpVerification, ConsentRecord
+from app.db.models import (
+    ChatConversation, ChatMessage, ConsentRecord, OtpVerification,
+    TherapyEngagement, User,
+)
 
 
 # ─── HTTP client ──────────────────────────────────────────────────────────────
@@ -100,9 +103,12 @@ def cleanup_test_records():
     Deletes all integ_*@example.com test records from the dev DB after each test.
 
     Cleanup order respects FK constraints:
-      1. consent_records (ondelete=SET NULL — must delete explicitly)
-      2. users            (cascades user_roles, user_sessions, profiles, etc.)
-      3. otp_verifications (no FK to users — standalone)
+      1. chat_messages → chat_conversations → therapy_engagements
+         (chat FKs — ON DELETE RESTRICT: иначе cascade-удаление engagement
+          при удалении user заблокируется беседой)
+      2. consent_records (ondelete=SET NULL — must delete explicitly)
+      3. users            (cascades user_roles, user_sessions, profiles, etc.)
+      4. otp_verifications (no FK to users — standalone)
     """
     yield
     with SessionLocal() as db:
@@ -113,6 +119,30 @@ def cleanup_test_records():
             .all()
         ]
         if ids:
+            eng_ids = [
+                row.id
+                for row in db.query(TherapyEngagement.id).filter(
+                    TherapyEngagement.client_id.in_(ids)
+                    | TherapyEngagement.psychologist_id.in_(ids)
+                ).all()
+            ]
+            if eng_ids:
+                conv_ids = [
+                    row.id
+                    for row in db.query(ChatConversation.id).filter(
+                        ChatConversation.engagement_id.in_(eng_ids)
+                    ).all()
+                ]
+                if conv_ids:
+                    db.query(ChatMessage).filter(
+                        ChatMessage.conversation_id.in_(conv_ids)
+                    ).delete(synchronize_session=False)
+                    db.query(ChatConversation).filter(
+                        ChatConversation.id.in_(conv_ids)
+                    ).delete(synchronize_session=False)
+                db.query(TherapyEngagement).filter(
+                    TherapyEngagement.id.in_(eng_ids)
+                ).delete(synchronize_session=False)
             db.query(ConsentRecord).filter(
                 ConsentRecord.user_id.in_(ids)
             ).delete(synchronize_session=False)
