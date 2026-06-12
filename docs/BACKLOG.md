@@ -35,6 +35,24 @@
 
 ## 🟠 Backend quality / security backlog
 
+**~~Session tokens хранились plaintext (C1)~~** ✅ Закрыто (Stage 22b)
+- `user_sessions.id` теперь хранит SHA-256 hash (64 hex), не raw token
+- Клиент получает raw token как раньше; lookup/revoke/touch — hash-on-lookup
+  (`hash_session_token()` в `app/auth/security.py`)
+- `auth_log.session_id` пишет hash (совпадает с `user_sessions.id` — join работает)
+- Значение из дампа БД больше нельзя использовать как `Authorization: Bearer`
+- Dual-read fallback намеренно отсутствует: **деплой инвалидирует все активные
+  сессии**, пользователи перелогиниваются один раз (фронт корректно показывает
+  «Сессия истекла»)
+- Тесты: `tests/test_session_security.py` + `tests/integration/test_session_token_hashing.py`
+- **Оставлено на потом (low-priority maintenance):**
+  - старые plaintext-строки `user_sessions` недостижимы и истекут сами
+    (`SESSION_EXPIRE_DAYS=7`); ручная зачистка:
+    `DELETE FROM user_sessions WHERE length(id) <> 64`
+  - старые plaintext `auth_log.session_id` — historical risk: после деплоя эти
+    токены не дают доступ; маскирование (`UPDATE ... SET session_id = NULL`
+    для записей до деплоя) — отдельный cleanup-stage
+
 **~~`auth_log.id` SAWarning~~** ✅ Закрыто
 - Исправлено: `autoincrement=True` добавлен в `AuditLog.id`, `AuthLog.id`, `DataChangeLog.id`
 - DB schema не менялась — sequences существовали; проблема была только в ORM metadata

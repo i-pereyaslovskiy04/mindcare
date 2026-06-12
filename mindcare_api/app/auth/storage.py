@@ -13,7 +13,7 @@ from app.db.session import SessionLocal
 from app.db.models import (
     User, UserRole, Role, UserSession, Consent, ConsentRecord,
 )
-from app.auth.security import generate_session_token
+from app.auth.security import generate_session_token, hash_session_token
 from app.core.config import SESSION_EXPIRE_DAYS
 
 
@@ -190,13 +190,18 @@ def create_session(
     user_agent: Optional[str] = None,
     expire_days: int = SESSION_EXPIRE_DAYS,
 ) -> tuple[str, datetime]:
-    """Создаёт сессию в БД. Возвращает (session_token, expires_at)."""
+    """
+    Создаёт сессию в БД. Возвращает (session_token, expires_at).
+
+    Клиенту возвращается raw token; в user_sessions.id хранится только
+    SHA-256 hash — значение из дампа БД нельзя использовать как Bearer.
+    """
     token = generate_session_token()
     expires_at = datetime.now(timezone.utc) + timedelta(days=expire_days)
 
     with SessionLocal() as db:
         db.add(UserSession(
-            id=token,
+            id=hash_session_token(token),
             user_id=int(user_id),
             ip_address=ip,
             user_agent=user_agent,
@@ -208,13 +213,15 @@ def create_session(
 
 
 def find_session(token: str) -> Optional[dict]:
-    """Ищет активную (не отозванную, не просроченную) сессию.
-    Возвращает {'user_id': str, 'expires_at': datetime} или None."""
+    """Ищет активную (не отозванную, не просроченную) сессию по hash от
+    raw token клиента. Возвращает {'user_id': str, 'expires_at': datetime}
+    или None. Plaintext-сессии, созданные до перехода на hashing,
+    намеренно не находятся (dual-read fallback отсутствует)."""
     with SessionLocal() as db:
         session = (
             db.query(UserSession)
             .filter(
-                UserSession.id == token,
+                UserSession.id == hash_session_token(token),
                 ~UserSession.is_revoked,
                 UserSession.expires_at > datetime.now(timezone.utc),
             )
@@ -229,11 +236,11 @@ def find_session(token: str) -> Optional[dict]:
 
 
 def revoke_session(token: str) -> None:
-    """Отзывает одну сессию (logout)."""
+    """Отзывает одну сессию (logout). Принимает raw token, ищет по hash."""
     with SessionLocal() as db:
-        db.query(UserSession).filter(UserSession.id == token).update(
-            {"is_revoked": True}, synchronize_session=False
-        )
+        db.query(UserSession).filter(
+            UserSession.id == hash_session_token(token)
+        ).update({"is_revoked": True}, synchronize_session=False)
         db.commit()
 
 
@@ -247,9 +254,11 @@ def revoke_all_user_sessions(user_id: str) -> None:
 
 
 def touch_session(token: str) -> None:
-    """Обновляет last_active для сессии."""
+    """Обновляет last_active для сессии. Принимает raw token, ищет по hash."""
     with SessionLocal() as db:
-        db.query(UserSession).filter(UserSession.id == token).update(
+        db.query(UserSession).filter(
+            UserSession.id == hash_session_token(token)
+        ).update(
             {"last_active": datetime.now(timezone.utc)},
             synchronize_session=False,
         )

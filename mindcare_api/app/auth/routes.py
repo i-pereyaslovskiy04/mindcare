@@ -14,6 +14,7 @@ from app.auth.schemas import (
 )
 from app.auth import service, audit
 from app.auth.deps import get_current_user, get_session_token
+from app.auth.security import hash_session_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -101,7 +102,9 @@ def login(body: LoginRequest, request: Request):
         user_email=user["email"],
         ip_address=ip,
         user_agent=user_agent,
-        session_id=session_token,
+        # В audit пишем hash, не raw token: совпадает с user_sessions.id,
+        # join для расследований работает, credential в лог не утекает.
+        session_id=hash_session_token(session_token),
     )
 
     return {
@@ -125,7 +128,7 @@ def logout(
         user_email=current_user["email"],
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
-        session_id=token,
+        session_id=hash_session_token(token),
     )
     return {"message": "Logged out successfully"}
 
