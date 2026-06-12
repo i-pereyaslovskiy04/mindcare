@@ -42,6 +42,35 @@
   box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
 }
 
+/* ---- loading / error / empty states ---- */
+.stateBox {
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  background: var(--warm-white);
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+}
+
+.stateTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.stateText {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 420px;
+}
+
 @media (max-width: 860px) {
   .pageTitle { font-size: 30px; }
   .shell { grid-template-columns: 1fr; }

@@ -1,4 +1,3 @@
-import Icon from '../../../../components/Icon/Icon';
 import styles from './ChatWindow.module.css';
 
 export default function ChatHeader({ contact }) {
@@ -8,15 +7,8 @@ export default function ChatHeader({ contact }) {
 
       <div className={styles.headerInfo}>
         <div className={styles.headerName}>{contact.name}</div>
-        <div className={styles.headerStatus}>
-          {contact.online && <span className={styles.statusDot} aria-hidden="true" />}
-          {contact.online ? 'в сети · отвечает обычно за 30 мин' : contact.role}
-        </div>
+        <div className={styles.headerStatus}>{contact.role}</div>
       </div>
-
-      <button type="button" className={styles.videoBtn} aria-label="Видеозвонок">
-        <Icon name="video" size={16} />
-      </button>
     </div>
   );
 }

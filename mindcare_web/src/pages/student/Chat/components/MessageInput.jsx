@@ -2,15 +2,18 @@ import { useState, useCallback } from 'react';
 import Icon from '../../../../components/Icon/Icon';
 import styles from './ChatWindow.module.css';
 
-export default function MessageInput({ onSend }) {
+const MAX_LENGTH = 10000; // лимит backend-валидации ChatMessageCreate
+
+export default function MessageInput({ onSend, sending = false }) {
   const [text, setText] = useState('');
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    onSend(trimmed);
-    setText('');
-  }, [text, onSend]);
+    if (!trimmed || sending) return;
+    const ok = await onSend(trimmed);
+    // При ошибке отправки текст сохраняется, чтобы пользователь не потерял сообщение.
+    if (ok !== false) setText('');
+  }, [text, sending, onSend]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -26,6 +29,8 @@ export default function MessageInput({ onSend }) {
         className={styles.input}
         placeholder="Напишите сообщение…"
         value={text}
+        maxLength={MAX_LENGTH}
+        disabled={sending}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
       />
@@ -33,11 +38,11 @@ export default function MessageInput({ onSend }) {
         type="button"
         className={styles.sendBtn}
         onClick={handleSend}
-        disabled={!text.trim()}
+        disabled={!text.trim() || sending}
         aria-label="Отправить"
       >
         <Icon name="send" size={14} />
-        Отправить
+        {sending ? 'Отправка…' : 'Отправить'}
       </button>
     </div>
   );

@@ -14,7 +14,7 @@ const NAV_SECTIONS = [
     label: 'Терапия',
     items: [
       { key: 'tasks',    label: 'Задания психолога',  icon: 'tasks',    to: '/student/tasks',    end: true, badge: '2' },
-      { key: 'chat',     label: 'Чат с психологом',   icon: 'chat',     to: '/student/chat',     end: true, badge: '1' },
+      { key: 'chat',     label: 'Чат с психологом',   icon: 'chat',     to: '/student/chat',     end: true },
       { key: 'calendar', label: 'Календарь и сессии', icon: 'calendar', to: '/student/calendar', end: true },
     ],
   },

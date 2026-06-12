@@ -105,10 +105,13 @@
     `chat_conversation_created` (без content и без per-message шума),
     rate limit на отправку 30 сообщений/мин/пользователь
     (`tests/integration/test_chat_api.py`, 20)
-  - ⏳ Stage 28d: frontend — `chat.api.js`, student ChatPage на реальных данных
-    (**mock-логика CONTACTS/INITIAL_MESSAGES удаляется, дизайн сохраняется**),
-    chat-раздел психолога (нав-пункт уже есть как disabled)
-  - ⏳ Stage 28e: smoke/hardening/docs
+  - ✅ Stage 28d: student frontend — `api/chat.api.js`, ChatPage на реальных
+    данных (mock CONTACTS/INITIAL_MESSAGES/группа/поддержка/online/видеокнопка
+    удалены, дизайн сохранён), loading/empty/error/closed states, polling 8s
+    через `after=<id>`, mark-read при открытии и новых входящих, hardcoded
+    unread badge в StudentLayout убран (реальный глобальный badge — future)
+  - ⏳ Stage 28e: psychologist chat frontend (нав-пункт уже есть как disabled),
+    затем smoke/hardening/docs
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать
