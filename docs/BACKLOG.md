@@ -58,9 +58,22 @@
 - DB schema не менялась — sequences существовали; проблема была только в ORM metadata
 - Файл: `mindcare_api/app/db/models/audit.py`
 
-**Открытые security/future направления (после Stages 21–23b):**
-- **H3:** admin/supervisor читают расшифрованный content всех `session_notes`
-  без audit-следа чтения — решить политику доступа + логировать read-доступ
+**~~H3: staff-доступ к content `session_notes` без audit~~** ✅ Закрыто для MVP (Stage 25b)
+- Политика B: psychologist — только свои с content; supervisor — list metadata-only,
+  GET by id с content **+ audit-событие `session_note_content_read`** в `audit_log`
+  (actor, role, entity_id, author_id/engagement_id/appointment_id, IP/UA — без content);
+  admin — metadata-only везде (`content_available: false`), decrypt не вызывается
+- create/update также пишут audit-события (`session_note_created`/`session_note_updated`)
+- Тесты: `tests/integration/test_session_notes_api.py` (15 сценариев)
+- **Остаток (future):**
+  - supervision-scope модель (супервизор ↔ психолог/кейс) — сейчас supervisor
+    видит content всех заметок под audit; сужение зоны — отдельный этап
+  - break-glass admin content access — только отдельным compliance/security
+    решением, если когда-нибудь понадобится
+  - full fix decrypt-error в content-list психолога (одна битая заметка валит
+    список; metadata-пути уже не подвержены)
+
+**Открытые security/future направления (после Stages 21–25b):**
 - **HttpOnly Secure SameSite cookie + CSRF** вместо localStorage-токена
   (текущий localStorage — осознанный MVP-компромисс, Stage 18f)
 - **Redis/shared storage для rate limiting** при multi-worker/multi-instance деплое

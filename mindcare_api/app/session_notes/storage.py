@@ -30,6 +30,27 @@ def _note_to_dict(note: SessionNote) -> dict:
     }
 
 
+def _note_to_meta_dict(note: SessionNote) -> dict:
+    """
+    Metadata-only dict: терапевтический content не включается и
+    decrypt_text НЕ вызывается вообще (не падает на битых записях,
+    не расшифровывает то, что роль не должна видеть).
+    """
+    return {
+        "id":                    note.id,
+        "uuid":                  str(note.uuid),
+        "appointment_id":        note.appointment_id,
+        "engagement_id":         note.engagement_id,
+        "author_id":             note.author_id,
+        "note_type":             note.note_type,
+        "is_shared_with_client": note.is_shared_with_client,
+        "version":               note.version,
+        "created_at":            note.created_at,
+        "updated_at":            note.updated_at,
+        "content_available":     False,
+    }
+
+
 def create_note(
     *,
     author_id:             int,
@@ -54,8 +75,17 @@ def create_note(
         return _note_to_dict(note)
 
 
-def get_note_by_id(note_id: int, *, author_id: Optional[int] = None) -> Optional[dict]:
-    """Returns note dict or None. author_id scopes the query to own notes when provided."""
+def get_note_by_id(
+    note_id: int,
+    *,
+    author_id: Optional[int] = None,
+    include_content: bool = True,
+) -> Optional[dict]:
+    """
+    Returns note dict or None. author_id scopes the query to own notes
+    when provided. include_content=False возвращает metadata-only dict
+    без вызова decrypt (permission-фильтры применяются до выборки).
+    """
     with SessionLocal() as db:
         q = db.query(SessionNote).filter(SessionNote.id == note_id)
         if author_id is not None:
@@ -63,16 +93,17 @@ def get_note_by_id(note_id: int, *, author_id: Optional[int] = None) -> Optional
         note = q.first()
         if not note:
             return None
-        return _note_to_dict(note)
+        return _note_to_dict(note) if include_content else _note_to_meta_dict(note)
 
 
 def find_notes(
     *,
-    page:           int           = 1,
-    size:           int           = 20,
-    author_id:      Optional[int] = None,
-    appointment_id: Optional[int] = None,
-    engagement_id:  Optional[int] = None,
+    page:            int           = 1,
+    size:            int           = 20,
+    author_id:       Optional[int] = None,
+    appointment_id:  Optional[int] = None,
+    engagement_id:   Optional[int] = None,
+    include_content: bool          = True,
 ) -> tuple[list[dict], int]:
     with SessionLocal() as db:
         q = db.query(SessionNote)
@@ -90,7 +121,8 @@ def find_notes(
             .limit(size)
             .all()
         )
-        items = [_note_to_dict(n) for n in notes]
+        mapper = _note_to_dict if include_content else _note_to_meta_dict
+        items = [mapper(n) for n in notes]
 
     return items, total
 

@@ -294,6 +294,11 @@ mindcare_api/
    (документированное основание организации; чекбокс в UI формулируется как
    «Подтверждаю наличие документированного основания для создания учётной
    записи и обработки персональных данных пользователя»)
+✅ session_notes: psychologist — только свои; supervisor — content только поштучно
+   и под audit (session_note_content_read); admin — metadata-only без decrypt
+✅ Staff-чтение терапевтического content ОБЯЗАНО писать audit-событие (без plaintext)
+✅ Metadata-путь session_notes не должен вызывать decrypt_text
+❌ Не расширять admin-доступ к therapeutic content без отдельного compliance-решения
 ❌ Не использовать consent_records как суррогат legal basis для staff-ролей
 ❌ Не писать «админ соглашается за пользователя» / «психолог даёт пациентское согласие»
 ❌ Не использовать fastapi-users — конфликтует с нашей схемой

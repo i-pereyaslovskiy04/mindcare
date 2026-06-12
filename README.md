@@ -407,8 +407,14 @@ npm run build
   Остаток (отдельные maintenance-этапы): зачистка старых строк `user_sessions WHERE length(id) <> 64`
   и маскирование исторических plaintext `auth_log.session_id`.
 
+**Доступ к `session_notes` (Stage 25b).** Психолог видит только свои заметки;
+supervisor — списки metadata-only, content конкретной заметки доступен, но каждое
+такое чтение пишется в `audit_log` (`session_note_content_read`, без plaintext);
+admin — metadata-only везде, расшифрованный терапевтический content недоступен
+(metadata-путь не вызывает decrypt). H3 закрыт для MVP; supervision-scope модель
+и break-glass admin access — отдельные будущие решения.
+
 **Открытые security-направления** (подробности — `docs/BACKLOG.md`):
-- доступ admin/supervisor к содержимому `session_notes` без audit-следа чтения (H3);
 - HttpOnly Secure SameSite cookie + CSRF вместо localStorage-токена;
 - Redis/shared storage для rate limiting при multi-worker деплое;
 - debounce `touch_session` / request-scoped DB session (актуально перед Chat MVP polling);
@@ -471,7 +477,7 @@ npm run build
 | `/api/admin/news/*` + `/api/news/*` | CRUD news + public list/item | Admin, Supervisor / Public |
 | `/api/admin/articles/*` + `/api/articles/*` | CRUD articles + public list/item | Admin, Supervisor / Public |
 | `/api/media/upload` | POST upload image | Auth |
-| `/api/session-notes/*` | CRUD session notes (enc:v1: ciphertext) | Psychologist (own) / Admin, Supervisor |
+| `/api/session-notes/*` | Session notes (enc:v1: ciphertext): psychologist — свои с content; supervisor — meta-list + audited content read; admin — metadata-only | Psychologist / Supervisor / Admin |
 | `/api/supervisor/*` | Student list, psychologist list, engagements | Supervisor |
 | `/api/psychologist/*` | Cabinet: clients, schedule, appointments | Psychologist |
 | `/api/health` | Health check: status, tables, revision | Public |

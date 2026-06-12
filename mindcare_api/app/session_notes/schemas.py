@@ -19,6 +19,8 @@ class SessionNoteUpdate(BaseModel):
 
 
 class SessionNoteRead(BaseModel):
+    """Полный ответ с расшифрованным content — только psychologist (свои)
+    и supervisor (GET by id, под audit)."""
     id:                    int
     uuid:                  str
     appointment_id:        Optional[int]
@@ -34,8 +36,35 @@ class SessionNoteRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SessionNoteMetaRead(BaseModel):
+    """
+    Metadata-only ответ — без терапевтического content и без decrypt.
+    Используется для admin (list + get) и supervisor (list).
+    """
+    id:                    int
+    uuid:                  str
+    appointment_id:        Optional[int]
+    engagement_id:         Optional[int]
+    author_id:             int
+    note_type:             str
+    is_shared_with_client: bool
+    version:               int
+    created_at:            datetime
+    updated_at:            datetime
+    content_available:     bool = False
+
+    model_config = {"from_attributes": True}
+
+
 class PaginatedNotesResponse(BaseModel):
     items: list[SessionNoteRead]
+    total: int
+    page:  int
+    size:  int
+
+
+class PaginatedNotesMetaResponse(BaseModel):
+    items: list[SessionNoteMetaRead]
     total: int
     page:  int
     size:  int

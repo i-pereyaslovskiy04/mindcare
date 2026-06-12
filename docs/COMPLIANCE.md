@@ -50,6 +50,24 @@
 - **Операционное требование:** `DATA_ENCRYPTION_KEY` должен быть настроен и резервно скопирован
   отдельно от бэкапов БД; потеря ключа = невозможность восстановить заметки
 
+### Политика доступа к `session_notes` (Stage 25b)
+Encryption-at-rest защищает от утечки БД; политика доступа защищает
+от избыточно широких ролей приложения:
+- **psychologist** — создаёт/читает/обновляет только свои заметки (с content)
+- **supervisor** — список: metadata-only; чтение конкретной заметки: content
+  разрешён, но **каждое такое чтение пишется в `audit_log`**
+  (`session_note_content_read`: actor, role, note id, author_id, IP/UA)
+- **admin** — metadata-only везде (`content_available: false`);
+  расшифрованный терапевтический content админу не предоставляется;
+  metadata-путь вообще не вызывает decrypt
+- **student** — доступа нет (403)
+- create/update заметок также логируются (`session_note_created` /
+  `session_note_updated`)
+- Audit-записи не содержат plaintext content (хелпер принимает только
+  идентификаторы — content не попадает в сигнатуру by design)
+- Future: supervision-scope модель (сужение зоны супервизора);
+  break-glass admin access — только отдельным compliance-решением
+
 ### Аудит auth-событий (`auth_log`)
 Логируются через `log_auth_event` из `app/auth/audit.py`:
 
