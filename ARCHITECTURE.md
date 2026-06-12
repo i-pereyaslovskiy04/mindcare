@@ -24,7 +24,7 @@ mindcare_api/
     main.py              - точка входа FastAPI, lifespan, роутеры
     core/
       config.py          - настройки из .env (pydantic-settings)
-      encryption.py      - Fernet encrypt/decrypt для session_notes
+      encryption.py      - Fernet encrypt/decrypt для session_notes и chat_messages
       normalization.py   - normalize_email()
       rate_limit.py      - in-memory rate limiter для auth-эндпоинтов (Stage 21)
     auth/                - /api/auth/* (+ hashed session tokens, Stage 22b)
@@ -35,6 +35,9 @@ mindcare_api/
     articles/            - /api/admin/articles/* + /api/articles/* (public)
     media/               - POST /api/media/upload (Pillow, WebP)
     session_notes/       - /api/session-notes/* (encrypt-on-write)
+    chat/                - /api/chat/* — one-to-one чат student ↔ psychologist (Stage 28c):
+                           polling (after=<id>), encrypt-on-write (enc:v1:), read_at receipts,
+                           доступ только участникам engagement (admin/supervisor — 403)
     supervisor/          - /api/supervisor/* (supervisor role)
     psychologist/        - /api/psychologist/* (psychologist role)
     db/
@@ -51,7 +54,7 @@ mindcare_api/
     ensure_audit_partitions.py  - CLI: создание будущих партиций audit-таблиц
     backfill_legal_basis.py     - CLI: backfill legal basis records (--dry-run default)
     test_smtp.py                - CLI: диагностика SMTP
-  tests/                 - 138 тестов (unit + integration), запуск: .\test.ps1
+  tests/                 - 188 тестов (unit + integration), запуск: .\test.ps1
 ```
 
 **Полная документация:** `CLAUDE.md`, `docs/backend_architecture.md`
@@ -61,6 +64,13 @@ mindcare_api/
 ## Frontend: `mindcare_web/`
 
 **Стек:** React 19, React Router 7, CSS Modules, CRA (порт 3000)
+
+**Chat (Stage 28d/28e):** `src/api/chat.api.js`; student — `pages/student/Chat/`
+(`useStudentChat.js`, real API вместо mock); psychologist — `pages/psychologist/Chat/`
+(`usePsychologistChat.js`, список бесед + окно переписки на переиспользованных
+student chat-компонентах). Polling 8s (`after=<id>`), mark-read при открытии и
+новых входящих; WebSocket в MVP не используется. Diary/tasks/calendar студента
+остаются accepted demo/mock.
 
 **Полная документация:** `mindcare_web/ARCHITECTURE.md`
 

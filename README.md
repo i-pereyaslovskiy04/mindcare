@@ -55,7 +55,7 @@ mindcare/
 │   │   ├── main.py                  # Точка входа: FastAPI app, CORS, lifespan, роутеры
 │   │   ├── core/
 │   │   │   ├── config.py            # Настройки из .env (pydantic-settings)
-│   │   │   ├── encryption.py        # Fernet encrypt/decrypt для session_notes
+│   │   │   ├── encryption.py        # Fernet encrypt/decrypt для session_notes и chat_messages
 │   │   │   ├── normalization.py     # normalize_email()
 │   │   │   └── rate_limit.py        # In-memory sliding-window limiter для auth (Stage 21)
 │   │   ├── db/
@@ -96,6 +96,7 @@ mindcare/
 │   │   ├── articles/                # /api/admin/articles/* + /api/articles/* (public)
 │   │   ├── media/                   # POST /api/media/upload + Pillow resize/WebP
 │   │   ├── session_notes/           # /api/session-notes/* + Fernet encrypt-on-write
+│   │   ├── chat/                    # /api/chat/* — one-to-one чат (Stage 28c), encrypt-on-write
 │   │   ├── supervisor/              # /api/supervisor/* (supervisor role)
 │   │   ├── psychologist/            # /api/psychologist/* (psychologist role)
 │   │   └── services/
@@ -106,7 +107,7 @@ mindcare/
 │   │   ├── ensure_audit_partitions.py   # Создание будущих партиций audit-таблиц
 │   │   ├── backfill_legal_basis.py      # Backfill legal basis records (--dry-run по умолчанию)
 │   │   └── test_smtp.py                 # Диагностика SMTP-соединения
-│   ├── tests/                       # 138 тестов: unit + integration (см. «Тестирование»)
+│   ├── tests/                       # 188 тестов: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -154,10 +155,11 @@ pip install -r requirements.txt
 # Обязательные
 DATABASE_URL=postgresql://MindcareUser:password@localhost/mindcare
 
-# Шифрование заметок сессий (Fernet, обязателен при наличии данных)
+# Шифрование заметок сессий И сообщений чата (Fernet, обязателен при наличии данных)
 # Генерация нового ключа:
 #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# Хранить отдельно от резервных копий БД. Потеря ключа = потеря зашифрованных заметок.
+# Хранить отдельно от резервных копий БД.
+# Потеря ключа = потеря зашифрованных заметок (session_notes) и переписки (chat_messages).
 DATA_ENCRYPTION_KEY=
 
 # Email: "dev" — печатает в stdout, "smtp" — реальная отправка
@@ -342,7 +344,7 @@ lifespan() startup
 
 ## Тестирование
 
-Текущий статус: **138 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
+Текущий статус: **188 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
 
 ```bash
 # Backend
@@ -375,6 +377,10 @@ npm run build
 | `tests/integration/test_rate_limit_api.py` | 429-поведение auth API (10) |
 | `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end (9) |
 | `tests/integration/test_legal_basis_api.py` | legal basis records API (11) |
+| `tests/integration/test_session_notes_api.py` | access policy session_notes (15) |
+| `tests/integration/test_touch_session.py` | debounce touch_session (9) |
+| `tests/integration/test_chat_models.py` | constraints chat-таблиц (6) |
+| `tests/integration/test_chat_api.py` | Chat MVP API end-to-end (20) |
 
 ---
 
@@ -400,7 +406,8 @@ npm run build
 - ~~`session_notes.content` не шифруется~~ ✅ Закрыто — реализовано Fernet application-layer шифрование:
   `app/core/encryption.py`, `enc:v1:` prefix, encrypt-on-write/decrypt-on-read в `app/session_notes/storage.py`.
   **Операционное требование:** `DATA_ENCRYPTION_KEY` должен быть настроен и резервно скопирован отдельно от бэкапов БД.
-  Потеря ключа = невозможность восстановить зашифрованные заметки.
+  Потеря ключа = невозможность восстановить зашифрованные заметки **и переписку чата** —
+  с Stage 28c тот же ключ шифрует `chat_messages.content`.
 - ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ ✅ Закрыто — `scripts/ensure_audit_partitions.py` управляет
   будущими партициями; начальные партиции 2026-01..2028-12 созданы миграцией `3a7c5e2b8f1d`.
 - ~~Нет rate limiting на auth-эндпоинтах~~ ✅ Закрыто (Stage 21) — см. «Rate limiting» выше.
@@ -417,11 +424,26 @@ admin — metadata-only везде, расшифрованный терапев�
 (metadata-путь не вызывает decrypt). H3 закрыт для MVP; supervision-scope модель
 и break-glass admin access — отдельные будущие решения.
 
+**Chat MVP (Stage 28b–28f).** One-to-one чат student ↔ psychologist поверх
+`therapy_engagements` — **реализован; full-stack HTTP/API smoke пройден (38/0)**:
+- polling-based (клиент опрашивает `messages?after=<id>` раз в 7–10 секунд), без WebSocket;
+- `chat_messages.content` шифруется at-rest (Fernet, `enc:v1:`, тот же `DATA_ENCRYPTION_KEY`);
+- доступ только участникам engagement: **admin/supervisor получают 403 на все chat-роуты**,
+  staff-доступа к содержимому переписки нет by design (break-glass — отдельное compliance-решение);
+- read/unread через `chat_messages.read_at` (`POST .../read` помечает входящие);
+- rate limit на отправку: 30 сообщений/мин/пользователь;
+- audit: только `chat_conversation_created` (содержимое сообщений не логируется);
+- global unread badge, attachments, group chat, WebSocket, typing/online-индикаторы —
+  **future**, не реализованы.
+
+Ручной browser smoke обоих кабинетов остаётся рекомендованным перед demo/deploy.
+
 **Открытые security-направления** (подробности — `docs/BACKLOG.md`):
 - HttpOnly Secure SameSite cookie + CSRF вместо localStorage-токена;
 - Redis/shared storage для rate limiting при multi-worker деплое;
-- debounce `touch_session` / request-scoped DB session (актуально перед Chat MVP polling);
-- `target_user_id` в auth_log для поиска операций по субъекту.
+- request-scoped DB session (debounce `touch_session` закрыт в Stage 26);
+- `target_user_id` в auth_log для поиска операций по субъекту;
+- retention policy для chat_messages (открытый продуктовый вопрос).
 
 **Закрытые compliance-риски:**
 
@@ -481,6 +503,7 @@ admin — metadata-only везде, расшифрованный терапев�
 | `/api/admin/articles/*` + `/api/articles/*` | CRUD articles + public list/item | Admin, Supervisor / Public |
 | `/api/media/upload` | POST upload image | Auth |
 | `/api/session-notes/*` | Session notes (enc:v1: ciphertext): psychologist — свои с content; supervisor — meta-list + audited content read; admin — metadata-only | Psychologist / Supervisor / Admin |
+| `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts | Student / Psychologist (admin/supervisor — 403) |
 | `/api/supervisor/*` | Student list, psychologist list, engagements | Supervisor |
 | `/api/psychologist/*` | Cabinet: clients, schedule, appointments | Psychologist |
 | `/api/health` | Health check: status, tables, revision | Public |

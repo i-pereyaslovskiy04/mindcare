@@ -19,7 +19,9 @@
 - Все данные пользователей хранятся на серверах в РФ
 - Согласие на обработку ПДн фиксируется в `consent_records` при регистрации
 - Перед каждым тестом и записью на консультацию проверяется актуальность согласия
-- Заметки сессий (`session_notes`) шифруются на уровне приложения: Fernet, `enc:v1:` prefix, `app/core/encryption.py`; не писать plaintext в `SessionNote.content`, не логировать `content`
+- Заметки сессий (`session_notes`) и сообщения чата (`chat_messages.content`) шифруются
+  на уровне приложения: Fernet, `enc:v1:` prefix, `app/core/encryption.py`;
+  не сохранять и не логировать plaintext `content`
 - IP-адреса анонимизируются через 90 дней (`anonymize_old_ips()` в БД)
 
 **Монорепо с двумя проектами:**
@@ -165,7 +167,7 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **138 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **188 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -179,6 +181,10 @@ npm run build
 | `tests/integration/test_rate_limit_api.py` | 429-поведение auth API — 10 |
 | `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end — 9 |
 | `tests/integration/test_legal_basis_api.py` | legal basis records API — 11 |
+| `tests/integration/test_session_notes_api.py` | access policy session_notes (Stage 25b) — 15 |
+| `tests/integration/test_touch_session.py` | debounce touch_session (Stage 26) — 9 |
+| `tests/integration/test_chat_models.py` | constraints chat-таблиц (Stage 28b) — 6 |
+| `tests/integration/test_chat_api.py` | Chat MVP API end-to-end (Stage 28c) — 20 |
 
 ---
 
@@ -207,7 +213,7 @@ mindcare_api/
 │   ├── main.py              — точка входа FastAPI, подключение роутеров
 │   ├── core/
 │   │   ├── config.py        — настройки из .env (pydantic-settings)
-│   │   ├── encryption.py    — Fernet encrypt/decrypt (enc:v1:) для session_notes
+│   │   ├── encryption.py    — Fernet encrypt/decrypt (enc:v1:) для session_notes и chat_messages
 │   │   ├── normalization.py — normalize_email()
 │   │   └── rate_limit.py    — in-memory sliding-window limiter для auth (Stage 21)
 │   ├── db/
@@ -259,6 +265,7 @@ mindcare_api/
 │   │   ├── service.py       — бизнес-логика
 │   │   └── storage.py       — _article_to_dict, _sync_categories, _sync_tags
 │   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
+│   ├── chat/                — /api/chat/* (one-to-one, polling, read_at, encrypt-on-write)
 │   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
 │   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
@@ -299,6 +306,9 @@ mindcare_api/
    и под audit (session_note_content_read); admin — metadata-only без decrypt
 ✅ Staff-чтение терапевтического content ОБЯЗАНО писать audit-событие (без plaintext)
 ✅ Metadata-путь session_notes не должен вызывать decrypt_text
+✅ Chat content доступен только student/psychologist — участникам therapy_engagement
+✅ Chat content шифруется при записи и не попадает в logs/audit
+❌ Не добавлять admin/supervisor доступ к chat content без отдельного compliance/security этапа
 ❌ Не расширять admin-доступ к therapeutic content без отдельного compliance-решения
 ❌ Не использовать consent_records как суррогат legal basis для staff-ролей
 ❌ Не писать «админ соглашается за пользователя» / «психолог даёт пациентское согласие»
@@ -830,20 +840,20 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
-**Student chat/diary/tasks/calendar — accepted demo/mock (НЕ баг):**
-- `/student/chat`, `/student/diary`, `/student/tasks`, `/student/calendar` работают на
-  hardcoded mock-данных — это осознанная демо-витрина до отдельного Chat MVP этапа
-- НЕ считать это production-чатом и НЕ «чинить» без отдельного этапа
-- При старте Chat MVP: всю hardcoded mock-логику (CONTACTS, INITIAL_MESSAGES, MOCK_*)
-  можно удалить/сломать; сохранить только дизайн/визуальную структуру компонентов
-- One-to-one chat строить поверх `therapy_engagements` (partial unique index
-  гарантирует одного активного психолога на студента)
+**Student diary/tasks/calendar — accepted demo/mock (НЕ баг):**
+- `/student/diary`, `/student/tasks`, `/student/calendar` работают на hardcoded
+  mock-данных — это осознанная демо-витрина до отдельных этапов
+- `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
+  one-to-one поверх `therapy_engagements`, polling, read/unread через `read_at`
+- Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
+- Не добавлять WebSocket, group chat, attachments, global unread badge или
+  staff-доступ к content без отдельного этапа
 - `questions_answers` — это Q&A-модуль (один вопрос → один ответ), НЕ чат;
   не использовать как основу для чата
 
 Исправлено (больше не критично):
 - ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ — закрыто: миграция `3a7c5e2b8f1d` создаёт partitioned tables, `scripts/ensure_audit_partitions.py` управляет будущими партициями
-- ~~`session_notes.content` хранится открытым текстом~~ — закрыто: Fernet application-layer encryption в `app/core/encryption.py`; `DATA_ENCRYPTION_KEY` обязателен в `.env`
+- ~~`session_notes.content` хранится открытым текстом~~ — закрыто: Fernet application-layer encryption в `app/core/encryption.py`; `DATA_ENCRYPTION_KEY` обязателен в `.env` и также защищает `chat_messages.content`
 - OTP-коды теперь хранятся как SHA-256 хеш (migration `c5d8a1b4e7f2`, otp_service.py)
 - ~~Нет rate limiting на auth-эндпоинтах~~ — закрыто (Stage 21): `app/core/rate_limit.py`,
   per-process MVP; Redis/shared storage — отдельный этап

@@ -93,7 +93,7 @@
   фиксируется только в bootstrap-ветке `create_admin.py`; выдача staff-роли
   через обычный PATCH запись не создаёт
 - **UI просмотра legal basis records** в карточке пользователя админки
-- **Chat MVP** — one-to-one чат поверх `therapy_engagements` — **в работе**:
+- **Chat MVP** — one-to-one чат поверх `therapy_engagements` — **MVP завершён**:
   - ✅ Stage 28b: DB foundation — миграция `d8f3a6c1e9b4` (`chat_conversations`
     UNIQUE по engagement_id + `chat_messages` c partial-индексами), модели
     `app/db/models/chat.py`, constraint-тесты (`test_chat_models.py`, 6)
@@ -114,10 +114,13 @@
     включён), список бесед с unread_count/статусом, окно переписки на
     переиспользованных student chat-компонентах (ChatSidebar/ChatWindow),
     polling 8s/30s, mark-read, closed-state (включая 409 при отправке)
-  - ⏳ Stage 28f: manual smoke обоих кабинетов, docs/hardening
+  - ✅ Stage 28f: full-stack HTTP/API smoke `38 passed / 0 failed`,
+    документация и hardening завершены; ручной browser smoke обоих кабинетов
+    остаётся рекомендованным перед demo/deploy
   - **Future (chat):** глобальный unread badge в layout (нужен shared state);
     preview последнего сообщения в списке бесед (требует decrypt на список —
     optional); вынос chat-компонентов из `pages/student/Chat/` в shared
+    components; WebSocket; group chat; attachments; staff break-glass access
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

@@ -1,7 +1,7 @@
 # ФЗ-152 Compliance Checklist
 
 Статус выполнения требований ФЗ-152 «О персональных данных» для платформы MindCare.
-Последнее обновление: 2026-06-11.
+Последнее обновление: 2026-06-12.
 
 ---
 
@@ -67,6 +67,19 @@ Encryption-at-rest защищает от утечки БД; политика д�
   идентификаторы — content не попадает в сигнатуру by design)
 - Future: supervision-scope модель (сужение зоны супервизора);
   break-glass admin access — только отдельным compliance-решением
+
+### Шифрование и доступ к переписке (`chat_messages.content`)
+- Содержимое one-to-one чата — чувствительные психологические данные
+- `chat_messages.content` шифруется at-rest через Fernet (`enc:v1:`) тем же
+  `DATA_ENCRYPTION_KEY`, который защищает `session_notes`
+- Доступ к plaintext есть только у student и psychologist — участников
+  соответствующего `therapy_engagement`
+- Admin и supervisor не имеют доступа к chat content в MVP
+- Plaintext сообщений нельзя писать в application logs или audit; audit-событие
+  `chat_conversation_created` содержит только идентификаторы
+- Staff break-glass access требует отдельного compliance/security этапа
+- Retention policy для chat messages остаётся открытым продуктовым и
+  compliance-вопросом
 
 ### Аудит auth-событий (`auth_log`)
 Логируются через `log_auth_event` из `app/auth/audit.py`:
@@ -150,5 +163,6 @@ UUID цели закодирован в строке события (време�
 | ФИО, email, телефон | `users` | Базовые ПДн |
 | Результаты тестов | `test_results` | Специальные категории |
 | Заметки сессий | `session_notes` | Специальные категории |
+| Переписка student ↔ psychologist | `chat_messages` | Специальные категории |
 | Записи на консультации | `appointments` | Базовые ПДн |
 | IP-адреса | `auth_log` | Анонимизируются через 90 дней |
