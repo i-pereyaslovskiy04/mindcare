@@ -97,8 +97,14 @@
   - ✅ Stage 28b: DB foundation — миграция `d8f3a6c1e9b4` (`chat_conversations`
     UNIQUE по engagement_id + `chat_messages` c partial-индексами), модели
     `app/db/models/chat.py`, constraint-тесты (`test_chat_models.py`, 6)
-  - ⏳ Stage 28c: backend `app/chat/` — API, encryption (enc:v1: по паттерну
-    session_notes), access control по engagement, polling endpoints
+  - ✅ Stage 28c: backend `app/chat/` — polling API (`/api/chat/*`),
+    encrypt-on-write/decrypt-after-permission (enc:v1:), access только
+    student+psychologist по engagement (admin/supervisor → 403, без
+    staff-доступа к content), lazy-create беседы с race-защитой,
+    read receipts (`read_at`), before/after пагинация, audit
+    `chat_conversation_created` (без content и без per-message шума),
+    rate limit на отправку 30 сообщений/мин/пользователь
+    (`tests/integration/test_chat_api.py`, 20)
   - ⏳ Stage 28d: frontend — `chat.api.js`, student ChatPage на реальных данных
     (**mock-логика CONTACTS/INITIAL_MESSAGES удаляется, дизайн сохраняется**),
     chat-раздел психолога (нав-пункт уже есть как disabled)
