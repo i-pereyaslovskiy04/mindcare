@@ -88,7 +88,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 46 таблиц создаются через `alembic upgrade head`.
+> Все 48 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -215,7 +215,7 @@ mindcare_api/
 │   │   ├── session.py       — engine, SessionLocal
 │   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
 │   │   ├── seed.py          — идемпотентный seed
-│   │   └── models/          — ORM-модели (11 модулей, 46 таблиц; legal_basis.py — Stage 23b)
+│   │   └── models/          — ORM-модели (12 модулей, 48 таблиц; chat.py — Stage 28b)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
@@ -312,7 +312,7 @@ mindcare_api/
 
 ### База данных: схема
 
-46 таблиц в 11 модулях. Схема управляется через Alembic.
+48 таблиц в 12 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -328,7 +328,8 @@ mindcare_api/
 | `b3c5e7a9f1d2` | extend_auth_log_event: auth_log.event VARCHAR(50→150) |
 | `d2e5f8a1b4c7` | add_supervisor_engagement_index: partial unique index |
 | `e5a8f3c1d2b6` | add_normalized_email_unique_index: `lower(trim(email))` |
-| `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) — **head** |
+| `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) |
+| `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) — **head** |
 
 **Ключевые таблицы:**
 
@@ -341,6 +342,7 @@ mindcare_api/
 | `otp_verifications` | OTP для регистрации и сброса пароля. code = SHA-256 хеш |
 | `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
+| `chat_conversations`, `chat_messages` | Chat MVP (Stage 28b): one-to-one чат поверх therapy_engagements; одна беседа на engagement (UNIQUE); content — только `enc:v1:` (шифрование — Stage 28c) |
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |

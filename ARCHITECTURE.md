@@ -19,7 +19,7 @@ uvicorn app.main:app       # 2. Запустить приложение
 **Структура модулей:**
 ```
 mindcare_api/
-  alembic/               - конфиг и версии миграций (10 ревизий, head: b6e1f4a7c9d3)
+  alembic/               - конфиг и версии миграций (11 ревизий, head: d8f3a6c1e9b4)
   app/
     main.py              - точка входа FastAPI, lifespan, роутеры
     core/
@@ -42,7 +42,7 @@ mindcare_api/
       session.py         - engine, SessionLocal, get_db()
       init_db.py         - startup: ensure_database + check_migrations + seed
       seed.py            - идемпотентный seed: роли, permissions, consents
-      models/            - ORM-модели (11 модулей, 46 таблиц; legal_basis.py — Stage 23b)
+      models/            - ORM-модели (12 модулей, 48 таблиц; chat.py — Stage 28b)
     services/
       email_service.py   - высокоуровневые email-функции (per-event)
       _smtp.py           - SMTP-транспорт (внутренний)
@@ -68,7 +68,7 @@ mindcare_api/
 
 ## База данных
 
-PostgreSQL 15+, 46 таблиц, схема управляется только через Alembic.
+PostgreSQL 15+, 48 таблиц, схема управляется только через Alembic.
 
 | Revision | Описание |
 |----------|----------|
@@ -81,7 +81,8 @@ PostgreSQL 15+, 46 таблиц, схема управляется только 
 | b3c5e7a9f1d2 | auth_log.event VARCHAR(50→150) |
 | d2e5f8a1b4c7 | supervisor engagement unique index |
 | e5a8f3c1d2b6 | normalized email unique index: lower(trim(email)) |
-| b6e1f4a7c9d3 | user_legal_basis_records (Stage 23b) — **head** |
+| b6e1f4a7c9d3 | user_legal_basis_records (Stage 23b) |
+| d8f3a6c1e9b4 | chat_conversations + chat_messages (Stage 28b) — **head** |
 
 ---
 

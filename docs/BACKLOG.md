@@ -93,9 +93,19 @@
   фиксируется только в bootstrap-ветке `create_admin.py`; выдача staff-роли
   через обычный PATCH запись не создаёт
 - **UI просмотра legal basis records** в карточке пользователя админки
-- **Chat MVP** — one-to-one чат поверх `therapy_engagements`
-  (см. «Chat mock» в CLAUDE.md: текущий `/student/chat` — accepted demo,
-  mock-логику можно удалить при старте этапа; `questions_answers` — не чат)
+- **Chat MVP** — one-to-one чат поверх `therapy_engagements` — **в работе**:
+  - ✅ Stage 28b: DB foundation — миграция `d8f3a6c1e9b4` (`chat_conversations`
+    UNIQUE по engagement_id + `chat_messages` c partial-индексами), модели
+    `app/db/models/chat.py`, constraint-тесты (`test_chat_models.py`, 6)
+  - ⏳ Stage 28c: backend `app/chat/` — API, encryption (enc:v1: по паттерну
+    session_notes), access control по engagement, polling endpoints
+  - ⏳ Stage 28d: frontend — `chat.api.js`, student ChatPage на реальных данных
+    (**mock-логика CONTACTS/INITIAL_MESSAGES удаляется, дизайн сохраняется**),
+    chat-раздел психолога (нав-пункт уже есть как disabled)
+  - ⏳ Stage 28e: smoke/hardening/docs
+  - **Open product question:** retention policy для chat messages
+    (срок хранения переписки после завершения терапии)
+  - `questions_answers` — не чат, не использовать
 
 ---
 

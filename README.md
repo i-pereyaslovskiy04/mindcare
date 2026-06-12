@@ -48,9 +48,9 @@ HTTP Request
 ```
 mindcare/
 ├── mindcare_api/                    # FastAPI backend — порт 8000
-│   ├── alembic/                     # Конфиг и версии миграций (10 ревизий, head: b6e1f4a7c9d3)
+│   ├── alembic/                     # Конфиг и версии миграций (11 ревизий, head: d8f3a6c1e9b4)
 │   │   ├── env.py
-│   │   └── versions/                # af13ad7a133c … b6e1f4a7c9d3 (см. «История ревизий»)
+│   │   └── versions/                # af13ad7a133c … d8f3a6c1e9b4 (см. «История ревизий»)
 │   ├── app/
 │   │   ├── main.py                  # Точка входа: FastAPI app, CORS, lifespan, роутеры
 │   │   ├── core/
@@ -63,7 +63,7 @@ mindcare/
 │   │   │   ├── session.py           # engine, SessionLocal, get_db()
 │   │   │   ├── init_db.py           # Startup: ensure_database + check_migrations + seed
 │   │   │   ├── seed.py              # Идемпотентный seed: роли, permissions, consents
-│   │   │   └── models/              # ORM-модели (11 модулей, 46 таблиц)
+│   │   │   └── models/              # ORM-модели (12 модулей, 48 таблиц)
 │   │   │       ├── auth.py          # users, roles, user_roles, permissions, user_sessions
 │   │   │       ├── profiles.py      # student_profiles, psychologist_profiles
 │   │   │       ├── consents.py      # consents, consent_records (личное согласие субъекта)
@@ -72,6 +72,7 @@ mindcare/
 │   │   │       ├── content.py       # articles, news, categories, help_resources, Q&A
 │   │   │       ├── diagnostics.py   # tests, questions, options, test_results
 │   │   │       ├── consultations.py # appointments, schedule_rules, session_notes
+│   │   │       ├── chat.py          # chat_conversations, chat_messages (Stage 28b)
 │   │   │       ├── notifications.py # notification_templates, notifications
 │   │   │       ├── audit.py         # auth_log, audit_log, data_change_log
 │   │   │       └── otp.py           # otp_verifications
@@ -245,7 +246,7 @@ Alembic хранит текущую ревизию в одной строке:
 alembic_version
 ───────────────────
 version_num
-b6e1f4a7c9d3      ← текущий head
+d8f3a6c1e9b4      ← текущий head
 ```
 
 Каждая команда `alembic upgrade head` применяет все недостающие ревизии по цепочке и обновляет эту строку.
@@ -263,9 +264,10 @@ b6e1f4a7c9d3      ← текущий head
 | `b3c5e7a9f1d2` | auth_log.event VARCHAR(50→150) |
 | `d2e5f8a1b4c7` | Supervisor engagement unique index |
 | `e5a8f3c1d2b6` | Normalized email unique index: `lower(trim(email))` |
-| `b6e1f4a7c9d3` | user_legal_basis_records (Stage 23b) — **head** |
+| `b6e1f4a7c9d3` | user_legal_basis_records (Stage 23b) |
+| `d8f3a6c1e9b4` | chat_conversations + chat_messages (Stage 28b) — **head** |
 
-### ORM-модели (46 таблиц, 11 модулей)
+### ORM-модели (48 таблиц, 12 модулей)
 
 | Модуль | Таблицы |
 |--------|---------|
@@ -277,6 +279,7 @@ b6e1f4a7c9d3      ← текущий head
 | `content.py` | categories, articles, article_categories, news, help_resources, questions_answers |
 | `diagnostics.py` | tests, test_categories, questions, options, question_media, option_media, test_results, test_result_scales, student_answers |
 | `consultations.py` | therapy_engagements, schedule_rules, schedule_exceptions, appointments, session_notes |
+| `chat.py` | chat_conversations, chat_messages |
 | `notifications.py` | notification_templates, notifications |
 | `audit.py` | auth_log, audit_log, data_change_log |
 | `otp.py` | otp_verifications |
@@ -461,8 +464,8 @@ admin — metadata-only везде, расшифрованный терапев�
 {
   "status": "ok",
   "db": "connected",
-  "tables": 46,
-  "revision": "b6e1f4a7c9d3"
+  "tables": 48,
+  "revision": "d8f3a6c1e9b4"
 }
 ```
 
