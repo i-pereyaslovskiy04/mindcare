@@ -88,7 +88,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 45 таблиц создаются через `alembic upgrade head`.
+> Все 46 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -165,10 +165,20 @@ npm run build
 
 ### Текущее покрытие
 
+Всего: **138 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+
 | Файл | Что покрыто |
 |------|-------------|
 | `tests/test_change_password.py` | `service.change_password` — 13 сценариев |
 | `tests/test_encryption.py` | `app.core.encryption` — 21 сценарий |
+| `tests/test_normalization.py` | `normalize_email` + OTP/storage нормализация — 16 |
+| `tests/test_smtp_transport.py` | SMTP TLS/SSL transport — 21 |
+| `tests/test_rate_limit.py` | sliding-window limiter (unit) — 18 |
+| `tests/test_session_security.py` | generate/hash session token (unit) — 8 |
+| `tests/integration/test_email_normalization_api.py` | register/login/reset API — 11 |
+| `tests/integration/test_rate_limit_api.py` | 429-поведение auth API — 10 |
+| `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end — 9 |
+| `tests/integration/test_legal_basis_api.py` | legal basis records API — 11 |
 
 ---
 
@@ -196,24 +206,30 @@ mindcare_api/
 ├── app/
 │   ├── main.py              — точка входа FastAPI, подключение роутеров
 │   ├── core/
-│   │   └── config.py        — настройки из .env (pydantic-settings)
+│   │   ├── config.py        — настройки из .env (pydantic-settings)
+│   │   ├── encryption.py    — Fernet encrypt/decrypt (enc:v1:) для session_notes
+│   │   ├── normalization.py — normalize_email()
+│   │   └── rate_limit.py    — in-memory sliding-window limiter для auth (Stage 21)
 │   ├── db/
-│   │   ├── session.py       — engine, SessionLocal, Base
-│   │   └── models.py        — все SQLAlchemy модели
+│   │   ├── base.py          — Base = declarative_base()
+│   │   ├── session.py       — engine, SessionLocal
+│   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
+│   │   ├── seed.py          — идемпотентный seed
+│   │   └── models/          — ORM-модели (11 модулей, 46 таблиц; legal_basis.py — Stage 23b)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
 │   │   ├── otp_service.py   — создание и верификация OTP
-│   │   ├── routes.py        — /api/auth/* эндпоинты
+│   │   ├── routes.py        — /api/auth/* эндпоинты (+ rate limiting)
 │   │   ├── schemas.py       — Pydantic-схемы auth
-│   │   ├── security.py      — генерация токенов сессии
+│   │   ├── security.py      — generate_session_token(), hash_session_token() (Stage 22b)
 │   │   ├── service.py       — бизнес-логика auth
-│   │   └── storage.py       — работа с БД (users, sessions, consents)
+│   │   └── storage.py       — работа с БД (users, sessions hash-on-lookup, consents)
 │   ├── users/               — управление пользователями (admin)
-│   │   ├── routes_admin.py  — /api/admin/users/* эндпоинты
-│   │   ├── schemas.py       — Pydantic-схемы users
+│   │   ├── routes_admin.py  — /api/admin/users/* эндпоинты (только admin)
+│   │   ├── schemas.py       — Pydantic-схемы users (+ legal_basis_confirmed)
 │   │   ├── service.py       — бизнес-логика users
-│   │   └── storage.py       — работа с БД (find_users, create_user)
+│   │   └── storage.py       — работа с БД (find_users, create_user + legal basis record)
 │   ├── tags/                — управление тегами контента
 │   │   ├── routes_admin.py  — /api/admin/tags/* (admin + supervisor)
 │   │   ├── routes_public.py — /api/tags/ (autocomplete, без auth)
@@ -241,12 +257,17 @@ mindcare_api/
 │   │   ├── schemas.py       — ArticleCreate, ArticleUpdate, ArticleRead, CategoryRead
 │   │   ├── service.py       — бизнес-логика
 │   │   └── storage.py       — _article_to_dict, _sync_categories, _sync_tags
+│   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
+│   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
+│   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
-│       ├── email_sender.py  — SMTP транспорт (dev/smtp режимы)
+│       ├── _smtp.py         — SMTP транспорт (dev/smtp режимы, внутренний)
 │       └── email_service.py — формирование писем по событиям
 ├── scripts/
-│   ├── create_admin.py      — создание первого админа (интерактивный)
-│   └── test_smtp.py         — диагностика SMTP
+│   ├── create_admin.py            — создание первого админа (+ legal basis record)
+│   ├── ensure_audit_partitions.py — будущие партиции audit-таблиц
+│   ├── backfill_legal_basis.py    — backfill legal basis (--dry-run default)
+│   └── test_smtp.py               — диагностика SMTP
 └── db/
     └── sql/
         ├── full_schema.sql  — полная схема (001-010 склеены)
@@ -285,7 +306,7 @@ mindcare_api/
 
 ### База данных: схема
 
-45 таблиц в 10 модулях. Схема управляется через Alembic.
+46 таблиц в 11 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -299,7 +320,9 @@ mindcare_api/
 | `f4b9e2c6a1d8` | audit_indexes_and_types: индексы + тип data_change_log.changed_fields |
 | `a8c3f1d9e2b5` | add_tags_tables: tags, article_tags, news_tags, test_tags |
 | `b3c5e7a9f1d2` | extend_auth_log_event: auth_log.event VARCHAR(50→150) |
-| `d2e5f8a1b4c7` | add_supervisor_engagement_index: partial unique index — **head** |
+| `d2e5f8a1b4c7` | add_supervisor_engagement_index: partial unique index |
+| `e5a8f3c1d2b6` | add_normalized_email_unique_index: `lower(trim(email))` |
+| `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) — **head** |
 
 **Ключевые таблицы:**
 
@@ -419,7 +442,7 @@ src/components/UI
 Базовые shared UI controls, которые обязательно учитывать при создании локальных контролов:
 
 ```text
-src/components/UI/Button
+src/components/UI/Button            (Button.jsx + ButtonLink.jsx)
 src/components/UI/Checkbox
 src/components/UI/Toggle
 src/components/UI/FilterChip
@@ -441,6 +464,7 @@ src/components/UI/MultiSelect
 
 ```text
 ✅ Button — обычные action-кнопки: сохранить, отменить, удалить, загрузить ещё, назначить, повторить, применить.
+✅ ButtonLink — React Router навигационные ссылки, выглядящие как кнопки (router <Link> со стилями Button). Не делать Button + navigate() для обычной навигации.
 ✅ Checkbox — настоящие form-checkbox: согласие, active/inactive, published/unpublished, include deleted.
 ✅ Toggle — on/off переключатели: уведомления, настройки, включить/выключить.
 ✅ FilterChip — интерактивные фильтр-чипы с active/inactive состоянием.
@@ -602,11 +626,11 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/auth/me` | Auth | ✅ |
 | POST | `/api/auth/password/reset/init` | Public | ✅ |
 | POST | `/api/auth/password/reset/confirm` | Public | ✅ |
-| GET | `/api/admin/users` | Admin, Supervisor | ✅ |
-| POST | `/api/admin/users` | Admin, Supervisor | ✅ |
-| PATCH | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
-| DELETE | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
-| GET | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/users` | Admin | ✅ |
+| POST | `/api/admin/users` | Admin | ✅ |
+| PATCH | `/api/admin/users/{id}` | Admin | ✅ |
+| DELETE | `/api/admin/users/{id}` | Admin | ✅ |
+| GET | `/api/admin/users/{id}` | Admin | ✅ |
 | GET | `/api/admin/tags` | Admin, Supervisor | ✅ |
 | POST | `/api/admin/tags` | Admin, Supervisor | ✅ |
 | PATCH | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
@@ -798,7 +822,24 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
+**Student chat/diary/tasks/calendar — accepted demo/mock (НЕ баг):**
+- `/student/chat`, `/student/diary`, `/student/tasks`, `/student/calendar` работают на
+  hardcoded mock-данных — это осознанная демо-витрина до отдельного Chat MVP этапа
+- НЕ считать это production-чатом и НЕ «чинить» без отдельного этапа
+- При старте Chat MVP: всю hardcoded mock-логику (CONTACTS, INITIAL_MESSAGES, MOCK_*)
+  можно удалить/сломать; сохранить только дизайн/визуальную структуру компонентов
+- One-to-one chat строить поверх `therapy_engagements` (partial unique index
+  гарантирует одного активного психолога на студента)
+- `questions_answers` — это Q&A-модуль (один вопрос → один ответ), НЕ чат;
+  не использовать как основу для чата
+
 Исправлено (больше не критично):
 - ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ — закрыто: миграция `3a7c5e2b8f1d` создаёт partitioned tables, `scripts/ensure_audit_partitions.py` управляет будущими партициями
 - ~~`session_notes.content` хранится открытым текстом~~ — закрыто: Fernet application-layer encryption в `app/core/encryption.py`; `DATA_ENCRYPTION_KEY` обязателен в `.env`
 - OTP-коды теперь хранятся как SHA-256 хеш (migration `c5d8a1b4e7f2`, otp_service.py)
+- ~~Нет rate limiting на auth-эндпоинтах~~ — закрыто (Stage 21): `app/core/rate_limit.py`,
+  per-process MVP; Redis/shared storage — отдельный этап
+- ~~Session-токены plaintext в `user_sessions.id` / `auth_log.session_id`~~ — закрыто (Stage 22b):
+  SHA-256 hash-on-lookup; зачистка старых plaintext-строк — отдельный maintenance-этап
+- ~~Нет legal basis для admin-created users~~ — закрыто (Stage 23b): `user_legal_basis_records`;
+  backfill `--apply` выполнить при деплое

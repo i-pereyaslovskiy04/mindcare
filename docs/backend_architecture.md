@@ -2,9 +2,11 @@
 
 > **Historical snapshot.** This document reflects backend architecture as of 2026-05-21 and is not the current source of truth.
 > For current status see `README.md`, `docs/BACKLOG.md`, `docs/DECISIONS.md`, and `alembic history`.
-> Known stale items: "41 tables" (actual: 45), head revision `e9a3d7f2b5c0` (actual: `d2e5f8a1b4c7`),
-> missing modules: tags, categories, news, articles, media, session_notes, supervisor, psychologist, core/encryption.py.
-> Known security debt section below is also stale — both issues have been closed (see BACKLOG.md).
+> Known stale items: "41 tables" (actual: 46), head revision `e9a3d7f2b5c0` (actual: `b6e1f4a7c9d3`),
+> missing modules: tags, categories, news, articles, media, session_notes, supervisor, psychologist,
+> core/encryption.py, core/rate_limit.py, db/models/legal_basis.py.
+> Known security debt section below is also stale — все перечисленные риски закрыты,
+> включая rate limiting (Stage 21), hashed session tokens (Stage 22b) и legal basis (Stage 23b) — see BACKLOG.md.
 
 > Last snapshot: 2026-05-21
 

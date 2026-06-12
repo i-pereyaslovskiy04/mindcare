@@ -45,10 +45,12 @@ npm run lint
 
 ```bash
 cd mindcare_api
-python -m py_compile app/main.py
+python -m compileall app scripts -q
+pytest tests/ -v
 ```
 
-Или любой аналогичный синтаксический check. Полный тестовый запуск — по ситуации.
+Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
+Текущий ожидаемый статус: **138 passed**.
 
 ### Alembic
 
@@ -77,6 +79,7 @@ mindcare_web/src/components/UI
 | Компонент | Использовать для |
 |-----------|-----------------|
 | `Button` | Все action-кнопки: сохранить, отменить, удалить, загрузить ещё, применить |
+| `ButtonLink` | React Router навигационные ссылки в виде кнопки (`<Link>` со стилями Button). Не делать `Button + navigate()` для обычной навигации |
 | `Checkbox` | Настоящие form-checkbox: согласие, active/inactive, published/unpublished |
 | `Toggle` | On/off переключатели: уведомления, настройки |
 | `FilterChip` | Интерактивные фильтры с active/inactive состоянием |
@@ -209,10 +212,12 @@ Supervisor не должен роутиться в `/admin/*`.
 
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
-| **Unit** | Service/helper business logic, без реальной БД | `test_change_password.py` (13), `test_encryption.py` (21) |
-| **API/Integration** | Route → deps → service → storage → DB | Не реализованы — задел на будущее |
+| **Unit** | Service/helper business logic, без реальной БД | 97 тестов: change_password (13), encryption (21), normalization (16), smtp_transport (21), rate_limit (18), session_security (8) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 41 тест: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11) |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
+
+Итого: **138 passed** (`.\test.ps1`).
 
 ### Обязательные проверки перед PR
 

@@ -60,6 +60,7 @@
 | `failed_login` | `auth/routes.py` |
 | `logout` | `auth/routes.py` |
 | `password_reset` | `auth/routes.py` |
+| `password_change` | `auth/routes.py` |
 | `admin_create_user:{uuid}` | `users/routes_admin.py` |
 | `admin_update_user:{uuid}` | `users/routes_admin.py` |
 | `admin_delete_user:{uuid}` | `users/routes_admin.py` |
@@ -73,9 +74,21 @@ UUID цели закодирован в строке события (време�
 ### Анонимизация IP
 - Функция `anonymize_old_ips()` в БД — IP-адреса анонимизируются через 90 дней
 
-### Сессии
+### Сессии (Stage 22b — hashed tokens)
 - Сессии хранятся в `user_sessions`, не в JWT
+- В `user_sessions.id` хранится только SHA-256 hash токена (hash-on-lookup);
+  значение из дампа БД нельзя использовать как Bearer credential
+- Новые `auth_log.session_id` содержат hash, не raw token
 - Мягкий отзыв через `is_revoked=True` без физического удаления
+- Остаток (отдельные maintenance-этапы): зачистка legacy plaintext-строк
+  `user_sessions` и маскирование исторических `auth_log.session_id`
+
+### Rate limiting auth-эндпоинтов (Stage 21)
+- Login / register init+confirm / password reset init+confirm защищены
+  sliding-window лимитером (`app/core/rate_limit.py`): лимиты по IP
+  и нормализованному email, 429 без раскрытия существования аккаунта
+- MVP-ограничение: per-process state; для multi-worker production — Redis
+  (отдельный этап)
 
 ---
 

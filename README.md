@@ -48,28 +48,26 @@ HTTP Request
 ```
 mindcare/
 ├── mindcare_api/                    # FastAPI backend — порт 8000
-│   ├── alembic/                     # Конфиг и версии миграций
+│   ├── alembic/                     # Конфиг и версии миграций (10 ревизий, head: b6e1f4a7c9d3)
 │   │   ├── env.py
-│   │   └── versions/
-│   │       ├── af13ad7a133c_baseline_initial_schema.py
-│   │       ├── 3a7c5e2b8f1d_add_audit_tables.py
-│   │       ├── c5d8a1b4e7f2_otp_code_varchar64.py
-│   │       ├── f4b9e2c6a1d8_audit_indexes_and_types.py
-│   │       └── e9a3d7f2b5c0_rebuild_audit_indexes.py
+│   │   └── versions/                # af13ad7a133c … b6e1f4a7c9d3 (см. «История ревизий»)
 │   ├── app/
 │   │   ├── main.py                  # Точка входа: FastAPI app, CORS, lifespan, роутеры
 │   │   ├── core/
 │   │   │   ├── config.py            # Настройки из .env (pydantic-settings)
-│   │   │   └── encryption.py        # Fernet encrypt/decrypt для session_notes
+│   │   │   ├── encryption.py        # Fernet encrypt/decrypt для session_notes
+│   │   │   ├── normalization.py     # normalize_email()
+│   │   │   └── rate_limit.py        # In-memory sliding-window limiter для auth (Stage 21)
 │   │   ├── db/
 │   │   │   ├── base.py              # Base = declarative_base()  ← единственный источник
 │   │   │   ├── session.py           # engine, SessionLocal, get_db()
 │   │   │   ├── init_db.py           # Startup: ensure_database + check_migrations + seed
 │   │   │   ├── seed.py              # Идемпотентный seed: роли, permissions, consents
-│   │   │   └── models/              # ORM-модели (10 модулей, 45 таблиц)
+│   │   │   └── models/              # ORM-модели (11 модулей, 46 таблиц)
 │   │   │       ├── auth.py          # users, roles, user_roles, permissions, user_sessions
 │   │   │       ├── profiles.py      # student_profiles, psychologist_profiles
-│   │   │       ├── consents.py      # consents, consent_records
+│   │   │       ├── consents.py      # consents, consent_records (личное согласие субъекта)
+│   │   │       ├── legal_basis.py   # user_legal_basis_records (основание организации, Stage 23b)
 │   │   │       ├── media.py         # media_files, media_versions
 │   │   │       ├── content.py       # articles, news, categories, help_resources, Q&A
 │   │   │       ├── diagnostics.py   # tests, questions, options, test_results
@@ -84,10 +82,10 @@ mindcare/
 │   │   │   ├── otp_service.py       # OTP: создание (SHA-256 hash), верификация, очистка
 │   │   │   ├── audit.py             # log_auth_event() → auth_log
 │   │   │   ├── deps.py              # get_current_user, require_role
-│   │   │   ├── security.py          # generate_session_token()
+│   │   │   ├── security.py          # generate_session_token(), hash_session_token()
 │   │   │   └── schemas.py           # Pydantic-схемы /api/auth/*
 │   │   ├── users/
-│   │   │   ├── routes_admin.py      # /api/admin/users/* (admin, supervisor)
+│   │   │   ├── routes_admin.py      # /api/admin/users/* (только admin)
 │   │   │   ├── service.py           # Бизнес-логика: CRUD пользователей
 │   │   │   ├── storage.py           # DB-запросы: поиск, создание, обновление
 │   │   │   └── schemas.py           # Pydantic-схемы admin user management
@@ -101,13 +99,13 @@ mindcare/
 │   │   ├── psychologist/            # /api/psychologist/* (psychologist role)
 │   │   └── services/
 │   │       ├── email_service.py     # Публичный API: send_registration_otp() и др.
-│   │       └── email_sender.py      # Внутренний SMTP-транспорт (не импортировать напрямую)
+│   │       └── _smtp.py             # Внутренний SMTP-транспорт (не импортировать напрямую)
 │   ├── scripts/
 │   │   ├── create_admin.py              # Создание первого администратора (интерактивный CLI)
 │   │   ├── ensure_audit_partitions.py   # Создание будущих партиций audit-таблиц
+│   │   ├── backfill_legal_basis.py      # Backfill legal basis records (--dry-run по умолчанию)
 │   │   └── test_smtp.py                 # Диагностика SMTP-соединения
-│   ├── tests/
-│   │   └── test_encryption.py       # Unit-тесты для app/core/encryption.py (21 test)
+│   ├── tests/                       # 138 тестов: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -247,7 +245,7 @@ Alembic хранит текущую ревизию в одной строке:
 alembic_version
 ───────────────────
 version_num
-d2e5f8a1b4c7      ← текущий head
+b6e1f4a7c9d3      ← текущий head
 ```
 
 Каждая команда `alembic upgrade head` применяет все недостающие ревизии по цепочке и обновляет эту строку.
@@ -263,15 +261,18 @@ d2e5f8a1b4c7      ← текущий head
 | `e9a3d7f2b5c0` | Rebuild audit indexes (согласованы с ORM) |
 | `a8c3f1d9e2b5` | Tags tables: tags, article_tags, news_tags, test_tags |
 | `b3c5e7a9f1d2` | auth_log.event VARCHAR(50→150) |
-| `d2e5f8a1b4c7` | Supervisor engagement unique index — **head** |
+| `d2e5f8a1b4c7` | Supervisor engagement unique index |
+| `e5a8f3c1d2b6` | Normalized email unique index: `lower(trim(email))` |
+| `b6e1f4a7c9d3` | user_legal_basis_records (Stage 23b) — **head** |
 
-### ORM-модели (45 таблиц, 10 модулей)
+### ORM-модели (46 таблиц, 11 модулей)
 
 | Модуль | Таблицы |
 |--------|---------|
 | `auth.py` | users, roles, user_roles, permissions, role_permissions, user_sessions, refresh_tokens\*, user_mfa_methods\* |
 | `profiles.py` | student_profiles, psychologist_profiles, emergency_contacts |
 | `consents.py` | consents, consent_records |
+| `legal_basis.py` | user_legal_basis_records |
 | `media.py` | media_files, media_versions |
 | `content.py` | categories, articles, article_categories, news, help_resources, questions_answers |
 | `diagnostics.py` | tests, test_categories, questions, options, question_media, option_media, test_results, test_result_scales, student_answers |
@@ -336,9 +337,49 @@ lifespan() startup
 
 ---
 
+## Тестирование
+
+Текущий статус: **138 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
+
+```bash
+# Backend
+cd mindcare_api
+python -m compileall app scripts -q
+pytest tests/ -v
+```
+
+```powershell
+# Из корня проекта (compileall + все backend-тесты)
+.\test.ps1
+```
+
+```bash
+# Frontend
+cd mindcare_web
+npm run lint
+npm run build
+```
+
+| Файл | Покрытие |
+|------|----------|
+| `tests/test_change_password.py` | смена пароля (13) |
+| `tests/test_encryption.py` | Fernet encryption helper (21) |
+| `tests/test_normalization.py` | нормализация email (16) |
+| `tests/test_smtp_transport.py` | SMTP TLS/SSL transport (21) |
+| `tests/test_rate_limit.py` | rate limiter unit (18) |
+| `tests/test_session_security.py` | session token hashing unit (8) |
+| `tests/integration/test_email_normalization_api.py` | register/login/reset API (11) |
+| `tests/integration/test_rate_limit_api.py` | 429-поведение auth API (10) |
+| `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end (9) |
+| `tests/integration/test_legal_basis_api.py` | legal basis records API (11) |
+
+---
+
 ## Безопасность
 
-**Аутентификация.** Сессионные токены (`secrets.token_urlsafe`) хранятся в таблице `user_sessions`. Все защищённые эндпоинты проверяют токен через `deps.get_current_user()`: находит сессию, проверяет `is_revoked` и `expires_at`, обновляет `last_active`. JWT не используется.
+**Аутентификация.** Клиент получает opaque-токен (`secrets.token_urlsafe`); в таблице `user_sessions` хранится только его **SHA-256 hash** (Stage 22b) — значение из дампа БД нельзя использовать как Bearer. Все защищённые эндпоинты проверяют токен через `deps.get_current_user()` (hash-on-lookup): находит сессию, проверяет `is_revoked` и `expires_at`, обновляет `last_active`. JWT не используется.
+
+**Rate limiting (Stage 21).** Auth-эндпоинты (login, register init/confirm, password reset init/confirm) защищены in-memory sliding-window лимитером (`app/core/rate_limit.py`): лимиты по IP и нормализованному email, 429 с единым сообщением без раскрытия существования аккаунта. **MVP-ограничение:** состояние per-process, сбрасывается при рестарте; для multi-worker/multi-instance production нужен Redis/shared storage (отдельный этап).
 
 **OTP-коды.** Plaintext-код отправляется пользователю по email. В БД хранится только `SHA-256(code)` в `otp_verifications`. Код действителен 10 минут. Верификация — сравнение хешей. После успешной верификации запись удаляется.
 
@@ -359,6 +400,19 @@ lifespan() startup
   Потеря ключа = невозможность восстановить зашифрованные заметки.
 - ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ ✅ Закрыто — `scripts/ensure_audit_partitions.py` управляет
   будущими партициями; начальные партиции 2026-01..2028-12 созданы миграцией `3a7c5e2b8f1d`.
+- ~~Нет rate limiting на auth-эндпоинтах~~ ✅ Закрыто (Stage 21) — см. «Rate limiting» выше.
+- ~~Session-токены хранились plaintext в `user_sessions.id` и `auth_log.session_id`~~ ✅ Закрыто (Stage 22b) —
+  в БД хранится `sha256(raw_token)`, lookup/revoke/touch — hash-on-lookup; новые `auth_log.session_id` пишут hash.
+  Деплой инвалидировал старые plaintext-сессии (one-time re-login).
+  Остаток (отдельные maintenance-этапы): зачистка старых строк `user_sessions WHERE length(id) <> 64`
+  и маскирование исторических plaintext `auth_log.session_id`.
+
+**Открытые security-направления** (подробности — `docs/BACKLOG.md`):
+- доступ admin/supervisor к содержимому `session_notes` без audit-следа чтения (H3);
+- HttpOnly Secure SameSite cookie + CSRF вместо localStorage-токена;
+- Redis/shared storage для rate limiting при multi-worker деплое;
+- debounce `touch_session` / request-scoped DB session (актуально перед Chat MVP polling);
+- `target_user_id` в auth_log для поиска операций по субъекту.
 
 **Закрытые compliance-риски:**
 
@@ -401,8 +455,8 @@ lifespan() startup
 {
   "status": "ok",
   "db": "connected",
-  "tables": 45,
-  "revision": "d2e5f8a1b4c7"
+  "tables": 46,
+  "revision": "b6e1f4a7c9d3"
 }
 ```
 
@@ -410,8 +464,8 @@ lifespan() startup
 
 | Группа | Методы | Доступ |
 |--------|--------|--------|
-| `/api/auth/*` | register/init, register/confirm, login, logout, me, password reset | Public / Auth |
-| `/api/admin/users/*` | GET list, GET one, POST, PATCH, DELETE | Admin, Supervisor |
+| `/api/auth/*` | register/init, register/confirm, login, logout, me, password reset, change-password | Public / Auth |
+| `/api/admin/users/*` | GET list, GET one, POST, PATCH, DELETE | Admin |
 | `/api/admin/tags/*` + `/api/tags` | CRUD tags + public autocomplete | Admin, Supervisor / Public |
 | `/api/admin/categories/*` | CRUD categories | Admin, Supervisor |
 | `/api/admin/news/*` + `/api/news/*` | CRUD news + public list/item | Admin, Supervisor / Public |

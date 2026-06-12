@@ -58,6 +58,26 @@
 - DB schema не менялась — sequences существовали; проблема была только в ORM metadata
 - Файл: `mindcare_api/app/db/models/audit.py`
 
+**Открытые security/future направления (после Stages 21–23b):**
+- **H3:** admin/supervisor читают расшифрованный content всех `session_notes`
+  без audit-следа чтения — решить политику доступа + логировать read-доступ
+- **HttpOnly Secure SameSite cookie + CSRF** вместо localStorage-токена
+  (текущий localStorage — осознанный MVP-компромисс, Stage 18f)
+- **Redis/shared storage для rate limiting** при multi-worker/multi-instance деплое
+- **Cleanup legacy plaintext**: старые строки `user_sessions WHERE length(id) <> 64`
+  и маскирование исторических `auth_log.session_id` (см. Stage 22b выше)
+- **`touch_session` debounce / request-scoped DB session** — сейчас каждый
+  авторизованный запрос делает 3 транзакции (UPDATE last_active на каждый GET);
+  критично перед Chat MVP polling
+- **`target_user_id` в auth_log** — см. 🔵-секцию (ADR-006)
+- **Legal basis при смене роли через `PATCH /api/admin/users`** — сейчас
+  фиксируется только в bootstrap-ветке `create_admin.py`; выдача staff-роли
+  через обычный PATCH запись не создаёт
+- **UI просмотра legal basis records** в карточке пользователя админки
+- **Chat MVP** — one-to-one чат поверх `therapy_engagements`
+  (см. «Chat mock» в CLAUDE.md: текущий `/student/chat` — accepted demo,
+  mock-логику можно удалить при старте этапа; `questions_answers` — не чат)
+
 ---
 
 ## 🟡 Важные (влияют на качество)
@@ -89,9 +109,8 @@
   **`--apply` на момент Stage 23b не запускался** — выполнить при деплое
 - Тесты: `tests/integration/test_legal_basis_api.py` (11 сценариев)
 
-**`AdminUserCreate` не допускает роль `supervisor`, `AdminUserUpdate` — допускает**
-- Создать супервизора через `POST /api/admin/users` нельзя, но сменить роль на `supervisor` через `PATCH` — можно
-- Асимметрия не задокументирована; уточнить намеренность и при необходимости выровнять
+**~~`AdminUserCreate` не допускает роль `supervisor`, `AdminUserUpdate` — допускает~~** ✅ Закрыто
+- Асимметрия устранена: `AdminUserCreate.role` теперь `Literal["psychologist", "admin", "supervisor"]`
 - Файл: `mindcare_api/app/users/schemas.py`
 
 ---

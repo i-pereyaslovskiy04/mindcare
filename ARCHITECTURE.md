@@ -19,14 +19,16 @@ uvicorn app.main:app       # 2. Запустить приложение
 **Структура модулей:**
 ```
 mindcare_api/
-  alembic/               - конфиг и версии миграций (8 ревизий)
+  alembic/               - конфиг и версии миграций (10 ревизий, head: b6e1f4a7c9d3)
   app/
     main.py              - точка входа FastAPI, lifespan, роутеры
     core/
       config.py          - настройки из .env (pydantic-settings)
       encryption.py      - Fernet encrypt/decrypt для session_notes
-    auth/                - /api/auth/*
-    users/               - /api/admin/users/* (admin, supervisor)
+      normalization.py   - normalize_email()
+      rate_limit.py      - in-memory rate limiter для auth-эндпоинтов (Stage 21)
+    auth/                - /api/auth/* (+ hashed session tokens, Stage 22b)
+    users/               - /api/admin/users/* (только admin)
     tags/                - /api/admin/tags/* + /api/tags/ (public)
     categories/          - /api/admin/categories/*
     news/                - /api/admin/news/* + /api/news/* (public)
@@ -40,16 +42,16 @@ mindcare_api/
       session.py         - engine, SessionLocal, get_db()
       init_db.py         - startup: ensure_database + check_migrations + seed
       seed.py            - идемпотентный seed: роли, permissions, consents
-      models/            - ORM-модели (10 модулей, 45 таблиц)
+      models/            - ORM-модели (11 модулей, 46 таблиц; legal_basis.py — Stage 23b)
     services/
       email_service.py   - высокоуровневые email-функции (per-event)
-      email_sender.py    - SMTP-транспорт (внутренний)
+      _smtp.py           - SMTP-транспорт (внутренний)
   scripts/
-    create_admin.py             - CLI: создание первого администратора
+    create_admin.py             - CLI: создание первого администратора (+ legal basis record)
     ensure_audit_partitions.py  - CLI: создание будущих партиций audit-таблиц
+    backfill_legal_basis.py     - CLI: backfill legal basis records (--dry-run default)
     test_smtp.py                - CLI: диагностика SMTP
-  tests/
-    test_encryption.py   - unit-тесты encryption helper (21 test)
+  tests/                 - 138 тестов (unit + integration), запуск: .\test.ps1
 ```
 
 **Полная документация:** `CLAUDE.md`, `docs/backend_architecture.md`
@@ -66,7 +68,7 @@ mindcare_api/
 
 ## База данных
 
-PostgreSQL 15+, 45 таблиц, схема управляется только через Alembic.
+PostgreSQL 15+, 46 таблиц, схема управляется только через Alembic.
 
 | Revision | Описание |
 |----------|----------|
@@ -77,7 +79,9 @@ PostgreSQL 15+, 45 таблиц, схема управляется только 
 | e9a3d7f2b5c0 | rebuild audit indexes (согласованы с ORM) |
 | a8c3f1d9e2b5 | tags tables: tags, article_tags, news_tags, test_tags |
 | b3c5e7a9f1d2 | auth_log.event VARCHAR(50→150) |
-| d2e5f8a1b4c7 | supervisor engagement unique index — **head** |
+| d2e5f8a1b4c7 | supervisor engagement unique index |
+| e5a8f3c1d2b6 | normalized email unique index: lower(trim(email)) |
+| b6e1f4a7c9d3 | user_legal_basis_records (Stage 23b) — **head** |
 
 ---
 

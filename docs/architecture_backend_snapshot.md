@@ -1,5 +1,12 @@
 # Backend Architecture Snapshot — MindCare API
 
+> ⚠️ **Historical snapshot (2026-05-20) — НЕ source of truth.**
+> Документ описывает состояние ДО интеграции Alembic и security-этапов
+> (Stages 17–23b: email normalization, SMTP hardening, rate limiting,
+> hashed session tokens, legal basis records). Актуальное состояние —
+> `README.md`, `CLAUDE.md`, `docs/BACKLOG.md`, `alembic history`
+> (head: `b6e1f4a7c9d3`, 46 таблиц, 138 тестов).
+
 > **Цель документа:** полный технический snapshot состояния backend-архитектуры на момент 2026-05-20.  
 > Предназначен для другого AI-инженера или разработчика перед интеграцией Alembic и production-ready DB architecture.  
 > **Ничего не изменяет в проекте.** Только анализ и описание текущего состояния.
