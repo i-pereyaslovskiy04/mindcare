@@ -184,6 +184,12 @@ def update_user_password(user_id: str, password_hash: str) -> None:
 # Сессии (заменяют JWT refresh-токены)
 # ---------------------------------------------------------------------------
 
+# Debounce для last_active (Stage 26): обновляем не чаще раза в 5 минут.
+# touch_session вызывается на КАЖДОМ авторизованном запросе — без debounce
+# каждый GET порождает UPDATE по user_sessions (write amplification,
+# критично перед Chat MVP polling). Точность last_active — до 5 минут.
+TOUCH_SESSION_DEBOUNCE_SECONDS = 300
+
 def create_session(
     user_id: str,
     ip: Optional[str] = None,
@@ -254,12 +260,29 @@ def revoke_all_user_sessions(user_id: str) -> None:
 
 
 def touch_session(token: str) -> None:
-    """Обновляет last_active для сессии. Принимает raw token, ищет по hash."""
+    """
+    Обновляет last_active для сессии. Принимает raw token, ищет по hash.
+
+    Debounce: UPDATE выполняется только если last_active отсутствует или
+    старше TOUCH_SESSION_DEBOUNCE_SECONDS — свежие сессии не трогаются
+    (условие в самом UPDATE, без отдельного SELECT — атомарно).
+
+    Revoked/expired сессии намеренно не «оживляются»: их last_active
+    не обновляется. Валидацию сессии это не затрагивает — она выполняется
+    в find_session на каждом запросе, как раньше.
+    """
+    now = datetime.now(timezone.utc)
+    threshold = now - timedelta(seconds=TOUCH_SESSION_DEBOUNCE_SECONDS)
+
     with SessionLocal() as db:
         db.query(UserSession).filter(
-            UserSession.id == hash_session_token(token)
+            UserSession.id == hash_session_token(token),
+            ~UserSession.is_revoked,
+            UserSession.expires_at > now,
+            (UserSession.last_active.is_(None))
+            | (UserSession.last_active <= threshold),
         ).update(
-            {"last_active": datetime.now(timezone.utc)},
+            {"last_active": now},
             synchronize_session=False,
         )
         db.commit()

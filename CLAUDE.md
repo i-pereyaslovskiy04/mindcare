@@ -224,7 +224,8 @@ mindcare_api/
 │   │   ├── schemas.py       — Pydantic-схемы auth
 │   │   ├── security.py      — generate_session_token(), hash_session_token() (Stage 22b)
 │   │   ├── service.py       — бизнес-логика auth
-│   │   └── storage.py       — работа с БД (users, sessions hash-on-lookup, consents)
+│   │   └── storage.py       — работа с БД (users, sessions hash-on-lookup,
+│   │                          last_active с debounce 5 мин — Stage 26, consents)
 │   ├── users/               — управление пользователями (admin)
 │   │   ├── routes_admin.py  — /api/admin/users/* эндпоинты (только admin)
 │   │   ├── schemas.py       — Pydantic-схемы users (+ legal_basis_confirmed)

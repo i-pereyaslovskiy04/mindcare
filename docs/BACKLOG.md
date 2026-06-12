@@ -79,9 +79,15 @@
 - **Redis/shared storage для rate limiting** при multi-worker/multi-instance деплое
 - **Cleanup legacy plaintext**: старые строки `user_sessions WHERE length(id) <> 64`
   и маскирование исторических `auth_log.session_id` (см. Stage 22b выше)
-- **`touch_session` debounce / request-scoped DB session** — сейчас каждый
-  авторизованный запрос делает 3 транзакции (UPDATE last_active на каждый GET);
-  критично перед Chat MVP polling
+- ~~**`touch_session` debounce**~~ ✅ Закрыто (Stage 26): `last_active`
+  обновляется не чаще раза в `TOUCH_SESSION_DEBOUNCE_SECONDS = 300` (5 мин),
+  одним условным UPDATE без отдельного SELECT; revoked/expired сессии
+  не «оживляются». Точность `last_active` — до 5 минут.
+  Тесты: `tests/integration/test_touch_session.py` (9)
+- **Request-scoped DB session / объединение auth storage calls** — future
+  optimization: `get_current_user` по-прежнему делает `find_session` +
+  `touch_session` (теперь чаще no-op) + `find_user_by_id` отдельными
+  транзакциями; объединение в одну сессию — отдельный этап
 - **`target_user_id` в auth_log** — см. 🔵-секцию (ADR-006)
 - **Legal basis при смене роли через `PATCH /api/admin/users`** — сейчас
   фиксируется только в bootstrap-ветке `create_admin.py`; выдача staff-роли
