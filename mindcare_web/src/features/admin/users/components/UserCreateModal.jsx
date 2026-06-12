@@ -3,6 +3,7 @@ import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
+import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import styles from './UserCreateModal.module.css';
 
 const ROLE_OPTIONS = [
@@ -10,6 +11,18 @@ const ROLE_OPTIONS = [
   { value: 'psychologist', label: 'Психолог' },
   { value: 'admin',        label: 'Администратор' },
 ];
+
+const BASIS_TYPE_OPTIONS = [
+  { value: 'service_duty',         label: 'Служебная необходимость' },
+  { value: 'employment',           label: 'Трудовое основание' },
+  { value: 'contract',             label: 'Договор' },
+  { value: 'administrative_order', label: 'Административный приказ' },
+  { value: 'other',                label: 'Иное' },
+];
+
+const LEGAL_BASIS_LABEL =
+  'Подтверждаю наличие документированного основания для создания ' +
+  'учётной записи и обработки персональных данных пользователя.';
 
 export default function UserCreateModal({ open, onClose, onCreated }) {
   const [createdUser, setCreatedUser] = useState(null);
@@ -95,6 +108,69 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
           />
         </div>
 
+        <div className={styles.field}>
+          <label className={styles.label}>Тип основания</label>
+          <Select
+            value={values.basis_type}
+            options={BASIS_TYPE_OPTIONS}
+            onChange={(val) => onChange({ target: { name: 'basis_type', value: val } })}
+            error={errors.basis_type}
+            panelZIndex={2300}
+          />
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="ucm-basis_reference">
+            Документ-основание (необязательно)
+          </label>
+          <input
+            id="ucm-basis_reference"
+            className={styles.input}
+            type="text"
+            name="basis_reference"
+            value={values.basis_reference}
+            onChange={onChange}
+            placeholder="Например: приказ №..., договор №..."
+            autoComplete="off"
+            maxLength={255}
+          />
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="ucm-legal_basis_comment">
+            Комментарий (необязательно)
+          </label>
+          <input
+            id="ucm-legal_basis_comment"
+            className={styles.input}
+            type="text"
+            name="legal_basis_comment"
+            value={values.legal_basis_comment}
+            onChange={onChange}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className={styles.field}>
+          <Checkbox
+            id="ucm-legal_basis_confirmed"
+            checked={values.legal_basis_confirmed}
+            error={Boolean(errors.legal_basis_confirmed)}
+            ariaDescribedBy={errors.legal_basis_confirmed ? 'ucm-lb-error' : undefined}
+            onChange={(checked) =>
+              onChange({
+                target: { name: 'legal_basis_confirmed', type: 'checkbox', checked },
+              })
+            }
+            label={LEGAL_BASIS_LABEL}
+          />
+          {errors.legal_basis_confirmed && (
+            <span id="ucm-lb-error" className={styles.hint} role="alert">
+              {errors.legal_basis_confirmed}
+            </span>
+          )}
+        </div>
+
         {errors._form && (
           <div className={styles.formError} role="alert">{errors._form}</div>
         )}
@@ -103,7 +179,11 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
           <Button variant="secondary" onClick={onCancel} disabled={submitting}>
             Отмена
           </Button>
-          <Button variant="primary" type="submit" disabled={submitting}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={submitting || !values.legal_basis_confirmed}
+          >
             {submitting ? 'Создаём…' : 'Создать'}
           </Button>
         </div>

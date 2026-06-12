@@ -11,7 +11,7 @@ from sqlalchemy import or_, asc, desc, select, case as sa_case
 
 from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
-from app.db.models import User, UserRole, Role, UserSession
+from app.db.models import User, UserRole, Role, UserSession, UserLegalBasisRecord
 
 _ROLE_PRIORITY = sa_case(
     (Role.name == "admin",        1),
@@ -266,6 +266,13 @@ def create_user(
     password_hash: str,
     role: str,
     phone: Optional[str] = None,
+    *,
+    basis_type: str = "service_duty",
+    basis_reference: Optional[str] = None,
+    legal_basis_comment: Optional[str] = None,
+    confirmed_by_user_id: Optional[int] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
     """
     Создаёт нового пользователя с указанной ролью.
@@ -273,9 +280,12 @@ def create_user(
     Используется только из админских эндпоинтов.
     Публичная регистрация — через auth/storage.save_user.
 
+    В той же транзакции создаёт UserLegalBasisRecord — документированное
+    основание организации для создания учётной записи (НЕ consent_records:
+    это не «согласие за пользователя», см. app/db/models/legal_basis.py).
+    Если запись основания не создаётся — пользователь не создаётся (rollback).
+
     Возвращает dict с данными созданного юзера.
-    Не создаёт consent_records — для adminski-созданных юзеров
-    согласие фиксируется отдельно при первом логине (TODO: Этап 2).
     """
     with SessionLocal() as db:
         existing = (
@@ -295,13 +305,23 @@ def create_user(
             is_active=True,
         )
         db.add(new_user)
-        db.flush()  # получаем id до commit — нужен для user_roles
+        db.flush()  # получаем id до commit — нужен для user_roles и legal basis
 
         role_obj = db.query(Role).filter(Role.name == role).first()
         if not role_obj:
             raise ValueError(f"Роль '{role}' не найдена в БД")
 
         db.add(UserRole(user_id=new_user.id, role_id=role_obj.id))
+        db.add(UserLegalBasisRecord(
+            user_id=new_user.id,
+            basis_type=basis_type,
+            basis_source="admin_ui",
+            basis_reference=basis_reference,
+            confirmed_by_user_id=confirmed_by_user_id,
+            ip_address=ip,
+            user_agent=user_agent,
+            comment=legal_basis_comment,
+        ))
         db.commit()
         db.refresh(new_user)
 

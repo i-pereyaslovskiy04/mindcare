@@ -75,11 +75,19 @@
 - 16 unit-тестов в `tests/test_normalization.py`; Stage 17c: API/integration tests
 - DB-level защита: migration `e5a8f3c1d2b6` добавляет `ux_users_email_normalized` — functional unique index `lower(trim(email))` на таблице `users`
 
-**Нет `consent_records` для юзеров созданных через `POST /api/admin/users`**
-- Психологи и админы создаются без фиксации согласия на ПДн
-- Юридически: согласие должно быть получено при первом входе
-- Нужен флаг `must_accept_consent` и проверка при логине
-- Файл: `app/users/service.py`, `app/auth/service.py`
+**~~Нет фиксации основания обработки ПДн для юзеров, созданных через `POST /api/admin/users`~~** ✅ Закрыто (Stage 23b, H4)
+- Переформулировано: для psychologist/supervisor/admin это не «согласие пациента»,
+  а **документированное основание организации** (трудовое/служебное/договорное/приказ).
+  `consent_records` не использовать как суррогат legal basis для staff-ролей.
+- Реализовано: таблица `user_legal_basis_records` (миграция `b6e1f4a7c9d3`,
+  модель `app/db/models/legal_basis.py`); запись создаётся в одной транзакции
+  с пользователем; `legal_basis_confirmed=true` обязателен (422 без него);
+  фиксируются basis_type, basis_reference, actor admin id, IP, user-agent
+- `scripts/create_admin.py` пишет legal basis (bootstrap) вместо consent-имитации;
+  исторические bootstrap consent_records не удалялись
+- Backfill: `scripts/backfill_legal_basis.py` (`--dry-run` по умолчанию);
+  **`--apply` на момент Stage 23b не запускался** — выполнить при деплое
+- Тесты: `tests/integration/test_legal_basis_api.py` (11 сценариев)
 
 **`AdminUserCreate` не допускает роль `supervisor`, `AdminUserUpdate` — допускает**
 - Создать супервизора через `POST /api/admin/users` нельзя, но сменить роль на `supervisor` через `PATCH` — можно

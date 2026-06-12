@@ -44,6 +44,9 @@ from app.db.models.consents import (  # noqa: F401
     ConsentRecord,
 )
 
+# ── legal basis ───────────────────────────────────────────────────────────────
+from app.db.models.legal_basis import UserLegalBasisRecord  # noqa: F401
+
 # ── media ─────────────────────────────────────────────────────────────────────
 from app.db.models.media import (  # noqa: F401
     MediaFile,
@@ -110,6 +113,8 @@ __all__ = [
     "StudentProfile", "PsychologistProfile", "EmergencyContact",
     # consents
     "Consent", "ConsentRecord",
+    # legal basis
+    "UserLegalBasisRecord",
     # media
     "MediaFile", "MediaVersion",
     # content

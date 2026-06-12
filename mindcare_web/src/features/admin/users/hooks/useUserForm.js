@@ -1,9 +1,21 @@
 import { useState, useEffect } from 'react';
 import { getUser, createUser, updateUser } from '../../../../api/users.api';
 
-const CREATE_INITIAL = { full_name: '', email: '', role: 'psychologist' };
+const CREATE_INITIAL = {
+  full_name: '',
+  email: '',
+  role: 'psychologist',
+  // Документированное основание (legal basis) — НЕ «согласие за пользователя»
+  legal_basis_confirmed: false,
+  basis_type: 'service_duty',
+  basis_reference: '',
+  legal_basis_comment: '',
+};
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_ROLES = ['psychologist', 'admin', 'supervisor'];
+const VALID_BASIS_TYPES = [
+  'service_duty', 'employment', 'contract', 'administrative_order', 'other',
+];
 
 function validateCreate(values) {
   const errs = {};
@@ -13,6 +25,11 @@ function validateCreate(values) {
     errs.email = 'Введите корректный email';
   if (!VALID_ROLES.includes(values.role))
     errs.role = 'Выберите роль';
+  if (!VALID_BASIS_TYPES.includes(values.basis_type))
+    errs.basis_type = 'Выберите тип основания';
+  if (!values.legal_basis_confirmed)
+    errs.legal_basis_confirmed =
+      'Подтвердите наличие документированного основания';
   return errs;
 }
 
@@ -78,7 +95,15 @@ export function useUserForm({ mode, uuid, onSuccess }) {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setSubmitting(true);
-    const request = isCreate ? createUser(values) : updateUser(uuid, values);
+    // Пустые опциональные поля основания отправляем как null, не ''
+    const payload = isCreate
+      ? {
+          ...values,
+          basis_reference: values.basis_reference?.trim() || null,
+          legal_basis_comment: values.legal_basis_comment?.trim() || null,
+        }
+      : values;
+    const request = isCreate ? createUser(payload) : updateUser(uuid, values);
 
     request
       .then((result) => { onSuccess(result); })

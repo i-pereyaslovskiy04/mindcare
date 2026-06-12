@@ -6,6 +6,7 @@
 import logging
 import secrets
 import string
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -66,9 +67,17 @@ def get_users_list(query: AdminUserListQuery) -> PaginatedUsersResponse:
     )
 
 
-def create_user(data: AdminUserCreate) -> dict:
+def create_user(
+    data: AdminUserCreate,
+    *,
+    actor_id: Optional[int] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     """
-    Создаёт нового юзера (психолога или админа) от имени администратора.
+    Создаёт нового юзера (психолога, супервизора или админа) от имени
+    администратора. Вместе с пользователем в одной транзакции фиксируется
+    legal basis record (документированное основание организации).
 
     Генерирует временный пароль и отправляет его на email нового юзера.
     Пароль хешируется перед сохранением в БД.
@@ -89,6 +98,12 @@ def create_user(data: AdminUserCreate) -> dict:
             password_hash=password_hash,
             role=data.role,
             phone=data.phone,
+            basis_type=data.basis_type,
+            basis_reference=data.basis_reference,
+            legal_basis_comment=data.legal_basis_comment,
+            confirmed_by_user_id=actor_id,
+            ip=ip,
+            user_agent=user_agent,
         )
     except ValueError as e:
         raise AuthError(str(e), status_code=409)

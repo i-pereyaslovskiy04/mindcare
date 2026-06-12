@@ -268,6 +268,13 @@ mindcare_api/
 ✅ Soft delete — deleted_at, не физическое удаление
 ✅ Внешний API использует users.uuid (UUID), не users.id (INT)
 ✅ Схема БД — только через Alembic (alembic upgrade head перед стартом)
+✅ consent_records — ТОЛЬКО личное согласие субъекта (студент сам принимает политику)
+✅ Для admin-created psychologist/supervisor/admin — user_legal_basis_records
+   (документированное основание организации; чекбокс в UI формулируется как
+   «Подтверждаю наличие документированного основания для создания учётной
+   записи и обработки персональных данных пользователя»)
+❌ Не использовать consent_records как суррогат legal basis для staff-ролей
+❌ Не писать «админ соглашается за пользователя» / «психолог даёт пациентское согласие»
 ❌ Не использовать fastapi-users — конфликтует с нашей схемой
 ❌ Не использовать async SQLAlchemy — проект на sync psycopg2
 ❌ Не вызывать alembic.command.upgrade() из FastAPI lifespan — deadlock
@@ -303,7 +310,8 @@ mindcare_api/
 | `student_profiles`, `psychologist_profiles` | Профили 1:1 с users |
 | `user_sessions` | Сессии (заменяют JWT). Soft-revoke через `is_revoked` |
 | `otp_verifications` | OTP для регистрации и сброса пароля. code = SHA-256 хеш |
-| `consents`, `consent_records` | Согласия на ПДн. Обязательны при регистрации |
+| `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
+| `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
