@@ -15,7 +15,9 @@ export function configureClient({ getToken }) {
 
 async function _parseError(res) {
   const body = await res.json().catch(() => ({}));
-  return new Error(body.detail || body.message || `HTTP ${res.status}`);
+  const err = new Error(body.detail || body.message || `HTTP ${res.status}`);
+  err.status = res.status;
+  return err;
 }
 
 export async function apiFetch(url, options = {}) {

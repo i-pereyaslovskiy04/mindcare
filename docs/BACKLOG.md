@@ -110,8 +110,14 @@
     удалены, дизайн сохранён), loading/empty/error/closed states, polling 8s
     через `after=<id>`, mark-read при открытии и новых входящих, hardcoded
     unread badge в StudentLayout убран (реальный глобальный badge — future)
-  - ⏳ Stage 28e: psychologist chat frontend (нав-пункт уже есть как disabled),
-    затем smoke/hardening/docs
+  - ✅ Stage 28e: psychologist chat frontend — `/psychologist/chat` (нав-пункт
+    включён), список бесед с unread_count/статусом, окно переписки на
+    переиспользованных student chat-компонентах (ChatSidebar/ChatWindow),
+    polling 8s/30s, mark-read, closed-state (включая 409 при отправке)
+  - ⏳ Stage 28f: manual smoke обоих кабинетов, docs/hardening
+  - **Future (chat):** глобальный unread badge в layout (нужен shared state);
+    preview последнего сообщения в списке бесед (требует decrypt на список —
+    optional); вынос chat-компонентов из `pages/student/Chat/` в shared
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

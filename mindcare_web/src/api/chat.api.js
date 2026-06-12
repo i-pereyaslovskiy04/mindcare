@@ -28,3 +28,39 @@ export const sendMyConversationMessage = (content) =>
 
 export const markMyConversationRead = () =>
   apiFetch('/api/chat/my-conversation/read', { method: 'POST' });
+
+/**
+ * Psychologist side (Stage 28e): беседы со своими студентами по engagements.
+ */
+
+export const getPsychologistConversations = ({ page, size } = {}) => {
+  const params = new URLSearchParams();
+  if (page != null) params.set('page', page);
+  if (size != null) params.set('size', size);
+  const qs = params.toString();
+  return apiFetch(`/api/chat/conversations${qs ? `?${qs}` : ''}`);
+};
+
+export const getPsychologistConversation = (conversationUuid) =>
+  apiFetch(`/api/chat/conversations/${conversationUuid}`);
+
+export const getPsychologistConversationMessages = (
+  conversationUuid,
+  { limit, before, after } = {},
+) => {
+  const params = new URLSearchParams();
+  if (limit != null) params.set('limit', limit);
+  if (before != null) params.set('before', before);
+  if (after != null) params.set('after', after);
+  const qs = params.toString();
+  return apiFetch(`/api/chat/conversations/${conversationUuid}/messages${qs ? `?${qs}` : ''}`);
+};
+
+export const sendPsychologistConversationMessage = (conversationUuid, content) =>
+  apiFetch(`/api/chat/conversations/${conversationUuid}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+
+export const markPsychologistConversationRead = (conversationUuid) =>
+  apiFetch(`/api/chat/conversations/${conversationUuid}/read`, { method: 'POST' });
