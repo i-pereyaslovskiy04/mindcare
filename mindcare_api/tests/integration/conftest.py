@@ -76,6 +76,22 @@ def capture_emails():
         yield sent
 
 
+# ─── Rate limiter isolation ───────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """
+    Сбрасывает in-memory rate limiter перед каждым тестом.
+
+    Все integration-тесты ходят через один TestClient с одним IP (127.0.0.1),
+    поэтому без сброса IP-лимиты auth-эндпоинтов срабатывали бы на сумме
+    запросов всей сессии, а не одного теста.
+    """
+    from app.core import rate_limit
+    rate_limit.reset()
+    yield
+
+
 # ─── DB cleanup ───────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)

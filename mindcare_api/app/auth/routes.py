@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 
+from app.core.rate_limit import RateLimitExceeded, enforce as enforce_rate_limit
 from app.auth.schemas import (
     RegisterInitRequest,
     RegisterConfirmRequest,
@@ -16,9 +17,24 @@ from app.auth.deps import get_current_user, get_session_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_RATE_LIMIT_MESSAGE = "Слишком много попыток. Попробуйте позже."
+
+
+def _check_rate_limit(action: str, request: Request, email: str | None = None) -> None:
+    """
+    Лимит по IP и нормализованному email. При превышении — 429 с единым
+    сообщением, не раскрывающим существование email.
+    """
+    ip = request.client.host if request.client else None
+    try:
+        enforce_rate_limit(action, email=email, ip=ip)
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail=_RATE_LIMIT_MESSAGE)
+
 
 @router.post("/register/init", response_model=MessageResponse)
-def register_init(body: RegisterInitRequest):
+def register_init(body: RegisterInitRequest, request: Request):
+    _check_rate_limit("register_init", request, email=body.email)
     try:
         service.register_init(name=body.name, email=body.email, password=body.password)
     except service.AuthError as e:
@@ -28,6 +44,7 @@ def register_init(body: RegisterInitRequest):
 
 @router.post("/register/confirm", response_model=MessageResponse, status_code=201)
 def register_confirm(body: RegisterConfirmRequest, request: Request):
+    _check_rate_limit("confirm", request, email=body.email)
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     try:
@@ -55,6 +72,7 @@ def register_confirm(body: RegisterConfirmRequest, request: Request):
 
 @router.post("/login", response_model=SessionResponse)
 def login(body: LoginRequest, request: Request):
+    _check_rate_limit("login", request, email=body.email)
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     try:
@@ -123,7 +141,10 @@ def me(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/password/reset/init", response_model=MessageResponse)
-def password_reset_init(body: PasswordResetInitRequest):
+def password_reset_init(body: PasswordResetInitRequest, request: Request):
+    # Лимит считается по запросам, а не по существованию аккаунта:
+    # 429 для незарегистрированного email выглядит так же, как для живого.
+    _check_rate_limit("reset_init", request, email=body.email)
     try:
         service.password_reset_init(email=body.email)
     except service.AuthError as e:
@@ -159,6 +180,7 @@ def change_password(
 
 @router.post("/password/reset/confirm", response_model=MessageResponse)
 def password_reset_confirm(body: PasswordResetConfirmRequest, request: Request):
+    _check_rate_limit("confirm", request, email=body.email)
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     try:

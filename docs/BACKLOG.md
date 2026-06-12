@@ -260,5 +260,12 @@
 - Полнотекстовый поиск с морфологией
 - Экспорт данных (Excel, PDF-отчёты)
 - Принудительная смена пароля при первом входе
-- Rate limiting на API-эндпоинты
+- ~~Rate limiting на auth-эндпоинты~~ — закрыто (Stage 21): in-memory sliding window
+  в `app/core/rate_limit.py`, подключён к login / register init+confirm /
+  password reset init+confirm. Лимиты по IP и нормализованному email, 429 с единым
+  сообщением без раскрытия существования аккаунта.
+  **Ограничение MVP:** состояние per-process; при multi-worker/multi-instance
+  деплое каждый процесс считает независимо — для production нужен Redis/shared
+  storage (интерфейс `enforce()` сохраняется). Rate limiting на остальные
+  API-эндпоинты (не auth) — по-прежнему Этап 2.
 - ~~Автогенерация партиций audit-таблиц~~ — закрыто `ensure_audit_partitions.py`
