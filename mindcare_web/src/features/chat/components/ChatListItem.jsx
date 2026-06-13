@@ -1,12 +1,16 @@
+import Icon from '../../../components/Icon/Icon';
 import styles from './ChatSidebar.module.css';
 
 export default function ChatListItem({ contact, isActive, onClick }) {
   return (
     <button
-      className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
+      type="button"
+      className={`${styles.item} ${isActive ? styles.itemActive : ''} ${contact.system ? styles.itemSystem : ''}`}
       onClick={onClick}
     >
-      <div className={styles.avatar}>{contact.initials}</div>
+      <div className={`${styles.avatar} ${contact.system ? styles.avatarSystem : ''}`}>
+        {contact.system ? <Icon name="bell" size={18} /> : contact.initials}
+      </div>
 
       <div className={styles.info}>
         <div className={styles.name}>{contact.name}</div>

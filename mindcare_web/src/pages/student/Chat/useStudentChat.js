@@ -5,25 +5,11 @@ import {
   markMyConversationRead,
   sendMyConversationMessage,
 } from '../../../api/chat.api';
+import { mapApiMessage as mapMessage } from '../../../features/chat/lib/messageShape';
 
 const POLL_ACTIVE_MS = 8000;            // новые сообщения в активном диалоге
 const POLL_NO_CONVERSATION_MS = 30000;  // ожидание назначения психолога
 const HISTORY_LIMIT = 100;
-
-function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-}
-
-/** Backend message → UI-форма, которую ждут MessageList/MessageItem. */
-function mapMessage(m) {
-  return {
-    id: m.id,
-    text: m.content,
-    sender: m.is_mine ? 'me' : 'psychologist',
-    time: formatTime(m.created_at),
-    createdAt: m.created_at,
-  };
-}
 
 /** Достаёт человекочитаемый текст ошибки; raw HTTP-статусы заменяет fallback'ом. */
 function errText(e, fallback) {

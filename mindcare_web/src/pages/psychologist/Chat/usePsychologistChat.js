@@ -6,26 +6,12 @@ import {
   markPsychologistConversationRead,
   sendPsychologistConversationMessage,
 } from '../../../api/chat.api';
+import { mapApiMessage as mapMessage } from '../../../features/chat/lib/messageShape';
 
 const POLL_MESSAGES_MS = 8000;   // новые сообщения выбранной активной беседы
 const POLL_LIST_MS = 30000;      // обновление unread_count / появление новых бесед
 const LIST_PAGE_SIZE = 100;
 const HISTORY_LIMIT = 100;
-
-function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-}
-
-/** Backend message → UI-форма, которую ждут MessageList/MessageItem. */
-function mapMessage(m) {
-  return {
-    id: m.id,
-    text: m.content,
-    sender: m.is_mine ? 'me' : 'student',
-    time: formatTime(m.created_at),
-    createdAt: m.created_at,
-  };
-}
 
 const STATUS_FALLBACK = {
   403: 'Нет доступа к этому чату',

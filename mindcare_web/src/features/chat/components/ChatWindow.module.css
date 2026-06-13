@@ -140,6 +140,56 @@
   text-align: right;
 }
 
+/* read receipts (только для исходящих user-сообщений) */
+.receipt {
+  margin-left: 5px;
+  font-size: 11px;
+  color: var(--text-light);
+  letter-spacing: -1px;
+}
+
+/* link inside bubble (frontend linkify) */
+.bubble a,
+.systemBubble a {
+  color: inherit;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.bubbleMe a {
+  color: var(--milk);
+}
+
+/* ---- system message (нейтральный, по центру, без аватара/receipts) ---- */
+.msgSystem {
+  align-self: center;
+  max-width: 85%;
+}
+
+.systemBubble {
+  background: var(--sand);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  text-align: center;
+  word-break: break-word;
+}
+
+.systemTime {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-light);
+}
+
+.headerAvatarSystem {
+  background: var(--sand);
+  color: var(--coffee);
+  border: 1px solid var(--nav-border);
+}
+
 .threadEmpty {
   margin: auto;
   text-align: center;

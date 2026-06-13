@@ -1,47 +1,89 @@
+import { useEffect, useState } from 'react';
 import Button from '../../../components/UI/Button/Button';
-import ChatSidebar from './components/ChatSidebar';
-import ChatWindow from './components/ChatWindow';
+import ChatSidebar from '../../../features/chat/components/ChatSidebar';
+import ChatWindow from '../../../features/chat/components/ChatWindow';
+import { useSystemConversation } from '../../../features/chat/hooks/useSystemConversation';
+import {
+  SYSTEM_DIALOG_ID,
+  SYSTEM_NOTICE,
+  formatLastTime,
+  initialsOf,
+  systemContact,
+} from '../../../features/chat/lib/conversationView';
 import { useStudentChat } from './useStudentChat';
 import styles from './ChatPage.module.css';
 
-function initialsOf(name) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
-}
-
-function formatLastTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toDateString() === new Date().toDateString()
-    ? d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('ru', { day: 'numeric', month: 'short' });
-}
+const SYSTEM_META_POLL_MS = 30000;
+const SYSTEM_MSG_POLL_MS = 8000;
 
 export default function ChatPage() {
-  const { conversation, messages, loading, error, sending, sendError, send, refetch } =
-    useStudentChat();
+  const {
+    conversation: engConv,
+    messages: engMessages,
+    loading: engLoading,
+    error: engError,
+    sending,
+    sendError,
+    send,
+    refetch,
+  } = useStudentChat();
 
-  const closed = Boolean(conversation) && conversation.engagement_status !== 'active';
+  const {
+    conversation: sysConv,
+    messages: sysMessages,
+    loading: sysLoading,
+    error: sysError,
+    refreshMeta: sysRefreshMeta,
+    open: sysOpen,
+    close: sysClose,
+    pollNew: sysPollNew,
+  } = useSystemConversation();
+
+  const [selected, setSelected] = useState(null);
+
+  // Лёгкий poll метаданных системной беседы (unread в списке) независимо от выбора.
+  useEffect(() => {
+    sysRefreshMeta();
+    const t = setInterval(sysRefreshMeta, SYSTEM_META_POLL_MS);
+    return () => clearInterval(t);
+  }, [sysRefreshMeta]);
+
+  // Дефолтный выбор: диалог с психологом, иначе системные уведомления.
+  useEffect(() => {
+    if (selected != null) return;
+    if (engConv) setSelected(engConv.uuid);
+    else if (sysConv) setSelected(SYSTEM_DIALOG_ID);
+  }, [selected, engConv, sysConv]);
+
+  // Открытие системной беседы: загрузка + mark-read + лёгкий poll новых.
+  useEffect(() => {
+    if (selected !== SYSTEM_DIALOG_ID) return undefined;
+    sysOpen();
+    const t = setInterval(sysPollNew, SYSTEM_MSG_POLL_MS);
+    return () => {
+      clearInterval(t);
+      sysClose();
+    };
+  }, [selected, sysOpen, sysPollNew, sysClose]);
+
+  const engClosed = Boolean(engConv) && engConv.engagement_status !== 'active';
+  const hasAny = Boolean(engConv) || Boolean(sysConv);
 
   let body;
-  if (loading) {
+  if (engLoading) {
     body = (
       <div className={styles.stateBox}>
-        <p className={styles.stateText}>Загрузка чата…</p>
+        <p className={styles.stateText}>Загрузка сообщений…</p>
       </div>
     );
-  } else if (error) {
+  } else if (engError) {
     body = (
       <div className={styles.stateBox}>
-        <p className={styles.stateText}>{error}</p>
+        <p className={styles.stateText}>{engError}</p>
         <Button onClick={refetch}>Повторить</Button>
       </div>
     );
-  } else if (!conversation) {
+  } else if (!hasAny) {
     body = (
       <div className={styles.stateBox}>
         <p className={styles.stateTitle}>Вам ещё не назначен психолог.</p>
@@ -51,26 +93,73 @@ export default function ChatPage() {
       </div>
     );
   } else {
-    const contact = {
-      id: conversation.uuid,
-      name: conversation.partner.full_name,
-      initials: initialsOf(conversation.partner.full_name),
-      role: closed ? 'Диалог закрыт' : 'Психолог',
-      lastMsg: closed ? 'История доступна для чтения' : 'Ваш психолог',
-      time: formatLastTime(conversation.last_message_at),
-      unread: 0,
-    };
-    body = (
-      <div className={styles.shell}>
-        <ChatSidebar contacts={[contact]} activeId={contact.id} onSelect={() => {}} />
+    // Список: системные уведомления закреплены сверху, затем диалог с психологом.
+    const contacts = [];
+    if (sysConv) contacts.push(systemContact(sysConv));
+    if (engConv) {
+      contacts.push({
+        id: engConv.uuid,
+        name: engConv.partner.full_name,
+        initials: initialsOf(engConv.partner.full_name),
+        role: engClosed ? 'Диалог закрыт' : 'Психолог',
+        lastMsg: engClosed ? 'История доступна для чтения' : 'Ваш психолог',
+        time: formatLastTime(engConv.last_message_at),
+        unread: engConv.unread_count || 0,
+      });
+    }
+
+    let pane;
+    if (selected === SYSTEM_DIALOG_ID && sysConv) {
+      if (sysError) {
+        pane = (
+          <div className={styles.paneState}>
+            <p className={styles.stateText}>{sysError}</p>
+          </div>
+        );
+      } else if (sysLoading && sysMessages.length === 0) {
+        pane = (
+          <div className={styles.paneState}>
+            <p className={styles.stateText}>Загрузка уведомлений…</p>
+          </div>
+        );
+      } else {
+        pane = (
+          <ChatWindow
+            contact={systemContact(sysConv)}
+            messages={sysMessages}
+            readOnly
+            readOnlyNotice={SYSTEM_NOTICE}
+          />
+        );
+      }
+    } else if (engConv) {
+      pane = (
         <ChatWindow
-          contact={contact}
-          messages={messages}
+          contact={{
+            id: engConv.uuid,
+            name: engConv.partner.full_name,
+            initials: initialsOf(engConv.partner.full_name),
+            role: engClosed ? 'Диалог закрыт' : 'Психолог',
+          }}
+          messages={engMessages}
           onSend={send}
-          closed={closed}
+          closed={engClosed}
           sending={sending}
           sendError={sendError}
         />
+      );
+    } else {
+      pane = (
+        <div className={styles.paneState}>
+          <p className={styles.stateText}>Выберите диалог.</p>
+        </div>
+      );
+    }
+
+    body = (
+      <div className={styles.shell}>
+        <ChatSidebar contacts={contacts} activeId={selected} onSelect={setSelected} />
+        {pane}
       </div>
     );
   }
@@ -78,10 +167,11 @@ export default function ChatPage() {
   return (
     <div className={styles.page}>
       <h1 className={styles.pageTitle}>
-        Чат с <em>психологом</em>
+        <em>Сообщения</em>
       </h1>
       <p className={styles.pageSub}>
-        Связь между сессиями. Отвечаем в течение рабочего дня. Для срочной помощи — телефон доверия в настройках.
+        Связь с психологом между сессиями и системные уведомления. Для срочной помощи —
+        телефон доверия в настройках.
       </p>
 
       {body}

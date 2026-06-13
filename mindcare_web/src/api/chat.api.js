@@ -64,3 +64,23 @@ export const sendPsychologistConversationMessage = (conversationUuid, content) =
 
 export const markPsychologistConversationRead = (conversationUuid) =>
   apiFetch(`/api/chat/conversations/${conversationUuid}/read`, { method: 'POST' });
+
+/**
+ * System conversation (Stage 29b/29c): read-only feed системных уведомлений
+ * текущего пользователя. Отправка сообщений не поддерживается (write-эндпоинта нет).
+ */
+
+export const getSystemConversation = () =>
+  apiFetch('/api/chat/system-conversation');
+
+export const getSystemMessages = ({ limit, before, after } = {}) => {
+  const params = new URLSearchParams();
+  if (limit != null) params.set('limit', limit);
+  if (before != null) params.set('before', before);
+  if (after != null) params.set('after', after);
+  const qs = params.toString();
+  return apiFetch(`/api/chat/system-conversation/messages${qs ? `?${qs}` : ''}`);
+};
+
+export const markSystemConversationRead = () =>
+  apiFetch('/api/chat/system-conversation/read', { method: 'POST' });

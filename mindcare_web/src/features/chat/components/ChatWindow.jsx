@@ -10,8 +10,13 @@ export default function ChatWindow({
   closed = false,
   sending = false,
   sendError = null,
+  readOnly = false,
+  readOnlyNotice = null,
 }) {
   if (!contact) return null;
+
+  // composer скрыт у системной беседы (readOnly) и у закрытого engagement.
+  const showComposer = !readOnly && !closed;
 
   return (
     <div className={styles.window}>
@@ -22,12 +27,14 @@ export default function ChatWindow({
           {sendError}
         </div>
       )}
-      {closed ? (
-        <div className={styles.closedNotice}>
-          Диалог закрыт. История переписки доступна только для чтения.
-        </div>
-      ) : (
+      {showComposer ? (
         <MessageInput onSend={onSend} sending={sending} />
+      ) : (
+        <div className={styles.closedNotice}>
+          {readOnly
+            ? readOnlyNotice
+            : 'Диалог закрыт. История переписки доступна только для чтения.'}
+        </div>
       )}
     </div>
   );

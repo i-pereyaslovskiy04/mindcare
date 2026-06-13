@@ -130,9 +130,13 @@
     беседе), подключены события welcome (register + admin-create) и password_changed;
     `tests/integration/test_system_conversation.py` (17). engagement chat-эндпоинты
     не изменены, frontend не тронут
-  - ⏳ Stage 29c: **frontend Unified Messenger + system conversation UI** — единый
-    раздел «Сообщения», system-беседа как read-only feed (без composer), nav badge
-    по числу бесед с unread, linkify (http/https, без HTML), read receipts (галочки)
+  - ✅ Stage 29c: **frontend Unified Messenger + system conversation UI** — единый
+    раздел «Сообщения» (student + psychologist), общие chat-компоненты вынесены в
+    `src/features/chat/`, system-беседа как read-only feed (закреплена сверху, без
+    composer), nav badge по числу диалогов с unread (не сумма сообщений), linkify
+    http/https (без `dangerouslySetInnerHTML`), read receipts (✓/✓✓ по `read_at`),
+    роуты `/student/chat` и `/psychologist/chat` сохранены; backend не менялся
+    (lint 0 / build OK / backend 205)
   - ⏳ Stage 29d (или позже): system messages для engagement
     assignment/transfer/close (точки в `supervisor/service.py` готовы), задания,
     материалы, анкеты, legal announcements

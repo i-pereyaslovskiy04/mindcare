@@ -72,6 +72,17 @@
   flex-shrink: 0;
 }
 
+/* system conversation: закреплена сверху, нейтральный маркер */
+.itemSystem {
+  background: var(--cream);
+}
+
+.avatarSystem {
+  background: var(--sand);
+  color: var(--coffee);
+  border: 1px solid var(--nav-border);
+}
+
 .info {
   flex: 1;
   min-width: 0;

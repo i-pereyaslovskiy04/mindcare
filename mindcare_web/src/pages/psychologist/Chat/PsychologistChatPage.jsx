@@ -1,25 +1,20 @@
+import { useEffect, useState } from 'react';
 import Button from '../../../components/UI/Button/Button';
-import ChatSidebar from '../../student/Chat/components/ChatSidebar';
-import ChatWindow from '../../student/Chat/components/ChatWindow';
+import ChatSidebar from '../../../features/chat/components/ChatSidebar';
+import ChatWindow from '../../../features/chat/components/ChatWindow';
+import { useSystemConversation } from '../../../features/chat/hooks/useSystemConversation';
+import {
+  SYSTEM_DIALOG_ID,
+  SYSTEM_NOTICE,
+  formatLastTime,
+  initialsOf,
+  systemContact,
+} from '../../../features/chat/lib/conversationView';
 import { usePsychologistChat } from './usePsychologistChat';
 import styles from './PsychologistChatPage.module.css';
 
-function initialsOf(name) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
-}
-
-function formatLastTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toDateString() === new Date().toDateString()
-    ? d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('ru', { day: 'numeric', month: 'short' });
-}
+const SYSTEM_META_POLL_MS = 30000;
+const SYSTEM_MSG_POLL_MS = 8000;
 
 function toContact(conv) {
   const closed = conv.engagement_status !== 'active';
@@ -52,7 +47,48 @@ export default function PsychologistChatPage() {
     send,
   } = usePsychologistChat();
 
+  const {
+    conversation: sysConv,
+    messages: sysMessages,
+    loading: sysLoading,
+    error: sysError,
+    refreshMeta: sysRefreshMeta,
+    open: sysOpen,
+    close: sysClose,
+    pollNew: sysPollNew,
+  } = useSystemConversation();
+
+  const [systemSelected, setSystemSelected] = useState(false);
+
+  // Лёгкий poll метаданных системной беседы (unread в списке).
+  useEffect(() => {
+    sysRefreshMeta();
+    const t = setInterval(sysRefreshMeta, SYSTEM_META_POLL_MS);
+    return () => clearInterval(t);
+  }, [sysRefreshMeta]);
+
+  // Открытие системной беседы: загрузка + mark-read + лёгкий poll новых.
+  useEffect(() => {
+    if (!systemSelected) return undefined;
+    sysOpen();
+    const t = setInterval(sysPollNew, SYSTEM_MSG_POLL_MS);
+    return () => {
+      clearInterval(t);
+      sysClose();
+    };
+  }, [systemSelected, sysOpen, sysPollNew, sysClose]);
+
+  const handleSelect = (id) => {
+    if (id === SYSTEM_DIALOG_ID) {
+      setSystemSelected(true);
+      return;
+    }
+    setSystemSelected(false);
+    selectConversation(id);
+  };
+
   const closed = Boolean(selected) && selected.engagement_status !== 'active';
+  const activeId = systemSelected ? SYSTEM_DIALOG_ID : selectedUuid;
 
   let body;
   if (listLoading) {
@@ -68,7 +104,7 @@ export default function PsychologistChatPage() {
         <Button onClick={() => reloadList()}>Повторить</Button>
       </div>
     );
-  } else if (conversations.length === 0) {
+  } else if (conversations.length === 0 && !sysConv) {
     body = (
       <div className={styles.stateBox}>
         <p className={styles.stateTitle}>У вас пока нет активных клиентов для чата.</p>
@@ -78,8 +114,36 @@ export default function PsychologistChatPage() {
       </div>
     );
   } else {
+    // Список: системные уведомления закреплены сверху, затем клиентские диалоги.
+    const contacts = [];
+    if (sysConv) contacts.push(systemContact(sysConv));
+    contacts.push(...conversations.map(toContact));
+
     let pane;
-    if (messagesError) {
+    if (systemSelected && sysConv) {
+      if (sysError) {
+        pane = (
+          <div className={styles.paneState}>
+            <p className={styles.stateText}>{sysError}</p>
+          </div>
+        );
+      } else if (sysLoading && sysMessages.length === 0) {
+        pane = (
+          <div className={styles.paneState}>
+            <p className={styles.stateText}>Загрузка уведомлений…</p>
+          </div>
+        );
+      } else {
+        pane = (
+          <ChatWindow
+            contact={systemContact(sysConv)}
+            messages={sysMessages}
+            readOnly
+            readOnlyNotice={SYSTEM_NOTICE}
+          />
+        );
+      }
+    } else if (messagesError) {
       pane = (
         <div className={styles.paneState}>
           <p className={styles.stateText}>{messagesError}</p>
@@ -109,11 +173,7 @@ export default function PsychologistChatPage() {
 
     body = (
       <div className={styles.shell}>
-        <ChatSidebar
-          contacts={conversations.map(toContact)}
-          activeId={selectedUuid}
-          onSelect={selectConversation}
-        />
+        <ChatSidebar contacts={contacts} activeId={activeId} onSelect={handleSelect} />
         {pane}
       </div>
     );
@@ -122,11 +182,11 @@ export default function PsychologistChatPage() {
   return (
     <div className={styles.page}>
       <h1 className={styles.pageTitle}>
-        Чат с <em>клиентами</em>
+        <em>Сообщения</em>
       </h1>
       <p className={styles.pageSub}>
-        Переписка со студентами по активным консультационным связям. История закрытых
-        диалогов доступна только для чтения.
+        Переписка со студентами по активным консультационным связям и системные
+        уведомления. История закрытых диалогов доступна только для чтения.
       </p>
 
       {body}
