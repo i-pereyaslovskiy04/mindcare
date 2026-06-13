@@ -137,13 +137,17 @@
     http/https (без `dangerouslySetInnerHTML`), read receipts (✓/✓✓ по `read_at`),
     роуты `/student/chat` и `/psychologist/chat` сохранены; backend не менялся
     (lint 0 / build OK / backend 205)
-  - ⏳ Stage 29d (или позже): system messages для engagement
-    assignment/transfer/close (точки в `supervisor/service.py` готовы), задания,
-    материалы, анкеты, legal announcements
+  - ✅ Stage 29d: **system messages для engagement-событий** — `publish_system_message`
+    подключён в `supervisor/service.py` (assign/transfer/close, после commit, soft-fail,
+    имя психолога фиксируется до commit, reason не раскрывается). System-сообщения
+    теперь публикуются для: **welcome**, **password_changed**, **engagement_assigned**,
+    **engagement_transferred**, **engagement_closed** (idempotent по event_key);
+    `tests/integration/test_engagement_system_messages.py` (11). Frontend/Alembic/схема
+    не менялись (backend 216)
   - **Future (chat):** глобальный unread badge в layout (нужен shared state);
     preview последнего сообщения в списке бесед (требует decrypt на список —
-    optional); вынос chat-компонентов из `pages/student/Chat/` в shared
-    components; WebSocket; group chat; attachments; staff break-glass access
+    optional); WebSocket; group chat; attachments; staff break-glass access;
+    system messages для заданий/материалов/анкет/legal announcements
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.chat.system_publisher import publish_system_message
 from app.db.session import SessionLocal
 from app.db.models import AuditLog, Role, TherapyEngagement, User, UserRole
 
@@ -105,7 +106,9 @@ def assign_psychologist(
     """
     with SessionLocal() as db:
         client = _get_user_with_role(client_id, "student", db)
-        _get_user_with_role(psychologist_id, "psychologist", db)
+        psychologist = _get_user_with_role(psychologist_id, "psychologist", db)
+        # Имя фиксируем до commit (после — атрибуты expire вне сессии).
+        psych_name = psychologist.full_name or psychologist.email
 
         existing = _get_active_engagement(client_id, db)
         if existing:
@@ -136,12 +139,10 @@ def assign_psychologist(
             db,
         )
 
-        # TODO: отправить уведомления студенту и психологу (NotificationService не реализован)
-
         db.commit()
         db.refresh(engagement)
 
-        return {
+        result = {
             "id":              engagement.id,
             "status":          engagement.status,
             "client_id":       engagement.client_id,
@@ -151,6 +152,18 @@ def assign_psychologist(
             "ended_at":        engagement.ended_at,
             "transfer_reason": engagement.transfer_reason,
         }
+        eng_id = engagement.id
+
+    # System-уведомление студенту — только после успешного commit (soft-fail).
+    publish_system_message(
+        recipient_id=client_id,
+        event_key=f"engagement_assigned:engagement:{eng_id}",
+        text=(
+            f"Вам назначен психолог: {psych_name}." if psych_name
+            else "Вам назначен психолог."
+        ),
+    )
+    return result
 
 
 def transfer_psychologist(
@@ -181,7 +194,8 @@ def transfer_psychologist(
                 status_code=400,
             )
 
-        _get_user_with_role(new_psychologist_id, "psychologist", db)
+        new_psychologist = _get_user_with_role(new_psychologist_id, "psychologist", db)
+        new_psych_name = new_psychologist.full_name or new_psychologist.email
 
         now = datetime.now(timezone.utc)
 
@@ -216,12 +230,10 @@ def transfer_psychologist(
             db,
         )
 
-        # TODO: отправить уведомления студенту, старому и новому психологу
-
         db.commit()
         db.refresh(new_engagement)
 
-        return {
+        result = {
             "id":              new_engagement.id,
             "status":          new_engagement.status,
             "client_id":       new_engagement.client_id,
@@ -231,6 +243,19 @@ def transfer_psychologist(
             "ended_at":        new_engagement.ended_at,
             "transfer_reason": new_engagement.transfer_reason,
         }
+        new_eng_id = new_engagement.id
+
+    # System-уведомление студенту — после успешного commit (soft-fail).
+    # event_key привязан к НОВОЙ active-связи → идемпотентность на её id.
+    publish_system_message(
+        recipient_id=old_client_id,
+        event_key=f"engagement_transferred:engagement:{new_eng_id}",
+        text=(
+            f"Ваш психолог изменён: {new_psych_name}." if new_psych_name
+            else "Ваш психолог изменён."
+        ),
+    )
+    return result
 
 
 def close_engagement(
@@ -260,6 +285,7 @@ def close_engagement(
             )
 
         now = datetime.now(timezone.utc)
+        client_id = engagement.client_id
         engagement.status          = "completed"
         engagement.ended_at        = now
         engagement.transfer_reason = reason
@@ -275,12 +301,10 @@ def close_engagement(
             db,
         )
 
-        # TODO: отправить уведомления студенту и психологу
-
         db.commit()
         db.refresh(engagement)
 
-        return {
+        result = {
             "id":              engagement.id,
             "status":          engagement.status,
             "client_id":       engagement.client_id,
@@ -290,3 +314,12 @@ def close_engagement(
             "ended_at":        engagement.ended_at,
             "transfer_reason": engagement.transfer_reason,
         }
+
+    # System-уведомление студенту — после успешного commit (soft-fail).
+    # reason намеренно не раскрывается в тексте уведомления (MVP).
+    publish_system_message(
+        recipient_id=client_id,
+        event_key=f"engagement_closed:engagement:{engagement_id}",
+        text="Консультационная связь с психологом закрыта.",
+    )
+    return result
