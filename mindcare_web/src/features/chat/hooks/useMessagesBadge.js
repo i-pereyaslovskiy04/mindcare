@@ -5,6 +5,7 @@ import {
   getPsychologistConversations,
   getSystemConversation,
 } from '../../../api/chat.api';
+import { subscribeMessagesUpdated } from '../lib/messagesEvents';
 
 const POLL_MS = 30000;
 
@@ -51,9 +52,12 @@ export function useMessagesBadge() {
 
     tick();
     const t = setInterval(tick, POLL_MS);
+    // Мгновенный refresh при mark-read/send/новых — не ждём 30-секундный тик.
+    const unsub = subscribeMessagesUpdated(tick);
     return () => {
       alive = false;
       clearInterval(t);
+      unsub();
     };
   }, [user]);
 

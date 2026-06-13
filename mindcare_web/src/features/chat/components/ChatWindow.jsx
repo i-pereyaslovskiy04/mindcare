@@ -12,6 +12,7 @@ export default function ChatWindow({
   sendError = null,
   readOnly = false,
   readOnlyNotice = null,
+  emptyText,
 }) {
   if (!contact) return null;
 
@@ -21,7 +22,7 @@ export default function ChatWindow({
   return (
     <div className={styles.window}>
       <ChatHeader contact={contact} />
-      <MessageList messages={messages} contact={contact} />
+      <MessageList messages={messages} contact={contact} emptyText={emptyText} />
       {sendError && (
         <div className={styles.sendError} role="alert">
           {sendError}

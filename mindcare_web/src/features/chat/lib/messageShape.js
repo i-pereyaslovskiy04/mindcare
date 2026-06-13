@@ -22,3 +22,27 @@ export function mapApiMessage(m) {
     readAt: m.read_at || null,
   };
 }
+
+/**
+ * Сливает текущий список сообщений со снапшотом (live refresh):
+ *   - новые id добавляются;
+ *   - существующие обновляются (важно для read_at/readAt → ✓✓);
+ *   - дубликатов нет;
+ *   - порядок по createdAt, fallback по id.
+ * Чистая функция: incoming перезаписывает поля existing.
+ */
+export function mergeMessages(existing, incoming) {
+  if (!incoming || incoming.length === 0) return existing;
+  const byId = new Map();
+  for (const m of existing) byId.set(m.id, m);
+  for (const m of incoming) {
+    const prev = byId.get(m.id);
+    byId.set(m.id, prev ? { ...prev, ...m } : m);
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+    const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+    if (ta !== tb) return ta - tb;
+    return a.id - b.id;
+  });
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Button from '../../../components/UI/Button/Button';
 import ChatSidebar from '../../../features/chat/components/ChatSidebar';
 import ChatWindow from '../../../features/chat/components/ChatWindow';
@@ -52,6 +52,7 @@ export default function PsychologistChatPage() {
     messages: sysMessages,
     loading: sysLoading,
     error: sysError,
+    metaLoaded: sysMetaLoaded,
     refreshMeta: sysRefreshMeta,
     open: sysOpen,
     close: sysClose,
@@ -59,6 +60,7 @@ export default function PsychologistChatPage() {
   } = useSystemConversation();
 
   const [systemSelected, setSystemSelected] = useState(false);
+  const enteredRef = useRef(false);  // entrance-выбор делаем один раз
 
   // Лёгкий poll метаданных системной беседы (unread в списке).
   useEffect(() => {
@@ -77,6 +79,26 @@ export default function PsychologistChatPage() {
       sysClose();
     };
   }, [systemSelected, sysOpen, sysPollNew, sysClose]);
+
+  // Entrance-выбор (один раз, после загрузки списка и метаданных системной беседы).
+  // Приоритет: непрочитанная system-беседа → первый клиентский диалог с unread →
+  // нет клиентов → system. Иначе оставляем дефолт хука (первый клиент). Ручной выбор
+  // пользователя не перебиваем (enteredRef).
+  useEffect(() => {
+    if (enteredRef.current || listLoading || !sysMetaLoaded) return;
+    enteredRef.current = true;
+    if (sysConv && sysConv.unread_count > 0) {
+      setSystemSelected(true);
+      return;
+    }
+    const unreadConv = conversations.find((c) => c.unread_count > 0);
+    if (unreadConv) {
+      setSystemSelected(false);
+      selectConversation(unreadConv.uuid);
+    } else if (conversations.length === 0) {
+      setSystemSelected(true);
+    }
+  }, [listLoading, sysMetaLoaded, sysConv, conversations, selectConversation]);
 
   const handleSelect = (id) => {
     if (id === SYSTEM_DIALOG_ID) {
@@ -104,23 +126,12 @@ export default function PsychologistChatPage() {
         <Button onClick={() => reloadList()}>Повторить</Button>
       </div>
     );
-  } else if (conversations.length === 0 && !sysConv) {
-    body = (
-      <div className={styles.stateBox}>
-        <p className={styles.stateTitle}>У вас пока нет активных клиентов для чата.</p>
-        <p className={styles.stateText}>
-          Когда супервизор назначит студента, беседа появится здесь.
-        </p>
-      </div>
-    );
   } else {
-    // Список: системные уведомления закреплены сверху, затем клиентские диалоги.
-    const contacts = [];
-    if (sysConv) contacts.push(systemContact(sysConv));
-    contacts.push(...conversations.map(toContact));
+    // Список: «Системные уведомления» закреплены сверху ВСЕГДА, затем клиентские диалоги.
+    const contacts = [systemContact(sysConv), ...conversations.map(toContact)];
 
     let pane;
-    if (systemSelected && sysConv) {
+    if (systemSelected) {
       if (sysError) {
         pane = (
           <div className={styles.paneState}>
@@ -140,6 +151,7 @@ export default function PsychologistChatPage() {
             messages={sysMessages}
             readOnly
             readOnlyNotice={SYSTEM_NOTICE}
+            emptyText="Пока нет системных уведомлений."
           />
         );
       }

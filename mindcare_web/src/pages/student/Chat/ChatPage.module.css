@@ -3,7 +3,14 @@
   to   { opacity: 1; transform: none; }
 }
 
+/* page = flex-column, ограниченный высотой рабочей области кабинета:
+   заголовок виден целиком, shell занимает остаток и скроллит внутри себя.
+   Reserve (~145px) = topbar + вертикальные паддинги .content в CabinetLayout. */
 .page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 145px);
+  min-height: 460px;
   animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
@@ -14,6 +21,7 @@
   line-height: 1.15;
   color: var(--espresso);
   margin-bottom: 6px;
+  flex-shrink: 0;
 }
 
 .pageTitle em {
@@ -28,6 +36,7 @@
   line-height: 1.6;
   margin-bottom: 20px;
   max-width: 600px;
+  flex-shrink: 0;
 }
 
 .shell {
@@ -36,8 +45,8 @@
   border: 1px solid var(--nav-border);
   border-radius: 16px;
   overflow: hidden;
-  height: calc(100vh - 220px);
-  min-height: 500px;
+  flex: 1;
+  min-height: 0;
   background: var(--warm-white);
   box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
 }
@@ -59,7 +68,8 @@
   border: 1px solid var(--nav-border);
   border-radius: 16px;
   background: var(--warm-white);
-  min-height: 320px;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -81,6 +91,11 @@
   color: var(--text-muted);
   line-height: 1.6;
   max-width: 420px;
+}
+
+/* паддинги .content в CabinetLayout меняются на ≤980px → корректируем reserve */
+@media (max-width: 980px) {
+  .page { height: calc(100vh - 124px); }
 }
 
 @media (max-width: 860px) {

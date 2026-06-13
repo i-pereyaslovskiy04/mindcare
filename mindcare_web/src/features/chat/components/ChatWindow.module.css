@@ -8,6 +8,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;   /* grid-item: позволяет .messages скроллиться, а не растягивать shell */
+  min-width: 0;
   background: var(--warm-white);
 }
 
@@ -61,6 +63,7 @@
 /* ---- messages list ---- */
 .messages {
   flex: 1;
+  min-height: 0;   /* критично для overflow-y внутри flex-column */
   overflow-y: auto;
   padding: 20px 22px;
   background: var(--cream);

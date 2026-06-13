@@ -5,11 +5,16 @@ import {
   markMyConversationRead,
   sendMyConversationMessage,
 } from '../../../api/chat.api';
-import { mapApiMessage as mapMessage } from '../../../features/chat/lib/messageShape';
+import {
+  mapApiMessage as mapMessage,
+  mergeMessages,
+} from '../../../features/chat/lib/messageShape';
+import { notifyMessagesUpdated } from '../../../features/chat/lib/messagesEvents';
 
 const POLL_ACTIVE_MS = 8000;            // новые сообщения в активном диалоге
 const POLL_NO_CONVERSATION_MS = 30000;  // ожидание назначения психолога
 const HISTORY_LIMIT = 100;
+const SNAPSHOT_LIMIT = 50;              // снапшот для live refresh (read_at + новые)
 
 /** Достаёт человекочитаемый текст ошибки; raw HTTP-статусы заменяет fallback'ом. */
 function errText(e, fallback) {
@@ -33,7 +38,12 @@ export function useStudentChat() {
 
   const markReadSafe = useCallback(() => {
     // Не критично при сбое: непрочитанные пометятся при следующем открытии/poll.
-    markMyConversationRead().catch(() => {});
+    markMyConversationRead()
+      .then(() => {
+        setConversation((prev) => (prev ? { ...prev, unread_count: 0 } : prev));
+        notifyMessagesUpdated();   // мгновенно гасим badge в меню
+      })
+      .catch(() => {});
   }, []);
 
   const loadAll = useCallback(async () => {
@@ -66,17 +76,16 @@ export function useStudentChat() {
     if (pollBusyRef.current) return;
     pollBusyRef.current = true;
     try {
-      const { items } = await getMyConversationMessages({ after: lastIdRef.current });
-      if (items.length) {
-        const lastId = items[items.length - 1].id;
+      // Снапшот последних сообщений + merge по id: подхватывает новые И обновляет
+      // read_at уже загруженных (after=<id> этого бы не дал → ✓→✓✓ без F5).
+      const { items } = await getMyConversationMessages({ limit: SNAPSHOT_LIMIT });
+      const mapped = items.map(mapMessage);
+      if (mapped.length) {
+        const lastId = mapped[mapped.length - 1].id;
         if (lastId > lastIdRef.current) lastIdRef.current = lastId;
-        setMessages((prev) => {
-          const known = new Set(prev.map((m) => m.id));
-          const fresh = items.filter((m) => !known.has(m.id)).map(mapMessage);
-          return fresh.length ? [...prev, ...fresh] : prev;
-        });
-        if (items.some((m) => !m.is_mine)) markReadSafe();
       }
+      setMessages((prev) => mergeMessages(prev, mapped));
+      if (mapped.some((m) => !m.mine && !m.readAt)) markReadSafe();
     } catch {
       // Разовая сетевая ошибка poll'а не должна показывать баннер — повтор через интервал.
     } finally {

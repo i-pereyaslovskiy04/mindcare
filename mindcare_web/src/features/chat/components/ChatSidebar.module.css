@@ -30,6 +30,7 @@
 
 .list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -58,7 +59,13 @@
   padding-left: 13px;
 }
 
+/* непрочитанный диалог: заметнее фон + точка-маркер на аватаре */
+.itemUnread {
+  background: rgba(139, 111, 71, 0.06);
+}
+
 .avatar {
+  position: relative;
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -70,6 +77,22 @@
   font-weight: 600;
   font-size: 13px;
   flex-shrink: 0;
+}
+
+.unreadDot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--coffee);
+  border: 2px solid var(--cream);
+}
+
+.nameUnread {
+  font-weight: 800;
+  color: var(--espresso);
 }
 
 /* system conversation: закреплена сверху, нейтральный маркер */

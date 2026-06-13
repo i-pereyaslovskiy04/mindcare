@@ -4,9 +4,11 @@ import {
   getSystemMessages,
   markSystemConversationRead,
 } from '../../../api/chat.api';
-import { mapApiMessage } from '../lib/messageShape';
+import { mapApiMessage, mergeMessages } from '../lib/messageShape';
+import { notifyMessagesUpdated } from '../lib/messagesEvents';
 
 const HISTORY_LIMIT = 100;
+const SNAPSHOT_LIMIT = 50;
 
 /**
  * Read-only системная беседа текущего пользователя.
@@ -21,6 +23,7 @@ export function useSystemConversation() {
   const [messages, setMessages]         = useState([]);
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState(null);
+  const [metaLoaded, setMetaLoaded]     = useState(false);  // первый refreshMeta завершён
 
   const lastIdRef = useRef(0);
   const openedRef = useRef(false);
@@ -37,6 +40,8 @@ export function useSystemConversation() {
       return conv;
     } catch {
       return null;
+    } finally {
+      setMetaLoaded(true);
     }
   }, []);
 
@@ -48,7 +53,7 @@ export function useSystemConversation() {
       const { items } = await getSystemMessages({ limit: HISTORY_LIMIT });
       setMessages(items.map(mapApiMessage));
       lastIdRef.current = items.length ? items[items.length - 1].id : 0;
-      markSystemConversationRead().catch(() => {});
+      markSystemConversationRead().then(notifyMessagesUpdated).catch(() => {});
       setConversation((prev) => (prev ? { ...prev, unread_count: 0 } : prev));
     } catch (e) {
       const m = e?.message;
@@ -70,16 +75,16 @@ export function useSystemConversation() {
     if (!openedRef.current || pollBusyRef.current) return;
     pollBusyRef.current = true;
     try {
-      const { items } = await getSystemMessages({ after: lastIdRef.current });
-      if (items.length) {
-        const lastId = items[items.length - 1].id;
+      const { items } = await getSystemMessages({ limit: SNAPSHOT_LIMIT });
+      const mapped = items.map(mapApiMessage);
+      if (mapped.length) {
+        const lastId = mapped[mapped.length - 1].id;
         if (lastId > lastIdRef.current) lastIdRef.current = lastId;
-        setMessages((prev) => {
-          const known = new Set(prev.map((m) => m.id));
-          const fresh = items.filter((m) => !known.has(m.id)).map(mapApiMessage);
-          return fresh.length ? [...prev, ...fresh] : prev;
-        });
-        markSystemConversationRead().catch(() => {});
+      }
+      setMessages((prev) => mergeMessages(prev, mapped));
+      if (mapped.some((m) => !m.readAt)) {
+        markSystemConversationRead().then(notifyMessagesUpdated).catch(() => {});
+        setConversation((prev) => (prev ? { ...prev, unread_count: 0 } : prev));
       }
     } catch {
       // разовый сетевой сбой poll'а — без баннера, повтор по интервалу
@@ -88,5 +93,8 @@ export function useSystemConversation() {
     }
   }, []);
 
-  return { conversation, messages, loading, error, refreshMeta, open, close, pollNew };
+  return {
+    conversation, messages, loading, error, metaLoaded,
+    refreshMeta, open, close, pollNew,
+  };
 }

@@ -33,6 +33,7 @@ export default function ChatPage() {
     messages: sysMessages,
     loading: sysLoading,
     error: sysError,
+    metaLoaded: sysMetaLoaded,
     refreshMeta: sysRefreshMeta,
     open: sysOpen,
     close: sysClose,
@@ -48,12 +49,20 @@ export default function ChatPage() {
     return () => clearInterval(t);
   }, [sysRefreshMeta]);
 
-  // Дефолтный выбор: диалог с психологом, иначе системные уведомления.
+  // Дефолтный выбор при входе (только пока ничего не выбрано вручную).
+  // Приоритет: непрочитанная system-беседа → непрочитанный диалог с психологом →
+  // обычный дефолт. Ждём загрузки engagement и первого refreshMeta системной беседы,
+  // чтобы приоритет был детерминированным.
   useEffect(() => {
-    if (selected != null) return;
-    if (engConv) setSelected(engConv.uuid);
-    else if (sysConv) setSelected(SYSTEM_DIALOG_ID);
-  }, [selected, engConv, sysConv]);
+    if (selected != null || engLoading || !sysMetaLoaded) return;
+    if (sysConv && sysConv.unread_count > 0) {
+      setSelected(SYSTEM_DIALOG_ID);
+    } else if (engConv && engConv.unread_count > 0) {
+      setSelected(engConv.uuid);
+    } else {
+      setSelected(engConv ? engConv.uuid : SYSTEM_DIALOG_ID);
+    }
+  }, [selected, engLoading, sysMetaLoaded, sysConv, engConv]);
 
   // Открытие системной беседы: загрузка + mark-read + лёгкий poll новых.
   useEffect(() => {
@@ -67,7 +76,6 @@ export default function ChatPage() {
   }, [selected, sysOpen, sysPollNew, sysClose]);
 
   const engClosed = Boolean(engConv) && engConv.engagement_status !== 'active';
-  const hasAny = Boolean(engConv) || Boolean(sysConv);
 
   let body;
   if (engLoading) {
@@ -83,19 +91,10 @@ export default function ChatPage() {
         <Button onClick={refetch}>Повторить</Button>
       </div>
     );
-  } else if (!hasAny) {
-    body = (
-      <div className={styles.stateBox}>
-        <p className={styles.stateTitle}>Вам ещё не назначен психолог.</p>
-        <p className={styles.stateText}>
-          Когда специалист будет назначен, здесь появится чат.
-        </p>
-      </div>
-    );
   } else {
-    // Список: системные уведомления закреплены сверху, затем диалог с психологом.
-    const contacts = [];
-    if (sysConv) contacts.push(systemContact(sysConv));
+    // Список: «Системные уведомления» закреплены сверху ВСЕГДА (даже без backend
+    // conversation), затем диалог с психологом, если назначен.
+    const contacts = [systemContact(sysConv)];
     if (engConv) {
       contacts.push({
         id: engConv.uuid,
@@ -109,7 +108,7 @@ export default function ChatPage() {
     }
 
     let pane;
-    if (selected === SYSTEM_DIALOG_ID && sysConv) {
+    if (selected === SYSTEM_DIALOG_ID) {
       if (sysError) {
         pane = (
           <div className={styles.paneState}>
@@ -129,6 +128,7 @@ export default function ChatPage() {
             messages={sysMessages}
             readOnly
             readOnlyNotice={SYSTEM_NOTICE}
+            emptyText="Пока нет системных уведомлений."
           />
         );
       }

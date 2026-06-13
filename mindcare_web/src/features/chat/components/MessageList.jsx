@@ -12,7 +12,7 @@ function dayLabel(iso) {
   return d.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
 }
 
-export default function MessageList({ messages, contact }) {
+export default function MessageList({ messages, contact, emptyText }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function MessageList({ messages, contact }) {
   return (
     <div className={styles.messages}>
       {messages.length === 0 && (
-        <div className={styles.threadEmpty}>Сообщений пока нет.</div>
+        <div className={styles.threadEmpty}>{emptyText || 'Сообщений пока нет.'}</div>
       )}
       {messages.map((msg) => {
         const label = msg.createdAt ? dayLabel(msg.createdAt) : null;

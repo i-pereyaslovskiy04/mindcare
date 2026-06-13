@@ -6,12 +6,17 @@ import {
   markPsychologistConversationRead,
   sendPsychologistConversationMessage,
 } from '../../../api/chat.api';
-import { mapApiMessage as mapMessage } from '../../../features/chat/lib/messageShape';
+import {
+  mapApiMessage as mapMessage,
+  mergeMessages,
+} from '../../../features/chat/lib/messageShape';
+import { notifyMessagesUpdated } from '../../../features/chat/lib/messagesEvents';
 
 const POLL_MESSAGES_MS = 8000;   // новые сообщения выбранной активной беседы
 const POLL_LIST_MS = 30000;      // обновление unread_count / появление новых бесед
 const LIST_PAGE_SIZE = 100;
 const HISTORY_LIMIT = 100;
+const SNAPSHOT_LIMIT = 50;       // снапшот для live refresh (read_at + новые)
 
 const STATUS_FALLBACK = {
   403: 'Нет доступа к этому чату',
@@ -46,7 +51,9 @@ export function usePsychologistChat() {
 
   const markReadSafe = useCallback((uuid) => {
     // Не критично при сбое: непрочитанные пометятся при следующем открытии/poll.
-    markPsychologistConversationRead(uuid).catch(() => {});
+    markPsychologistConversationRead(uuid)
+      .then(notifyMessagesUpdated)   // мгновенно гасим badge в меню
+      .catch(() => {});
   }, []);
 
   const loadList = useCallback(async ({ silent = false } = {}) => {
@@ -128,20 +135,18 @@ export function usePsychologistChat() {
     if (!uuid || pollBusyRef.current) return;
     pollBusyRef.current = true;
     try {
+      // Снапшот + merge: новые сообщения И обновление read_at уже загруженных.
       const { items } = await getPsychologistConversationMessages(uuid, {
-        after: lastIdRef.current,
+        limit: SNAPSHOT_LIMIT,
       });
       if (selectedRef.current !== uuid) return;
-      if (items.length) {
-        const lastId = items[items.length - 1].id;
+      const mapped = items.map(mapMessage);
+      if (mapped.length) {
+        const lastId = mapped[mapped.length - 1].id;
         if (lastId > lastIdRef.current) lastIdRef.current = lastId;
-        setMessages((prev) => {
-          const known = new Set(prev.map((m) => m.id));
-          const fresh = items.filter((m) => !known.has(m.id)).map(mapMessage);
-          return fresh.length ? [...prev, ...fresh] : prev;
-        });
-        if (items.some((m) => !m.is_mine)) markReadSafe(uuid);
       }
+      setMessages((prev) => mergeMessages(prev, mapped));
+      if (mapped.some((m) => !m.mine && !m.readAt)) markReadSafe(uuid);
     } catch {
       // Разовая сетевая ошибка poll'а не должна показывать баннер — повтор через интервал.
     } finally {
