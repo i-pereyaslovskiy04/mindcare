@@ -120,15 +120,11 @@ export function usePsychologistChat() {
     if (selectedRef.current) loadMessages(selectedRef.current);
   }, [loadMessages]);
 
-  // Первичная загрузка списка + автовыбор первой беседы.
+  // Первичная загрузка списка. VK-like: НЕ выбираем диалог автоматически —
+  // открытие (и mark-read) только по явному клику пользователя.
   useEffect(() => {
-    (async () => {
-      const items = await loadList();
-      if (items && items.length && !selectedRef.current) {
-        selectConversation(items[0].uuid);
-      }
-    })();
-  }, [loadList, selectConversation]);
+    loadList();
+  }, [loadList]);
 
   const pollNew = useCallback(async () => {
     const uuid = selectedRef.current;

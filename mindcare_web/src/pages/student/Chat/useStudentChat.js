@@ -11,10 +11,9 @@ import {
 } from '../../../features/chat/lib/messageShape';
 import { notifyMessagesUpdated } from '../../../features/chat/lib/messagesEvents';
 
-const POLL_ACTIVE_MS = 8000;            // новые сообщения в активном диалоге
-const POLL_NO_CONVERSATION_MS = 30000;  // ожидание назначения психолога
+const META_POLL_MS = 30000;   // обновление unread/назначения психолога в списке
 const HISTORY_LIMIT = 100;
-const SNAPSHOT_LIMIT = 50;              // снапшот для live refresh (read_at + новые)
+const SNAPSHOT_LIMIT = 50;    // снапшот для live refresh (read_at + новые)
 
 /** Достаёт человекочитаемый текст ошибки; raw HTTP-статусы заменяет fallback'ом. */
 function errText(e, fallback) {
@@ -25,19 +24,32 @@ function errText(e, fallback) {
   return fallback;
 }
 
+/**
+ * Диалог студента с психологом.
+ *
+ * VK-like: вход в раздел НЕ открывает диалог и НЕ помечает прочитанным.
+ *   - refreshMeta — только метаданные беседы (имя/статус/unread) для списка,
+ *     без сообщений и без mark-read; крутится на интервале;
+ *   - open()   — явное открытие: грузит сообщения + mark-read (вызывает страница
+ *     по клику пользователя);
+ *   - pollNew  — snapshot+merge живого обновления открытого диалога;
+ *   - close()  — уход с диалога.
+ */
 export function useStudentChat() {
-  const [conversation, setConversation] = useState(null);
-  const [messages, setMessages]         = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(null);
-  const [sending, setSending]           = useState(false);
-  const [sendError, setSendError]       = useState(null);
+  const [conversation, setConversation]       = useState(null);
+  const [messages, setMessages]               = useState([]);
+  const [metaLoading, setMetaLoading]         = useState(true);
+  const [metaError, setMetaError]             = useState(null);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesError, setMessagesError]     = useState(null);
+  const [sending, setSending]                 = useState(false);
+  const [sendError, setSendError]             = useState(null);
 
   const lastIdRef   = useRef(0);
+  const openedRef   = useRef(false);
   const pollBusyRef = useRef(false);
 
   const markReadSafe = useCallback(() => {
-    // Не критично при сбое: непрочитанные пометятся при следующем открытии/poll.
     markMyConversationRead()
       .then(() => {
         setConversation((prev) => (prev ? { ...prev, unread_count: 0 } : prev));
@@ -46,39 +58,66 @@ export function useStudentChat() {
       .catch(() => {});
   }, []);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // Только метаданные: НЕ грузит сообщения и НЕ помечает прочитанным.
+  const refreshMeta = useCallback(async () => {
     try {
       const { conversation: conv } = await getMyConversation();
-      setConversation(conv);
-      if (conv) {
-        const { items } = await getMyConversationMessages({ limit: HISTORY_LIMIT });
-        setMessages(items.map(mapMessage));
-        lastIdRef.current = items.length ? items[items.length - 1].id : 0;
-        if (items.some((m) => !m.is_mine && !m.read_at)) markReadSafe();
-      } else {
-        setMessages([]);
-        lastIdRef.current = 0;
-      }
+      setConversation((prev) => {
+        // Если диалог открыт — его unread уже погашен локально, не воскрешаем.
+        if (openedRef.current && conv) return { ...conv, unread_count: 0 };
+        return conv;
+      });
+      setMetaError(null);
+      return conv;
     } catch (e) {
-      setError(errText(e, 'Не удалось загрузить чат. Попробуйте ещё раз.'));
+      setMetaError(errText(e, 'Не удалось загрузить чат. Попробуйте ещё раз.'));
+      return null;
     } finally {
-      setLoading(false);
+      setMetaLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshMeta();
+    const t = setInterval(refreshMeta, META_POLL_MS);
+    return () => clearInterval(t);
+  }, [refreshMeta]);
+
+  // Явное открытие диалога: грузит историю и помечает прочитанным.
+  const open = useCallback(async () => {
+    openedRef.current = true;
+    setMessagesLoading(true);
+    setMessagesError(null);
+    setSendError(null);
+    setMessages([]);
+    lastIdRef.current = 0;
+    try {
+      const { items } = await getMyConversationMessages({ limit: HISTORY_LIMIT });
+      if (!openedRef.current) return;
+      setMessages(items.map(mapMessage));
+      lastIdRef.current = items.length ? items[items.length - 1].id : 0;
+      if (items.some((m) => !m.is_mine && !m.read_at)) markReadSafe();
+    } catch (e) {
+      if (openedRef.current) {
+        setMessagesError(errText(e, 'Не удалось загрузить сообщения.'));
+      }
+    } finally {
+      setMessagesLoading(false);
     }
   }, [markReadSafe]);
 
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+  const close = useCallback(() => {
+    openedRef.current = false;
+    setMessages([]);
+    lastIdRef.current = 0;
+  }, []);
 
   const pollNew = useCallback(async () => {
-    if (pollBusyRef.current) return;
+    if (!openedRef.current || pollBusyRef.current) return;
     pollBusyRef.current = true;
     try {
-      // Снапшот последних сообщений + merge по id: подхватывает новые И обновляет
-      // read_at уже загруженных (after=<id> этого бы не дал → ✓→✓✓ без F5).
       const { items } = await getMyConversationMessages({ limit: SNAPSHOT_LIMIT });
+      if (!openedRef.current) return;
       const mapped = items.map(mapMessage);
       if (mapped.length) {
         const lastId = mapped[mapped.length - 1].id;
@@ -87,33 +126,11 @@ export function useStudentChat() {
       setMessages((prev) => mergeMessages(prev, mapped));
       if (mapped.some((m) => !m.mine && !m.readAt)) markReadSafe();
     } catch {
-      // Разовая сетевая ошибка poll'а не должна показывать баннер — повтор через интервал.
+      // Разовая сетевая ошибка poll'а — без баннера, повтор по интервалу.
     } finally {
       pollBusyRef.current = false;
     }
   }, [markReadSafe]);
-
-  const hasConversation = Boolean(conversation);
-  const isActive = conversation?.engagement_status === 'active';
-
-  useEffect(() => {
-    if (loading || error) return undefined;
-    if (!hasConversation) {
-      // Психолог не назначен: редкий poll беседы, чтобы чат появился после назначения.
-      const t = setInterval(() => {
-        getMyConversation()
-          .then(({ conversation: conv }) => {
-            if (conv) loadAll();
-          })
-          .catch(() => {});
-      }, POLL_NO_CONVERSATION_MS);
-      return () => clearInterval(t);
-    }
-    // Закрытый диалог read-only: новых сообщений не будет, poll не нужен.
-    if (!isActive) return undefined;
-    const t = setInterval(pollNew, POLL_ACTIVE_MS);
-    return () => clearInterval(t);
-  }, [loading, error, hasConversation, isActive, pollNew, loadAll]);
 
   const send = useCallback(async (text) => {
     setSending(true);
@@ -133,5 +150,11 @@ export function useStudentChat() {
     }
   }, []);
 
-  return { conversation, messages, loading, error, sending, sendError, send, refetch: loadAll };
+  return {
+    conversation, messages,
+    metaLoading, metaError,
+    messagesLoading, messagesError,
+    sending, sendError,
+    refreshMeta, open, close, pollNew, send,
+  };
 }

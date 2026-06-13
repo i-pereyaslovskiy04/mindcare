@@ -14,18 +14,23 @@ import { useStudentChat } from './useStudentChat';
 import styles from './ChatPage.module.css';
 
 const SYSTEM_META_POLL_MS = 30000;
-const SYSTEM_MSG_POLL_MS = 8000;
+const MSG_POLL_MS = 8000;
 
 export default function ChatPage() {
   const {
     conversation: engConv,
     messages: engMessages,
-    loading: engLoading,
-    error: engError,
+    metaLoading: engMetaLoading,
+    metaError: engMetaError,
+    messagesLoading: engMsgLoading,
+    messagesError: engMsgError,
     sending,
     sendError,
+    refreshMeta: engRefreshMeta,
+    open: engOpen,
+    close: engClose,
+    pollNew: engPollNew,
     send,
-    refetch,
   } = useStudentChat();
 
   const {
@@ -33,14 +38,18 @@ export default function ChatPage() {
     messages: sysMessages,
     loading: sysLoading,
     error: sysError,
-    metaLoaded: sysMetaLoaded,
     refreshMeta: sysRefreshMeta,
     open: sysOpen,
     close: sysClose,
     pollNew: sysPollNew,
   } = useSystemConversation();
 
+  // VK-like: при входе ничего не выбрано и ничего не открыто (нет авто-mark-read).
   const [selected, setSelected] = useState(null);
+
+  const engUuid = engConv?.uuid ?? null;
+  const engActive = engConv?.engagement_status === 'active';
+  const engClosed = Boolean(engConv) && !engActive;
 
   // Лёгкий poll метаданных системной беседы (unread в списке) независимо от выбора.
   useEffect(() => {
@@ -49,51 +58,44 @@ export default function ChatPage() {
     return () => clearInterval(t);
   }, [sysRefreshMeta]);
 
-  // Дефолтный выбор при входе (только пока ничего не выбрано вручную).
-  // Приоритет: непрочитанная system-беседа → непрочитанный диалог с психологом →
-  // обычный дефолт. Ждём загрузки engagement и первого refreshMeta системной беседы,
-  // чтобы приоритет был детерминированным.
+  // Открытие диалога с психологом — ТОЛЬКО по явному выбору (mark-read внутри open).
   useEffect(() => {
-    if (selected != null || engLoading || !sysMetaLoaded) return;
-    if (sysConv && sysConv.unread_count > 0) {
-      setSelected(SYSTEM_DIALOG_ID);
-    } else if (engConv && engConv.unread_count > 0) {
-      setSelected(engConv.uuid);
-    } else {
-      setSelected(engConv ? engConv.uuid : SYSTEM_DIALOG_ID);
-    }
-  }, [selected, engLoading, sysMetaLoaded, sysConv, engConv]);
+    if (!engUuid || selected !== engUuid) return undefined;
+    engOpen();
+    const t = engActive ? setInterval(engPollNew, MSG_POLL_MS) : null;
+    return () => {
+      if (t) clearInterval(t);
+      engClose();
+    };
+  }, [selected, engUuid, engActive, engOpen, engClose, engPollNew]);
 
-  // Открытие системной беседы: загрузка + mark-read + лёгкий poll новых.
+  // Открытие системной беседы — ТОЛЬКО по явному выбору.
   useEffect(() => {
     if (selected !== SYSTEM_DIALOG_ID) return undefined;
     sysOpen();
-    const t = setInterval(sysPollNew, SYSTEM_MSG_POLL_MS);
+    const t = setInterval(sysPollNew, MSG_POLL_MS);
     return () => {
       clearInterval(t);
       sysClose();
     };
   }, [selected, sysOpen, sysPollNew, sysClose]);
 
-  const engClosed = Boolean(engConv) && engConv.engagement_status !== 'active';
-
   let body;
-  if (engLoading) {
+  if (engMetaLoading) {
     body = (
       <div className={styles.stateBox}>
-        <p className={styles.stateText}>Загрузка сообщений…</p>
+        <p className={styles.stateText}>Загрузка диалогов…</p>
       </div>
     );
-  } else if (engError) {
+  } else if (engMetaError) {
     body = (
       <div className={styles.stateBox}>
-        <p className={styles.stateText}>{engError}</p>
-        <Button onClick={refetch}>Повторить</Button>
+        <p className={styles.stateText}>{engMetaError}</p>
+        <Button onClick={engRefreshMeta}>Повторить</Button>
       </div>
     );
   } else {
-    // Список: «Системные уведомления» закреплены сверху ВСЕГДА (даже без backend
-    // conversation), затем диалог с психологом, если назначен.
+    // «Системные уведомления» закреплены сверху ВСЕГДА, затем диалог с психологом.
     const contacts = [systemContact(sysConv)];
     if (engConv) {
       contacts.push({
@@ -110,17 +112,9 @@ export default function ChatPage() {
     let pane;
     if (selected === SYSTEM_DIALOG_ID) {
       if (sysError) {
-        pane = (
-          <div className={styles.paneState}>
-            <p className={styles.stateText}>{sysError}</p>
-          </div>
-        );
+        pane = <div className={styles.paneState}><p className={styles.stateText}>{sysError}</p></div>;
       } else if (sysLoading && sysMessages.length === 0) {
-        pane = (
-          <div className={styles.paneState}>
-            <p className={styles.stateText}>Загрузка уведомлений…</p>
-          </div>
-        );
+        pane = <div className={styles.paneState}><p className={styles.stateText}>Загрузка уведомлений…</p></div>;
       } else {
         pane = (
           <ChatWindow
@@ -132,26 +126,39 @@ export default function ChatPage() {
           />
         );
       }
-    } else if (engConv) {
-      pane = (
-        <ChatWindow
-          contact={{
-            id: engConv.uuid,
-            name: engConv.partner.full_name,
-            initials: initialsOf(engConv.partner.full_name),
-            role: engClosed ? 'Диалог закрыт' : 'Психолог',
-          }}
-          messages={engMessages}
-          onSend={send}
-          closed={engClosed}
-          sending={sending}
-          sendError={sendError}
-        />
-      );
+    } else if (selected === engUuid && engConv) {
+      if (engMsgError) {
+        pane = (
+          <div className={styles.paneState}>
+            <p className={styles.stateText}>{engMsgError}</p>
+            <Button onClick={engOpen}>Повторить</Button>
+          </div>
+        );
+      } else if (engMsgLoading && engMessages.length === 0) {
+        pane = <div className={styles.paneState}><p className={styles.stateText}>Загрузка сообщений…</p></div>;
+      } else {
+        pane = (
+          <ChatWindow
+            contact={{
+              id: engConv.uuid,
+              name: engConv.partner.full_name,
+              initials: initialsOf(engConv.partner.full_name),
+              role: engClosed ? 'Диалог закрыт' : 'Психолог',
+            }}
+            messages={engMessages}
+            onSend={send}
+            closed={engClosed}
+            sending={sending}
+            sendError={sendError}
+          />
+        );
+      }
     } else {
+      // Ничего не выбрано — нейтральный placeholder (VK-like), без mark-read.
       pane = (
         <div className={styles.paneState}>
-          <p className={styles.stateText}>Выберите диалог.</p>
+          <p className={styles.stateTitle}>Выберите диалог, чтобы открыть переписку.</p>
+          <p className={styles.stateText}>Непрочитанные диалоги отмечены в списке слева.</p>
         </div>
       );
     }

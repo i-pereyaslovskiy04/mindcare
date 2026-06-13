@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Button from '../../../components/UI/Button/Button';
 import ChatSidebar from '../../../features/chat/components/ChatSidebar';
 import ChatWindow from '../../../features/chat/components/ChatWindow';
@@ -52,15 +52,14 @@ export default function PsychologistChatPage() {
     messages: sysMessages,
     loading: sysLoading,
     error: sysError,
-    metaLoaded: sysMetaLoaded,
     refreshMeta: sysRefreshMeta,
     open: sysOpen,
     close: sysClose,
     pollNew: sysPollNew,
   } = useSystemConversation();
 
+  // VK-like: при входе ничего не выбрано и ничего не открыто (нет авто-mark-read).
   const [systemSelected, setSystemSelected] = useState(false);
-  const enteredRef = useRef(false);  // entrance-выбор делаем один раз
 
   // Лёгкий poll метаданных системной беседы (unread в списке).
   useEffect(() => {
@@ -69,7 +68,7 @@ export default function PsychologistChatPage() {
     return () => clearInterval(t);
   }, [sysRefreshMeta]);
 
-  // Открытие системной беседы: загрузка + mark-read + лёгкий poll новых.
+  // Открытие системной беседы — ТОЛЬКО по явному выбору: загрузка + mark-read + poll.
   useEffect(() => {
     if (!systemSelected) return undefined;
     sysOpen();
@@ -79,26 +78,6 @@ export default function PsychologistChatPage() {
       sysClose();
     };
   }, [systemSelected, sysOpen, sysPollNew, sysClose]);
-
-  // Entrance-выбор (один раз, после загрузки списка и метаданных системной беседы).
-  // Приоритет: непрочитанная system-беседа → первый клиентский диалог с unread →
-  // нет клиентов → system. Иначе оставляем дефолт хука (первый клиент). Ручной выбор
-  // пользователя не перебиваем (enteredRef).
-  useEffect(() => {
-    if (enteredRef.current || listLoading || !sysMetaLoaded) return;
-    enteredRef.current = true;
-    if (sysConv && sysConv.unread_count > 0) {
-      setSystemSelected(true);
-      return;
-    }
-    const unreadConv = conversations.find((c) => c.unread_count > 0);
-    if (unreadConv) {
-      setSystemSelected(false);
-      selectConversation(unreadConv.uuid);
-    } else if (conversations.length === 0) {
-      setSystemSelected(true);
-    }
-  }, [listLoading, sysMetaLoaded, sysConv, conversations, selectConversation]);
 
   const handleSelect = (id) => {
     if (id === SYSTEM_DIALOG_ID) {
@@ -155,6 +134,14 @@ export default function PsychologistChatPage() {
           />
         );
       }
+    } else if (!selectedUuid) {
+      // Ничего не выбрано — нейтральный placeholder (VK-like), без mark-read.
+      pane = (
+        <div className={styles.paneState}>
+          <p className={styles.stateTitle}>Выберите диалог, чтобы открыть переписку.</p>
+          <p className={styles.stateText}>Непрочитанные диалоги отмечены в списке слева.</p>
+        </div>
+      );
     } else if (messagesError) {
       pane = (
         <div className={styles.paneState}>
@@ -165,9 +152,7 @@ export default function PsychologistChatPage() {
     } else if (!selected || (messagesLoading && messages.length === 0)) {
       pane = (
         <div className={styles.paneState}>
-          <p className={styles.stateText}>
-            {selected ? 'Загрузка сообщений…' : 'Выберите диалог.'}
-          </p>
+          <p className={styles.stateText}>Загрузка сообщений…</p>
         </div>
       );
     } else {
