@@ -117,6 +117,25 @@
   - ✅ Stage 28f: full-stack HTTP/API smoke `38 passed / 0 failed`,
     документация и hardening завершены; ручной browser smoke обоих кабинетов
     остаётся рекомендованным перед demo/deploy
+  - ✅ Stage 29a: READ-ONLY дизайн Unified Messenger + System Conversation
+    (выбор: `conversation_type` + nullable engagement_id, system как read-only
+    feed, не замена audit_log, encryption-at-rest, idempotency через event_key)
+  - ✅ Stage 29b: **System Conversation backend foundation** — миграция
+    `c4f7a2e9d1b8` (chat_conversations.type/recipient_id + nullable engagement_id
+    + CHECK + partial UNIQUE(recipient) WHERE system; chat_messages.message_kind/
+    event_key + nullable sender_id + CHECK + partial UNIQUE(conversation,event_key)),
+    `app/chat/system_publisher.py` (lazy-create, encrypt-on-write, idempotency,
+    soft-fail, content не логируется), read-only API
+    `GET/POST /api/chat/system-conversation*` (любая авторизованная роль — к своей
+    беседе), подключены события welcome (register + admin-create) и password_changed;
+    `tests/integration/test_system_conversation.py` (17). engagement chat-эндпоинты
+    не изменены, frontend не тронут
+  - ⏳ Stage 29c: **frontend Unified Messenger + system conversation UI** — единый
+    раздел «Сообщения», system-беседа как read-only feed (без composer), nav badge
+    по числу бесед с unread, linkify (http/https, без HTML), read receipts (галочки)
+  - ⏳ Stage 29d (или позже): system messages для engagement
+    assignment/transfer/close (точки в `supervisor/service.py` готовы), задания,
+    материалы, анкеты, legal announcements
   - **Future (chat):** глобальный unread badge в layout (нужен shared state);
     preview последнего сообщения в списке бесед (требует decrypt на список —
     optional); вынос chat-компонентов из `pages/student/Chat/` в shared

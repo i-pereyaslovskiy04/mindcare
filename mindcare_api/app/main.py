@@ -122,6 +122,7 @@ from app.supervisor.routes import router as supervisor_router              # noq
 from app.psychologist.routes import router as psychologist_router          # noqa: E402
 from app.session_notes.routes import router as session_notes_router        # noqa: E402
 from app.chat.routes import router as chat_router                          # noqa: E402
+from app.chat.routes import system_router as chat_system_router            # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
@@ -137,6 +138,7 @@ app.include_router(supervisor_router,         prefix="/api")
 app.include_router(psychologist_router,       prefix="/api")
 app.include_router(session_notes_router,      prefix="/api")
 app.include_router(chat_router,               prefix="/api")
+app.include_router(chat_system_router,        prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

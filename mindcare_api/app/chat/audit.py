@@ -49,3 +49,29 @@ def log_conversation_created(
             f"(conversation id={conversation_id}): {type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
+
+
+def log_system_conversation_created(
+    *,
+    recipient_id:      int,
+    conversation_id:   int,
+    conversation_uuid: str,
+) -> None:
+    """Одно событие на создание system-беседы. Без content / event text / ciphertext."""
+    try:
+        with SessionLocal() as db:
+            db.add(AuditLog(
+                user_id=recipient_id,
+                event_type="system_conversation_created",
+                entity_type="chat_conversation",
+                entity_id=conversation_id,
+                description=f"system_conversation_created: id={conversation_id}",
+                log_metadata={"conversation_uuid": conversation_uuid},
+            ))
+            db.commit()
+    except Exception as exc:
+        print(
+            f"[AUDIT FAIL] system_conversation_created "
+            f"(conversation id={conversation_id}): {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )

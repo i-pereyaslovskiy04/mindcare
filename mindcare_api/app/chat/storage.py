@@ -27,20 +27,31 @@ def _message_to_dict(
     msg: ChatMessage,
     *,
     current_user_id: int,
-    client_id: int,
+    client_id: Optional[int],
 ) -> dict:
-    """Response dict с расшифрованным content. Вызывать только для участника."""
+    """Response dict с расшифрованным content. Вызывать только после проверки прав.
+
+    system-сообщение (message_kind='system', sender_id IS NULL) не обращается
+    к engagement.client_id: sender_role='system', is_mine=False.
+    """
     try:
         plaintext = decrypt_text(msg.content)
     except (ValueError, RuntimeError) as exc:
         raise RuntimeError(f"Message decryption failed (id={msg.id})") from exc
 
+    if msg.message_kind == "system":
+        sender_role = "system"
+        is_mine = False
+    else:
+        sender_role = "student" if msg.sender_id == client_id else "psychologist"
+        is_mine = msg.sender_id == current_user_id
+
     return {
         "id":          msg.id,
         "uuid":        str(msg.uuid),
         "sender_id":   msg.sender_id,
-        "sender_role": "student" if msg.sender_id == client_id else "psychologist",
-        "is_mine":     msg.sender_id == current_user_id,
+        "sender_role": sender_role,
+        "is_mine":     is_mine,
         "content":     plaintext,
         "created_at":  msg.created_at,
         "read_at":     msg.read_at,
@@ -327,6 +338,188 @@ def unread_count(conversation_id: int, *, user_id: int) -> int:
             .filter(
                 ChatMessage.conversation_id == conversation_id,
                 ChatMessage.sender_id != user_id,
+                ChatMessage.read_at.is_(None),
+                ChatMessage.deleted_at.is_(None),
+            )
+            .scalar()
+        ) or 0
+
+
+# ─── System conversation (Stage 29b) ────────────────────────────────────────
+#
+# Read-only беседа type='system' с одним получателем (recipient_id). У неё нет
+# engagement и нет client_id; sender_id всех сообщений IS NULL (message_kind=
+# 'system'). content шифруется тем же encrypt_text, что и engagement-переписка.
+
+def get_system_conversation(recipient_id: int) -> Optional[ChatConversation]:
+    with SessionLocal() as db:
+        conv = (
+            db.query(ChatConversation)
+            .filter(
+                ChatConversation.type == "system",
+                ChatConversation.recipient_id == recipient_id,
+            )
+            .first()
+        )
+        if conv is not None:
+            db.expunge(conv)
+        return conv
+
+
+def get_or_create_system_conversation(
+    recipient_id: int,
+) -> tuple[ChatConversation, bool]:
+    """Lazy-create system-беседы. Гонку закрывает partial UNIQUE(recipient_id)."""
+    existing = get_system_conversation(recipient_id)
+    if existing is not None:
+        return existing, False
+
+    with SessionLocal() as db:
+        conv = ChatConversation(type="system", recipient_id=recipient_id)
+        db.add(conv)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            conv = (
+                db.query(ChatConversation)
+                .filter(
+                    ChatConversation.type == "system",
+                    ChatConversation.recipient_id == recipient_id,
+                )
+                .one()
+            )
+            db.expunge(conv)
+            return conv, False
+        db.refresh(conv)
+        db.expunge(conv)
+        return conv, True
+
+
+def create_system_message(
+    recipient_id: int,
+    *,
+    event_key: str,
+    text: str,
+) -> dict:
+    """
+    Get-or-create system-беседы + encrypt-on-write одного сообщения.
+    Идемпотентность: повторный вызов с тем же (conversation, event_key)
+    не создаёт дубль (partial UNIQUE → IntegrityError → skipped).
+
+    Возвращает {"created": bool, "conversation_id": int}.
+    Plaintext text не возвращается и не логируется.
+    """
+    conv, _created_conv = get_or_create_system_conversation(recipient_id)
+    now = datetime.now(timezone.utc)
+
+    with SessionLocal() as db:
+        msg = ChatMessage(
+            conversation_id=conv.id,
+            message_kind="system",
+            sender_id=None,
+            event_key=event_key,
+            content=encrypt_text(text),
+        )
+        db.add(msg)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            return {"created": False, "conversation_id": conv.id}
+
+        db.query(ChatConversation).filter(
+            ChatConversation.id == conv.id
+        ).update(
+            {"last_message_at": now, "updated_at": now},
+            synchronize_session=False,
+        )
+        db.commit()
+        return {"created": True, "conversation_id": conv.id}
+
+
+def get_system_messages(
+    recipient_id: int,
+    *,
+    limit: int = 50,
+    before_id: Optional[int] = None,
+    after_id: Optional[int] = None,
+) -> list[dict]:
+    """Сообщения system-беседы получателя по возрастанию id (та же пагинация)."""
+    conv = get_system_conversation(recipient_id)
+    if conv is None:
+        return []
+
+    with SessionLocal() as db:
+        q = db.query(ChatMessage).filter(
+            ChatMessage.conversation_id == conv.id,
+            ChatMessage.deleted_at.is_(None),
+        )
+
+        if after_id is not None:
+            msgs = (
+                q.filter(ChatMessage.id > after_id)
+                .order_by(ChatMessage.id)
+                .limit(limit)
+                .all()
+            )
+        elif before_id is not None:
+            msgs = (
+                q.filter(ChatMessage.id < before_id)
+                .order_by(desc(ChatMessage.id))
+                .limit(limit)
+                .all()
+            )
+            msgs.reverse()
+        else:
+            msgs = (
+                q.order_by(desc(ChatMessage.id))
+                .limit(limit)
+                .all()
+            )
+            msgs.reverse()
+
+        return [
+            _message_to_dict(m, current_user_id=recipient_id, client_id=None)
+            for m in msgs
+        ]
+
+
+def mark_system_read(recipient_id: int) -> int:
+    """Помечает прочитанными непрочитанные system-сообщения получателя."""
+    conv = get_system_conversation(recipient_id)
+    if conv is None:
+        return 0
+
+    with SessionLocal() as db:
+        updated = (
+            db.query(ChatMessage)
+            .filter(
+                ChatMessage.conversation_id == conv.id,
+                ChatMessage.message_kind == "system",
+                ChatMessage.read_at.is_(None),
+                ChatMessage.deleted_at.is_(None),
+            )
+            .update(
+                {"read_at": datetime.now(timezone.utc)},
+                synchronize_session=False,
+            )
+        )
+        db.commit()
+        return updated
+
+
+def system_unread_count(recipient_id: int) -> int:
+    """Непрочитанные system-сообщения получателя."""
+    conv = get_system_conversation(recipient_id)
+    if conv is None:
+        return 0
+    with SessionLocal() as db:
+        return (
+            db.query(func.count(ChatMessage.id))
+            .filter(
+                ChatMessage.conversation_id == conv.id,
+                ChatMessage.message_kind == "system",
                 ChatMessage.read_at.is_(None),
                 ChatMessage.deleted_at.is_(None),
             )

@@ -108,6 +108,14 @@ def register_confirm(
             user_agent=user_agent,
         )
 
+    # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
+    from app.chat.system_publisher import publish_system_message
+    publish_system_message(
+        recipient_id=int(user["id"]),
+        event_key=f"welcome:user:{user['id']}",
+        text="Добро пожаловать в MindCare.",
+    )
+
     return user
 
 
@@ -210,6 +218,17 @@ def change_password(
 
     storage.update_user_password(user_id, _hash(new_password))
     storage.revoke_all_user_sessions(user_id)
+
+    # System-уведомление (soft-fail, content не логируется). Timestamp в event_key —
+    # чтобы каждая смена пароля давала отдельное сообщение.
+    from datetime import datetime, timezone
+    from app.chat.system_publisher import publish_system_message
+    _ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    publish_system_message(
+        recipient_id=int(user["id"]),
+        event_key=f"password_changed:user:{user['id']}:{_ts}",
+        text="Пароль вашей учётной записи был изменён.",
+    )
 
 
 def terminate_session(token: str) -> None:

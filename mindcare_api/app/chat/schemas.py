@@ -51,8 +51,8 @@ class PaginatedChatConversationsResponse(BaseModel):
 class ChatMessageRead(BaseModel):
     id:          int                      # курсор для before/after пагинации
     uuid:        str
-    sender_id:   int
-    sender_role: str                      # student / psychologist
+    sender_id:   Optional[int]            # None для system-сообщения
+    sender_role: str                      # student / psychologist / system
     is_mine:     bool
     content:     str                      # plaintext (decrypt после проверки прав)
     created_at:  datetime
@@ -81,3 +81,18 @@ class ChatMessageCreate(BaseModel):
 class ChatReadResponse(BaseModel):
     """POST .../read: сколько входящих сообщений помечено прочитанными."""
     updated_count: int
+
+
+# ─── System conversation (Stage 29b) ────────────────────────────────────────
+
+class SystemConversationRead(BaseModel):
+    """Детали read-only system-беседы получателя."""
+    uuid:            str
+    type:            str = "system"
+    last_message_at: Optional[datetime]
+    unread_count:    int
+
+
+class MySystemConversationResponse(BaseModel):
+    """GET /chat/system-conversation: null — беседы ещё нет (сообщений не было)."""
+    conversation: Optional[SystemConversationRead]

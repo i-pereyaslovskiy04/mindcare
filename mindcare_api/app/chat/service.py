@@ -242,3 +242,43 @@ def mark_read(current_user: dict, conversation_uuid: str) -> int:
     psychologist_id = int(current_user["id"])
     conv, _eng = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
     return storage.mark_read(conv.id, reader_id=psychologist_id)
+
+
+# ─── System conversation (Stage 29b) ────────────────────────────────────────
+#
+# Read-only. Доступна ТОЛЬКО своему получателю (любая авторизованная роль —
+# к своей беседе). Чужую прочитать нельзя: запросы всегда скоупятся по
+# current_user.id, отдельного conversation_uuid в API нет. Write-эндпоинта для
+# пользователя нет: system-сообщения создаёт только internal publisher.
+
+def get_my_system_conversation(current_user: dict) -> dict:
+    user_id = int(current_user["id"])
+    conv = storage.get_system_conversation(user_id)
+    if conv is None:
+        return {"conversation": None}
+    return {
+        "conversation": {
+            "uuid":            str(conv.uuid),
+            "type":            "system",
+            "last_message_at": conv.last_message_at,
+            "unread_count":    storage.system_unread_count(user_id),
+        }
+    }
+
+
+def get_my_system_messages(
+    current_user: dict,
+    *,
+    limit: int,
+    before_id: Optional[int],
+    after_id: Optional[int],
+) -> list[dict]:
+    user_id = int(current_user["id"])
+    return storage.get_system_messages(
+        user_id, limit=limit, before_id=before_id, after_id=after_id,
+    )
+
+
+def mark_my_system_read(current_user: dict) -> int:
+    """Идемпотентно; не падает, если system-беседы ещё нет (вернёт 0)."""
+    return storage.mark_system_read(int(current_user["id"]))

@@ -22,6 +22,7 @@ from app.chat.schemas import (
     ChatMessagesResponse,
     ChatReadResponse,
     MyConversationResponse,
+    MySystemConversationResponse,
     PaginatedChatConversationsResponse,
 )
 
@@ -203,3 +204,49 @@ def mark_read(
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return {"updated_count": updated}
+
+
+# ─── System conversation (Stage 29b) ────────────────────────────────────────
+#
+# Отдельный роутер: доступен ЛЮБОЙ авторизованной роли как получателю СВОЕЙ
+# system-беседы (engagement-роутер выше ограничен student/psychologist).
+# Все эндпоинты скоупятся по current_user — чужую беседу прочитать нельзя.
+# Write-эндпоинта нет: system-сообщения создаёт только internal publisher.
+
+system_router = APIRouter(
+    prefix="/chat",
+    tags=["chat-system"],
+    dependencies=[Depends(get_current_user)],
+)
+
+
+@system_router.get("/system-conversation", response_model=MySystemConversationResponse)
+def my_system_conversation(current_user: dict = Depends(get_current_user)):
+    return service.get_my_system_conversation(current_user)
+
+
+@system_router.get(
+    "/system-conversation/messages", response_model=ChatMessagesResponse,
+)
+def my_system_messages(
+    limit:        int           = Query(default=50, ge=1, le=100),
+    before:       Optional[int] = Query(default=None, ge=1),
+    after:        Optional[int] = Query(default=None, ge=0),
+    current_user: dict          = Depends(get_current_user),
+):
+    try:
+        items = service.get_my_system_messages(
+            current_user, limit=limit, before_id=before, after_id=after,
+        )
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось загрузить сообщения",
+        )
+    return {"items": items}
+
+
+@system_router.post("/system-conversation/read", response_model=ChatReadResponse)
+def my_system_read(current_user: dict = Depends(get_current_user)):
+    # Идемпотентно; не падает, если беседы ещё нет (вернёт 0).
+    return {"updated_count": service.mark_my_system_read(current_user)}

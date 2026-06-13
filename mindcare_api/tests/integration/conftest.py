@@ -126,20 +126,29 @@ def cleanup_test_records():
                     | TherapyEngagement.psychologist_id.in_(ids)
                 ).all()
             ]
+            # Беседы integ-пользователей: system (по recipient_id) + engagement (по eng_ids).
+            conv_ids = set(
+                row.id
+                for row in db.query(ChatConversation.id).filter(
+                    ChatConversation.recipient_id.in_(ids)
+                ).all()
+            )
             if eng_ids:
-                conv_ids = [
+                conv_ids |= set(
                     row.id
                     for row in db.query(ChatConversation.id).filter(
                         ChatConversation.engagement_id.in_(eng_ids)
                     ).all()
-                ]
-                if conv_ids:
-                    db.query(ChatMessage).filter(
-                        ChatMessage.conversation_id.in_(conv_ids)
-                    ).delete(synchronize_session=False)
-                    db.query(ChatConversation).filter(
-                        ChatConversation.id.in_(conv_ids)
-                    ).delete(synchronize_session=False)
+                )
+            conv_ids = list(conv_ids)
+            if conv_ids:
+                db.query(ChatMessage).filter(
+                    ChatMessage.conversation_id.in_(conv_ids)
+                ).delete(synchronize_session=False)
+                db.query(ChatConversation).filter(
+                    ChatConversation.id.in_(conv_ids)
+                ).delete(synchronize_session=False)
+            if eng_ids:
                 db.query(TherapyEngagement).filter(
                     TherapyEngagement.id.in_(eng_ids)
                 ).delete(synchronize_session=False)
