@@ -68,7 +68,7 @@ mindcare_api/
 
 **Стек:** React 19, React Router 7, CSS Modules, CRA (порт 3000)
 
-**Messenger (Stage 28–30c):** единый раздел «Сообщения». Общие компоненты —
+**Messenger (Stage 28–30d):** единый раздел «Сообщения». Общие компоненты —
 `src/features/chat/` (ChatSidebar/ChatWindow/ChatHeader/ChatListItem, `useSystemConversation`,
 `mergeMessages`, `messagesEvents`, `LinkifiedText`); `src/api/chat.api.js`. Student —
 `pages/student/Chat/` (`useStudentChat.js`), psychologist — `pages/psychologist/Chat/`
@@ -78,6 +78,13 @@ per-dialog; system conversation всегда видна и **последняя*
 live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts ✓/✓✓; online/offline
 точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat/attachments — postponed.
 Diary/tasks/calendar студента остаются accepted demo/mock.
+
+**Mobile (Stage 30d):** breakpoints различаются по слоям — Messenger переключается в
+list/thread на `≤900px` (в шапке чата кнопка «назад»); CabinetLayout: `>980px` full sidebar,
+`601–980px` icon-rail, `≤600px` мобильный drawer (`sidebarInner` переиспользуется из desktop
+sidebar; правила сворачивания заскоуплены под `.sidebar`, чтобы drawer оставался полным).
+На `≤600px` `.app` = `grid-template-columns: 1fr` (фикс пустого кабинета), topbar разгружен
+(скрыты bell/mail, оставлены hamburger + breadcrumb + logout). Drawer пока без focus-trap.
 
 **Полная документация:** `mindcare_web/ARCHITECTURE.md`
 

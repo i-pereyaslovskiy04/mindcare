@@ -157,6 +157,21 @@
     списке и шапке; без WebSocket, без last-seen-текста; новой колонки/миграции нет;
     `tests/integration/test_chat_presence.py` (12). System-беседа presence не имеет
     (backend 228, lint 0, build OK)
+  - ✅ Stage 30d + hotfixes: **mobile Messenger + mobile CabinetLayout** — Messenger
+    list/thread на `≤900px` (back-кнопка в шапке открытого чата); CabinetLayout: `>980px`
+    full sidebar, `601–980px` icon-rail, `≤600px` мобильный drawer (открытие по hamburger,
+    закрытие backdrop/✕/Escape/кликом по пункту; `sidebarInner` переиспользуется из desktop
+    sidebar, collapse-правила заскоуплены под `.sidebar`); фикс пустого кабинета на `<600px`
+    (`.app` = `grid-template-columns: 1fr`); topbar разгружен (скрыты bell/mail, оставлены
+    hamburger + breadcrumb + logout); удалён описательный подзаголовок под «Сообщения».
+    Frontend-only; добавлен `ChatPage.smoke.test.jsx` (render list/thread). Ручной browser
+    smoke desktop/tablet/mobile остаётся обязательным перед demo
+  - **Ограничения Messenger MVP** (зафиксированы осознанно, не баги):
+    - presence приблизительный — не realtime; порог 10 минут; зависит от
+      `user_sessions.last_active` и debounce `touch_session` 300с;
+    - read-receipt live-обновление только в пределах snapshot `limit=50`;
+    - без WebSocket/SSE (polling 8s/30s);
+    - mobile drawer пока без focus-trap / `inert` фона
   - **Group chat — postponed / future:**
     - не входит в текущий Messenger MVP; **не начат и не проектируется** на этом этапе
     - текущий Messenger покрывает только student↔psychologist one-to-one chat и
@@ -171,7 +186,9 @@
   - **Future (chat):** preview последнего сообщения в списке бесед (требует decrypt на
     список — optional); WebSocket/SSE realtime presence; attachments/files; staff
     break-glass access; Action Center / колокольчик; system messages для заданий/
-    материалов/анкет/legal announcements
+    материалов/анкет/legal announcements; усиление a11y mobile drawer (focus-trap/`inert`);
+    глубокий рефакторинг chat-модуля (split `storage.py`, общий `useChatThread`,
+    shared `MessengerPageShell`) — см. Stage 31a audit
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

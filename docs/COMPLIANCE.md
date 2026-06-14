@@ -77,7 +77,8 @@ Encryption-at-rest защищает от утечки БД; политика д�
 - Admin и supervisor не имеют доступа к chat content в MVP
 - Plaintext сообщений нельзя писать в application logs или audit; audit-событие
   `chat_conversation_created` содержит только идентификаторы
-- **System conversation** (уведомления MindCare): `chat_messages` с
+- **System conversation** (уведомления MindCare): system-сообщения **могут содержать
+  персональные данные** (например имя назначенного психолога), поэтому `chat_messages` с
   `message_kind='system'` шифруются at-rest тем же ключом; publisher не логирует
   plaintext (только тип ошибки + `event_key`); это read-only feed получателю, а не
   замена `audit_log`
@@ -87,6 +88,8 @@ Encryption-at-rest защищает от утечки БД; политика д�
 - Staff break-glass access требует отдельного compliance/security этапа
 - **Group chat — postponed**: до реализации требуется отдельный design audit,
   включая access policy и encryption policy для групповых сообщений
+- **Attachments/files — postponed**: загрузка вложений в чат не реализована; до
+  внедрения потребуется отдельная оценка хранения/шифрования/антивируса/ПДн
 - Retention policy для chat messages остаётся открытым продуктовым и
   compliance-вопросом
 

@@ -428,7 +428,7 @@ admin — metadata-only везде, расшифрованный терапев�
 (metadata-путь не вызывает decrypt). H3 закрыт для MVP; supervision-scope модель
 и break-glass admin access — отдельные будущие решения.
 
-**Messenger MVP (Stage 28b–30c).** Единый раздел «Сообщения» — one-to-one чат
+**Messenger MVP (Stage 28b–30d).** Единый раздел «Сообщения» — one-to-one чат
 student ↔ psychologist поверх `therapy_engagements` + read-only system conversation.
 Роуты `/student/chat` и `/psychologist/chat` сохранены. **Реализован**:
 
@@ -457,12 +457,25 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
 - linkify http/https only (без `dangerouslySetInnerHTML`, `target=_blank rel=noopener noreferrer`);
 - read receipts ✓/✓✓ по `read_at`; online/offline точкой в списке и шапке (без last-seen-текста).
 
+*Mobile (Stage 30d + hotfixes):*
+- Messenger `≤900px` — режим list/thread (Telegram/VK): сначала список диалогов, по
+  клику открывается чат, в шапке чата кнопка «назад» к списку;
+- Cabinet `>980px` — полный sidebar; `601–980px` — icon-rail; `≤600px` — мобильный
+  drawer (открывается по hamburger, закрывается backdrop/✕/Escape/кликом по пункту);
+- `≤600px` topbar разгружен: скрыты колокольчик/почта, оставлены hamburger + breadcrumb + logout;
+- фикс пустого кабинета на `<600px`: при скрытом sidebar `.app` остаётся `grid-template-columns: 1fr`.
+
+*Ограничения MVP:* presence приблизительный (не realtime, порог 10 минут, зависит от
+`user_sessions.last_active` и debounce `touch_session` 300с); read-receipt live-обновление —
+только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer пока без focus-trap/`inert`.
+
 *Future / postponed:* **group chat** (отдельный этап после стабилизации, обязателен
 READ-ONLY design audit — см. `docs/BACKLOG.md`); preview последнего сообщения в списке;
 WebSocket/SSE realtime presence; attachments/files; Action Center / колокольчик;
-staff break-glass access. Учебная группа ≠ автоматический чат.
+staff break-glass access; усиление a11y mobile drawer; глубокий рефакторинг chat-модуля.
+Учебная группа ≠ автоматический чат.
 
-Ручной browser smoke обоих кабинетов остаётся рекомендованным перед demo/deploy.
+Ручной browser smoke обоих кабинетов (desktop / tablet / mobile) остаётся рекомендованным перед demo/deploy.
 
 **Открытые security-направления** (подробности — `docs/BACKLOG.md`):
 - HttpOnly Secure SameSite cookie + CSRF вместо localStorage-токена;

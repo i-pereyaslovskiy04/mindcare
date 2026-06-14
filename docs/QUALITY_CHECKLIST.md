@@ -254,3 +254,44 @@ npm run build
 3. Убедиться, что произошёл автоматический выход и открылась AuthModal с сообщением «Пароль изменён. Войдите снова.»
 4. Ввести **старый** пароль → получить «Неверный email или пароль».
 5. Ввести **новый** пароль → успешный вход.
+
+---
+
+## 12. Messenger MVP checklist
+
+Применять при любых изменениях раздела «Сообщения» / chat-модуля.
+
+**Поведение (инварианты — не ломать):**
+
+- one-to-one chat student↔psychologist поверх `therapy_engagements`;
+- system conversation read-only, без composer, всегда видна и **последняя** в списке;
+- messages encrypted-at-rest (`enc:v1:`); **plaintext content не логируется** (logs/audit);
+- при входе в раздел диалог НЕ открывается автоматически (VK-like);
+- **mark-read только после явного клика** по диалогу (не на входе, не на hover);
+- unread: глобальный nav badge (по числу диалогов) + per-dialog badge/dot/bold/фон;
+- read receipts ✓/✓✓ по `read_at`; live refresh — snapshot `limit=50` + `mergeMessages`;
+- linkify только http/https, **без `dangerouslySetInnerHTML`**, `rel="noopener noreferrer"`;
+- approximate presence (`peer_is_online`) — точка online/offline, без last-seen-текста;
+- mobile `≤900px` — list/thread, back-кнопка в шапке открытого чата.
+
+**Тесты (backend — на alembic head + dev PostgreSQL):**
+
+- `tests/integration/test_chat_api.py` — chat MVP end-to-end (20);
+- `tests/integration/test_system_conversation.py` — system conversation backend (17);
+- `tests/integration/test_engagement_system_messages.py` — system messages событий (11);
+- `tests/integration/test_chat_presence.py` — approximate presence (12);
+- `tests/integration/test_chat_models.py` — constraints (6).
+
+**Frontend:**
+
+- `mindcare_web/src/pages/student/Chat/ChatPage.smoke.test.jsx` — render list/thread.
+
+**Manual smoke (обязателен перед demo — машинно не проверяется):**
+
+- ширины: desktop `>900px`, tablet `~800px`, mobile `<600px`;
+- роли: student, psychologist;
+- supervisor engagement events (assign / transfer / close) → system-уведомление студенту;
+- mobile drawer: открытие/закрытие (backdrop/✕/Escape/клик по пункту), навигация;
+- mobile topbar `≤600px`: hamburger + breadcrumb + logout видны, bell/mail скрыты;
+- read receipts ✓→✓✓; unread badge гаснет только после явного открытия;
+- linkify: ссылка кликабельна, текст с `<script>` отображается как текст (не исполняется).

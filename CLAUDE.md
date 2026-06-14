@@ -855,6 +855,13 @@ Conventional Commits:
   только по явному клику), глобальный nav badge + per-dialog unread, system-беседа
   последняя в списке, approximate online/offline (`peer_is_online`, порог 10 мин)
 - Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
+- **Mobile (Stage 30d):** Messenger `≤900px` — list/thread (back-кнопка в шапке чата);
+  CabinetLayout `>980px` full sidebar / `601–980px` icon-rail / `≤600px` мобильный drawer
+  (`sidebarInner` переиспользуется; collapse-правила заскоуплены под `.sidebar`); на `≤600px`
+  `.app`=`grid 1fr` (фикс пустого кабинета) и разгруженный topbar (скрыты bell/mail).
+  Breakpoints разные по слоям: Messenger=900px, Cabinet=600px (+980 icon-rail) — не «выравнивать»
+- **Ограничения MVP** (не баги): presence приблизительный (порог 10 мин, не realtime);
+  read-receipt live только в snapshot `limit=50`; без WebSocket/SSE; drawer без focus-trap
 - **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,
   обязателен READ-ONLY design audit (см. `docs/BACKLOG.md`); учебная группа ≠
   автоматический чат. Не начинать group chat без отдельного этапа
