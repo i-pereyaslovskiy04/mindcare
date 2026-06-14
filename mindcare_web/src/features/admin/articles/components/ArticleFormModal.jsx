@@ -6,6 +6,7 @@ import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
 import ContentPreview from '../../../../components/UI/ContentPreview/ContentPreview';
 import Button from '../../../../components/UI/Button/Button';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
+import DateInput, { isoToDateOnly, dateOnlyToPublishedAtIso } from '../../../../components/UI/DateInput';
 import { getTagsPublic } from '../../../../api/tags.api';
 import { getAdminCategories, createArticle, updateArticle } from '../../../../api/articles.api';
 import styles from './ArticleFormModal.module.css';
@@ -55,7 +56,7 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
         categoryIds: article.categories?.map(c => c.id) || [],
         tagUuids:    article.tags?.map(t => t.uuid) || [],
         isPublished: article.is_published || false,
-        publishedAt: article.published_at ? article.published_at.slice(0, 16) : '',
+        publishedAt: isoToDateOnly(article.published_at),
       });
     } else {
       setForm(EMPTY);
@@ -90,7 +91,7 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
         category_ids:     form.categoryIds,
         tag_uuids:        form.tagUuids,
         is_published:     form.isPublished,
-        published_at:     form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
+        published_at:     dateOnlyToPublishedAtIso(form.publishedAt),
       };
       const saved = isEdit
         ? await updateArticle(article.uuid, payload)
@@ -174,12 +175,10 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
 
           <div className={styles.row}>
             <div className={styles.field}>
-              <label className={styles.label}>Дата публикации</label>
-              <input
-                type="datetime-local"
-                className={styles.input}
+              <DateInput
+                label="Дата публикации"
                 value={form.publishedAt}
-                onChange={e => set('publishedAt', e.target.value)}
+                onChange={val => set('publishedAt', val)}
               />
             </div>
             <div className={styles.fieldCheck}>
@@ -219,7 +218,7 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
           coverUrl={form.cover?.url || null}
           tags={tagOptions.filter(t => form.tagUuids.includes(t.value)).map(t => t.label)}
           categories={catOptions.filter(c => form.categoryIds.includes(c.value)).map(c => c.label)}
-          publishedAt={form.publishedAt ? new Date(form.publishedAt).toISOString() : null}
+          publishedAt={dateOnlyToPublishedAtIso(form.publishedAt)}
         />
       )}
     </>
