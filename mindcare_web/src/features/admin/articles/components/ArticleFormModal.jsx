@@ -7,6 +7,7 @@ import ContentPreview from '../../../../components/UI/ContentPreview/ContentPrev
 import Button from '../../../../components/UI/Button/Button';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import DateInput, { isoToDateOnly, dateOnlyToPublishedAtIso } from '../../../../components/UI/DateInput';
+import { publishCheckboxLabel, submitButtonLabel } from '../../publishLabels';
 import { getTagsPublic } from '../../../../api/tags.api';
 import { getAdminCategories, createArticle, updateArticle } from '../../../../api/articles.api';
 import styles from './ArticleFormModal.module.css';
@@ -185,7 +186,7 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
               <Checkbox
                 checked={form.isPublished}
                 onChange={(val) => set('isPublished', val)}
-                label="Опубликовать"
+                label={publishCheckboxLabel()}
               />
             </div>
           </div>
@@ -202,7 +203,7 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
               Предпросмотр
             </Button>
             <Button variant="primary" type="submit" disabled={submitting}>
-              {submitting ? 'Сохранение…' : isEdit ? 'Сохранить' : 'Создать'}
+              {submitButtonLabel({ isEdit, isPublished: form.isPublished, submitting })}
             </Button>
           </div>
         </form>
