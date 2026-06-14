@@ -38,3 +38,28 @@ test('edit submit sends allowlisted payload WITHOUT role', async () => {
   });
   expect(payload).not.toHaveProperty('role');
 });
+
+test('edit submit sends phone in masked format', async () => {
+  const onSuccess = jest.fn();
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', onSuccess }),
+  );
+
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  // пользователь набирает только цифры — handleChange форматирует
+  act(() => {
+    result.current.handleChange({
+      target: { name: 'phone', value: '9491234567', type: 'text' },
+    });
+  });
+
+  act(() => {
+    result.current.handleSubmit({ preventDefault() {} });
+  });
+
+  await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
+  const [, payload] = api.updateUser.mock.calls[0];
+  expect(payload.phone).toBe('+7 (949) 123-45-67');
+  expect(payload).not.toHaveProperty('role');
+});

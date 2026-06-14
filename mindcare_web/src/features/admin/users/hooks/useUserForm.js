@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getUser, createUser, updateUser } from '../../../../api/users.api';
+import { formatPhoneInput } from '../phone';
 
 const CREATE_INITIAL = {
   full_name: '',
@@ -83,7 +84,11 @@ export function useUserForm({ mode, uuid, onSuccess }) {
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
-    setValues((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    let nextValue;
+    if (type === 'checkbox') nextValue = checked;
+    else if (name === 'phone') nextValue = formatPhoneInput(value);
+    else nextValue = value;
+    setValues((prev) => ({ ...prev, [name]: nextValue }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   }
 

@@ -4,6 +4,7 @@ import Button from '../../../../components/UI/Button/Button';
 import Badge from '../../../../components/UI/Badge/Badge';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import { ROLE_LABELS, ROLE_BADGE_TONES } from '../roleLabels';
+import { PHONE_PLACEHOLDER } from '../phone';
 import styles from './UserEditModal.module.css';
 
 function formatDate(dateStr) {
@@ -37,6 +38,12 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
                   readOnly
                   tabIndex={-1}
                 />
+              </div>
+              <div className={`${styles.roField} ${styles.roFieldBadge}`}>
+                <span className={styles.roLabel}>Роль</span>
+                <Badge tone={ROLE_BADGE_TONES[values.role] ?? 'neutral'}>
+                  {ROLE_LABELS[values.role] ?? values.role}
+                </Badge>
               </div>
               <div className={styles.roField}>
                 <span className={styles.roLabel}>Дата регистрации</span>
@@ -72,21 +79,8 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
                 name="phone"
                 value={values.phone}
                 onChange={handleChange}
-                placeholder="+7 (900) 000-00-00"
+                placeholder={PHONE_PLACEHOLDER}
               />
-            </div>
-
-            <div className={styles.field}>
-              <span className={styles.label}>Роль</span>
-              <div className={styles.roleValue}>
-                <Badge tone={ROLE_BADGE_TONES[values.role] ?? 'neutral'}>
-                  {ROLE_LABELS[values.role] ?? values.role}
-                </Badge>
-              </div>
-              <span className={styles.note}>
-                Роль задаётся при создании пользователя и не меняется в обычном
-                редактировании.
-              </span>
             </div>
 
             <div className={styles.checkboxField}>
