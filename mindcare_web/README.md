@@ -59,7 +59,8 @@ src/
 │   ├── Icon/       — общий SVG Icon-компонент
 │   ├── CabinetLayout/ — общий layout для psychologist и supervisor кабинетов
 │   ├── Modal/
-│   └── UI/         — TiptapEditor, MultiSelect, ImageUpload, ContentPreview
+│   └── UI/         — Button, ButtonLink, Checkbox, Toggle, FilterChip, Badge, Tag,
+│                     Select, MultiSelect, DateInput, TiptapEditor, ImageUpload, ContentPreview
 ├── pages/          — только композиция страниц, никакого fetch
 │   ├── home / about / services / news / materials
 │   ├── student/    — кабинет студента (собственный layout)
@@ -70,6 +71,12 @@ src/
 
 Полная структура с описанием — [ARCHITECTURE.md](ARCHITECTURE.md).
 Диаграммы — [DIAGRAM.md](DIAGRAM.md).
+
+> **Shared UI:** перед созданием локального контрола свериться с `src/components/UI/`
+> (правила — [../docs/UI_COMPONENTS_GUIDE.md](../docs/UI_COMPONENTS_GUIDE.md)).
+> `DateInput` — общий компонент выбора **только даты** (value `YYYY-MM-DD`, кастомный
+> popover, без нативного `datetime-local`/`date`); используется в admin news/articles.
+> Для записи на приём нужен будущий `SlotPicker` (выбор слота времени), а не `DateInput`.
 
 ---
 

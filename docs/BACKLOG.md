@@ -286,6 +286,13 @@
 - AuthContext покрывает текущие потребности
 - Нужен ли Redux — решать когда появится необходимость
 
+**~~Нативный `datetime-local` в admin news/articles формах~~** ✅ Закрыто (Stage 31j-fix / 31j-hotfix)
+- Заменён shared `DateInput` (`src/components/UI/DateInput/`): date-only, value `YYYY-MM-DD`, кастомный popover через portal, без нативного popup
+- `published_at` API-контракт не менялся (ISO datetime / `null`); конверсия через `dateHelpers`
+- Позиционирование popover: flip вверх/вниз + clamp в viewport (`computePopoverPosition`, тесты `popoverPosition.test.js`)
+- Остаток (pending): manual smoke `DateInput` на mobile / low-height viewport
+- `DateTimePicker` / `TimeInput` / `SlotPicker` — НЕ нужны в ближайшем этапе; `SlotPicker` появится отдельно для записи на приём (не замена `DateInput`)
+
 **Раздел 1 в `ARCHITECTURE.md` устарел**
 - Project Tree не отражает реальную структуру `mindcare_web/src/`
 - Обновить когда структура стабилизируется

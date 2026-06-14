@@ -159,6 +159,10 @@ mindcare_web/
     │   │   ├── MultiSelect/
     │   │   │   ├── MultiSelect.jsx
     │   │   │   └── multiSelect.module.css
+    │   │   ├── DateInput/             ← date-only picker (custom popover, no native datetime-local)
+    │   │   │   ├── DateInput.jsx + .module.css
+    │   │   │   ├── dateHelpers.js     ← isoToDateOnly / dateOnlyToPublishedAtIso
+    │   │   │   └── popoverPosition.js ← computePopoverPosition (flip up/down + viewport clamp)
     │   │   ├── Tag/
     │   │   ├── Toggle/
     │   │   ├── TiptapEditor/

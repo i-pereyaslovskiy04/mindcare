@@ -20,6 +20,7 @@
 | Display-only тег контента | `Tag` |
 | Выпадающий список | `Select` |
 | Множественный выбор | `MultiSelect` |
+| Выбор даты (только дата) | `DateInput` |
 
 ---
 
@@ -203,6 +204,39 @@ Tag — это display-only `<span>`, не button.
 
 Выбранные теги внутри MultiSelect — feature-specific removable chips,
 не мигрировать в `Tag` (разная семантика: интерактивные, не display-only).
+
+---
+
+## DateInput
+
+**Путь:** `src/components/UI/DateInput/DateInput.jsx`
+
+**Использовать для:**
+- выбор **только даты** в admin-формах (сейчас: «Дата публикации» в news/articles)
+- любые date-only поля в новых формах
+
+Кастомный popover-календарь через portal — **не** нативный `<input type="datetime-local">`
+или `type="date"` (нативный popup выбивается из дизайна). В новых формах нативные
+date/datetime инпуты не использовать без явной причины.
+
+**Контракт (date-only):**
+
+| Аспект | Значение |
+|---|---|
+| UI `value` | `YYYY-MM-DD` или `''` (controlled) |
+| Отображение в поле | `дд.мм.гггг` |
+| Хелперы | `isoToDateOnly(iso)` → `YYYY-MM-DD`; `dateOnlyToPublishedAtIso(date)` → ISO datetime |
+| API (news/articles) | `published_at` остаётся ISO datetime string / `null`; дата конвертируется в полдень UTC (`T12:00:00.000Z`), чтобы не было сдвига дня по таймзоне |
+| Время | в UI не выбирается |
+| Scheduling | **нет** — будущая дата не откладывает публикацию |
+
+Popover сам выбирает направление (вниз/вверх) и зажимается в пределах viewport
+(`popoverPosition.js` → `computePopoverPosition`); закрывается по Escape и клику вне.
+
+**Не использовать DateInput для:**
+- выбора времени / даты-времени → нужен будущий `DateTimePicker` / `TimeInput` (не реализованы)
+- записи на приём / выбора слота → нужен будущий `SlotPicker` (не реализован);
+  DateInput не является заменой слотам расписания
 
 ---
 

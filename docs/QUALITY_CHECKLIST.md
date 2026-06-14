@@ -86,6 +86,15 @@ mindcare_web/src/components/UI
 | `Badge` | Display-only статусы, роли и состояния: опубликовано, черновик, активен, заблокирован |
 | `Tag` | Display-only теги контента: тема материала, тег новости, категория статьи |
 | `Select` / `MultiSelect` | Выбор одного или нескольких значений |
+| `DateInput` | Выбор **только даты** (value `YYYY-MM-DD`, кастомный popover). Не использовать нативный `datetime-local`/`date` в новых формах без причины |
+
+### Date-only поля (`DateInput`)
+
+- Новые date-only поля — через `DateInput`, не через нативный `datetime-local`/`date`.
+- `published_at` (news/articles): UI хранит `YYYY-MM-DD`, в API уходит ISO datetime (полдень UTC) — конверсия только через `dateHelpers` (`isoToDateOnly` / `dateOnlyToPublishedAtIso`). **Future date не откладывает публикацию** (нет scheduling).
+- Проверять popover: flip вниз/вверх и clamp в пределах viewport (bottom/top/right/left), Escape закрывает только календарь, клик вне закрывает popover.
+- Проверять mobile / low-height viewport (popover не выходит за экран, внутренний scroll).
+- Для записи на приём / слотов `DateInput` не использовать — нужен будущий `SlotPicker`.
 
 ### Запрещено без явного обоснования
 
@@ -223,7 +232,12 @@ backend обязан отклонять (роль не меняется). `conse
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого: **188 passed** (`.\test.ps1`).
+Итого backend: **188 passed** (`.\test.ps1`).
+
+Frontend (CRA jest, `npm test -- --watchAll=false`): **11 suites / 53 tests** —
+chat (LinkifiedText, messageShape, Chat smoke), admin users (phone, useUserForm, users.api),
+publishLabels, и DateInput (dateHelpers, popoverPosition, DateInput). DOM-тесты модалок
+не ведутся (хрупкий setup Tiptap/ImageUpload/MultiSelect) — покрытие через pure helpers.
 
 ### Обязательные проверки перед PR
 

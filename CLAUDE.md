@@ -479,6 +479,7 @@ src/components/UI/Badge
 src/components/UI/Tag
 src/components/UI/Select
 src/components/UI/MultiSelect
+src/components/UI/DateInput
 ```
 
 В `src/components/UI` также есть более сложные shared utilities:
@@ -500,6 +501,7 @@ src/components/UI/MultiSelect
 ✅ Badge — display-only статусы, роли и состояния: опубликовано, черновик, активен, заблокирован, роль пользователя.
 ✅ Tag — display-only теги контента: тема материала, тег новости, категория статьи.
 ✅ Select / MultiSelect — выбор одного или нескольких значений.
+✅ DateInput — выбор ТОЛЬКО даты (value YYYY-MM-DD, кастомный popover). Перед созданием локального календаря/date-поля проверить src/components/UI/DateInput. Не использовать нативный datetime-local/date в новых формах без причины. DateTimePicker/TimeInput/SlotPicker пока НЕ реализованы; для записи на приём/слотов DateInput не использовать (нужен будущий SlotPicker).
 ```
 
 Запрещено без отдельного обоснования:
