@@ -149,15 +149,25 @@ def delete_user(uuid: str) -> None:
         raise AuthError("Пользователь не найден", status_code=404)
 
 
-def update_user(uuid: str, data: AdminUserUpdate) -> dict:
+def update_user(
+    uuid: str,
+    data: AdminUserUpdate,
+    *,
+    actor_id: Optional[int] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     """
     Частичное обновление юзера от имени администратора.
     Требует хотя бы одно непустое поле — иначе 400.
 
+    Смена роли на служебную требует документированного основания; запись
+    основания и смена роли выполняются атомарно в storage (см. update_user).
+
     Raises:
         AuthError: если нет ни одного поля (400)
         AuthError: если юзер не найден (404)
-        AuthError: если роль не существует в БД (400)
+        AuthError: если роль не существует в БД / нет основания при служебной роли (400)
     """
     if all(
         v is None
@@ -175,6 +185,13 @@ def update_user(uuid: str, data: AdminUserUpdate) -> dict:
             phone=data.phone,
             is_active=data.is_active,
             role=data.role,
+            legal_basis_confirmed=data.legal_basis_confirmed,
+            basis_type=data.basis_type,
+            basis_reference=data.basis_reference,
+            legal_basis_comment=data.legal_basis_comment,
+            confirmed_by_user_id=actor_id,
+            ip=ip,
+            user_agent=user_agent,
         )
     except ValueError as e:
         msg = str(e)

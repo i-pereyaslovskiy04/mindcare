@@ -106,13 +106,35 @@ class AdminUserCreateResponse(BaseModel):
 
 
 class AdminUserUpdate(BaseModel):
-    """Тело запроса PATCH /api/admin/users/{uuid}. Все поля опциональны."""
+    """Тело запроса PATCH /api/admin/users/{uuid}. Все поля опциональны.
+
+    Смена роли на служебную (psychologist/supervisor/admin) требует
+    документированного основания — те же поля, что и в AdminUserCreate.
+    Без подтверждения роль не меняется (см. service/storage). Это НЕ
+    consent_records: админ не «соглашается за пользователя».
+    """
 
     full_name: Optional[str] = Field(default=None, min_length=2, description="ФИО пользователя")
     phone: Optional[str] = Field(default=None, description="Телефон")
     is_active: Optional[bool] = Field(default=None, description="Активность аккаунта")
     role: Optional[Literal["student", "psychologist", "admin", "supervisor"]] = Field(
         default=None, description="Новая роль пользователя"
+    )
+
+    # Legal basis — требуется только при смене роли на служебную (см. service/storage).
+    legal_basis_confirmed: Optional[bool] = Field(
+        default=None,
+        description="Подтверждение документированного основания при назначении служебной роли",
+    )
+    basis_type: Optional[Literal[
+        "service_duty", "employment", "contract", "administrative_order", "other"
+    ]] = Field(default=None, description="Тип документированного основания")
+    basis_reference: Optional[str] = Field(
+        default=None, max_length=255,
+        description="Документ-основание: «Приказ №…», «Договор №…» (обязателен для служебной роли)",
+    )
+    legal_basis_comment: Optional[str] = Field(
+        default=None, description="Комментарий к основанию (необязательно)",
     )
 
 

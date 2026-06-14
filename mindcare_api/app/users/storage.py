@@ -23,6 +23,9 @@ _ROLE_PRIORITY = sa_case(
 
 ALLOWED_SORT_FIELDS = {"created_at", "email", "full_name", "last_login"}
 
+# Служебные роли: их назначение требует документированного основания (legal basis).
+STAFF_ROLES = {"psychologist", "supervisor", "admin"}
+
 
 def find_users(
     page: int = 1,
@@ -163,11 +166,28 @@ def update_user(
     phone: Optional[str] = None,
     is_active: Optional[bool] = None,
     role: Optional[str] = None,
+    *,
+    legal_basis_confirmed: Optional[bool] = None,
+    basis_type: Optional[str] = None,
+    basis_reference: Optional[str] = None,
+    legal_basis_comment: Optional[str] = None,
+    confirmed_by_user_id: Optional[int] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
     """
     Обновляет поля юзера и/или его роль.
     Роль меняется атомарно: удаляем старую запись user_roles, вставляем новую.
-    Raises ValueError если юзер не найден или роль не существует в БД.
+
+    Назначение служебной роли (psychologist/supervisor/admin), отличной от
+    текущей, требует документированного основания: в ТОЙ ЖЕ транзакции
+    создаётся UserLegalBasisRecord (НЕ consent_records). Если основание не
+    подтверждено / не указан basis_type или basis_reference — ValueError,
+    роль не меняется, частичных записей нет (commit не выполняется).
+    Переход staff → student основания не требует и старые записи не удаляет.
+
+    Raises ValueError если юзер не найден, роль не существует в БД, либо
+    отсутствует обязательное основание при смене роли на служебную.
     """
     try:
         uuid_obj = _uuid.UUID(uuid)
@@ -183,6 +203,37 @@ def update_user(
         )
         if not user:
             raise ValueError(f"Пользователь {uuid} не найден")
+
+        # Текущая (primary) роль — нужна для policy и для metadata записи основания.
+        cur_role_row = (
+            db.query(Role.name)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .filter(UserRole.user_id == user.id)
+            .order_by(_ROLE_PRIORITY)
+            .first()
+        )
+        old_role = cur_role_row[0] if cur_role_row else "student"
+
+        # Требуется ли legal basis: смена на служебную роль, отличную от текущей.
+        requires_basis = (
+            role is not None and role != old_role and role in STAFF_ROLES
+        )
+        if requires_basis:
+            # Проверки ДО любых мутаций — чтобы не было частичных изменений.
+            if legal_basis_confirmed is not True:
+                raise ValueError(
+                    "Для назначения служебной роли необходимо подтвердить "
+                    "документированное основание (legal_basis_confirmed)"
+                )
+            if not basis_type:
+                raise ValueError(
+                    "Необходимо указать basis_type для смены роли на служебную"
+                )
+            if not (basis_reference and basis_reference.strip()):
+                raise ValueError(
+                    "Необходимо указать basis_reference (документ-основание) "
+                    "для смены роли на служебную"
+                )
 
         if full_name is not None:
             stripped = full_name.strip()
@@ -201,14 +252,25 @@ def update_user(
             db.query(UserRole).filter(UserRole.user_id == user.id).delete()
             db.add(UserRole(user_id=user.id, role_id=role_obj.id))
             current_role = role
+
+            if requires_basis:
+                db.add(UserLegalBasisRecord(
+                    user_id=user.id,
+                    basis_type=basis_type,
+                    basis_source="admin_ui",
+                    basis_reference=basis_reference.strip(),
+                    confirmed_by_user_id=confirmed_by_user_id,
+                    ip_address=ip,
+                    user_agent=user_agent,
+                    comment=legal_basis_comment,
+                    record_metadata={
+                        "action":   "role_change",
+                        "old_role": old_role,
+                        "new_role": role,
+                    },
+                ))
         else:
-            user_role = (
-                db.query(UserRole, Role.name)
-                .join(Role, Role.id == UserRole.role_id)
-                .filter(UserRole.user_id == user.id)
-                .first()
-            )
-            current_role = user_role[1] if user_role else "student"
+            current_role = old_role
 
         db.commit()
         db.refresh(user)
