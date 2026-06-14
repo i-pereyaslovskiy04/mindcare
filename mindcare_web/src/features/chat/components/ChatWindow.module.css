@@ -53,11 +53,33 @@
 .headerStatus {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 3px;
   font-weight: 500;
+}
+
+/* presence-индикатор рядом с именем собеседника в шапке диалога */
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.presenceDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.presenceOnline {
+  background: var(--success);
+}
+
+.presenceOffline {
+  background: var(--text-light);
 }
 
 /* ---- messages list ---- */

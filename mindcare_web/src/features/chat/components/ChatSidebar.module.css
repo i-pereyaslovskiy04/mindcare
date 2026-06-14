@@ -95,6 +95,25 @@
   color: var(--espresso);
 }
 
+/* presence-индикатор: точка online/offline снизу-справа аватара */
+.presenceDot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--cream);
+}
+
+.presenceOnline {
+  background: var(--success);
+}
+
+.presenceOffline {
+  background: var(--text-light);
+}
+
 /* system conversation: закреплена сверху, нейтральный маркер */
 .itemSystem {
   background: var(--cream);

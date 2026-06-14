@@ -53,6 +53,7 @@ def _conversation_read_dict(conv, eng, *, current_user_id: int) -> dict:
         "unread_count":      storage.unread_count(
             conv.id, user_id=current_user_id,
         ),
+        "peer_is_online":    storage.is_user_online(partner_id),
     }
 
 

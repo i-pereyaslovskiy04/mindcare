@@ -26,6 +26,7 @@ function toContact(conv) {
     lastMsg: closed ? 'Диалог закрыт' : 'Активный диалог',
     time: formatLastTime(conv.last_message_at),
     unread: conv.unread_count,
+    online: Boolean(conv.peer_is_online),
   };
 }
 
@@ -106,8 +107,8 @@ export default function PsychologistChatPage() {
       </div>
     );
   } else {
-    // Список: «Системные уведомления» закреплены сверху ВСЕГДА, затем клиентские диалоги.
-    const contacts = [systemContact(sysConv), ...conversations.map(toContact)];
+    // Список: клиентские диалоги первыми, «Системные уведомления» — всегда последними.
+    const contacts = [...conversations.map(toContact), systemContact(sysConv)];
 
     let pane;
     if (systemSelected) {

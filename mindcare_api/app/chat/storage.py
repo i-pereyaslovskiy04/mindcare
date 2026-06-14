@@ -10,7 +10,7 @@ SQLAlchemy-запросы Chat MVP.
   - deleted_at IS NULL — во всех выборках сообщений (soft delete).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import desc, func, select
@@ -18,7 +18,47 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.encryption import decrypt_text, encrypt_text
 from app.db.session import SessionLocal
-from app.db.models import ChatConversation, ChatMessage, TherapyEngagement, User
+from app.db.models import (
+    ChatConversation, ChatMessage, TherapyEngagement, User, UserSession,
+)
+
+
+# ─── Presence (Stage 30c) ───────────────────────────────────────────────────
+#
+# MVP online/offline без real-time: пользователь считается online, если у него
+# есть активная (не revoked, не expired) сессия с last_active не старше порога.
+# Порог 10 минут намеренно мягче, чем debounce touch_session (300с): при
+# 5-минутном пороге активный пользователь выглядел бы offline в окне между
+# двумя debounce-обновлениями last_active. Статус приблизительный — не realtime.
+
+ONLINE_THRESHOLD_SECONDS = 600
+
+
+def get_online_user_ids(user_ids: list[int]) -> set[int]:
+    """Подмножество user_ids со свежей активной сессией. Один запрос — без N+1."""
+    ids = [i for i in user_ids if i is not None]
+    if not ids:
+        return set()
+    now = datetime.now(timezone.utc)
+    threshold = now - timedelta(seconds=ONLINE_THRESHOLD_SECONDS)
+    with SessionLocal() as db:
+        rows = (
+            db.query(UserSession.user_id)
+            .filter(
+                UserSession.user_id.in_(ids),
+                ~UserSession.is_revoked,
+                UserSession.expires_at > now,
+                UserSession.last_active.isnot(None),
+                UserSession.last_active >= threshold,
+            )
+            .distinct()
+            .all()
+        )
+    return {row[0] for row in rows}
+
+
+def is_user_online(user_id: int) -> bool:
+    return user_id in get_online_user_ids([user_id])
 
 
 # ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -216,6 +256,10 @@ def list_conversations_for_psychologist(
                 "last_message_at":   conv.last_message_at,
                 "unread_count":      int(unread or 0),
             })
+        # Презенс клиентов одним запросом по странице (не N+1).
+        online = get_online_user_ids([it["student"]["id"] for it in items])
+        for it in items:
+            it["peer_is_online"] = it["student"]["id"] in online
         return items, total
 
 

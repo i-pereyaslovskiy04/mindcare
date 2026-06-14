@@ -25,6 +25,7 @@ class ChatConversationRead(BaseModel):
     engagement_status: str                # active / completed / transferred / cancelled
     last_message_at:   Optional[datetime]
     unread_count:      int
+    peer_is_online:    bool = False       # приблизительный presence по last_active (Stage 30c)
 
 
 class MyConversationResponse(BaseModel):
@@ -39,6 +40,7 @@ class ChatConversationListItem(BaseModel):
     engagement_status: str
     last_message_at:   Optional[datetime]
     unread_count:      int
+    peer_is_online:    bool = False       # приблизительный presence по last_active (Stage 30c)
 
 
 class PaginatedChatConversationsResponse(BaseModel):

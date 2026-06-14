@@ -95,8 +95,8 @@ export default function ChatPage() {
       </div>
     );
   } else {
-    // «Системные уведомления» закреплены сверху ВСЕГДА, затем диалог с психологом.
-    const contacts = [systemContact(sysConv)];
+    // Диалог с психологом первым, «Системные уведомления» — всегда последними.
+    const contacts = [];
     if (engConv) {
       contacts.push({
         id: engConv.uuid,
@@ -106,8 +106,10 @@ export default function ChatPage() {
         lastMsg: engClosed ? 'История доступна для чтения' : 'Ваш психолог',
         time: formatLastTime(engConv.last_message_at),
         unread: engConv.unread_count || 0,
+        online: Boolean(engConv.peer_is_online),
       });
     }
+    contacts.push(systemContact(sysConv));
 
     let pane;
     if (selected === SYSTEM_DIALOG_ID) {
@@ -144,6 +146,7 @@ export default function ChatPage() {
               name: engConv.partner.full_name,
               initials: initialsOf(engConv.partner.full_name),
               role: engClosed ? 'Диалог закрыт' : 'Психолог',
+              online: Boolean(engConv.peer_is_online),
             }}
             messages={engMessages}
             onSend={send}
