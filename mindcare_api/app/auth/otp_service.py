@@ -21,7 +21,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from app.core.normalization import normalize_email
+from app.core.normalization import normalize_email, mask_email
 from app.db.session import SessionLocal
 from app.db.models import OtpVerification
 
@@ -102,7 +102,7 @@ def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
 
         db.commit()
 
-    log.info("[OTP] Code created/updated for %s", email)
+    log.info("[OTP] Code created/updated for %s", mask_email(email))
     return plaintext_code   # plaintext возвращается caller'у для отправки по email
 
 
@@ -157,7 +157,7 @@ def verify_otp(email: str, code: str) -> dict:
             db.commit()
             log.info(
                 "[OTP] Wrong code for %s, attempts=%d, remaining=%d",
-                email, record.attempts, remaining,
+                mask_email(email), record.attempts, remaining,
             )
             raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
 
@@ -165,7 +165,7 @@ def verify_otp(email: str, code: str) -> dict:
         db.delete(record)
         db.commit()
 
-    log.info("[OTP] Verification OK for %s", email)
+    log.info("[OTP] Verification OK for %s", mask_email(email))
     return user_data
 
 

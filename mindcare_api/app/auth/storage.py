@@ -48,10 +48,23 @@ def _user_to_dict(user: User, db) -> dict:
 
 
 def _assign_role(db, user_id: int, role_name: str = "student") -> None:
-    """Назначает роль пользователю. Если роль не найдена в БД — пропускает."""
+    """
+    Назначает роль пользователю.
+
+    Роль обязана существовать в справочнике `roles`. Если её нет — это
+    проблема seed/reference data: бросаем RuntimeError, чтобы не создать
+    пользователя без реальной записи `user_roles` (раньше роль молча
+    пропускалась, а `_get_primary_role` маскировал это дефолтом "student").
+    Исключение поднимается до commit в `save_user`, поэтому INSERT
+    пользователя откатывается вместе с транзакцией.
+    """
     role = db.query(Role).filter(Role.name == role_name).first()
-    if role:
-        db.add(UserRole(user_id=user_id, role_id=role.id))
+    if role is None:
+        raise RuntimeError(
+            f"Role '{role_name}' not found in roles table — "
+            "check seed/reference data"
+        )
+    db.add(UserRole(user_id=user_id, role_id=role.id))
 
 
 # ---------------------------------------------------------------------------

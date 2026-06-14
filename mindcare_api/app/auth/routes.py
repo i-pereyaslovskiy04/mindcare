@@ -49,7 +49,12 @@ def register_confirm(body: RegisterConfirmRequest, request: Request):
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     try:
-        user = service.register_confirm(email=body.email, code=body.code)
+        user = service.register_confirm(
+            email=body.email,
+            code=body.code,
+            ip=ip,
+            user_agent=user_agent,
+        )
     except service.AuthError as e:
         audit.log_auth_event(
             event="register",
