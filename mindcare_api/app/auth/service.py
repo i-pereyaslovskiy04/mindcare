@@ -9,8 +9,13 @@ from typing import Optional
 
 import bcrypt
 from app.auth import storage
+from app.core.normalization import mask_email
 
 log = logging.getLogger(__name__)
+
+# Стабильное сообщение клиенту при сбое доставки письма: не раскрывает
+# SMTP host/user/stack/internal exception. Детали — только в server-side логах.
+_EMAIL_SEND_FAILED_MESSAGE = "Не удалось отправить письмо. Попробуйте позже."
 
 
 def _hash(password: str) -> str:
@@ -54,14 +59,14 @@ def register_init(name: str, email: str, password: str) -> None:
     except ValueError as e:
         raise AuthError(str(e), 429)
 
-    log.info("[register_init] sending OTP to %s", email)
+    log.info("[register_init] sending OTP to %s", mask_email(email))
     try:
         send_registration_otp(email, code)
-    except Exception as e:
-        log.exception("[register_init] failed to send email to %s", email)
-        raise AuthError(
-            f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
+    except Exception:
+        log.exception(
+            "[register_init] failed to send email to %s", mask_email(email)
         )
+        raise AuthError(_EMAIL_SEND_FAILED_MESSAGE, 500)
 
 
 def register_confirm(
@@ -155,11 +160,11 @@ def password_reset_init(email: str) -> None:
 
     try:
         send_password_reset_otp(email, code)
-    except Exception as e:
-        log.exception("[password_reset_init] failed to send email to %s", email)
-        raise AuthError(
-            f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
+    except Exception:
+        log.exception(
+            "[password_reset_init] failed to send email to %s", mask_email(email)
         )
+        raise AuthError(_EMAIL_SEND_FAILED_MESSAGE, 500)
 
 
 def password_reset_confirm(

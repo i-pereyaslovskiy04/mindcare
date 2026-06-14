@@ -113,7 +113,7 @@ npm run build
 npm test
 
 # Запуск одного файла
-npm test -- --testPathPattern=App.test.js
+npm test -- --testPathPattern=client.test.js
 ```
 
 > **Важно:** для full-stack разработки нужно запустить **оба** сервера одновременно.

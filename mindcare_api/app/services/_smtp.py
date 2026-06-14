@@ -13,6 +13,7 @@ from email.utils import formataddr
 from typing import Optional
 
 from app.core.config import settings
+from app.core.normalization import mask_email
 
 log = logging.getLogger(__name__)
 
@@ -89,4 +90,4 @@ def _send_smtp(to: str, subject: str, body: str, html: Optional[str]) -> None:
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         server.send_message(msg)
 
-    log.info("[SMTP] message sent to %s", to)
+    log.info("[SMTP] message sent to %s", mask_email(to))

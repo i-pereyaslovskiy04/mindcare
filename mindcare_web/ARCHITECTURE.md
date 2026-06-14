@@ -13,9 +13,8 @@ mindcare_web/
 ├── package.json               proxy → http://localhost:8000
 └── src/
     ├── index.js               DOM entry point
-    ├── App.test.js
     ├── reportWebVitals.js
-    ├── setupTests.js
+    ├── setupTests.js          ← jest-dom matchers (CRA stale App.test.js removed)
     │
     ├── app/                   ← shell: providers + routing
     │   ├── App.jsx
