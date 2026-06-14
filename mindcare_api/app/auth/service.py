@@ -75,45 +75,32 @@ def register_confirm(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
-    """Проверяет OTP, создаёт/реактивирует пользователя, записывает согласия."""
-    from app.auth import otp_service
+    """
+    Подтверждает регистрацию атомарно (Stage 31m-fix-b2).
 
+    OTP-валидация, создание/реактивация пользователя, роль student, обязательные
+    consent_records и потребление OTP выполняются как одна core DB-транзакция
+    в storage.register_confirm_atomic — без частичных состояний. SMTP здесь не
+    участвует (письмо ушло на init-шаге). Welcome-уведомление — soft-fail и
+    выполняется уже ПОСЛЕ успешного commit (его сбой не откатывает регистрацию).
+    """
     try:
-        user_data = otp_service.verify_otp(email, code)
-    except ValueError as e:
-        raise AuthError(str(e), 400)
-
-    consent_ids = {}
-    for policy_type in REQUIRED_CONSENTS:
-        cid = storage.get_active_consent_id(policy_type)
-        if cid is None:
-            raise AuthError(
-                f"Политика '{policy_type}' не найдена в БД."
-                " Обратитесь к администратору.",
-                500,
-            )
-        consent_ids[policy_type] = cid
-
-    user = storage.reactivate_user(
-        email, user_data["name"], user_data["password_hash"]
-    )
-    if user is None:
-        user = storage.save_user({
-            "name":            user_data["name"],
-            "email":           email,
-            "hashed_password": user_data["password_hash"],
-            "role":            "student",
-        })
-
-    for cid in consent_ids.values():
-        storage.save_consent_record(
-            user_id=int(user["id"]),
-            consent_id=cid,
+        user = storage.register_confirm_atomic(
+            email=email,
+            code=code,
+            required_consent_types=REQUIRED_CONSENTS,
             ip=ip,
             user_agent=user_agent,
         )
+    except storage.RegistrationDataError as e:
+        # Отсутствует роль/consent-политика — проблема seed/reference data.
+        raise AuthError(str(e), 500)
+    except ValueError as e:
+        raise AuthError(str(e), 400)
 
     # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
+    # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
+    # не должен ломать регистрацию.
     from app.chat.system_publisher import publish_system_message
     publish_system_message(
         recipient_id=int(user["id"]),

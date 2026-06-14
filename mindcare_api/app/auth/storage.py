@@ -11,10 +11,22 @@ from typing import Optional
 from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.db.models import (
-    User, UserRole, Role, UserSession, Consent, ConsentRecord,
+    User, UserRole, Role, UserSession, Consent, ConsentRecord, OtpVerification,
 )
 from app.auth.security import generate_session_token, hash_session_token
+# OTP-хелперы переиспользуются для атомарного confirm (один пакет app.auth,
+# цикла импортов нет: otp_service не импортирует storage).
+from app.auth.otp_service import _verify_code, MAX_ATTEMPTS, _utcnow
 from app.core.config import SESSION_EXPIRE_DAYS
+
+
+class RegistrationDataError(RuntimeError):
+    """
+    Отсутствуют обязательные seed/reference данные (роль или consent-политика)
+    при подтверждении регистрации. Подкласс RuntimeError → существующие
+    проверки `pytest.raises(RuntimeError)` остаются валидными; service-слой
+    может отлавливать этот тип отдельно и мапить на HTTP 500.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +72,7 @@ def _assign_role(db, user_id: int, role_name: str = "student") -> None:
     """
     role = db.query(Role).filter(Role.name == role_name).first()
     if role is None:
-        raise RuntimeError(
+        raise RegistrationDataError(
             f"Role '{role_name}' not found in roles table — "
             "check seed/reference data"
         )
@@ -170,6 +182,141 @@ def save_consent_record(
             user_agent=user_agent,
         ))
         db.commit()
+
+
+def register_confirm_atomic(
+    email: str,
+    code: str,
+    required_consent_types: list[str],
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    Атомарное подтверждение self-registration (Stage 31m-fix-b2).
+
+    В ОДНОЙ сессии и ОДНОМ финальном commit:
+      1. validate OTP (без удаления, если код верный);
+      2. убедиться, что все обязательные consent-политики существуют;
+      3. создать нового или реактивировать soft-deleted пользователя;
+      4. назначить роль student (для нового пользователя);
+      5. создать все обязательные consent_records (с ip/user_agent);
+      6. consume (delete) OTP;
+      7. commit.
+
+    Любой сбой core-шага (2–6) поднимает исключение до commit → транзакция
+    откатывается целиком: пользователь, user_roles и consent_records не
+    сохраняются даже частично, а OTP НЕ потребляется (повторная попытка
+    возможна тем же кодом).
+
+    OTP failure-пути (не найден / истёк / превышены попытки / неверный код)
+    сохраняют текущую политику attempts: для них выполняется отдельный commit
+    (пользователь при этом не создаётся).
+
+    Бросает:
+      ValueError            — проблема OTP (service → HTTP 400);
+      RegistrationDataError — нет роли student или consent-политики (→ HTTP 500).
+
+    SMTP/email и welcome-уведомление СЮДА не входят (письмо отправляется на
+    init-шаге; welcome — soft-fail после commit на уровне service).
+    """
+    email = normalize_email(email)
+    now = _utcnow()
+
+    with SessionLocal() as db:
+        # ── 1. OTP validation ───────────────────────────────────────────────
+        record = (
+            db.query(OtpVerification)
+            .filter(OtpVerification.email == email)
+            .first()
+        )
+        if not record:
+            raise ValueError("Код не найден или уже использован")
+
+        if now > record.expires_at:
+            db.delete(record)
+            db.commit()
+            raise ValueError("Срок действия кода истёк. Начните регистрацию заново")
+
+        if record.attempts >= MAX_ATTEMPTS:
+            db.delete(record)
+            db.commit()
+            raise ValueError("Превышено число попыток. Начните регистрацию заново")
+
+        if not _verify_code(code, record.code):
+            record.attempts += 1
+            remaining = MAX_ATTEMPTS - record.attempts
+            if remaining <= 0:
+                db.delete(record)
+                db.commit()
+                raise ValueError(
+                    "Неверный код. Попытки исчерпаны. Начните регистрацию заново"
+                )
+            db.commit()
+            raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
+
+        # ── OTP верный. Дальше — core UoW без промежуточных commit. ──────────
+        name = record.name
+        password_hash = record.password_hash
+
+        # 2. Обязательные consent-политики обязаны существовать (seed data).
+        consent_ids: list[int] = []
+        for policy_type in required_consent_types:
+            consent = (
+                db.query(Consent)
+                .filter(Consent.policy_type == policy_type)
+                .order_by(Consent.version.desc())
+                .first()
+            )
+            if consent is None:
+                raise RegistrationDataError(
+                    f"Политика '{policy_type}' не найдена в БД."
+                    " Обратитесь к администратору."
+                )
+            consent_ids.append(consent.id)
+
+        # 3. Создать нового или реактивировать soft-deleted пользователя.
+        user = (
+            db.query(User)
+            .filter(
+                User.email == email,
+                User.deleted_at.isnot(None),
+            )
+            .first()
+        )
+        if user is not None:
+            # Реактивация: id/uuid/роль сохраняются (как в reactivate_user).
+            user.deleted_at = None
+            user.is_active = True
+            user.full_name = name
+            user.password_hash = password_hash
+            db.flush()
+        else:
+            user = User(
+                full_name=name,
+                email=email,
+                password_hash=password_hash,
+            )
+            db.add(user)
+            db.flush()                      # нужен user.id до user_roles/consents
+            _assign_role(db, user.id, "student")  # RegistrationDataError если нет роли
+
+        # 4. Обязательные consent_records (с request-контекстом).
+        for cid in consent_ids:
+            db.add(ConsentRecord(
+                user_id=user.id,
+                consent_id=cid,
+                accepted=True,
+                ip_address=ip,
+                user_agent=user_agent,
+            ))
+
+        # 5. Потребить OTP в той же транзакции.
+        db.delete(record)
+
+        # 6. Единственный финальный commit — атомарно.
+        db.commit()
+        db.refresh(user)
+        return _user_to_dict(user, db)
 
 
 def update_last_login(user_id: str) -> None:
