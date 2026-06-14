@@ -144,10 +144,34 @@
     **engagement_transferred**, **engagement_closed** (idempotent по event_key);
     `tests/integration/test_engagement_system_messages.py` (11). Frontend/Alembic/схема
     не менялись (backend 216)
-  - **Future (chat):** глобальный unread badge в layout (нужен shared state);
-    preview последнего сообщения в списке бесед (требует decrypt на список —
-    optional); WebSocket; group chat; attachments; staff break-glass access;
-    system messages для заданий/материалов/анкет/legal announcements
+  - ✅ Stage 30a/30b: **Messenger polish** — system-беседа всегда видима + empty state,
+    фикс высоты/обрезки шапки, live refresh через snapshot (limit=50) + `mergeMessages`
+    (`read_at` обновляется без F5), per-dialog unread (badge/маркер/bold/фон), глобальный
+    nav badge через `messagesEvents`; **VK-like entry**: при входе в раздел диалог не
+    открывается автоматически, mark-read только после явного клика (placeholder справа).
+    Frontend-only
+  - ✅ Stage 30c: **presence + порядок диалогов** — system-беседа перемещена в конец
+    списка; approximate online/offline через `user_sessions.last_active` (порог 10 минут,
+    мягче debounce touch_session 300с), API-поле `peer_is_online` в `my-conversation`/
+    `conversations`/`conversations/{uuid}`; frontend показывает online/offline точкой в
+    списке и шапке; без WebSocket, без last-seen-текста; новой колонки/миграции нет;
+    `tests/integration/test_chat_presence.py` (12). System-беседа presence не имеет
+    (backend 228, lint 0, build OK)
+  - **Group chat — postponed / future:**
+    - не входит в текущий Messenger MVP; **не начат и не проектируется** на этом этапе
+    - текущий Messenger покрывает только student↔psychologist one-to-one chat и
+      system conversation — не смешивать с group chat
+    - group chat будет **отдельным этапом** после стабилизации Messenger
+    - учебная группа **не является** автоматическим чатом; она может быть только
+      будущим источником отбора участников
+    - перед реализацией обязателен отдельный **READ-ONLY design audit**, покрывающий:
+      `chat_groups`; `chat_group_members`; roles/moderation; access policy;
+      unread/read model; encryption policy; system messages внутри группы;
+      privacy/compliance-риски
+  - **Future (chat):** preview последнего сообщения в списке бесед (требует decrypt на
+    список — optional); WebSocket/SSE realtime presence; attachments/files; staff
+    break-glass access; Action Center / колокольчик; system messages для заданий/
+    материалов/анкет/legal announcements
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

@@ -35,9 +35,12 @@ mindcare_api/
     articles/            - /api/admin/articles/* + /api/articles/* (public)
     media/               - POST /api/media/upload (Pillow, WebP)
     session_notes/       - /api/session-notes/* (encrypt-on-write)
-    chat/                - /api/chat/* — one-to-one чат student ↔ psychologist (Stage 28c):
+    chat/                - /api/chat/* — Messenger (Stage 28–30c): one-to-one чат
+                           student ↔ psychologist + read-only system conversation;
                            polling (after=<id>), encrypt-on-write (enc:v1:), read_at receipts,
-                           доступ только участникам engagement (admin/supervisor — 403)
+                           peer_is_online presence (по user_sessions.last_active, порог 10 мин);
+                           доступ к engagement-беседам только участникам (admin/supervisor — 403);
+                           system messages публикует только internal publisher (idempotency event_key)
     supervisor/          - /api/supervisor/* (supervisor role)
     psychologist/        - /api/psychologist/* (psychologist role)
     db/
@@ -65,12 +68,16 @@ mindcare_api/
 
 **Стек:** React 19, React Router 7, CSS Modules, CRA (порт 3000)
 
-**Chat (Stage 28d/28e):** `src/api/chat.api.js`; student — `pages/student/Chat/`
-(`useStudentChat.js`, real API вместо mock); psychologist — `pages/psychologist/Chat/`
-(`usePsychologistChat.js`, список бесед + окно переписки на переиспользованных
-student chat-компонентах). Polling 8s (`after=<id>`), mark-read при открытии и
-новых входящих; WebSocket в MVP не используется. Diary/tasks/calendar студента
-остаются accepted demo/mock.
+**Messenger (Stage 28–30c):** единый раздел «Сообщения». Общие компоненты —
+`src/features/chat/` (ChatSidebar/ChatWindow/ChatHeader/ChatListItem, `useSystemConversation`,
+`mergeMessages`, `messagesEvents`, `LinkifiedText`); `src/api/chat.api.js`. Student —
+`pages/student/Chat/` (`useStudentChat.js`), psychologist — `pages/psychologist/Chat/`
+(`usePsychologistChat.js`). Polling 8s/30s (`after=<id>`); **VK-like entry** (диалог не
+открывается автоматически, mark-read только по явному клику); unread — глобальный nav badge +
+per-dialog; system conversation всегда видна и **последняя** в списке (read-only, без composer);
+live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts ✓/✓✓; online/offline
+точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat/attachments — postponed.
+Diary/tasks/calendar студента остаются accepted demo/mock.
 
 **Полная документация:** `mindcare_web/ARCHITECTURE.md`
 
@@ -92,7 +99,8 @@ PostgreSQL 15+, 48 таблиц, схема управляется только 
 | d2e5f8a1b4c7 | supervisor engagement unique index |
 | e5a8f3c1d2b6 | normalized email unique index: lower(trim(email)) |
 | b6e1f4a7c9d3 | user_legal_basis_records (Stage 23b) |
-| d8f3a6c1e9b4 | chat_conversations + chat_messages (Stage 28b) — **head** |
+| d8f3a6c1e9b4 | chat_conversations + chat_messages (Stage 28b) |
+| c4f7a2e9d1b8 | system conversation support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
 
 ---
 

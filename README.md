@@ -267,7 +267,8 @@ d8f3a6c1e9b4      ← текущий head
 | `d2e5f8a1b4c7` | Supervisor engagement unique index |
 | `e5a8f3c1d2b6` | Normalized email unique index: `lower(trim(email))` |
 | `b6e1f4a7c9d3` | user_legal_basis_records (Stage 23b) |
-| `d8f3a6c1e9b4` | chat_conversations + chat_messages (Stage 28b) — **head** |
+| `d8f3a6c1e9b4` | chat_conversations + chat_messages (Stage 28b) |
+| `c4f7a2e9d1b8` | system conversation support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
 
 ### ORM-модели (48 таблиц, 12 модулей)
 
@@ -381,6 +382,9 @@ npm run build
 | `tests/integration/test_touch_session.py` | debounce touch_session (9) |
 | `tests/integration/test_chat_models.py` | constraints chat-таблиц (6) |
 | `tests/integration/test_chat_api.py` | Chat MVP API end-to-end (20) |
+| `tests/integration/test_system_conversation.py` | system conversation backend (17) |
+| `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (11) |
+| `tests/integration/test_chat_presence.py` | approximate online/offline presence (12) |
 
 ---
 
@@ -424,17 +428,39 @@ admin — metadata-only везде, расшифрованный терапев�
 (metadata-путь не вызывает decrypt). H3 закрыт для MVP; supervision-scope модель
 и break-glass admin access — отдельные будущие решения.
 
-**Chat MVP (Stage 28b–28f).** One-to-one чат student ↔ psychologist поверх
-`therapy_engagements` — **реализован; full-stack HTTP/API smoke пройден (38/0)**:
-- polling-based (клиент опрашивает `messages?after=<id>` раз в 7–10 секунд), без WebSocket;
+**Messenger MVP (Stage 28b–30c).** Единый раздел «Сообщения» — one-to-one чат
+student ↔ psychologist поверх `therapy_engagements` + read-only system conversation.
+Роуты `/student/chat` и `/psychologist/chat` сохранены. **Реализован**:
+
+*Backend:*
+- DB foundation: `chat_conversations` (type `engagement`/`system`, nullable `engagement_id`/
+  `recipient_id`) + `chat_messages` (`message_kind` `user`/`system`, `event_key` idempotency);
+- polling-based (`messages?after=<id>` раз в 7–10 секунд), без WebSocket;
 - `chat_messages.content` шифруется at-rest (Fernet, `enc:v1:`, тот же `DATA_ENCRYPTION_KEY`);
-- доступ только участникам engagement: **admin/supervisor получают 403 на все chat-роуты**,
-  staff-доступа к содержимому переписки нет by design (break-glass — отдельное compliance-решение);
-- read/unread через `chat_messages.read_at` (`POST .../read` помечает входящие);
-- rate limit на отправку: 30 сообщений/мин/пользователь;
+- доступ только участникам engagement: **admin/supervisor получают 403 на все engagement
+  chat-роуты**, staff-доступа к содержимому нет by design (break-glass — отдельное решение);
+- read/unread через `chat_messages.read_at`; rate limit отправки 30/мин/пользователь;
 - audit: только `chat_conversation_created` (содержимое сообщений не логируется);
-- global unread badge, attachments, group chat, WebSocket, typing/online-индикаторы —
-  **future**, не реализованы.
+- **system conversation** read-only: `GET/POST /api/chat/system-conversation*` (своя беседа,
+  любая авторизованная роль), без write-эндпоинта; события публикует только internal
+  publisher (idempotency по `event_key`): **welcome**, **password_changed**,
+  **engagement_assigned**, **engagement_transferred**, **engagement_closed**;
+- **presence** `peer_is_online` (approximate) по `user_sessions.last_active`, порог 10 минут.
+
+*Frontend:*
+- VK-like entry: при входе диалог не открывается автоматически, mark-read только после
+  явного клика (placeholder справа);
+- unread: глобальный nav badge (по числу диалогов) + per-dialog badge/маркер/bold/фон;
+- system conversation: всегда видна, **последняя** в списке, read-only, без composer;
+- live refresh: snapshot (limit=50) + `mergeMessages` — `read_at` обновляется без F5
+  в пределах последних 50 сообщений;
+- linkify http/https only (без `dangerouslySetInnerHTML`, `target=_blank rel=noopener noreferrer`);
+- read receipts ✓/✓✓ по `read_at`; online/offline точкой в списке и шапке (без last-seen-текста).
+
+*Future / postponed:* **group chat** (отдельный этап после стабилизации, обязателен
+READ-ONLY design audit — см. `docs/BACKLOG.md`); preview последнего сообщения в списке;
+WebSocket/SSE realtime presence; attachments/files; Action Center / колокольчик;
+staff break-glass access. Учебная группа ≠ автоматический чат.
 
 Ручной browser smoke обоих кабинетов остаётся рекомендованным перед demo/deploy.
 
@@ -503,7 +529,8 @@ admin — metadata-only везде, расшифрованный терапев�
 | `/api/admin/articles/*` + `/api/articles/*` | CRUD articles + public list/item | Admin, Supervisor / Public |
 | `/api/media/upload` | POST upload image | Auth |
 | `/api/session-notes/*` | Session notes (enc:v1: ciphertext): psychologist — свои с content; supervisor — meta-list + audited content read; admin — metadata-only | Psychologist / Supervisor / Admin |
-| `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts | Student / Psychologist (admin/supervisor — 403) |
+| `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts, `peer_is_online` presence | Student / Psychologist (admin/supervisor — 403) |
+| `/api/chat/system-conversation*` | Read-only system conversation (своя беседа): GET conversation/messages, POST read; write только internal publisher | Auth (любая роль — к своей беседе) |
 | `/api/supervisor/*` | Student list, psychologist list, engagements | Supervisor |
 | `/api/psychologist/*` | Cabinet: clients, schedule, appointments | Psychologist |
 | `/api/health` | Health check: status, tables, revision | Public |

@@ -167,7 +167,7 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **188 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **228 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -185,6 +185,9 @@ npm run build
 | `tests/integration/test_touch_session.py` | debounce touch_session (Stage 26) — 9 |
 | `tests/integration/test_chat_models.py` | constraints chat-таблиц (Stage 28b) — 6 |
 | `tests/integration/test_chat_api.py` | Chat MVP API end-to-end (Stage 28c) — 20 |
+| `tests/integration/test_system_conversation.py` | system conversation backend (Stage 29b) — 17 |
+| `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (Stage 29d) — 11 |
+| `tests/integration/test_chat_presence.py` | approximate online/offline presence (Stage 30c) — 12 |
 
 ---
 
@@ -265,7 +268,9 @@ mindcare_api/
 │   │   ├── service.py       — бизнес-логика
 │   │   └── storage.py       — _article_to_dict, _sync_categories, _sync_tags
 │   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
-│   ├── chat/                — /api/chat/* (one-to-one, polling, read_at, encrypt-on-write)
+│   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
+│   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
+│   │                          system_publisher (idempotency event_key)
 │   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
 │   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
@@ -339,7 +344,8 @@ mindcare_api/
 | `d2e5f8a1b4c7` | add_supervisor_engagement_index: partial unique index |
 | `e5a8f3c1d2b6` | add_normalized_email_unique_index: `lower(trim(email))` |
 | `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) |
-| `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) — **head** |
+| `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
+| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
 
 **Ключевые таблицы:**
 
@@ -352,7 +358,7 @@ mindcare_api/
 | `otp_verifications` | OTP для регистрации и сброса пароля. code = SHA-256 хеш |
 | `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
-| `chat_conversations`, `chat_messages` | Chat MVP (Stage 28b): one-to-one чат поверх therapy_engagements; одна беседа на engagement (UNIQUE); content — только `enc:v1:` (шифрование — Stage 28c) |
+| `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
@@ -844,9 +850,15 @@ Conventional Commits:
 - `/student/diary`, `/student/tasks`, `/student/calendar` работают на hardcoded
   mock-данных — это осознанная демо-витрина до отдельных этапов
 - `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
-  one-to-one поверх `therapy_engagements`, polling, read/unread через `read_at`
+  единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
+  conversation), polling, read/unread через `read_at`, VK-like entry (mark-read
+  только по явному клику), глобальный nav badge + per-dialog unread, system-беседа
+  последняя в списке, approximate online/offline (`peer_is_online`, порог 10 мин)
 - Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
-- Не добавлять WebSocket, group chat, attachments, global unread badge или
+- **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,
+  обязателен READ-ONLY design audit (см. `docs/BACKLOG.md`); учебная группа ≠
+  автоматический чат. Не начинать group chat без отдельного этапа
+- Не добавлять WebSocket/SSE, attachments, Action Center/колокольчик или
   staff-доступ к content без отдельного этапа
 - `questions_answers` — это Q&A-модуль (один вопрос → один ответ), НЕ чат;
   не использовать как основу для чата
