@@ -27,6 +27,36 @@ def is_encrypted(value: str | None) -> bool:
     return bool(value and value.startswith(ENCRYPTION_PREFIX))
 
 
+_ENCRYPTION_CONFIG_ERROR = (
+    "DATA_ENCRYPTION_KEY is required and must be a valid Fernet key"
+)
+
+
+def assert_encryption_ready() -> None:
+    """Fail-fast проверка конфигурации шифрования (вызывать при старте).
+
+    Гарантирует, что DATA_ENCRYPTION_KEY задан и валиден для Fernet, до того
+    как приложение начнёт обслуживать запросы. Иначе RuntimeError/ValueError
+    всплыли бы только при первом encrypted read/write (chat/session_notes).
+
+    Безопасность:
+      - сам ключ НЕ логируется и НЕ включается в текст ошибки
+        (сообщение статичное; исходное исключение cryptography ключ не содержит);
+      - проверка делает round-trip на статичной строке в памяти, без записи в БД;
+      - формат enc:v1: и реальные данные не затрагиваются.
+    """
+    key = settings.DATA_ENCRYPTION_KEY
+    if not key:
+        raise RuntimeError(_ENCRYPTION_CONFIG_ERROR)
+    try:
+        fernet = Fernet(key.encode("utf-8"))
+        probe = b"mindcare-encryption-healthcheck"
+        if fernet.decrypt(fernet.encrypt(probe)) != probe:
+            raise ValueError("encryption round-trip mismatch")
+    except Exception as exc:
+        raise RuntimeError(_ENCRYPTION_CONFIG_ERROR) from exc
+
+
 def encrypt_text(plaintext: str) -> str:
     if plaintext is None:
         raise ValueError("plaintext must not be None")

@@ -59,6 +59,11 @@ async def lifespan(_app: FastAPI):
     # ── Startup ───────────────────────────────────────────────────────────────
     log.info("MindCare API starting up...")
 
+    # Fail-fast: без валидного DATA_ENCRYPTION_KEY chat/session_notes сломались бы
+    # только при первом encrypted read/write. Проверяем до обработки запросов.
+    from app.core.encryption import assert_encryption_ready
+    assert_encryption_ready()
+
     from app.db.init_db import init_db
     init_db()                   # ensure_database + check_migrations + seed
 

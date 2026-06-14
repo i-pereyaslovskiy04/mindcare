@@ -176,3 +176,42 @@ class TestWrongKeyOrCorrupted:
         truncated = ct[:len(ENCRYPTION_PREFIX) + 10]
         with pytest.raises(ValueError, match="invalid key or corrupted"):
             decrypt_text(truncated)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 2.6  Startup guard: assert_encryption_ready (Stage 31c)
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestAssertEncryptionReady:
+    def test_valid_key_passes(self, monkeypatch):
+        key = Fernet.generate_key().decode()
+        monkeypatch.setattr(enc_mod.settings, "DATA_ENCRYPTION_KEY", key)
+        enc_mod.assert_encryption_ready()   # не должно бросать
+
+    def test_none_key_raises_runtimeerror(self, monkeypatch):
+        monkeypatch.setattr(enc_mod.settings, "DATA_ENCRYPTION_KEY", None)
+        with pytest.raises(RuntimeError, match="valid Fernet key"):
+            enc_mod.assert_encryption_ready()
+
+    def test_empty_key_raises_runtimeerror(self, monkeypatch):
+        monkeypatch.setattr(enc_mod.settings, "DATA_ENCRYPTION_KEY", "")
+        with pytest.raises(RuntimeError, match="valid Fernet key"):
+            enc_mod.assert_encryption_ready()
+
+    def test_invalid_key_raises_runtimeerror(self, monkeypatch):
+        monkeypatch.setattr(
+            enc_mod.settings, "DATA_ENCRYPTION_KEY", "not-a-valid-fernet-key",
+        )
+        with pytest.raises(RuntimeError, match="valid Fernet key"):
+            enc_mod.assert_encryption_ready()
+
+    def test_error_does_not_leak_key(self, monkeypatch):
+        secret = "super-secret-but-invalid-key-value-1234567890"
+        monkeypatch.setattr(enc_mod.settings, "DATA_ENCRYPTION_KEY", secret)
+        with pytest.raises(RuntimeError) as excinfo:
+            enc_mod.assert_encryption_ready()
+        # ни сообщение RuntimeError, ни цепочка причин не содержат сам ключ
+        assert secret not in str(excinfo.value)
+        assert secret not in repr(excinfo.value)
+        if excinfo.value.__cause__ is not None:
+            assert secret not in str(excinfo.value.__cause__)
