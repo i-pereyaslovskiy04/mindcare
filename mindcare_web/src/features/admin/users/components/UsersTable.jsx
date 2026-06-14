@@ -1,21 +1,8 @@
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Badge from '../../../../components/UI/Badge/Badge';
+import { ROLE_LABELS, ROLE_BADGE_TONES } from '../roleLabels';
 import styles from './UsersTable.module.css';
-
-const ROLE_LABELS = {
-  student:      'Студент',
-  psychologist: 'Психолог',
-  admin:        'Администратор',
-  supervisor:   'Супервизор',
-};
-
-const ROLE_BADGE_TONES = {
-  student:      'role-student',
-  psychologist: 'role-psychologist',
-  admin:        'role-admin',
-  supervisor:   'role-supervisor',
-};
 
 const SKELETON_ROWS = 7;
 

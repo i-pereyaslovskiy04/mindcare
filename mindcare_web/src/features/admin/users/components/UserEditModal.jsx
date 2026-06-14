@@ -1,16 +1,10 @@
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
-import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
+import Badge from '../../../../components/UI/Badge/Badge';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
+import { ROLE_LABELS, ROLE_BADGE_TONES } from '../roleLabels';
 import styles from './UserEditModal.module.css';
-
-const ROLE_OPTIONS = [
-  { value: 'student',      label: 'Студент' },
-  { value: 'psychologist', label: 'Психолог' },
-  { value: 'admin',        label: 'Администратор' },
-  { value: 'supervisor',   label: 'Супервизор' },
-];
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
@@ -83,14 +77,16 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Роль</label>
-              <Select
-                value={values.role}
-                options={ROLE_OPTIONS}
-                onChange={(val) => handleChange({ target: { name: 'role', value: val } })}
-                error={errors.role}
-                panelZIndex={2300}
-              />
+              <span className={styles.label}>Роль</span>
+              <div className={styles.roleValue}>
+                <Badge tone={ROLE_BADGE_TONES[values.role] ?? 'neutral'}>
+                  {ROLE_LABELS[values.role] ?? values.role}
+                </Badge>
+              </div>
+              <span className={styles.note}>
+                Роль задаётся при создании пользователя и не меняется в обычном
+                редактировании.
+              </span>
             </div>
 
             <div className={styles.checkboxField}>

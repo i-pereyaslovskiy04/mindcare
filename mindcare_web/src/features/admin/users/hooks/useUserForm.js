@@ -37,8 +37,7 @@ function validateEdit(values) {
   const errs = {};
   if (!values.full_name || values.full_name.trim().length < 2)
     errs.full_name = 'Минимум 2 символа';
-  if (!values.role)
-    errs.role = 'Выберите роль';
+  // Роль не редактируется в обычной форме (read-only) — не валидируем и не шлём.
   return errs;
 }
 
@@ -96,14 +95,19 @@ export function useUserForm({ mode, uuid, onSuccess }) {
 
     setSubmitting(true);
     // Пустые опциональные поля основания отправляем как null, не ''
+    // Edit: явный allowlist — role в PATCH не отправляется (задаётся при создании).
     const payload = isCreate
       ? {
           ...values,
           basis_reference: values.basis_reference?.trim() || null,
           legal_basis_comment: values.legal_basis_comment?.trim() || null,
         }
-      : values;
-    const request = isCreate ? createUser(payload) : updateUser(uuid, values);
+      : {
+          full_name: values.full_name,
+          phone:     values.phone,
+          is_active: values.is_active,
+        };
+    const request = isCreate ? createUser(payload) : updateUser(uuid, payload);
 
     request
       .then((result) => { onSuccess(result); })

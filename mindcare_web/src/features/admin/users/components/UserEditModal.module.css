@@ -65,6 +65,20 @@
   border-color: var(--error);
 }
 
+/* ── Read-only роль ── */
+
+.roleValue {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--text-light);
+  line-height: 1.4;
+}
+
 /* ── Ошибки ── */
 
 .hint {

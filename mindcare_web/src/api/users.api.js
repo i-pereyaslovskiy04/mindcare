@@ -41,11 +41,23 @@ export function createUser(data) {
   });
 }
 
-/** PATCH /api/admin/users/:uuid — partial update. */
+/**
+ * PATCH /api/admin/users/:uuid — partial update.
+ *
+ * Allowlist: обычное редактирование меняет только эти поля. role намеренно
+ * исключена — роль задаётся при создании и не меняется через edit-форму
+ * (смена роли на staff требует legal basis — отдельный backend-флоу).
+ */
+const EDITABLE_FIELDS = ['full_name', 'phone', 'is_active'];
+
 export function updateUser(uuid, data) {
+  const body = {};
+  for (const key of EDITABLE_FIELDS) {
+    if (data[key] !== undefined) body[key] = data[key];
+  }
   return apiFetch(`${BASE}/${uuid}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(body),
   });
 }
 
