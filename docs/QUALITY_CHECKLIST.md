@@ -129,6 +129,12 @@ mindcare_web/src/components/UI
 Supervisor не должен роутиться в `/admin/*`.
 Расширение прав supervisor требует отдельного ADR и изменения backend `require_role`.
 
+**Legal basis для staff-ролей.** Назначение роли `psychologist`/`supervisor`/`admin`
+— и при создании (`POST /api/admin/users`), и при смене роли (`PATCH …/{uuid}`) —
+требует документированного основания (`legal_basis_confirmed` + `basis_type` +
+`basis_reference`), которое пишется в `user_legal_basis_records`. PATCH без основания
+backend обязан отклонять (роль не меняется). `consent_records` для staff не использовать.
+
 ---
 
 ## 5. Backend / Alembic rules
@@ -212,8 +218,8 @@ Supervisor не должен роутиться в `/admin/*`.
 
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
-| **Unit** | Service/helper business logic, без реальной БД | 97 тестов: change_password (13), encryption (21), normalization (16), smtp_transport (21), rate_limit (18), session_security (8) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 131 тест: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12) |
+| **Unit** | Service/helper business logic, без реальной БД | 102 теста: change_password (13), encryption (26), normalization (16), smtp_transport (21), rate_limit (18), session_security (8) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 143 теста: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12) |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 

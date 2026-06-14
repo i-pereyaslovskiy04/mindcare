@@ -511,7 +511,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 
 > Подтверждаю наличие документированного основания для создания учётной записи и обработки персональных данных пользователя.
 
-Реализация: отдельная сущность `user_legal_basis_records` (миграция `b6e1f4a7c9d3`, модель `app/db/models/legal_basis.py`). Не использовать `consent_records` как суррогат legal basis для психологов, супервизоров и администраторов.
+Реализация: отдельная сущность `user_legal_basis_records` (миграция `b6e1f4a7c9d3`, модель `app/db/models/legal_basis.py`). Не использовать `consent_records` как суррогат legal basis для психологов, супервизоров и администраторов. Основание требуется и при создании staff (`POST /api/admin/users`), и при смене роли на staff (`PATCH /api/admin/users/{uuid}`, Stage 31f-fix): смена роли и запись основания атомарны; `staff → student` основания не требует.
 
 ---
 

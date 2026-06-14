@@ -23,9 +23,18 @@
   административное назначение, иное).
 
 Реализация:
-- `POST /api/admin/users` требует `legal_basis_confirmed=true` (иначе 422);
-  запись основания создаётся в одной транзакции с пользователем
+- self-registration студента → `consent_records` (личное согласие субъекта),
+  основание организации НЕ создаётся;
+- `POST /api/admin/users` (создание staff) требует `legal_basis_confirmed=true` (иначе 422);
+  запись `user_legal_basis_records` создаётся в одной транзакции с пользователем
   (basis_type, basis_reference, actor admin id, IP, user-agent)
+- `PATCH /api/admin/users/{uuid}` со сменой роли на staff (`psychologist`/`supervisor`/
+  `admin`, при `old_role != new_role`) тоже требует документированного основания:
+  `legal_basis_confirmed=true` + валидный `basis_type` + непустой `basis_reference`
+  (иначе роль не меняется; 400, либо 422 на невалидный basis_type); смена роли и запись
+  основания атомарны; `metadata` фиксирует `action="role_change"`, `old_role`, `new_role`;
+- переход `staff → student` основания не требует и старые `user_legal_basis_records` не удаляет;
+- админ НЕ создаёт consent от имени пользователя ни в create, ни в PATCH;
 - UI-формулировка: «Подтверждаю наличие документированного основания для
   создания учётной записи и обработки персональных данных пользователя»
 - `scripts/create_admin.py` пишет legal basis (`basis_type=bootstrap`)

@@ -89,9 +89,15 @@
   `touch_session` (теперь чаще no-op) + `find_user_by_id` отдельными
   транзакциями; объединение в одну сессию — отдельный этап
 - **`target_user_id` в auth_log** — см. 🔵-секцию (ADR-006)
-- **Legal basis при смене роли через `PATCH /api/admin/users`** — сейчас
-  фиксируется только в bootstrap-ветке `create_admin.py`; выдача staff-роли
-  через обычный PATCH запись не создаёт
+- **~~Legal basis при смене роли через `PATCH /api/admin/users`~~** ✅ Закрыто (Stage 31f-fix)
+  - PATCH смены роли на staff (`psychologist`/`supervisor`/`admin`, при `old_role != new_role`)
+    требует `legal_basis_confirmed=true`, валидный `basis_type` и непустой `basis_reference`
+    (иначе 400; невалидный `basis_type` → 422); роль не меняется, частичных записей нет;
+  - смена роли и создание `user_legal_basis_records` — атомарны (одна транзакция);
+  - `record_metadata` фиксирует `action="role_change"`, `old_role`, `new_role`;
+  - `staff → student` основания не требует и старые записи не удаляет; смена не-роли — не требует;
+  - тесты: `tests/integration/test_admin_role_patch_legal_basis.py` (12); backend full suite **245 passed**.
+    Без миграций (использовано существующее JSONB-поле `metadata`)
 - **UI просмотра legal basis records** в карточке пользователя админки
 - **Chat MVP** — one-to-one чат поверх `therapy_engagements` — **MVP завершён**:
   - ✅ Stage 28b: DB foundation — миграция `d8f3a6c1e9b4` (`chat_conversations`

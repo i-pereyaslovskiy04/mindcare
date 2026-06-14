@@ -307,6 +307,11 @@ mindcare_api/
    (документированное основание организации; чекбокс в UI формулируется как
    «Подтверждаю наличие документированного основания для создания учётной
    записи и обработки персональных данных пользователя»)
+✅ Смена роли на staff через PATCH /api/admin/users (old_role != new_role,
+   new_role ∈ psychologist/supervisor/admin) тоже требует legal basis
+   (legal_basis_confirmed + basis_type + basis_reference); смена роли и запись
+   user_legal_basis_records атомарны; metadata: action=role_change/old_role/new_role.
+   staff → student основания не требует и старые записи не удаляет (Stage 31f-fix)
 ✅ session_notes: psychologist — только свои; supervisor — content только поштучно
    и под audit (session_note_content_read); admin — metadata-only без decrypt
 ✅ Staff-чтение терапевтического content ОБЯЗАНО писать audit-событие (без plaintext)
