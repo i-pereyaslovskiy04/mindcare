@@ -120,6 +120,13 @@ export function usePsychologistChat() {
     if (selectedRef.current) loadMessages(selectedRef.current);
   }, [loadMessages]);
 
+  // Снять выбор беседы (mobile back к списку). Не трогает unread/mark-read:
+  // прочитанные при открытии сообщения остаются прочитанными.
+  const deselect = useCallback(() => {
+    selectedRef.current = null;
+    setSelectedUuid(null);
+  }, []);
+
   // Первичная загрузка списка. VK-like: НЕ выбираем диалог автоматически —
   // открытие (и mark-read) только по явному клику пользователя.
   useEffect(() => {
@@ -217,6 +224,7 @@ export function usePsychologistChat() {
     selected,
     selectedUuid,
     selectConversation,
+    deselect,
     messages,
     messagesLoading,
     messagesError,

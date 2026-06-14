@@ -24,6 +24,27 @@
   background: var(--warm-white);
 }
 
+/* back-arrow: только на узких экранах (mobile thread view) */
+.backBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: -6px;
+  border: none;
+  background: transparent;
+  color: var(--espresso);
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.backBtn:hover {
+  background: var(--sand);
+}
+
 .headerAvatar {
   width: 38px;
   height: 38px;
@@ -306,4 +327,11 @@
   opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* На узких экранах в thread view показываем back-arrow (см. ChatPage media query) */
+@media (max-width: 900px) {
+  .backBtn {
+    display: inline-flex;
+  }
 }

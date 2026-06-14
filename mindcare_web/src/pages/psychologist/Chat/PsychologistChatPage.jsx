@@ -39,6 +39,7 @@ export default function PsychologistChatPage() {
     selected,
     selectedUuid,
     selectConversation,
+    deselect,
     messages,
     messagesLoading,
     messagesError,
@@ -89,8 +90,16 @@ export default function PsychologistChatPage() {
     selectConversation(id);
   };
 
+  // mobile back к списку: снять выбор и обычного, и системного диалога.
+  const handleBack = () => {
+    setSystemSelected(false);
+    deselect();
+  };
+
   const closed = Boolean(selected) && selected.engagement_status !== 'active';
   const activeId = systemSelected ? SYSTEM_DIALOG_ID : selectedUuid;
+  // threadOpen = открыт любой диалог (обычный или системный) — для mobile list/thread.
+  const threadOpen = systemSelected || Boolean(selectedUuid);
 
   let body;
   if (listLoading) {
@@ -132,6 +141,7 @@ export default function PsychologistChatPage() {
             readOnly
             readOnlyNotice={SYSTEM_NOTICE}
             emptyText="Пока нет системных уведомлений."
+            onBack={handleBack}
           />
         );
       }
@@ -165,12 +175,13 @@ export default function PsychologistChatPage() {
           closed={closed}
           sending={sending}
           sendError={sendError}
+          onBack={handleBack}
         />
       );
     }
 
     body = (
-      <div className={styles.shell}>
+      <div className={`${styles.shell} ${threadOpen ? styles.threadOpen : ''}`}>
         <ChatSidebar contacts={contacts} activeId={activeId} onSelect={handleSelect} />
         {pane}
       </div>
@@ -182,10 +193,6 @@ export default function PsychologistChatPage() {
       <h1 className={styles.pageTitle}>
         <em>Сообщения</em>
       </h1>
-      <p className={styles.pageSub}>
-        Переписка со студентами по активным консультационным связям и системные
-        уведомления. История закрытых диалогов доступна только для чтения.
-      </p>
 
       {body}
     </div>

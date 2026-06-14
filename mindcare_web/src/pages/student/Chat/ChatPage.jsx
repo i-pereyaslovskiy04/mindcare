@@ -125,6 +125,7 @@ export default function ChatPage() {
             readOnly
             readOnlyNotice={SYSTEM_NOTICE}
             emptyText="Пока нет системных уведомлений."
+            onBack={() => setSelected(null)}
           />
         );
       }
@@ -153,6 +154,7 @@ export default function ChatPage() {
             closed={engClosed}
             sending={sending}
             sendError={sendError}
+            onBack={() => setSelected(null)}
           />
         );
       }
@@ -166,8 +168,11 @@ export default function ChatPage() {
       );
     }
 
+    // На узких экранах shell работает как Telegram/VK: список ИЛИ открытый чат.
+    // threadOpen = выбран любой диалог (engagement или системный).
+    const threadOpen = selected !== null;
     body = (
-      <div className={styles.shell}>
+      <div className={`${styles.shell} ${threadOpen ? styles.threadOpen : ''}`}>
         <ChatSidebar contacts={contacts} activeId={selected} onSelect={setSelected} />
         {pane}
       </div>
@@ -179,10 +184,6 @@ export default function ChatPage() {
       <h1 className={styles.pageTitle}>
         <em>Сообщения</em>
       </h1>
-      <p className={styles.pageSub}>
-        Связь с психологом между сессиями и системные уведомления. Для срочной помощи —
-        телефон доверия в настройках.
-      </p>
 
       {body}
     </div>

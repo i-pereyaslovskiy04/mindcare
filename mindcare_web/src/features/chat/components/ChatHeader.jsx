@@ -1,12 +1,22 @@
 import Icon from '../../../components/Icon/Icon';
 import styles from './ChatWindow.module.css';
 
-export default function ChatHeader({ contact }) {
+export default function ChatHeader({ contact, onBack = null }) {
   // presence показываем только у обычных диалогов (у system-беседы его нет).
   const showPresence = !contact.system && typeof contact.online === 'boolean';
 
   return (
     <div className={styles.header}>
+      {onBack && (
+        <button
+          type="button"
+          className={styles.backBtn}
+          onClick={onBack}
+          aria-label="Назад к списку диалогов"
+        >
+          <Icon name="chevron-left" size={20} />
+        </button>
+      )}
       <div className={`${styles.headerAvatar} ${contact.system ? styles.headerAvatarSystem : ''}`}>
         {contact.system ? <Icon name="bell" size={18} /> : contact.initials}
       </div>
