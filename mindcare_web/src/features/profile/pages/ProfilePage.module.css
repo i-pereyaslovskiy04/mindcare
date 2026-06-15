@@ -48,32 +48,3 @@
   font-size: 14px;
   color: var(--text-muted);
 }
-
-.badge {
-  padding: 4px 14px;
-  border-radius: 20px;
-  background: var(--cream);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  border: 1px solid var(--nav-border);
-}
-
-.logoutBtn {
-  margin-top: 16px;
-  padding: 10px 28px;
-  border-radius: 10px;
-  border: 1px solid rgba(185, 64, 64, 0.3);
-  background: transparent;
-  color: var(--error);
-  font-size: 14px;
-  font-family: inherit;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.logoutBtn:hover {
-  background: var(--error-bg);
-}

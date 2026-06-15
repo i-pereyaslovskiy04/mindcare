@@ -1,92 +1,191 @@
-import { useState, useCallback } from 'react';
-import ChatSidebar from './components/ChatSidebar';
-import ChatWindow from './components/ChatWindow';
+import { useEffect, useState } from 'react';
+import Button from '../../../components/UI/Button/Button';
+import ChatSidebar from '../../../features/chat/components/ChatSidebar';
+import ChatWindow from '../../../features/chat/components/ChatWindow';
+import { useSystemConversation } from '../../../features/chat/hooks/useSystemConversation';
+import {
+  SYSTEM_DIALOG_ID,
+  SYSTEM_NOTICE,
+  formatLastTime,
+  initialsOf,
+  systemContact,
+} from '../../../features/chat/lib/conversationView';
+import { useStudentChat } from './useStudentChat';
 import styles from './ChatPage.module.css';
 
-const CONTACTS = [
-  {
-    id: 1,
-    name: 'Мария Ковалёва',
-    initials: 'МК',
-    role: 'Клинический психолог',
-    lastMsg: 'Это хороший прогресс. Давайте…',
-    time: '09:31',
-    unread: 1,
-    online: true,
-  },
-  {
-    id: 2,
-    name: 'Поддержка ДонГУ',
-    initials: 'ПС',
-    role: 'Техническая поддержка',
-    lastMsg: 'Документы отправлены',
-    time: 'вчера',
-    unread: 0,
-    online: false,
-  },
-  {
-    id: 3,
-    name: 'Группа «Спокойствие»',
-    initials: 'ГС',
-    role: 'Групповой чат',
-    lastMsg: '5 сообщений',
-    time: 'пн',
-    unread: 0,
-    online: false,
-  },
-];
-
-const INITIAL_MESSAGES = {
-  1: [
-    { id: 1, text: 'Доброе утро, Анна. Как прошёл вечер?', sender: 'psychologist', time: '09:14' },
-    { id: 2, text: 'Спасибо, лучше, чем боялась. Сделала упражнение на дыхание перед сном.', sender: 'me', time: '09:22' },
-    { id: 3, text: 'Замечательно. А сон — был спокойнее?', sender: 'psychologist', time: '09:24' },
-    { id: 4, text: 'Проснулась один раз, но быстро уснула обратно.', sender: 'me', time: '09:26' },
-    { id: 5, text: 'Это хороший прогресс. Давайте на сессии в пятницу посмотрим, что именно помогло.', sender: 'psychologist', time: '09:31' },
-  ],
-  2: [
-    { id: 1, text: 'Ваши документы были успешно отправлены. Ожидайте ответа в течение 2 рабочих дней.', sender: 'psychologist', time: 'вчера' },
-  ],
-  3: [
-    { id: 1, text: 'Добро пожаловать в группу поддержки «Спокойствие»! Здесь вы можете делиться переживаниями.', sender: 'psychologist', time: 'пн' },
-  ],
-};
+const SYSTEM_META_POLL_MS = 30000;
+const MSG_POLL_MS = 8000;
 
 export default function ChatPage() {
-  const [activeId, setActiveId] = useState(1);
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const {
+    conversation: engConv,
+    messages: engMessages,
+    metaLoading: engMetaLoading,
+    metaError: engMetaError,
+    messagesLoading: engMsgLoading,
+    messagesError: engMsgError,
+    sending,
+    sendError,
+    refreshMeta: engRefreshMeta,
+    open: engOpen,
+    close: engClose,
+    pollNew: engPollNew,
+    send,
+  } = useStudentChat();
 
-  const handleSend = useCallback(
-    (text) => {
-      const now = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-      const newMsg = { id: Date.now(), text, sender: 'me', time: now };
-      setMessages((prev) => ({
-        ...prev,
-        [activeId]: [...(prev[activeId] ?? []), newMsg],
-      }));
-    },
-    [activeId],
-  );
+  const {
+    conversation: sysConv,
+    messages: sysMessages,
+    loading: sysLoading,
+    error: sysError,
+    refreshMeta: sysRefreshMeta,
+    open: sysOpen,
+    close: sysClose,
+    pollNew: sysPollNew,
+  } = useSystemConversation();
 
-  const activeContact = CONTACTS.find((c) => c.id === activeId);
+  // VK-like: при входе ничего не выбрано и ничего не открыто (нет авто-mark-read).
+  const [selected, setSelected] = useState(null);
+
+  const engUuid = engConv?.uuid ?? null;
+  const engActive = engConv?.engagement_status === 'active';
+  const engClosed = Boolean(engConv) && !engActive;
+
+  // Лёгкий poll метаданных системной беседы (unread в списке) независимо от выбора.
+  useEffect(() => {
+    sysRefreshMeta();
+    const t = setInterval(sysRefreshMeta, SYSTEM_META_POLL_MS);
+    return () => clearInterval(t);
+  }, [sysRefreshMeta]);
+
+  // Открытие диалога с психологом — ТОЛЬКО по явному выбору (mark-read внутри open).
+  useEffect(() => {
+    if (!engUuid || selected !== engUuid) return undefined;
+    engOpen();
+    const t = engActive ? setInterval(engPollNew, MSG_POLL_MS) : null;
+    return () => {
+      if (t) clearInterval(t);
+      engClose();
+    };
+  }, [selected, engUuid, engActive, engOpen, engClose, engPollNew]);
+
+  // Открытие системной беседы — ТОЛЬКО по явному выбору.
+  useEffect(() => {
+    if (selected !== SYSTEM_DIALOG_ID) return undefined;
+    sysOpen();
+    const t = setInterval(sysPollNew, MSG_POLL_MS);
+    return () => {
+      clearInterval(t);
+      sysClose();
+    };
+  }, [selected, sysOpen, sysPollNew, sysClose]);
+
+  let body;
+  if (engMetaLoading) {
+    body = (
+      <div className={styles.stateBox}>
+        <p className={styles.stateText}>Загрузка диалогов…</p>
+      </div>
+    );
+  } else if (engMetaError) {
+    body = (
+      <div className={styles.stateBox}>
+        <p className={styles.stateText}>{engMetaError}</p>
+        <Button onClick={engRefreshMeta}>Повторить</Button>
+      </div>
+    );
+  } else {
+    // Диалог с психологом первым, «Системные уведомления» — всегда последними.
+    const contacts = [];
+    if (engConv) {
+      contacts.push({
+        id: engConv.uuid,
+        name: engConv.partner.full_name,
+        initials: initialsOf(engConv.partner.full_name),
+        role: engClosed ? 'Диалог закрыт' : 'Психолог',
+        lastMsg: engClosed ? 'История доступна для чтения' : 'Ваш психолог',
+        time: formatLastTime(engConv.last_message_at),
+        unread: engConv.unread_count || 0,
+        online: Boolean(engConv.peer_is_online),
+      });
+    }
+    contacts.push(systemContact(sysConv));
+
+    let pane;
+    if (selected === SYSTEM_DIALOG_ID) {
+      if (sysError) {
+        pane = <div className={styles.paneState}><p className={styles.stateText}>{sysError}</p></div>;
+      } else if (sysLoading && sysMessages.length === 0) {
+        pane = <div className={styles.paneState}><p className={styles.stateText}>Загрузка уведомлений…</p></div>;
+      } else {
+        pane = (
+          <ChatWindow
+            contact={systemContact(sysConv)}
+            messages={sysMessages}
+            readOnly
+            readOnlyNotice={SYSTEM_NOTICE}
+            emptyText="Пока нет системных уведомлений."
+            onBack={() => setSelected(null)}
+          />
+        );
+      }
+    } else if (selected === engUuid && engConv) {
+      if (engMsgError) {
+        pane = (
+          <div className={styles.paneState}>
+            <p className={styles.stateText}>{engMsgError}</p>
+            <Button onClick={engOpen}>Повторить</Button>
+          </div>
+        );
+      } else if (engMsgLoading && engMessages.length === 0) {
+        pane = <div className={styles.paneState}><p className={styles.stateText}>Загрузка сообщений…</p></div>;
+      } else {
+        pane = (
+          <ChatWindow
+            contact={{
+              id: engConv.uuid,
+              name: engConv.partner.full_name,
+              initials: initialsOf(engConv.partner.full_name),
+              role: engClosed ? 'Диалог закрыт' : 'Психолог',
+              online: Boolean(engConv.peer_is_online),
+            }}
+            messages={engMessages}
+            onSend={send}
+            closed={engClosed}
+            sending={sending}
+            sendError={sendError}
+            onBack={() => setSelected(null)}
+          />
+        );
+      }
+    } else {
+      // Ничего не выбрано — нейтральный placeholder (VK-like), без mark-read.
+      pane = (
+        <div className={styles.paneState}>
+          <p className={styles.stateTitle}>Выберите диалог, чтобы открыть переписку.</p>
+          <p className={styles.stateText}>Непрочитанные диалоги отмечены в списке слева.</p>
+        </div>
+      );
+    }
+
+    // На узких экранах shell работает как Telegram/VK: список ИЛИ открытый чат.
+    // threadOpen = выбран любой диалог (engagement или системный).
+    const threadOpen = selected !== null;
+    body = (
+      <div className={`${styles.shell} ${threadOpen ? styles.threadOpen : ''}`}>
+        <ChatSidebar contacts={contacts} activeId={selected} onSelect={setSelected} />
+        {pane}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>
       <h1 className={styles.pageTitle}>
-        Чат с <em>психологом</em>
+        <em>Сообщения</em>
       </h1>
-      <p className={styles.pageSub}>
-        Связь между сессиями. Отвечаем в течение рабочего дня. Для срочной помощи — телефон доверия в настройках.
-      </p>
 
-      <div className={styles.shell}>
-        <ChatSidebar contacts={CONTACTS} activeId={activeId} onSelect={setActiveId} />
-        <ChatWindow
-          contact={activeContact}
-          messages={messages[activeId] ?? []}
-          onSend={handleSend}
-        />
-      </div>
+      {body}
     </div>
   );
 }

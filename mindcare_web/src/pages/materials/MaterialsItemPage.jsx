@@ -5,6 +5,7 @@ import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 import { getArticleById } from '../../api/articles.api';
+import Tag from '../../components/UI/Tag/Tag';
 import styles from './MaterialsItemPage.module.css';
 
 const HeroPlaceholder = () => (
@@ -85,7 +86,7 @@ export default function MaterialsItemPage() {
           {!loading && item && (
             <article className={styles.article}>
               <header className={styles.header}>
-                {categoryLabel && <span className={styles.tag}>{categoryLabel}</span>}
+                {categoryLabel && <Tag variant="public" className={styles.tagItem}>{categoryLabel}</Tag>}
                 <h1 className={styles.title}>{item.title}</h1>
                 <div className={styles.meta}>
                   {dateLabel && <span>{dateLabel}</span>}

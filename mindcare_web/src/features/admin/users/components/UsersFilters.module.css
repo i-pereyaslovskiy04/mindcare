@@ -27,21 +27,3 @@
   color: var(--text-light);
 }
 
-
-.checkboxLabel {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-muted);
-  cursor: pointer;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.checkboxLabel input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
-  accent-color: var(--coffee);
-}

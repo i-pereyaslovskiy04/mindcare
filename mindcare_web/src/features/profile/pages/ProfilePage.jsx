@@ -1,4 +1,6 @@
 import { useAuth, useLogout } from '../../auth/AuthContext';
+import Badge from '../../../components/UI/Badge/Badge';
+import Button from '../../../components/UI/Button/Button';
 import styles from './ProfilePage.module.css';
 
 const ROLE_LABELS = {
@@ -6,6 +8,13 @@ const ROLE_LABELS = {
   psychologist: 'Психолог',
   admin:        'Администратор',
   supervisor:   'Супервизор',
+};
+
+const ROLE_BADGE_TONE = {
+  student:      'role-student',
+  psychologist: 'role-psychologist',
+  admin:        'role-admin',
+  supervisor:   'role-supervisor',
 };
 
 export default function ProfilePage() {
@@ -24,13 +33,13 @@ export default function ProfilePage() {
         <h1 className={styles.name}>{user.name}</h1>
         <p className={styles.email}>{user.email}</p>
 
-        <div className={styles.badge}>
+        <Badge tone={ROLE_BADGE_TONE[user.role] ?? 'neutral'}>
           {ROLE_LABELS[user.role] ?? user.role}
-        </div>
+        </Badge>
 
-        <button type="button" className={styles.logoutBtn} onClick={logout}>
+        <Button type="button" variant="danger" onClick={logout}>
           Выйти из системы
-        </button>
+        </Button>
       </div>
     </div>
   );

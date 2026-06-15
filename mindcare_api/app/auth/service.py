@@ -9,8 +9,13 @@ from typing import Optional
 
 import bcrypt
 from app.auth import storage
+from app.core.normalization import mask_email
 
 log = logging.getLogger(__name__)
+
+# Стабильное сообщение клиенту при сбое доставки письма: не раскрывает
+# SMTP host/user/stack/internal exception. Детали — только в server-side логах.
+_EMAIL_SEND_FAILED_MESSAGE = "Не удалось отправить письмо. Попробуйте позже."
 
 
 def _hash(password: str) -> str:
@@ -37,11 +42,11 @@ REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
 def register_init(name: str, email: str, password: str) -> None:
     """Валидация данных -> OTP в БД -> отправка письма."""
     if not name or len(name.strip()) < 2:
-        raise AuthError("Name must be at least 2 characters", 422)
+        raise AuthError("Имя должно содержать не менее 2 символов", 422)
     if len(password) < 8:
-        raise AuthError("Password must be at least 8 characters", 422)
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
     if storage.find_user_by_email(email):
-        raise AuthError("Email already registered", 409)
+        raise AuthError("Email уже зарегистрирован", 409)
 
     from app.auth import otp_service
     from app.services.email_service import send_registration_otp
@@ -54,14 +59,14 @@ def register_init(name: str, email: str, password: str) -> None:
     except ValueError as e:
         raise AuthError(str(e), 429)
 
-    log.info("[register_init] sending OTP to %s", email)
+    log.info("[register_init] sending OTP to %s", mask_email(email))
     try:
         send_registration_otp(email, code)
-    except Exception as e:
-        log.exception("[register_init] failed to send email to %s", email)
-        raise AuthError(
-            f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
+    except Exception:
+        log.exception(
+            "[register_init] failed to send email to %s", mask_email(email)
         )
+        raise AuthError(_EMAIL_SEND_FAILED_MESSAGE, 500)
 
 
 def register_confirm(
@@ -70,43 +75,38 @@ def register_confirm(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
-    """Проверяет OTP, создаёт/реактивирует пользователя, записывает согласия."""
-    from app.auth import otp_service
+    """
+    Подтверждает регистрацию атомарно (Stage 31m-fix-b2).
 
+    OTP-валидация, создание/реактивация пользователя, роль student, обязательные
+    consent_records и потребление OTP выполняются как одна core DB-транзакция
+    в storage.register_confirm_atomic — без частичных состояний. SMTP здесь не
+    участвует (письмо ушло на init-шаге). Welcome-уведомление — soft-fail и
+    выполняется уже ПОСЛЕ успешного commit (его сбой не откатывает регистрацию).
+    """
     try:
-        user_data = otp_service.verify_otp(email, code)
-    except ValueError as e:
-        raise AuthError(str(e), 400)
-
-    consent_ids = {}
-    for policy_type in REQUIRED_CONSENTS:
-        cid = storage.get_active_consent_id(policy_type)
-        if cid is None:
-            raise AuthError(
-                f"Политика '{policy_type}' не найдена в БД."
-                " Обратитесь к администратору.",
-                500,
-            )
-        consent_ids[policy_type] = cid
-
-    user = storage.reactivate_user(
-        email, user_data["name"], user_data["password_hash"]
-    )
-    if user is None:
-        user = storage.save_user({
-            "name":            user_data["name"],
-            "email":           email,
-            "hashed_password": user_data["password_hash"],
-            "role":            "student",
-        })
-
-    for cid in consent_ids.values():
-        storage.save_consent_record(
-            user_id=int(user["id"]),
-            consent_id=cid,
+        user = storage.register_confirm_atomic(
+            email=email,
+            code=code,
+            required_consent_types=REQUIRED_CONSENTS,
             ip=ip,
             user_agent=user_agent,
         )
+    except storage.RegistrationDataError as e:
+        # Отсутствует роль/consent-политика — проблема seed/reference data.
+        raise AuthError(str(e), 500)
+    except ValueError as e:
+        raise AuthError(str(e), 400)
+
+    # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
+    # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
+    # не должен ломать регистрацию.
+    from app.chat.system_publisher import publish_system_message
+    publish_system_message(
+        recipient_id=int(user["id"]),
+        event_key=f"welcome:user:{user['id']}",
+        text="Добро пожаловать в MindCare.",
+    )
 
     return user
 
@@ -118,7 +118,7 @@ def register_confirm(
 def authenticate_user(email: str, password: str) -> dict:
     user = storage.find_user_by_email(email)
     if not user or not _verify(password, user["hashed_password"]):
-        raise AuthError("Invalid email or password", 401)
+        raise AuthError("Неверный email или пароль", 401)
     storage.update_last_login(user["id"])
     return user
 
@@ -147,33 +147,39 @@ def password_reset_init(email: str) -> None:
 
     try:
         send_password_reset_otp(email, code)
-    except Exception as e:
-        log.exception("[password_reset_init] failed to send email to %s", email)
-        raise AuthError(
-            f"Не удалось отправить письмо: {type(e).__name__}: {e}", 500
+    except Exception:
+        log.exception(
+            "[password_reset_init] failed to send email to %s", mask_email(email)
         )
+        raise AuthError(_EMAIL_SEND_FAILED_MESSAGE, 500)
 
 
 def password_reset_confirm(
     email: str, code: str, new_password: str
 ) -> None:
-    """Проверяет OTP, обновляет пароль, отзывает все сессии пользователя."""
+    """
+    Подтверждает сброс пароля атомарно (Stage 31m-fix-b3).
+
+    Валидация OTP, обновление password_hash, отзыв всех сессий пользователя и
+    потребление OTP выполняются как одна core DB-транзакция в
+    storage.password_reset_confirm_atomic — без частичных состояний. Хеш нового
+    пароля считается ДО открытия транзакции (bcrypt медленный). Если OTP верный,
+    но любой следующий шаг падает, всё откатывается и OTP не теряется.
+    """
     if len(new_password) < 8:
-        raise AuthError("Password must be at least 8 characters", 422)
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
 
-    from app.auth import otp_service
-
+    new_password_hash = _hash(new_password)
     try:
-        otp_service.verify_otp(email, code)
+        storage.password_reset_confirm_atomic(
+            email=email,
+            code=code,
+            new_password_hash=new_password_hash,
+        )
+    except storage.UserNotFoundError:
+        raise AuthError("Пользователь не найден", 404)
     except ValueError as e:
         raise AuthError(str(e), 400)
-
-    user = storage.find_user_by_email(email)
-    if not user:
-        raise AuthError("Пользователь не найден", 404)
-
-    storage.update_user_password(user["id"], _hash(new_password))
-    storage.revoke_all_user_sessions(user["id"])
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +193,52 @@ def create_session(
 ) -> tuple[str, datetime]:
     """Создаёт сессию, возвращает (session_token, expires_at)."""
     return storage.create_session(user_id, ip=ip, user_agent=user_agent)
+
+
+def change_password(
+    user_id: str,
+    current_password: str,
+    new_password: str,
+    new_password_confirm: str,
+) -> None:
+    """
+    Меняет пароль авторизованного пользователя атомарно (Stage 31m-fix-b3).
+
+    Поиск пользователя, проверка текущего пароля, обновление password_hash и
+    отзыв ВСЕХ сессий выполняются как одна core DB-транзакция в
+    storage.change_password_atomic — без частичных состояний (сбой на отзыве
+    сессий откатывает и смену пароля). Хеш нового пароля считается ДО открытия
+    транзакции (bcrypt медленный); проверка текущего пароля — внутри транзакции
+    через callback. System-уведомление — soft-fail ПОСЛЕ успешного commit.
+    """
+    if new_password != new_password_confirm:
+        raise AuthError("Новый пароль и подтверждение не совпадают", 422)
+    if len(new_password) < 8:
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
+
+    new_password_hash = _hash(new_password)
+    try:
+        user = storage.change_password_atomic(
+            user_id=user_id,
+            verify_current=lambda stored_hash: _verify(current_password, stored_hash),
+            new_password_hash=new_password_hash,
+        )
+    except storage.UserNotFoundError:
+        raise AuthError("Пользователь не найден", 404)
+    except storage.InvalidCurrentPasswordError:
+        raise AuthError("Неверный текущий пароль", 400)
+
+    # System-уведомление (soft-fail, content не логируется). Вне core-транзакции:
+    # пароль уже изменён и сессии отозваны, сбой уведомления это не откатывает.
+    # Timestamp в event_key — чтобы каждая смена пароля давала отдельное сообщение.
+    from datetime import datetime, timezone
+    from app.chat.system_publisher import publish_system_message
+    _ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    publish_system_message(
+        recipient_id=int(user["id"]),
+        event_key=f"password_changed:user:{user['id']}:{_ts}",
+        text="Пароль вашей учётной записи был изменён.",
+    )
 
 
 def terminate_session(token: str) -> None:

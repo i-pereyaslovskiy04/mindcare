@@ -13,9 +13,8 @@ mindcare_web/
 ├── package.json               proxy → http://localhost:8000
 └── src/
     ├── index.js               DOM entry point
-    ├── App.test.js
     ├── reportWebVitals.js
-    ├── setupTests.js
+    ├── setupTests.js          ← jest-dom matchers (CRA stale App.test.js removed)
     │
     ├── app/                   ← shell: providers + routing
     │   ├── App.jsx
@@ -148,10 +147,23 @@ mindcare_web/
     │   ├── CookieBanner/
     │   │   ├── CookieBanner.jsx
     │   │   └── CookieBanner.module.css
-    │   ├── UI/
+    │   ├── UI/                    ← shared UI primitives (see docs/UI_COMPONENTS_GUIDE.md)
+    │   │   ├── Button/
+    │   │   │   ├── Button.jsx + .module.css
+    │   │   │   └── ButtonLink.jsx     ← router <Link> styled as Button
+    │   │   ├── Badge/
+    │   │   ├── Checkbox/
+    │   │   ├── FilterChip/
+    │   │   ├── Select/
     │   │   ├── MultiSelect/
     │   │   │   ├── MultiSelect.jsx
     │   │   │   └── multiSelect.module.css
+    │   │   ├── DateInput/             ← date-only picker (custom popover, no native datetime-local)
+    │   │   │   ├── DateInput.jsx + .module.css
+    │   │   │   ├── dateHelpers.js     ← isoToDateOnly / dateOnlyToPublishedAtIso
+    │   │   │   └── popoverPosition.js ← computePopoverPosition (flip up/down + viewport clamp)
+    │   │   ├── Tag/
+    │   │   ├── Toggle/
     │   │   ├── TiptapEditor/
     │   │   │   └── TiptapEditor.jsx + .module.css
     │   │   ├── ImageUpload/

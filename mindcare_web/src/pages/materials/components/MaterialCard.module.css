@@ -48,38 +48,6 @@
   gap: 10px;
 }
 
-/* ── Tag chip ───────────────────────────── */
-
-.tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--fs-tag);
-  font-weight: 600;
-  letter-spacing: var(--ls-tag);
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--latte);
-  background: var(--sand);
-  color: var(--coffee);
-  line-height: 1;
-  white-space: nowrap;
-  align-self: flex-start;
-}
-
-/* All topic variants unified to brand palette */
-.tagAnxiety,
-.tagStress,
-.tagSleep,
-.tagRelations,
-.tagSelfEsteem,
-.tagEmotions {
-  background: var(--sand);
-  color: var(--coffee);
-  border-color: var(--latte);
-}
-
 /* ── Content ────────────────────────────── */
 
 .title {

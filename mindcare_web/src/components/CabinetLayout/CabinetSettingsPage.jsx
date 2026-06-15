@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { useAuth, useLogout } from '../../features/auth/AuthContext';
-import Icon from '../Icon/Icon';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../features/auth/AuthContext';
 import Button from '../UI/Button/Button';
+import Toggle from '../UI/Toggle/Toggle';
 import { getInitials } from '../../shared/lib/utils';
 import Select from '../UI/Select/Select';
+import * as authApi from '../../api/auth.api';
 import styles from './CabinetSettingsPage.module.css';
 
 const ROLE_LABELS = {
@@ -17,17 +19,6 @@ const TIMEZONE_OPTIONS = [
   { value: 'nsk', label: 'Новосибирск (UTC+7)' },
 ];
 
-function Toggle({ on, onToggle }) {
-  return (
-    <button
-      type="button"
-      className={`${styles.toggle} ${on ? styles.toggleOn : ''}`}
-      onClick={onToggle}
-      aria-pressed={on}
-    />
-  );
-}
-
 function NotifRow({ label, desc, on, onToggle }) {
   return (
     <div className={styles.notifRow}>
@@ -35,14 +26,42 @@ function NotifRow({ label, desc, on, onToggle }) {
         <div className={styles.notifLabel}>{label}</div>
         <div className={styles.notifDesc}>{desc}</div>
       </div>
-      <Toggle on={on} onToggle={onToggle} />
+      <Toggle checked={on} onChange={onToggle} label={label} />
     </div>
   );
 }
 
 export default function CabinetSettingsPage() {
-  const { user } = useAuth();
-  const logout   = useLogout();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [pwForm, setPwForm] = useState({
+    current_password: '',
+    new_password: '',
+    new_password_confirm: '',
+  });
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    setPwError('');
+    setPwSuccess(false);
+    setPwLoading(true);
+    try {
+      await authApi.changePassword(pwForm);
+      setPwSuccess(true);
+      setTimeout(async () => {
+        navigate('/', { replace: true, state: { openAuth: 'login', message: 'Пароль изменён. Войдите снова.' } });
+        await logout();
+      }, 1500);
+    } catch (err) {
+      setPwError(err.message || 'Ошибка смены пароля');
+    } finally {
+      setPwLoading(false);
+    }
+  }
 
   const [timezone, setTimezone] = useState('msk');
 
@@ -113,9 +132,63 @@ export default function CabinetSettingsPage() {
               Сохранить изменения
             </Button>
           </div>
+
+          {/* Security */}
+          <div className={styles.card}>
+            <h2 className={styles.sectionTitle}>Безопасность</h2>
+            <form onSubmit={handleChangePassword}>
+              <div className={styles.field}>
+                <label>Текущий пароль</label>
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={pwForm.current_password}
+                  onChange={(e) => setPwForm(f => ({ ...f, current_password: e.target.value }))}
+                  required
+                  disabled={pwLoading || pwSuccess}
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className={styles.field}>
+                <label>Новый пароль</label>
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={pwForm.new_password}
+                  onChange={(e) => setPwForm(f => ({ ...f, new_password: e.target.value }))}
+                  required
+                  disabled={pwLoading || pwSuccess}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className={styles.field}>
+                <label>Подтверждение нового пароля</label>
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={pwForm.new_password_confirm}
+                  onChange={(e) => setPwForm(f => ({ ...f, new_password_confirm: e.target.value }))}
+                  required
+                  disabled={pwLoading || pwSuccess}
+                  autoComplete="new-password"
+                />
+              </div>
+              {pwError && <div className={styles.formError}>{pwError}</div>}
+              {pwSuccess && <div className={styles.formSuccess}>Пароль изменён. Войдите снова.</div>}
+              <Button
+                type="submit"
+                variant="primary"
+                style={{ marginTop: 6 }}
+                loading={pwLoading}
+                disabled={pwSuccess}
+              >
+                Изменить пароль
+              </Button>
+            </form>
+          </div>
         </div>
 
-        {/* RIGHT — Notifications + Logout */}
+        {/* RIGHT — Notifications */}
         <div className={styles.rightCol}>
           <div className={styles.card}>
             <h2 className={styles.sectionTitle} style={{ marginBottom: 14 }}>Уведомления</h2>
@@ -139,15 +212,6 @@ export default function CabinetSettingsPage() {
             />
           </div>
 
-          <div className={`${styles.card} ${styles.logoutCard}`}>
-            <div>
-              <div className={styles.logoutLabel}>Выйти из аккаунта</div>
-              <div className={styles.logoutSub}>Сессия будет завершена на этом устройстве</div>
-            </div>
-            <Button variant="ghost" onClick={logout}>
-              <Icon name="logout" size={14} /> Выйти
-            </Button>
-          </div>
         </div>
       </div>
     </div>

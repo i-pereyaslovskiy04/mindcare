@@ -65,17 +65,6 @@
   font-size: 13.5px;
 }
 
-.tagBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  background: var(--milk);
-  color: var(--espresso);
-}
-
 .count {
   text-align: center;
   color: var(--text-muted);

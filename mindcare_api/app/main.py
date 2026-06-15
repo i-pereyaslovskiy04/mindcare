@@ -30,6 +30,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.core.config import settings
+
 # Принудительно задаём кодировку клиента PostgreSQL до любых импортов SQLAlchemy.
 # На Windows с русской локалью (cp1251) psycopg2 иначе падает с UnicodeDecodeError
 # при первом обращении к БД (PostgreSQL возвращает ошибки на русском в cp1251).
@@ -56,6 +58,11 @@ async def lifespan(_app: FastAPI):
     """
     # ── Startup ───────────────────────────────────────────────────────────────
     log.info("MindCare API starting up...")
+
+    # Fail-fast: без валидного DATA_ENCRYPTION_KEY chat/session_notes сломались бы
+    # только при первом encrypted read/write. Проверяем до обработки запросов.
+    from app.core.encryption import assert_encryption_ready
+    assert_encryption_ready()
 
     from app.db.init_db import init_db
     init_db()                   # ensure_database + check_migrations + seed
@@ -84,9 +91,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_allowed_origins = [
+    origin.strip()
+    for origin in settings.ALLOWED_ORIGINS.split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,6 +125,9 @@ from app.articles.routes_public import router as public_articles_router  # noqa:
 from app.categories.routes_admin import router as admin_categories_router  # noqa: E402
 from app.supervisor.routes import router as supervisor_router              # noqa: E402
 from app.psychologist.routes import router as psychologist_router          # noqa: E402
+from app.session_notes.routes import router as session_notes_router        # noqa: E402
+from app.chat.routes import router as chat_router                          # noqa: E402
+from app.chat.routes import system_router as chat_system_router            # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
@@ -125,6 +141,9 @@ app.include_router(public_articles_router,    prefix="/api")
 app.include_router(admin_categories_router,   prefix="/api")
 app.include_router(supervisor_router,         prefix="/api")
 app.include_router(psychologist_router,       prefix="/api")
+app.include_router(session_notes_router,      prefix="/api")
+app.include_router(chat_router,               prefix="/api")
+app.include_router(chat_system_router,        prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────
@@ -149,7 +168,6 @@ def public_config():
     Публичная конфигурация для фронтенда (без авторизации).
     Позволяет избежать дублирования ENV-переменных между backend и frontend.
     """
-    from app.core.config import settings
     return {
         "newsImageMaxSizeMb": settings.NEWS_IMAGE_MAX_SIZE_MB,
     }

@@ -48,6 +48,7 @@ export default function DiaryEntryForm({ onSave }) {
             <button
               key={em}
               type="button"
+              aria-pressed={selected.includes(em)}
               className={selected.includes(em) ? styles.chipActive : styles.chip}
               onClick={() => toggleEmotion(em)}
             >

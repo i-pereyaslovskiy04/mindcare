@@ -1,4 +1,6 @@
 import Icon from '../../../components/Icon/Icon';
+import Badge from '../../../components/UI/Badge/Badge';
+import Button from '../../../components/UI/Button/Button';
 import styles from './TestsPage.module.css';
 
 const RESULTS = [
@@ -60,9 +62,9 @@ export default function TestsPage() {
             GAD-7, PHQ-9, PSS-10, ISI и другие — подобранные специалистами.
           </div>
         </div>
-        <button className={`${styles.btn} ${styles.btnPrimary}`}>
+        <Button variant="primary">
           Все тесты <Icon name="arrow-right" size={14} />
-        </button>
+        </Button>
       </div>
 
       <h2 className={styles.hSection} style={{ marginBottom: 14 }}>
@@ -78,7 +80,7 @@ export default function TestsPage() {
                 <div className={styles.labelTag}>{r.name}</div>
                 <h3 className={styles.hCard}>{r.full}</h3>
               </div>
-              <span className={`${styles.badge} ${styles.badgeDone}`}>пройден</span>
+              <Badge tone="success">пройден</Badge>
             </div>
             <div className={styles.testDateRow}>
               <div className={styles.testDate}>{r.date}</div>
@@ -88,9 +90,9 @@ export default function TestsPage() {
               <div className={styles.pbarFill} style={{ width: `${r.pct}%` }} />
             </div>
             <p className={styles.testSummary}>{r.summary}</p>
-            <button className={`${styles.btn} ${styles.btnSoft}`}>
+            <Button variant="secondary" style={{ width: '100%' }}>
               Смотреть результат
-            </button>
+            </Button>
           </div>
         ))}
       </div>

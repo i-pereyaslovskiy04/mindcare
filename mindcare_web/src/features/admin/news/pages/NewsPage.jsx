@@ -97,9 +97,9 @@ export default function NewsPage() {
 
       {pageCount > 1 && (
         <div className={styles.pagination}>
-          <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
+          <Button type="button" variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</Button>
           <span>{page} / {pageCount}</span>
-          <button disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}>›</button>
+          <Button type="button" variant="secondary" size="sm" disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}>›</Button>
         </div>
       )}
 

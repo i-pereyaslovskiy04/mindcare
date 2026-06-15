@@ -5,7 +5,7 @@ Pydantic-схемы для модуля управления пользоват�
 
 from datetime import datetime
 from typing import Optional, Literal
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class AdminUserListQuery(BaseModel):
@@ -47,7 +47,13 @@ class PaginatedUsersResponse(BaseModel):
     
 
 class AdminUserCreate(BaseModel):
-    """Тело запроса POST /api/admin/users. Пароль генерируется автоматически."""
+    """
+    Тело запроса POST /api/admin/users. Пароль генерируется автоматически.
+
+    legal_basis_confirmed — админ подтверждает наличие документированного
+    основания для создания учётной записи и обработки персональных данных
+    пользователя (НЕ «согласие за пользователя»). Без подтверждения — 422.
+    """
 
     email: EmailStr = Field(description="Email нового пользователя")
     full_name: str = Field(min_length=2, description="ФИО пользователя")
@@ -55,6 +61,34 @@ class AdminUserCreate(BaseModel):
         description="Роль нового пользователя. student регистрируется сам."
     )
     phone: Optional[str] = Field(default=None, description="Телефон (необязательно)")
+
+    legal_basis_confirmed: bool = Field(
+        description="Подтверждение наличия документированного основания "
+                    "для создания учётной записи и обработки ПДн. Обязательно True."
+    )
+    basis_type: Literal[
+        "service_duty", "employment", "contract", "administrative_order", "other"
+    ] = Field(
+        default="service_duty",
+        description="Тип документированного основания",
+    )
+    basis_reference: Optional[str] = Field(
+        default=None, max_length=255,
+        description="Документ-основание: «Приказ №…», «Договор №…»",
+    )
+    legal_basis_comment: Optional[str] = Field(
+        default=None, description="Комментарий к основанию (необязательно)",
+    )
+
+    @field_validator("legal_basis_confirmed")
+    @classmethod
+    def _must_be_confirmed(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError(
+                "Необходимо подтвердить наличие документированного основания "
+                "для создания учётной записи и обработки персональных данных"
+            )
+        return v
 
 
 class AdminUserCreateResponse(BaseModel):
@@ -72,13 +106,35 @@ class AdminUserCreateResponse(BaseModel):
 
 
 class AdminUserUpdate(BaseModel):
-    """Тело запроса PATCH /api/admin/users/{uuid}. Все поля опциональны."""
+    """Тело запроса PATCH /api/admin/users/{uuid}. Все поля опциональны.
+
+    Смена роли на служебную (psychologist/supervisor/admin) требует
+    документированного основания — те же поля, что и в AdminUserCreate.
+    Без подтверждения роль не меняется (см. service/storage). Это НЕ
+    consent_records: админ не «соглашается за пользователя».
+    """
 
     full_name: Optional[str] = Field(default=None, min_length=2, description="ФИО пользователя")
     phone: Optional[str] = Field(default=None, description="Телефон")
     is_active: Optional[bool] = Field(default=None, description="Активность аккаунта")
     role: Optional[Literal["student", "psychologist", "admin", "supervisor"]] = Field(
         default=None, description="Новая роль пользователя"
+    )
+
+    # Legal basis — требуется только при смене роли на служебную (см. service/storage).
+    legal_basis_confirmed: Optional[bool] = Field(
+        default=None,
+        description="Подтверждение документированного основания при назначении служебной роли",
+    )
+    basis_type: Optional[Literal[
+        "service_duty", "employment", "contract", "administrative_order", "other"
+    ]] = Field(default=None, description="Тип документированного основания")
+    basis_reference: Optional[str] = Field(
+        default=None, max_length=255,
+        description="Документ-основание: «Приказ №…», «Договор №…» (обязателен для служебной роли)",
+    )
+    legal_basis_comment: Optional[str] = Field(
+        default=None, description="Комментарий к основанию (необязательно)",
     )
 
 

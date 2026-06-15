@@ -81,24 +81,6 @@
   align-items: center;
 }
 
-.checkLabel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-main);
-  cursor: pointer;
-  user-select: none;
-}
-
-.checkLabel input[type="checkbox"] {
-  accent-color: var(--coffee);
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  cursor: pointer;
-}
 
 .formError {
   padding: 10px 14px;

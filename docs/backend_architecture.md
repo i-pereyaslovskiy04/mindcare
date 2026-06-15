@@ -1,5 +1,19 @@
 # Backend Architecture — MindCare API
-> Last updated: 2026-05-21
+
+> **Historical snapshot.** This document reflects backend architecture as of 2026-05-21 and is not the current source of truth.
+> For current status see `README.md`, `docs/BACKLOG.md`, `docs/DECISIONS.md`, and `alembic history`.
+> Known stale items: "41 tables" (actual: 46), head revision `e9a3d7f2b5c0` (actual: `b6e1f4a7c9d3`),
+> missing modules: tags, categories, news, articles, media, session_notes, supervisor, psychologist,
+> core/encryption.py, core/rate_limit.py, db/models/legal_basis.py.
+> Known security debt section below is also stale — все перечисленные риски закрыты,
+> включая rate limiting (Stage 21), hashed session tokens (Stage 22b) и legal basis (Stage 23b) — see BACKLOG.md.
+> **Section 4 (Auth Flow) is superseded** by the atomic unit-of-work refactor (Stage 31m-fix-b2/b3):
+> registration confirm, password reset confirm и change password теперь выполняются как
+> одна Session/один commit (password update + revoke sessions + consume OTP в одной транзакции),
+> а не последовательностью независимых commit как описано ниже. Current source: `README.md` § Безопасность,
+> `CLAUDE.md`, `ARCHITECTURE.md`.
+
+> Last snapshot: 2026-05-21
 
 ---
 
@@ -187,9 +201,9 @@ alembic downgrade -1
 | `audit.py` | auth_log, audit_log, data_change_log | Audit trail (ФЗ-152) |
 | `otp.py` | otp_verifications | SHA-256 hashed OTP codes, TTL 10 min |
 
-**Known security debt:**
-- `session_notes.content` — stored plaintext, needs Fernet encryption (BACKLOG, ФЗ-152 violation)
-- Audit table partitions (if prod) expire 2026-12-31 — need auto-generation script (BACKLOG)
+**Known security debt** *(snapshot status — see BACKLOG.md for current status)*:
+- ~~`session_notes.content` — stored plaintext~~ ✅ Closed: Fernet encryption implemented in `app/core/encryption.py`
+- ~~Audit table partitions expire 2026-12-31~~ ✅ Closed: `scripts/ensure_audit_partitions.py` manages future partitions
 
 ---
 

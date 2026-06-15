@@ -1,5 +1,6 @@
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
+import Tag from '../../../../components/UI/Tag/Tag';
 import styles from './TagsTable.module.css';
 
 const SKELETON_ROWS = 5;
@@ -61,7 +62,7 @@ export default function TagsTable({ items, loading, error, onEdit, onDelete }) {
             return (
               <tr key={item.uuid} className={styles.row}>
                 <td>
-                  <span className={styles.tagBadge}>{item.name}</span>
+                  <Tag variant="admin">{item.name}</Tag>
                 </td>
                 <td className={styles.count}>{item.article_count || '—'}</td>
                 <td className={styles.count}>{item.news_count    || '—'}</td>

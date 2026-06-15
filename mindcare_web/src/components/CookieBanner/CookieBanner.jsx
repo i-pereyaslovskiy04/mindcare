@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Button from '../UI/Button/Button';
 import styles from './CookieBanner.module.css';
 
 const CookieIcon = () => (
@@ -59,20 +60,20 @@ export default function CookieBanner() {
           <a href="/privacy-policy">Политика персональных данных</a>.
         </p>
         <div className={styles.cookieActions}>
-          <button
-            className={styles.cookieBtnAccept}
-            onClick={handleAccept}
+          <Button
             type="button"
+            variant="primary"
+            onClick={handleAccept}
           >
             Принять
-          </button>
-          <button
-            className={styles.cookieBtnDecline}
-            onClick={handleDecline}
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            onClick={handleDecline}
           >
             Отклонить
-          </button>
+          </Button>
         </div>
       </div>
     </div>

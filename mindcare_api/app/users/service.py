@@ -6,6 +6,7 @@
 import logging
 import secrets
 import string
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -66,9 +67,17 @@ def get_users_list(query: AdminUserListQuery) -> PaginatedUsersResponse:
     )
 
 
-def create_user(data: AdminUserCreate) -> dict:
+def create_user(
+    data: AdminUserCreate,
+    *,
+    actor_id: Optional[int] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     """
-    Создаёт нового юзера (психолога или админа) от имени администратора.
+    Создаёт нового юзера (психолога, супервизора или админа) от имени
+    администратора. Вместе с пользователем в одной транзакции фиксируется
+    legal basis record (документированное основание организации).
 
     Генерирует временный пароль и отправляет его на email нового юзера.
     Пароль хешируется перед сохранением в БД.
@@ -89,6 +98,12 @@ def create_user(data: AdminUserCreate) -> dict:
             password_hash=password_hash,
             role=data.role,
             phone=data.phone,
+            basis_type=data.basis_type,
+            basis_reference=data.basis_reference,
+            legal_basis_comment=data.legal_basis_comment,
+            confirmed_by_user_id=actor_id,
+            ip=ip,
+            user_agent=user_agent,
         )
     except ValueError as e:
         raise AuthError(str(e), status_code=409)
@@ -104,6 +119,14 @@ def create_user(data: AdminUserCreate) -> dict:
             "[create_user] User %s created but welcome email failed: %s",
             user["email"], e,
         )
+
+    # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
+    from app.chat.system_publisher import publish_system_message
+    publish_system_message(
+        recipient_id=int(user["id"]),
+        event_key=f"welcome:user:{user['id']}",
+        text="Ваша учётная запись MindCare создана.",
+    )
 
     user["temporary_password"] = password
     return user
@@ -126,15 +149,25 @@ def delete_user(uuid: str) -> None:
         raise AuthError("Пользователь не найден", status_code=404)
 
 
-def update_user(uuid: str, data: AdminUserUpdate) -> dict:
+def update_user(
+    uuid: str,
+    data: AdminUserUpdate,
+    *,
+    actor_id: Optional[int] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     """
     Частичное обновление юзера от имени администратора.
     Требует хотя бы одно непустое поле — иначе 400.
 
+    Смена роли на служебную требует документированного основания; запись
+    основания и смена роли выполняются атомарно в storage (см. update_user).
+
     Raises:
         AuthError: если нет ни одного поля (400)
         AuthError: если юзер не найден (404)
-        AuthError: если роль не существует в БД (400)
+        AuthError: если роль не существует в БД / нет основания при служебной роли (400)
     """
     if all(
         v is None
@@ -152,6 +185,13 @@ def update_user(uuid: str, data: AdminUserUpdate) -> dict:
             phone=data.phone,
             is_active=data.is_active,
             role=data.role,
+            legal_basis_confirmed=data.legal_basis_confirmed,
+            basis_type=data.basis_type,
+            basis_reference=data.basis_reference,
+            legal_basis_comment=data.legal_basis_comment,
+            confirmed_by_user_id=actor_id,
+            ip=ip,
+            user_agent=user_agent,
         )
     except ValueError as e:
         msg = str(e)

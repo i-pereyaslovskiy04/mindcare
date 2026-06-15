@@ -62,22 +62,24 @@
   color: var(--error);
 }
 
+/* Чекбокс центрируется по высоте control'а DateInput (40px), а не липнет
+   к нижней границе поля (у DateInput есть label над control'ом). */
 .fieldCheck {
   display: flex;
   align-items: center;
-  padding-bottom: 2px;
+  min-height: 40px;
 }
 
-.checkLabel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-main);
-  cursor: pointer;
-  white-space: nowrap;
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .fieldCheck {
+    min-height: 0;
+  }
 }
+
 
 .formError {
   padding: 10px 14px;

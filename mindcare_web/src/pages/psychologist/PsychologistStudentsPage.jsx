@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
+import Badge from '../../components/UI/Badge/Badge';
 import Button from '../../components/UI/Button/Button';
+import ButtonLink from '../../components/UI/Button/ButtonLink';
 import { getInitials } from '../../shared/lib/utils';
 import { useMyStudents } from '../../features/psychologist/hooks/useMyStudents';
 import styles from './PsychologistStudentsPage.module.css';
@@ -121,37 +122,42 @@ export default function PsychologistStudentsPage() {
                         <div className={styles.email}>{student.email}</div>
                         <div className={styles.meta}>
                           <span>Назначен {formatDate(student.assigned_at)}</span>
-                          <span className={styles.badgeActive}>Активен</span>
+                          <Badge tone="success">Активен</Badge>
                         </div>
                       </div>
                     </div>
 
                     <div className={styles.cardActions}>
-                      <button
-                        className={styles.actionBtn}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         disabled
                         title="Чат будет доступен в следующих версиях"
                       >
                         <Icon name="chat" size={13} />
                         <span>Чат</span>
                         <span className={styles.soonTag}>скоро</span>
-                      </button>
-                      <button
-                        className={styles.actionBtn}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         disabled
                         title="Расписание будет доступно в следующих версиях"
                       >
                         <Icon name="calendar" size={13} />
                         <span>Расписание</span>
                         <span className={styles.soonTag}>скоро</span>
-                      </button>
-                      <Link
+                      </Button>
+                      <ButtonLink
                         to={`/psychologist/students/${student.student_id}`}
-                        className={styles.actionBtnLink}
+                        variant="secondary"
+                        size="sm"
                       >
                         <Icon name="diary" size={13} />
                         <span>Открыть карточку</span>
-                      </Link>
+                      </ButtonLink>
                     </div>
                   </div>
                 ))}
@@ -159,21 +165,27 @@ export default function PsychologistStudentsPage() {
 
               {totalPages > 1 && (
                 <div className={styles.pagination}>
-                  <button
-                    className={styles.pageBtn}
+                  <Button
+                    type="button"
+                    variant="icon"
+                    size="sm"
+                    aria-label="Предыдущая страница"
                     disabled={page === 1}
                     onClick={() => setPage(p => p - 1)}
                   >
                     <Icon name="chevron-left" size={16} />
-                  </button>
+                  </Button>
                   <span className={styles.pageInfo}>{page} / {totalPages}</span>
-                  <button
-                    className={styles.pageBtn}
+                  <Button
+                    type="button"
+                    variant="icon"
+                    size="sm"
+                    aria-label="Следующая страница"
                     disabled={page === totalPages}
                     onClick={() => setPage(p => p + 1)}
                   >
                     <Icon name="chevron-right" size={16} />
-                  </button>
+                  </Button>
                 </div>
               )}
 

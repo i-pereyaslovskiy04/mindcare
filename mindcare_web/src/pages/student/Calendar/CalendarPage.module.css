@@ -149,25 +149,3 @@
   font-weight: 600;
 }
 
-.bookBtn {
-  margin-top: 4px;
-  width: 100%;
-  padding: 11px;
-  background: var(--espresso);
-  color: var(--text-on-dark);
-  border: none;
-  border-radius: 8px;
-  font-size: var(--fs-ui);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-}
-
-.bookBtn:hover:not(:disabled) {
-  background: var(--mocha);
-}
-
-.bookBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}

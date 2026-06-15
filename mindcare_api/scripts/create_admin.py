@@ -7,7 +7,11 @@
 Скрипт интерактивно запросит email, имя и пароль, создаст:
 - запись в users с ролью admin
 - запись в user_roles
-- записи в consent_records (для соответствия ФЗ-152)
+- запись в user_legal_basis_records (документированное основание, ФЗ-152)
+
+ВАЖНО: скрипт НЕ создаёт consent_records — это личное согласие субъекта,
+которое нельзя записывать за пользователя. Основание создания учётной
+записи фиксируется как legal basis (basis_type=bootstrap).
 
 Если пользователь с таким email уже существует — скрипт спросит, добавить
 ли роль admin к существующему юзеру (для случаев когда обычный студент
@@ -24,18 +28,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.auth import storage, service
+from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
-from app.db.models import User, UserRole, Role, Consent, ConsentRecord
-
-
-REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
+from app.db.models import UserRole, Role, UserLegalBasisRecord
 
 
 def prompt_user_data() -> dict:
     """Запрашивает у разработчика данные нового админа."""
     print("\n=== Создание администратора ===\n")
 
-    email = input("Email: ").strip().lower()
+    email = normalize_email(input("Email: "))
     if not email or "@" not in email:
         print("[ERROR] Невалидный email")
         sys.exit(1)
@@ -97,33 +99,40 @@ def add_admin_role_to_existing_user(email: str) -> bool:
             sys.exit(0)
 
         db.add(UserRole(user_id=int(user["id"]), role_id=admin_role.id))
+        # Роль admin — это смена основания обработки ПДн (студент → сотрудник).
+        # Фиксируем legal basis record в той же транзакции.
+        db.add(UserLegalBasisRecord(
+            user_id=int(user["id"]),
+            basis_type="role_change",
+            basis_source="bootstrap_script",
+            confirmed_by_user_id=None,
+            user_agent="bootstrap-script",
+            comment="Admin role granted to existing user via bootstrap script",
+        ))
         db.commit()
 
     print(f"[OK] Роль admin добавлена пользователю {email}")
     return True
 
 
-def save_consents_for_user(user_id: int) -> None:
-    """Записывает технические согласия для bootstrap-админа."""
-    with SessionLocal() as db:
-        for policy_type in REQUIRED_CONSENTS:
-            consent = (
-                db.query(Consent)
-                .filter(Consent.policy_type == policy_type)
-                .order_by(Consent.version.desc())
-                .first()
-            )
-            if not consent:
-                print(f"[WARN] Политика '{policy_type}' не найдена, пропускаю")
-                continue
+def save_legal_basis_for_user(user_id: int) -> None:
+    """
+    Записывает документированное основание для bootstrap-админа.
 
-            db.add(ConsentRecord(
-                user_id=user_id,
-                consent_id=consent.id,
-                accepted=True,
-                ip_address=None,         # bootstrap, не было HTTP-запроса
-                user_agent="bootstrap-script",
-            ))
+    НЕ создаёт consent_records: личное согласие нельзя записывать
+    за пользователя. Основание учётной записи bootstrap-админа —
+    служебное (развёртывание системы).
+    """
+    with SessionLocal() as db:
+        db.add(UserLegalBasisRecord(
+            user_id=user_id,
+            basis_type="bootstrap",
+            basis_source="bootstrap_script",
+            confirmed_by_user_id=None,   # bootstrap, актора-админа ещё нет
+            ip_address=None,             # не было HTTP-запроса
+            user_agent="bootstrap-script",
+            comment="Bootstrap admin account created during deployment/setup",
+        ))
         db.commit()
 
 
@@ -136,7 +145,7 @@ def create_new_admin(data: dict) -> None:
         "role":            "admin",
     })
 
-    save_consents_for_user(int(user["id"]))
+    save_legal_basis_for_user(int(user["id"]))
 
     print(f"\n[OK] Администратор создан:")
     print(f"     ID:    {user['id']}")

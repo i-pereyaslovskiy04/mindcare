@@ -13,9 +13,52 @@ export function configureClient({ getToken }) {
   _cfg.getToken = getToken;
 }
 
+const _FALLBACK_MESSAGE = 'Ошибка запроса';
+const _LOC_PREFIXES = ['body', 'query', 'path'];
+
+/** FastAPI validation loc → читаемое имя поля ("body","email" → "email"). */
+function _locField(loc) {
+  if (!Array.isArray(loc) || loc.length === 0) return '';
+  const parts = loc.filter((p) => !_LOC_PREFIXES.includes(p));
+  return parts.join('.');
+}
+
+/**
+ * Превращает тело ошибки backend в человекочитаемое сообщение.
+ * - detail: string        → как есть;
+ * - detail: [{msg,loc}]   → "поле: msg" объединённые "; " (FastAPI 422);
+ * - message: string       → как есть;
+ * - иначе                 → "HTTP <status>" или fallback.
+ * Никогда не возвращает "[object Object]".
+ */
+export function parseErrorMessage(body, status) {
+  const detail = body?.detail;
+
+  if (typeof detail === 'string' && detail.trim()) return detail;
+
+  if (Array.isArray(detail) && detail.length) {
+    const msgs = detail
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        const msg = item?.msg;
+        if (!msg) return '';
+        const field = _locField(item?.loc);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .filter(Boolean);
+    if (msgs.length) return msgs.join('; ');
+  }
+
+  if (typeof body?.message === 'string' && body.message.trim()) return body.message;
+
+  return status ? `HTTP ${status}` : _FALLBACK_MESSAGE;
+}
+
 async function _parseError(res) {
   const body = await res.json().catch(() => ({}));
-  return new Error(body.detail || body.message || `HTTP ${res.status}`);
+  const err = new Error(parseErrorMessage(body, res.status));
+  err.status = res.status;
+  return err;
 }
 
 export async function apiFetch(url, options = {}) {

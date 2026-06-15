@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Icon from '../../components/Icon/Icon';
 import Button from '../../components/UI/Button/Button';
+import Badge from '../../components/UI/Badge/Badge';
 import { useStudents } from '../../features/supervisor/hooks/useStudents';
 import AssignModal from '../../features/supervisor/components/AssignModal';
 import {
@@ -9,6 +10,18 @@ import {
   closeEngagement,
 } from '../../api/supervisor.api';
 import styles from './EngagementsPage.module.css';
+
+const STATUS_LABELS = {
+  active:      'Активна',
+  completed:   'Завершена',
+  transferred: 'Переназначена',
+};
+
+const STATUS_TONES = {
+  active:      'success',
+  completed:   'neutral',
+  transferred: 'warning',
+};
 
 export default function EngagementsPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, refetch } =
@@ -154,11 +167,11 @@ export default function EngagementsPage() {
                       {/* Status */}
                       <td>
                         {eng ? (
-                          <span className={`${styles.badge} ${styles[`badge_${eng.status}`]}`}>
-                            {eng.status === 'active' ? 'Активна' : eng.status}
-                          </span>
+                          <Badge tone={STATUS_TONES[eng.status] || 'neutral'}>
+                            {STATUS_LABELS[eng.status] || eng.status}
+                          </Badge>
                         ) : (
-                          <span className={styles.badge}>—</span>
+                          <Badge tone="neutral">—</Badge>
                         )}
                       </td>
 
@@ -204,23 +217,29 @@ export default function EngagementsPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className={styles.pagination}>
-              <button
-                className={styles.pageBtn}
+              <Button
+                type="button"
+                variant="icon"
+                size="sm"
+                aria-label="Предыдущая страница"
                 disabled={page === 1}
                 onClick={() => setPage(p => p - 1)}
               >
                 <Icon name="chevron-left" size={16} />
-              </button>
+              </Button>
               <span className={styles.pageInfo}>
                 {page} / {totalPages}
               </span>
-              <button
-                className={styles.pageBtn}
+              <Button
+                type="button"
+                variant="icon"
+                size="sm"
+                aria-label="Следующая страница"
                 disabled={page === totalPages}
                 onClick={() => setPage(p => p + 1)}
               >
                 <Icon name="chevron-right" size={16} />
-              </button>
+              </Button>
             </div>
           )}
 

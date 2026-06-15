@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import FilterChip from '../../../components/UI/FilterChip/FilterChip';
 import styles from './FilterSheet.module.css';
 
 const XIcon = () => (
@@ -73,15 +74,15 @@ export default function FilterSheet({
             {tagOptions.map((opt) => {
               const active = selectedTags.includes(opt.value);
               return (
-                <button
+                <FilterChip
                   key={opt.value}
-                  className={`${styles.tagBtn} ${active ? styles.tagBtnActive : ''}`}
+                  active={active}
+                  size="md"
                   onClick={() => toggleTag(opt.value)}
-                  aria-pressed={active}
+                  icon={active ? <CheckIcon /> : null}
                 >
-                  {active && <CheckIcon />}
                   {opt.label}
-                </button>
+                </FilterChip>
               );
             })}
           </div>
@@ -93,15 +94,15 @@ export default function FilterSheet({
             {topicOptions.map((opt) => {
               const active = selectedTopics.includes(opt.value);
               return (
-                <button
+                <FilterChip
                   key={opt.value}
-                  className={`${styles.tagBtn} ${active ? styles.tagBtnActive : ''}`}
+                  active={active}
+                  size="md"
                   onClick={() => toggleTopic(opt.value)}
-                  aria-pressed={active}
+                  icon={active ? <CheckIcon /> : null}
                 >
-                  {active && <CheckIcon />}
                   {opt.label}
-                </button>
+                </FilterChip>
               );
             })}
           </div>

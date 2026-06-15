@@ -444,52 +444,6 @@
   flex-wrap: wrap; /* overridden to nowrap on mobile */
 }
 
-.pgBtn {
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-size: var(--fs-ui);
-  cursor: pointer;
-  border: 1px solid var(--nav-border);
-  background: transparent;
-  color: var(--text-muted);
-  font-weight: 500;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.pgBtn:hover {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-
-.pgNum {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  font-size: var(--fs-ui);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--text-muted);
-  border: none;
-  background: transparent;
-  transition: background 0.15s;
-}
-
-.pgNum:hover {
-  background: var(--sand);
-}
-
-.pgNum.active {
-  background: var(--coffee);
-  color: #FAF7F2;
-  font-weight: 600;
-}
-
-.pgDots {
-  color: var(--text-light);
-  font-size: var(--fs-ui);
-}
 
 /* Responsive */
 @media (max-width: 1024px) {
@@ -539,24 +493,6 @@
   }
 
   /* Shrink buttons so more fit before scroll kicks in */
-  .pgBtn {
-    flex-shrink: 0;
-    min-height: 36px;
-    padding: 0 10px;
-    font-size: 13px;
-    white-space: nowrap;
-  }
-
-  .pgNum {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    font-size: 13px;
-  }
-
-  .pgDots {
-    flex-shrink: 0;
-  }
 }
 
 @media (hover: none) {

@@ -13,11 +13,21 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
+    # SMTP_TLS=True  → STARTTLS (port 587). Cannot combine with SMTP_SSL.
+    # SMTP_SSL=True  → implicit SSL (port 465). Cannot combine with SMTP_TLS.
+    SMTP_TLS: bool = True
+    SMTP_SSL: bool = False
     # --- MEDIA ---
     NEWS_IMAGE_MAX_SIZE_MB: int = 20
+    # --- CORS ---
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
+    # --- ENCRYPTION ---
+    DATA_ENCRYPTION_KEY: str | None = None
     # --- APP ---
+    # DEBUG is a boolean flag only (true/false, 1/0, yes/no, on/off).
+    # Use ENV for environment names — do not put "release"/"production" into DEBUG.
     DEBUG: bool = False
-    ENV: str = "production"
+    ENV: str = "production"  # development | staging | production | release
 
     model_config = SettingsConfigDict(
         env_file=".env",

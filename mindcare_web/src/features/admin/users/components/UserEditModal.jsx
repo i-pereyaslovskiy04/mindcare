@@ -1,15 +1,12 @@
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
-import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
+import Select from '../../../../components/UI/Select/Select';
+import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
+import { EDIT_ROLE_OPTIONS, ROLE_LABELS, isStaffRole } from '../roleLabels';
+import { BASIS_TYPE_OPTIONS, ROLE_CHANGE_LEGAL_BASIS_LABEL } from '../legalBasis';
+import { PHONE_PLACEHOLDER } from '../phone';
 import styles from './UserEditModal.module.css';
-
-const ROLE_OPTIONS = [
-  { value: 'student',      label: 'Студент' },
-  { value: 'psychologist', label: 'Психолог' },
-  { value: 'admin',        label: 'Администратор' },
-  { value: 'supervisor',   label: 'Супервизор' },
-];
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
@@ -17,11 +14,16 @@ function formatDate(dateStr) {
 }
 
 export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated }) {
-  const { values, errors, loading, submitting, handleChange, handleSubmit } = useUserForm({
-    mode: 'edit',
-    uuid,
-    onSuccess: () => { onUpdated(); onClose(); },
-  });
+  const { values, errors, loading, submitting, handleChange, handleSubmit, initialRole } =
+    useUserForm({
+      mode: 'edit',
+      uuid,
+      onSuccess: () => { onUpdated(); onClose(); },
+    });
+
+  // Legal basis нужен только при реальной смене роли на staff/admin.
+  const roleChanged = initialRole != null && values.role !== initialRole;
+  const showLegalBasis = roleChanged && isStaffRole(values.role);
 
   return (
     <Modal open={open} onClose={onClose} ariaLabel="Редактировать пользователя" zIndex={2200}>
@@ -69,6 +71,18 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             </div>
 
             <div className={styles.field}>
+              <label className={styles.label}>Роль пользователя</label>
+              <Select
+                value={values.role}
+                options={EDIT_ROLE_OPTIONS}
+                displayLabel={ROLE_LABELS[values.role]}
+                onChange={(val) => handleChange({ target: { name: 'role', value: val } })}
+                error={errors.role}
+                panelZIndex={2300}
+              />
+            </div>
+
+            <div className={styles.field}>
               <label className={styles.label} htmlFor="uem-phone">Телефон</label>
               <input
                 id="uem-phone"
@@ -77,33 +91,92 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
                 name="phone"
                 value={values.phone}
                 onChange={handleChange}
-                placeholder="+7 (900) 000-00-00"
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Роль</label>
-              <Select
-                value={values.role}
-                options={ROLE_OPTIONS}
-                onChange={(val) => handleChange({ target: { name: 'role', value: val } })}
-                error={errors.role}
-                panelZIndex={2300}
+                placeholder={PHONE_PLACEHOLDER}
               />
             </div>
 
             <div className={styles.checkboxField}>
-              <label className={styles.checkboxLabel}>
-                <input
-                  className={styles.checkbox}
-                  type="checkbox"
-                  name="is_active"
-                  checked={values.is_active}
-                  onChange={handleChange}
-                />
-                Активен
-              </label>
+              <Checkbox
+                checked={values.is_active}
+                onChange={(val) => handleChange({ target: { name: 'is_active', type: 'checkbox', checked: val } })}
+                label="Активен"
+              />
             </div>
+
+            {showLegalBasis && (
+              <div className={styles.legalBasisGroup}>
+                <p className={styles.legalBasisNote}>
+                  Смена роли на «{ROLE_LABELS[values.role] ?? values.role}»
+                  требует документированного основания обработки ПДн.
+                </p>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Тип основания</label>
+                  <Select
+                    value={values.basis_type}
+                    options={BASIS_TYPE_OPTIONS}
+                    onChange={(val) => handleChange({ target: { name: 'basis_type', value: val } })}
+                    error={errors.basis_type}
+                    panelZIndex={2300}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="uem-basis_reference">
+                    Документ-основание
+                  </label>
+                  <input
+                    id="uem-basis_reference"
+                    className={`${styles.input} ${errors.basis_reference ? styles.inputError : ''}`}
+                    type="text"
+                    name="basis_reference"
+                    value={values.basis_reference}
+                    onChange={handleChange}
+                    placeholder="Например: приказ №..., договор №..."
+                    autoComplete="off"
+                    maxLength={255}
+                  />
+                  {errors.basis_reference && (
+                    <span className={styles.hint} role="alert">{errors.basis_reference}</span>
+                  )}
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="uem-legal_basis_comment">
+                    Комментарий (необязательно)
+                  </label>
+                  <input
+                    id="uem-legal_basis_comment"
+                    className={styles.input}
+                    type="text"
+                    name="legal_basis_comment"
+                    value={values.legal_basis_comment}
+                    onChange={handleChange}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className={styles.checkboxField}>
+                  <Checkbox
+                    id="uem-legal_basis_confirmed"
+                    checked={values.legal_basis_confirmed}
+                    error={Boolean(errors.legal_basis_confirmed)}
+                    ariaDescribedBy={errors.legal_basis_confirmed ? 'uem-lb-error' : undefined}
+                    onChange={(checked) =>
+                      handleChange({
+                        target: { name: 'legal_basis_confirmed', type: 'checkbox', checked },
+                      })
+                    }
+                    label={ROLE_CHANGE_LEGAL_BASIS_LABEL}
+                  />
+                  {errors.legal_basis_confirmed && (
+                    <span id="uem-lb-error" className={styles.hint} role="alert">
+                      {errors.legal_basis_confirmed}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {errors._form && (
               <div className={styles.formError} role="alert">{errors._form}</div>

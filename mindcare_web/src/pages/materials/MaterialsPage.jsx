@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Navbar from '../../components/Navbar/Navbar';
+import Button from '../../components/UI/Button/Button';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 import PageHero from '../../components/Hero/PageHero';
@@ -54,9 +55,9 @@ export default function MaterialsPage() {
 
           {hasMore && !loading && (
             <div className={styles.loadMore}>
-              <button className={styles.loadMoreBtn} onClick={loadMore}>
+              <Button type="button" variant="secondary" onClick={loadMore}>
                 Загрузить ещё
-              </button>
+              </Button>
             </div>
           )}
         </div>

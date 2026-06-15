@@ -1,6 +1,7 @@
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../auth/AuthContext';
 import Icon from '../../components/Icon/Icon';
+import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import styles from './AdminLayout.module.css';
 
@@ -10,6 +11,7 @@ const CRUMB_LABELS = {
   '/admin/tags':       'Темы',
   '/admin/news':       'Новости',
   '/admin/articles':   'Материалы',
+  '/admin/settings':   'Настройки',
 };
 
 export default function AdminLayout() {
@@ -36,7 +38,7 @@ export default function AdminLayout() {
             <div className={styles.userName}>{user?.name ?? 'Администратор'}</div>
             <div className={styles.userRole}>
               <span className={styles.roleDot} />
-              {user?.role === 'supervisor' ? 'Супервизор' : 'Администратор'}
+              Администратор
             </div>
           </div>
         </div>
@@ -111,6 +113,20 @@ export default function AdminLayout() {
             <span className={styles.navLabel}>Тесты</span>
             <span className={styles.navItemSoon}>скоро</span>
           </span>
+
+          <div className={styles.navSectionLabel} style={{ marginTop: 14 }}>Аккаунт</div>
+
+          <NavLink
+            to="/admin/settings"
+            className={({ isActive }) =>
+              `${styles.navItem} ${isActive ? styles.active : ''}`
+            }
+          >
+            <span className={styles.navIcon}>
+              <Icon name="settings" size={18} />
+            </span>
+            <span className={styles.navLabel}>Настройки</span>
+          </NavLink>
         </nav>
 
         <div className={styles.foot}>
@@ -127,14 +143,15 @@ export default function AdminLayout() {
             Администратор / <span>{crumb}</span>
           </div>
           <div className={styles.actions}>
-            <button
+            <Button
               type="button"
-              className={styles.iconBtn}
+              variant="icon"
+              size="sm"
               aria-label="Выйти"
               onClick={logout}
             >
               <Icon name="logout" size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 

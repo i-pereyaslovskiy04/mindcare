@@ -200,38 +200,6 @@
   font-style: italic;
 }
 
-/* Badges */
-.badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: var(--cream, #faf7f4);
-  color: var(--text-muted, #9a8e86);
-  border: 1px solid var(--nav-border, #ede8e3);
-}
-
-.badge_active {
-  background: #dcfce7;
-  color: var(--success);
-  border-color: #bbf7d0;
-}
-
-.badge_completed {
-  background: var(--cream, #faf7f4);
-  color: var(--text-muted, #9a8e86);
-  border-color: var(--nav-border, #ede8e3);
-}
-
-.badge_transferred {
-  background: var(--sand);
-  color: var(--text-muted);
-  border-color: var(--fog);
-}
-
 /* Action buttons */
 .btnGroup {
   display: flex;
@@ -248,22 +216,6 @@
   margin-top: 20px;
 }
 
-.pageBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid var(--nav-border, #ede8e3);
-  background: var(--warm-white, #fdfaf7);
-  color: var(--espresso, #3b2a1a);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.pageBtn:hover:not(:disabled) { background: var(--cream, #faf7f4); }
-.pageBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .pageInfo {
   font-size: 0.85rem;

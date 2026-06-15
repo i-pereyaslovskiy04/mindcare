@@ -1,0 +1,43 @@
+.label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  line-height: 1.45;
+}
+
+.label.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.labelError .text {
+  color: var(--error);
+}
+
+.input {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--espresso);
+  cursor: pointer;
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.text {
+  line-height: 1.45;
+}

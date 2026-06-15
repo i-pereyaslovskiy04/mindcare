@@ -68,11 +68,18 @@ def create_user(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Создание нового пользователя (психолога или админа).
+    Создание нового пользователя (психолога, супервизора или админа).
     Пароль генерируется автоматически и отправляется на email.
+    Требует подтверждения документированного основания (legal_basis_confirmed);
+    запись основания создаётся в одной транзакции с пользователем.
     """
     try:
-        user = service.create_user(body)
+        user = service.create_user(
+            body,
+            actor_id=int(current_user["id"]),
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     audit.log_auth_event(
@@ -106,7 +113,13 @@ def update_user(
     Поддерживает: блокировку/разблокировку, смену роли, ФИО и телефон.
     """
     try:
-        result = service.update_user(uuid, body)
+        result = service.update_user(
+            uuid,
+            body,
+            actor_id=int(current_user["id"]),
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     audit.log_auth_event(

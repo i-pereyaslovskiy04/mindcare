@@ -2,6 +2,10 @@
 SMTP diagnostic — STARTTLS port 587 with explicit SSL context.
 Run from mindcare_api/ directory:
     python scripts/test_smtp.py
+
+WARNING: This script sends a REAL email to the address in SMTP_USER.
+WARNING: set_debuglevel(1) is intentionally enabled here to aid diagnostics;
+         do NOT copy this into production/application code.
 """
 
 import smtplib

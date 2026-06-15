@@ -2,7 +2,7 @@
  * router.jsx — application route tree.
  *
  * Route guards:
- *   <PrivateRoute>   — requires authentication, redirects to /login on 401.
+ *   <PrivateRoute>   — requires authentication, redirects to / (with login modal) when unauthenticated.
  *   <RoleRoute>      — requires specific role(s), redirects to /profile on mismatch.
  *
  * Public routes: /, /about, /services, /news, /materials, /login, /register, /health
@@ -12,6 +12,7 @@
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
+import { getRoleHome } from '../shared/lib/routes';
 
 // ── Public pages ──────────────────────────────────────────────────────────────
 import Home              from '../pages/home/Home';
@@ -38,6 +39,7 @@ import TagsPage       from '../features/admin/tags/pages/TagsPage';
 import AdminNewsPage  from '../features/admin/news/pages/NewsPage';
 import AdminArticlesPage   from '../features/admin/articles/pages/ArticlesPage';
 import AdminCategoriesPage from '../features/admin/categories/pages/CategoriesPage';
+import AdminSettingsPage   from '../features/admin/settings/pages/AdminSettingsPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
 import ClientDashboard      from '../pages/client/ClientDashboard';
@@ -55,6 +57,7 @@ import PsychologistLayout          from '../pages/psychologist/PsychologistLayou
 import PsychologistHome            from '../pages/psychologist/PsychologistHome';
 import PsychologistStudentsPage    from '../pages/psychologist/PsychologistStudentsPage';
 import PsychologistStudentCardPage from '../pages/psychologist/PsychologistStudentCardPage';
+import PsychologistChatPage        from '../pages/psychologist/Chat/PsychologistChatPage';
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
 import SupervisorLayout    from '../pages/supervisor/SupervisorLayout';
@@ -74,7 +77,7 @@ import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user)   return <Navigate to="/login" replace />;
+  if (!user)   return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
   return children;
 }
 
@@ -85,7 +88,7 @@ function PrivateRoute({ children }) {
 function RoleRoute({ roles, children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user)                        return <Navigate to="/login" replace />;
+  if (!user)                        return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
   if (!roles.includes(user.role))   return <Navigate to="/profile" replace />;
   return children;
 }
@@ -96,15 +99,9 @@ function RoleRoute({ roles, children }) {
 function DashboardRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user)   return <Navigate to="/login" replace />;
+  if (!user)   return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
 
-  const destinations = {
-    student:      '/student',
-    psychologist: '/psychologist',
-    admin:        '/admin/users',
-    supervisor:   '/supervisor',
-  };
-  return <Navigate to={destinations[user.role] ?? '/profile'} replace />;
+  return <Navigate to={getRoleHome(user.role)} replace />;
 }
 
 // ── Route tree ────────────────────────────────────────────────────────────────
@@ -153,6 +150,7 @@ export default function AppRouter() {
         <Route index                          element={<PsychologistHome />} />
         <Route path="students"              element={<PsychologistStudentsPage />} />
         <Route path="students/:studentId"   element={<PsychologistStudentCardPage />} />
+        <Route path="chat"                  element={<PsychologistChatPage />} />
         <Route path="settings"              element={<CabinetSettingsPage />} />
       </Route>
 
@@ -177,6 +175,7 @@ export default function AppRouter() {
         <Route path="news"       element={<AdminNewsPage />} />
         <Route path="articles"   element={<AdminArticlesPage />} />
         <Route path="categories" element={<AdminCategoriesPage />} />
+        <Route path="settings"   element={<AdminSettingsPage />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

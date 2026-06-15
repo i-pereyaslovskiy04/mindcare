@@ -1,0 +1,40 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nav-border);
+  background: var(--sand);
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-tag);
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.chip:hover:not(.active):not(:disabled) {
+  border-color: var(--latte);
+}
+
+.chip.active {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+/* Mobile / touch size */
+.chip.md {
+  padding: 7px 14px;
+}
+
+.chip.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}

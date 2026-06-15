@@ -93,20 +93,3 @@
   margin-top: 2px;
 }
 
-.joinBtn {
-  margin-top: 6px;
-  width: 100%;
-  padding: 10px;
-  background: var(--espresso);
-  color: var(--text-on-dark);
-  border: none;
-  border-radius: 8px;
-  font-size: var(--fs-ui);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.joinBtn:hover {
-  background: var(--mocha);
-}

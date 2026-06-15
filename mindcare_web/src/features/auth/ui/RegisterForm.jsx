@@ -6,6 +6,7 @@ import { registerInit, registerConfirm } from '../../../api/auth.api';
 import { getRoleHome } from '../../../shared/lib/routes';
 import { TelegramIcon, VKIcon, YandexIcon } from '../../../components/icons';
 import CodeInput from '../../../components/CodeInput/CodeInput';
+import Checkbox from '../../../components/UI/Checkbox/Checkbox';
 
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
@@ -333,23 +334,24 @@ export default function RegisterForm({ onSuccess }) {
         </span>
       </div>
 
-      <div className={`${styles.consentRow} ${errors.consent ? styles.consentErr : ''}`}>
-        <input
-          type="checkbox"
-          className={styles.consentCheck}
-          id="r-consent"
-          checked={consent}
-          onChange={(e) => {
-            setConsent(e.target.checked);
-            setErrors((p) => ({ ...p, consent: !e.target.checked }));
-          }}
-          aria-describedby={errors.consent ? 'r-consent-hint' : undefined}
-        />
-        <label className={styles.consentText} htmlFor="r-consent">
-          Согласен(на) с{' '}
-          <a href="/privacy-policy">политикой персональных данных</a>
-        </label>
-      </div>
+      <Checkbox
+        id="r-consent"
+        checked={consent}
+        onChange={(val) => {
+          setConsent(val);
+          setErrors((p) => ({ ...p, consent: !val }));
+        }}
+        label={
+          <>
+            Согласен(на) с{' '}
+            <a href="/privacy-policy" className={styles.consentLink}>
+              политикой персональных данных
+            </a>
+          </>
+        }
+        error={errors.consent}
+        ariaDescribedBy={errors.consent ? 'r-consent-hint' : undefined}
+      />
       {errors.consent && (
         <span className={styles.consentHint} id="r-consent-hint" role="alert">
           Необходимо принять политику персональных данных

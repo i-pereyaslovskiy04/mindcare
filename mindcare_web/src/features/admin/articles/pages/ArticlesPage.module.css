@@ -26,17 +26,6 @@
 .pagination {
   display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 14px;
 }
-.pagination button {
-  padding: 6px 12px; border: 1px solid var(--nav-border);
-  border-radius: 6px; background: var(--warm-white); color: var(--text-muted);
-  font-family: inherit; cursor: pointer; font-size: 16px;
-  transition: background 0.15s, border-color 0.15s;
-}
-.pagination button:hover:not(:disabled) {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-.pagination button:disabled { opacity: 0.4; cursor: default; }
 
 .overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);

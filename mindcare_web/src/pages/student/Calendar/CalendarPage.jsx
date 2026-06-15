@@ -8,6 +8,7 @@ import CalendarDayPopup from './components/CalendarDayPopup';
 import UpcomingList from './components/UpcomingList';
 import SessionHistory from './components/SessionHistory';
 import Select from '../../../components/UI/Select/Select';
+import Button from '../../../components/UI/Button/Button';
 import styles from './CalendarPage.module.css';
 
 const _today = new Date();
@@ -132,6 +133,8 @@ export default function CalendarPage() {
               {FORMAT_OPTIONS.map(f => (
                 <button
                   key={f}
+                  type="button"
+                  aria-pressed={activeFormat === f}
                   className={activeFormat === f ? `${styles.chip} ${styles.chipActive}` : styles.chip}
                   onClick={() => setActiveFormat(f)}
                 >
@@ -147,6 +150,8 @@ export default function CalendarPage() {
               {SLOT_OPTIONS.map(t => (
                 <button
                   key={t}
+                  type="button"
+                  aria-pressed={activeSlot === t}
                   className={activeSlot === t ? `${styles.slot} ${styles.slotActive}` : styles.slot}
                   onClick={() => setActiveSlot(prev => prev === t ? null : t)}
                 >
@@ -156,7 +161,7 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <button className={styles.bookBtn} disabled={!activeSlot}>Записаться</button>
+          <Button variant="primary" disabled={!activeSlot} style={{ width: '100%', marginTop: 4 }}>Записаться</Button>
         </section>
       </div>
     </div>

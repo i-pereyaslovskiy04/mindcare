@@ -11,7 +11,7 @@
 - Онлайн-психодиагностика (тесты с автоподсчётом результатов)
 - Блог, новости, справочник ресурсов помощи
 - Модуль вопросов и ответов (Q&A)
-- Личные кабинеты по ролям (студент, психолог, админ)
+- Личные кабинеты по ролям (студент, психолог, супервизор, админ)
 - Административная панель
 
 **Критически важно:** платформа работает с психологическими и медицинскими данными.
@@ -19,7 +19,9 @@
 - Все данные пользователей хранятся на серверах в РФ
 - Согласие на обработку ПДн фиксируется в `consent_records` при регистрации
 - Перед каждым тестом и записью на консультацию проверяется актуальность согласия
-- Заметки сессий (`session_notes`) должны шифроваться на уровне приложения (TODO: не реализовано)
+- Заметки сессий (`session_notes`) и сообщения чата (`chat_messages.content`) шифруются
+  на уровне приложения: Fernet, `enc:v1:` prefix, `app/core/encryption.py`;
+  не сохранять и не логировать plaintext `content`
 - IP-адреса анонимизируются через 90 дней (`anonymize_old_ips()` в БД)
 
 **Монорепо с двумя проектами:**
@@ -88,7 +90,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 45 таблиц создаются через `alembic upgrade head`.
+> Все 48 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -111,11 +113,94 @@ npm run build
 npm test
 
 # Запуск одного файла
-npm test -- --testPathPattern=App.test.js
+npm test -- --testPathPattern=client.test.js
 ```
 
 > **Важно:** для full-stack разработки нужно запустить **оба** сервера одновременно.
 > Фронт проксирует `/api/*` запросы на `http://localhost:8000` через настройку в `package.json`.
+
+## Тестирование
+
+### Правила для Claude Code
+
+При изменении backend/security/auth:
+
+```
+✅ Проверить, есть ли релевантные тесты в mindcare_api/tests/
+✅ Добавить или обновить тесты для изменённой логики
+✅ Запустить релевантный pytest перед завершением задачи
+✅ Если тесты не добавлены — объяснить причину в финальном отчёте
+✅ Для изменений auth UoW — failure-injection тесты на реальном состоянии БД
+❌ Не утверждать "покрыто тестами", если покрыта только конкретная зона
+```
+
+Финальный отчёт по любой задаче (особенно docs/fix-промпты) должен содержать:
+что изменено · какие тесты добавлены/прогнаны (или почему нет) · что НЕ трогалось ·
+оставшиеся pending-риски.
+
+### Команды
+
+**Backend:**
+```bash
+cd mindcare_api
+.venv\Scripts\python.exe -m compileall app -q
+.venv\Scripts\python.exe -m pytest tests/test_change_password.py -v
+.venv\Scripts\python.exe -m pytest tests/ -v
+```
+
+**Frontend:**
+```bash
+cd mindcare_web
+npm run lint
+npm run build
+```
+
+**Через скрипты в корне проекта:**
+```powershell
+.\test.ps1    # compileall + все backend-тесты (без запуска проекта)
+.\start.ps1   # backend-тесты, затем запуск проекта
+```
+
+### Уровни тестов
+
+| Уровень | Что покрывает | Когда добавлять |
+|---------|---------------|-----------------|
+| Unit | Service/helper logic, без реальной БД | Обязательно для новых auth/security/critical изменений |
+| API/Integration | Route → deps → service → storage → DB | Желательно для auth/session/permissions/encryption |
+| Manual smoke | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
+| E2E | Полный browser flow | Позже, после стабилизации UI |
+
+### Текущее покрытие
+
+Всего: **282 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+
+| Файл | Что покрыто |
+|------|-------------|
+| `tests/test_change_password.py` | `service.change_password` — атомарный UoW, мок storage — 13 сценариев |
+| `tests/test_encryption.py` | `app.core.encryption` — 26 сценариев |
+| `tests/test_normalization.py` | `normalize_email` + OTP/storage нормализация — 16 |
+| `tests/test_smtp_transport.py` | SMTP TLS/SSL transport — 21 |
+| `tests/test_email_error_sanitization.py` | санитизация SMTP/auth ошибок клиенту (Stage 31m-fix-a) — 11 |
+| `tests/test_rate_limit.py` | sliding-window limiter (unit) — 18 |
+| `tests/test_session_security.py` | generate/hash session token (unit) — 8 |
+| `tests/test_auth_hardening_b1.py` | OTP log masking / consent IP-UA / fail on missing role (Stage 31m-fix-b1) — 6 |
+| `tests/integration/test_register_confirm_atomic.py` | атомарный registration confirm UoW + failure-injection (Stage 31m-fix-b2) — 8 |
+| `tests/integration/test_register_consent_context.py` | IP/User-Agent в consent_records при confirm — 1 |
+| `tests/integration/test_password_uow_atomic.py` | атомарные password reset confirm + change password UoW, failure-injection (Stage 31m-fix-b3) — 11 |
+| `tests/integration/test_email_normalization_api.py` | register/login/reset API — 11 |
+| `tests/integration/test_rate_limit_api.py` | 429-поведение auth API — 10 |
+| `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end — 9 |
+| `tests/integration/test_legal_basis_api.py` | legal basis records API — 11 |
+| `tests/integration/test_admin_role_patch_legal_basis.py` | legal basis при смене роли (Stage 31f-fix) — 12 |
+| `tests/integration/test_session_notes_api.py` | access policy session_notes (Stage 25b) — 15 |
+| `tests/integration/test_touch_session.py` | debounce touch_session (Stage 26) — 9 |
+| `tests/integration/test_chat_models.py` | constraints chat-таблиц (Stage 28b) — 6 |
+| `tests/integration/test_chat_api.py` | Chat MVP API end-to-end (Stage 28c) — 20 |
+| `tests/integration/test_system_conversation.py` | system conversation backend (Stage 29b) — 17 |
+| `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (Stage 29d) — 11 |
+| `tests/integration/test_chat_presence.py` | approximate online/offline presence (Stage 30c) — 12 |
+
+---
 
 ## Архитектура
 
@@ -141,24 +226,31 @@ mindcare_api/
 ├── app/
 │   ├── main.py              — точка входа FastAPI, подключение роутеров
 │   ├── core/
-│   │   └── config.py        — настройки из .env (pydantic-settings)
+│   │   ├── config.py        — настройки из .env (pydantic-settings)
+│   │   ├── encryption.py    — Fernet encrypt/decrypt (enc:v1:) для session_notes и chat_messages
+│   │   ├── normalization.py — normalize_email()
+│   │   └── rate_limit.py    — in-memory sliding-window limiter для auth (Stage 21)
 │   ├── db/
-│   │   ├── session.py       — engine, SessionLocal, Base
-│   │   └── models.py        — все SQLAlchemy модели
+│   │   ├── base.py          — Base = declarative_base()
+│   │   ├── session.py       — engine, SessionLocal
+│   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
+│   │   ├── seed.py          — идемпотентный seed
+│   │   └── models/          — ORM-модели (12 модулей, 48 таблиц; chat.py — Stage 28b)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
 │   │   ├── otp_service.py   — создание и верификация OTP
-│   │   ├── routes.py        — /api/auth/* эндпоинты
+│   │   ├── routes.py        — /api/auth/* эндпоинты (+ rate limiting)
 │   │   ├── schemas.py       — Pydantic-схемы auth
-│   │   ├── security.py      — генерация токенов сессии
+│   │   ├── security.py      — generate_session_token(), hash_session_token() (Stage 22b)
 │   │   ├── service.py       — бизнес-логика auth
-│   │   └── storage.py       — работа с БД (users, sessions, consents)
+│   │   └── storage.py       — работа с БД (users, sessions hash-on-lookup,
+│   │                          last_active с debounce 5 мин — Stage 26, consents)
 │   ├── users/               — управление пользователями (admin)
-│   │   ├── routes_admin.py  — /api/admin/users/* эндпоинты
-│   │   ├── schemas.py       — Pydantic-схемы users
+│   │   ├── routes_admin.py  — /api/admin/users/* эндпоинты (только admin)
+│   │   ├── schemas.py       — Pydantic-схемы users (+ legal_basis_confirmed)
 │   │   ├── service.py       — бизнес-логика users
-│   │   └── storage.py       — работа с БД (find_users, create_user)
+│   │   └── storage.py       — работа с БД (find_users, create_user + legal basis record)
 │   ├── tags/                — управление тегами контента
 │   │   ├── routes_admin.py  — /api/admin/tags/* (admin + supervisor)
 │   │   ├── routes_public.py — /api/tags/ (autocomplete, без auth)
@@ -186,12 +278,20 @@ mindcare_api/
 │   │   ├── schemas.py       — ArticleCreate, ArticleUpdate, ArticleRead, CategoryRead
 │   │   ├── service.py       — бизнес-логика
 │   │   └── storage.py       — _article_to_dict, _sync_categories, _sync_tags
+│   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
+│   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
+│   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
+│   │                          system_publisher (idempotency event_key)
+│   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
+│   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
-│       ├── email_sender.py  — SMTP транспорт (dev/smtp режимы)
+│       ├── _smtp.py         — SMTP транспорт (dev/smtp режимы, внутренний)
 │       └── email_service.py — формирование писем по событиям
 ├── scripts/
-│   ├── create_admin.py      — создание первого админа (интерактивный)
-│   └── test_smtp.py         — диагностика SMTP
+│   ├── create_admin.py            — создание первого админа (+ legal basis record)
+│   ├── ensure_audit_partitions.py — будущие партиции audit-таблиц
+│   ├── backfill_legal_basis.py    — backfill legal basis (--dry-run default)
+│   └── test_smtp.py               — диагностика SMTP
 └── db/
     └── sql/
         ├── full_schema.sql  — полная схема (001-010 склеены)
@@ -213,6 +313,47 @@ mindcare_api/
 ✅ Soft delete — deleted_at, не физическое удаление
 ✅ Внешний API использует users.uuid (UUID), не users.id (INT)
 ✅ Схема БД — только через Alembic (alembic upgrade head перед стартом)
+✅ consent_records — ТОЛЬКО личное согласие субъекта (студент сам принимает политику)
+✅ Для admin-created psychologist/supervisor/admin — user_legal_basis_records
+   (документированное основание организации; чекбокс в UI формулируется как
+   «Подтверждаю наличие документированного основания для создания учётной
+   записи и обработки персональных данных пользователя»)
+✅ Смена роли на staff через PATCH /api/admin/users (old_role != new_role,
+   new_role ∈ psychologist/supervisor/admin) тоже требует legal basis
+   (legal_basis_confirmed + basis_type + basis_reference); смена роли и запись
+   user_legal_basis_records атомарны; metadata: action=role_change/old_role/new_role.
+   staff → student основания не требует и старые записи не удаляет (Stage 31f-fix)
+✅ Роль в admin edit-модалке РЕДАКТИРУЕМА (Stage 31n; правило Stage 31h «role
+   read-only» отменено) — но безопасно: при реальной смене на staff/admin UI
+   показывает блок legal basis и шлёт его поля; backend PATCH guard обязателен
+   как defense-in-depth (не полагаться только на UI)
+✅ student НЕ selectable в admin edit-dropdown (Stage 31n-hotfix; студенты —
+   self-registration). Текущая роль student показывается через Select displayLabel,
+   но недоступна для выбора. student как target роли из UI не отправляется
+❌ Не делать роль read-only в admin edit и не слать role без legal basis при смене на staff
+❌ Не писать «админ подтверждает согласие пользователя» — только «документированное
+   основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
+✅ session_notes: psychologist — только свои; supervisor — content только поштучно
+   и под audit (session_note_content_read); admin — metadata-only без decrypt
+✅ Staff-чтение терапевтического content ОБЯЗАНО писать audit-событие (без plaintext)
+✅ Metadata-путь session_notes не должен вызывать decrypt_text
+✅ Chat content доступен только student/psychologist — участникам therapy_engagement
+✅ Chat content шифруется при записи и не попадает в logs/audit
+✅ Auth бизнес-операции АТОМАРНЫ (Stage 31m-fix-b2/b3): registration confirm,
+   password reset confirm, change password — одна SessionLocal() + один commit.
+   password+revoke sessions (и consume OTP) — в одной транзакции
+✅ OTP consume только ПОСЛЕ успешных core DB-изменений, тем же commit
+   (validate без удаления; при сбое core-шага OTP не теряется)
+✅ Хеш нового пароля считать ДО открытия транзакции (bcrypt медленный)
+✅ Новые auth/security изменения требуют failure-injection тестов на реальном
+   состоянии БД (см. test_register_confirm_atomic, test_password_uow_atomic)
+❌ Не возвращать старую модель «несколько независимых commit в одной auth-операции»
+❌ Не выполнять SMTP/email-отправку внутри core DB-транзакции
+❌ Не делать system/auth_log уведомления частью core-транзакции — soft-fail после commit
+❌ Не добавлять admin/supervisor доступ к chat content без отдельного compliance/security этапа
+❌ Не расширять admin-доступ к therapeutic content без отдельного compliance-решения
+❌ Не использовать consent_records как суррогат legal basis для staff-ролей
+❌ Не писать «админ соглашается за пользователя» / «психолог даёт пациентское согласие»
 ❌ Не использовать fastapi-users — конфликтует с нашей схемой
 ❌ Не использовать async SQLAlchemy — проект на sync psycopg2
 ❌ Не вызывать alembic.command.upgrade() из FastAPI lifespan — deadlock
@@ -223,7 +364,7 @@ mindcare_api/
 
 ### База данных: схема
 
-45 таблиц в 10 модулях. Схема управляется через Alembic.
+48 таблиц в 12 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -237,6 +378,11 @@ mindcare_api/
 | `f4b9e2c6a1d8` | audit_indexes_and_types: индексы + тип data_change_log.changed_fields |
 | `a8c3f1d9e2b5` | add_tags_tables: tags, article_tags, news_tags, test_tags |
 | `b3c5e7a9f1d2` | extend_auth_log_event: auth_log.event VARCHAR(50→150) |
+| `d2e5f8a1b4c7` | add_supervisor_engagement_index: partial unique index |
+| `e5a8f3c1d2b6` | add_normalized_email_unique_index: `lower(trim(email))` |
+| `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) |
+| `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
+| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
 
 **Ключевые таблицы:**
 
@@ -247,7 +393,9 @@ mindcare_api/
 | `student_profiles`, `psychologist_profiles` | Профили 1:1 с users |
 | `user_sessions` | Сессии (заменяют JWT). Soft-revoke через `is_revoked` |
 | `otp_verifications` | OTP для регистрации и сброса пароля. code = SHA-256 хеш |
-| `consents`, `consent_records` | Согласия на ПДн. Обязательны при регистрации |
+| `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
+| `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
+| `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
@@ -337,6 +485,177 @@ mindcare_web/src/
 
 ---
 
+### Frontend: UI governance
+
+Полные правила shared UI и аудитов описаны в:
+
+- `docs/UI_COMPONENTS_GUIDE.md`
+- `docs/UI_TECH_DEBT.md`
+- `docs/FRONTEND_CHECKLIST.md`
+- `docs/AUDIT_RULES.md`
+
+Перед любыми изменениями frontend UI сначала проверить:
+
+```text
+src/components/UI
+```
+
+Базовые shared UI controls, которые обязательно учитывать при создании локальных контролов:
+
+```text
+src/components/UI/Button            (Button.jsx + ButtonLink.jsx)
+src/components/UI/Checkbox
+src/components/UI/Toggle
+src/components/UI/FilterChip
+src/components/UI/Badge
+src/components/UI/Tag
+src/components/UI/Select
+src/components/UI/MultiSelect
+src/components/UI/DateInput
+```
+
+В `src/components/UI` также есть более сложные shared utilities:
+
+- `ContentPreview` — предпросмотр HTML-контента новости/материала (DOMPurify).
+- `ImageUpload` — drag-drop загрузка обложки.
+- `TiptapEditor` — rich-text редактор.
+
+Они не являются заменой Button/Checkbox/Toggle/FilterChip/Badge/Tag, но перед созданием preview/upload/editor-логики нужно проверить их повторное использование.
+
+Правила использования:
+
+```text
+✅ Button — обычные action-кнопки: сохранить, отменить, удалить, загрузить ещё, назначить, повторить, применить.
+✅ ButtonLink — React Router навигационные ссылки, выглядящие как кнопки (router <Link> со стилями Button). Не делать Button + navigate() для обычной навигации.
+✅ Checkbox — настоящие form-checkbox: согласие, active/inactive, published/unpublished, include deleted.
+✅ Toggle — on/off переключатели: уведомления, настройки, включить/выключить.
+✅ FilterChip — интерактивные фильтр-чипы с active/inactive состоянием.
+✅ Badge — display-only статусы, роли и состояния: опубликовано, черновик, активен, заблокирован, роль пользователя.
+✅ Tag — display-only теги контента: тема материала, тег новости, категория статьи.
+✅ Select / MultiSelect — выбор одного или нескольких значений.
+✅ DateInput — выбор ТОЛЬКО даты (value YYYY-MM-DD, кастомный popover). Перед созданием локального календаря/date-поля проверить src/components/UI/DateInput. Не использовать нативный datetime-local/date в новых формах без причины. DateTimePicker/TimeInput/SlotPicker пока НЕ реализованы; для записи на приём/слотов DateInput не использовать (нужен будущий SlotPicker).
+```
+
+Запрещено без отдельного обоснования:
+
+```text
+❌ Создавать локальные .btn*, .checkbox*, .toggle*, .chip*, .badge*, .tag*, если уже есть подходящий shared-компонент.
+❌ Писать локальный UI-контрол, не проверив src/components/UI.
+❌ Дублировать стили Button / Checkbox / Toggle / FilterChip / Badge / Tag в CSS Modules.
+❌ Использовать button там, где элемент display-only и должен быть span.
+❌ Использовать span/div там, где элемент интерактивный и должен быть button/input.
+```
+
+Feature-specific UI разрешён только с обоснованием в финальном отчёте.
+
+Осознанные исключения (не мигрировать без отдельного решения):
+
+```text
+- Calendar time slots / time picker
+- Calendar format chips
+- CabinetLayout nav badges
+- CabinetLayout navBadgeSoon
+- CabinetLayout notification dot
+- SearchBar count overlay
+- SearchBar removable chips
+- TaskItem badges
+- Chat controls
+- DiaryEntryForm emotion chips
+- FeaturedNews newsTagOverlay
+- ContentPreview category/tag
+- Student MaterialsPage articleTopic
+- StudentHome period chips
+- StudentHome dark-card buttons
+- MultiSelect selected tags внутри shared MultiSelect
+```
+
+Если задача затрагивает похожий UI-элемент, сначала свериться с `docs/UI_TECH_DEBT.md`.
+Если элемент там числится как feature-specific — не мигрировать без отдельного решения.
+
+---
+
+### Audit mode
+
+Любой аудит в проекте MindCare выполняется только в режиме READ-ONLY.
+
+Обязательные строки для любого промпта на аудит:
+
+```text
+Режим READ-ONLY.
+
+Не менять код.
+Не создавать файлы.
+Не редактировать JSX/CSS/Python.
+Не удалять стили.
+Не делать рефакторинг.
+Не запускать миграцию.
+Только анализ и финальный отчёт.
+```
+
+Аудит может:
+
+```text
+✅ искать файлы;
+✅ классифицировать компоненты;
+✅ описывать риски;
+✅ находить дубли;
+✅ предлагать API будущего компонента;
+✅ предлагать план миграции;
+✅ давать рекомендации.
+```
+
+Аудит не может:
+
+```text
+❌ менять JSX;
+❌ менять CSS;
+❌ менять Python;
+❌ создавать компоненты;
+❌ удалять классы;
+❌ запускать миграцию;
+❌ исправлять найденные проблемы без отдельного разрешения.
+```
+
+Аудит и миграция — разные этапы:
+
+```text
+1. Аудит — только анализ.
+2. Миграция — изменение кода только по отдельному промпту.
+3. Контрольный отчёт — build, grep, visual risks, accessibility risks.
+```
+
+---
+
+### Frontend task checklist
+
+Перед завершением любой frontend-задачи проверить:
+
+```text
+- Использованы shared UI-компоненты там, где они подходят.
+- Не добавлены новые локальные .btn*, .badge*, .tag*, .chip*, .toggle*, .checkbox* без причины.
+- Feature-specific элементы явно обоснованы.
+- Интерактивные button имеют type="button", если это не submit.
+- Toggle / FilterChip / choice-like controls имеют aria-pressed или корректную семантику.
+- Декоративные элементы имеют aria-hidden="true".
+- Display-only элементы не рендерятся как button.
+- Цвета берутся из CSS variables проекта, а не из случайных hex.
+- Проверен responsive для затронутых страниц.
+- Запущен build.
+```
+
+В финальном отчёте по frontend-задаче обязательно указать:
+
+```text
+1. Какие файлы изменены.
+2. Какие shared UI-компоненты использованы.
+3. Какие feature-specific элементы намеренно оставлены.
+4. Какие CSS-классы удалены.
+5. Прошёл ли build.
+6. Есть ли visual/accessibility risks.
+```
+
+---
+
 ### Auth flow
 
 ```
@@ -370,11 +689,11 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/auth/me` | Auth | ✅ |
 | POST | `/api/auth/password/reset/init` | Public | ✅ |
 | POST | `/api/auth/password/reset/confirm` | Public | ✅ |
-| GET | `/api/admin/users` | Admin, Supervisor | ✅ |
-| POST | `/api/admin/users` | Admin, Supervisor | ✅ |
-| PATCH | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
-| DELETE | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
-| GET | `/api/admin/users/{id}` | Admin, Supervisor | ✅ |
+| GET | `/api/admin/users` | Admin | ✅ |
+| POST | `/api/admin/users` | Admin | ✅ |
+| PATCH | `/api/admin/users/{id}` | Admin | ✅ |
+| DELETE | `/api/admin/users/{id}` | Admin | ✅ |
+| GET | `/api/admin/users/{id}` | Admin | ✅ |
 | GET | `/api/admin/tags` | Admin, Supervisor | ✅ |
 | POST | `/api/admin/tags` | Admin, Supervisor | ✅ |
 | PATCH | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |
@@ -564,9 +883,51 @@ Conventional Commits:
 **Не «исправляй» эти вещи без явного запроса** — они отложены осознанно.
 
 Критические риски (прочитай перед любой работой с auth или БД):
-- ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ — закрыто: миграция `3a7c5e2b8f1d` создаёт partitioned tables, `scripts/ensure_audit_partitions.py` управляет будущими партициями
-- `session_notes.content` хранится открытым текстом — шифрование не реализовано (нарушение ФЗ-152 для специальных категорий ПДн)
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
+**Student diary/tasks/calendar — accepted demo/mock (НЕ баг):**
+- `/student/diary`, `/student/tasks`, `/student/calendar` работают на hardcoded
+  mock-данных — это осознанная демо-витрина до отдельных этапов
+- `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
+  единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
+  conversation), polling, read/unread через `read_at`, VK-like entry (mark-read
+  только по явному клику), глобальный nav badge + per-dialog unread, system-беседа
+  последняя в списке, approximate online/offline (`peer_is_online`, порог 10 мин)
+- Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
+- **Mobile (Stage 30d):** Messenger `≤900px` — list/thread (back-кнопка в шапке чата);
+  CabinetLayout `>980px` full sidebar / `601–980px` icon-rail / `≤600px` мобильный drawer
+  (`sidebarInner` переиспользуется; collapse-правила заскоуплены под `.sidebar`); на `≤600px`
+  `.app`=`grid 1fr` (фикс пустого кабинета) и разгруженный topbar (скрыты bell/mail).
+  Breakpoints разные по слоям: Messenger=900px, Cabinet=600px (+980 icon-rail) — не «выравнивать»
+- **Ограничения MVP** (не баги): presence приблизительный (порог 10 мин, не realtime);
+  read-receipt live только в snapshot `limit=50`; без WebSocket/SSE; drawer без focus-trap
+- **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,
+  обязателен READ-ONLY design audit (см. `docs/BACKLOG.md`); учебная группа ≠
+  автоматический чат. Не начинать group chat без отдельного этапа
+- Не добавлять WebSocket/SSE, attachments, Action Center/колокольчик или
+  staff-доступ к content без отдельного этапа
+- `questions_answers` — это Q&A-модуль (один вопрос → один ответ), НЕ чат;
+  не использовать как основу для чата
+
 Исправлено (больше не критично):
+- ~~Партиции audit-таблиц захардкожены до 31.12.2026~~ — закрыто: миграция `3a7c5e2b8f1d` создаёт partitioned tables, `scripts/ensure_audit_partitions.py` управляет будущими партициями
+- ~~`session_notes.content` хранится открытым текстом~~ — закрыто: Fernet application-layer encryption в `app/core/encryption.py`; `DATA_ENCRYPTION_KEY` обязателен в `.env` и также защищает `chat_messages.content`
 - OTP-коды теперь хранятся как SHA-256 хеш (migration `c5d8a1b4e7f2`, otp_service.py)
+- ~~Нет rate limiting на auth-эндпоинтах~~ — закрыто (Stage 21): `app/core/rate_limit.py`,
+  per-process MVP; Redis/shared storage — отдельный этап
+- ~~Session-токены plaintext в `user_sessions.id` / `auth_log.session_id`~~ — закрыто (Stage 22b):
+  SHA-256 hash-on-lookup; зачистка старых plaintext-строк — отдельный maintenance-этап
+- ~~Нет legal basis для admin-created users~~ — закрыто (Stage 23b): `user_legal_basis_records`;
+  backfill `--apply` выполнить при деплое
+- ~~Raw SMTP/auth ошибки клиенту, `[object Object]` на 422, незамаскированный email в логах~~ —
+  закрыто (Stage 31m-fix-a): client.js парсит 422 detail array, SMTP/auth errors санитизированы,
+  email маскируется `mask_email`
+- ~~OTP INFO-логи раскрывают email; confirm не передаёт IP/UA в consent; `_assign_role` silent skip~~ —
+  закрыто (Stage 31m-fix-b1): OTP-логи маскируют email, consent получает IP/User-Agent, роль обязана существовать
+- ~~Registration confirm не атомарен (user без consent при сбое)~~ — закрыто (Stage 31m-fix-b2):
+  один UoW/commit (user/role/consent + consume OTP); welcome — soft-fail после commit
+- ~~Password reset confirm / change password не атомарны (пароль изменён, старые сессии живы)~~ —
+  закрыто (Stage 31m-fix-b3): password_hash + revoke sessions (+ consume OTP) в одной транзакции;
+  system-уведомление soft-fail после commit
+- Остаётся pending (deferred): OTP concurrency / `SELECT … FOR UPDATE`; `_get_primary_role`
+  read-fallback `"student"`; transactional outbox для post-commit уведомлений

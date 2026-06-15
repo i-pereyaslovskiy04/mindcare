@@ -1,16 +1,15 @@
-﻿# MindCare -- zero-to-run startup script
-# Usage: .\start.ps1
-#
+# MindCare -- zero-to-run startup script
 # Startup order:
 #   1. Validate tools (python, npm)
 #   2. Create venv at mindcare_api/.venv
 #   3. Install backend deps (pip)
 #   4. Install frontend deps (npm)
-#   5. alembic upgrade head  <- MUST run before uvicorn
-#   6. Verify alembic revision
-#   7. Start backend  (new window)
-#   8. Start frontend (new window)
-#   9. Health-check poll (60 s)
+#   5. Backend tests  (.\test.ps1)
+#   6. alembic upgrade head  <- MUST run before uvicorn
+#   7. Verify alembic revision
+#   8. Start backend  (new window)
+#   9. Start frontend (new window)
+#  10. Health-check poll (60 s)
 #
 # WHY alembic runs before uvicorn:
 #   FastAPI lifespan only reads alembic_version (read-only check).
@@ -30,11 +29,10 @@ $venvPip     = Join-Path $venvDir "Scripts\pip.exe"
 $venvUvicorn = Join-Path $venvDir "Scripts\uvicorn.exe"
 $venvAlembic = Join-Path $venvDir "Scripts\alembic.exe"
 $nodeModules = Join-Path $webDir  "node_modules"
-$requirements= Join-Path $apiDir  "requirements.txt"
+$requirements = Join-Path $apiDir "requirements.txt"
 
 # --- Helpers -----------------------------------------------------------------
 function Log-Section  { param($m) Write-Host ""; Write-Host "--- $m" -ForegroundColor DarkCyan }
-function Log-DB       { param($m) Write-Host "[DB]       $m" -ForegroundColor Blue }
 function Log-Alembic  { param($m) Write-Host "[ALEMBIC]  $m" -ForegroundColor Cyan }
 function Log-Backend  { param($m) Write-Host "[BACKEND]  $m" -ForegroundColor Green }
 function Log-Frontend { param($m) Write-Host "[FRONTEND] $m" -ForegroundColor Magenta }
@@ -97,8 +95,19 @@ if (-not (Test-Path $nodeModules)) {
     Log-Ok "node_modules already exists."
 }
 
-# --- Step 5: alembic upgrade head --------------------------------------------
-Log-Section "Step 5: alembic upgrade head"
+# --- Step 5: backend tests ---------------------------------------------------
+Log-Section "Step 5: backend tests"
+& "$root\test.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "  Project not started: tests failed." -ForegroundColor Red
+    Write-Host "  Fix the errors and re-run: .\start.ps1" -ForegroundColor Yellow
+    exit 1
+}
+Log-Ok "All tests passed."
+
+# --- Step 6: alembic upgrade head --------------------------------------------
+Log-Section "Step 6: alembic upgrade head"
 Log-Alembic "Applying migrations..."
 Push-Location $apiDir
 $env:PGCLIENTENCODING = "UTF8"
@@ -110,8 +119,8 @@ if ($alembicExit -ne 0) {
 }
 Log-Ok "Migrations applied."
 
-# --- Step 6: verify revision -------------------------------------------------
-Log-Section "Step 6: verify DB revision"
+# --- Step 7: verify revision -------------------------------------------------
+Log-Section "Step 7: verify DB revision"
 Log-Alembic "Current revision:"
 Push-Location $apiDir
 & $venvAlembic current
@@ -119,8 +128,8 @@ $revExit = $LASTEXITCODE
 Pop-Location
 if ($revExit -ne 0) { Log-Warn "Could not read alembic revision." }
 
-# --- Step 7: start backend ---------------------------------------------------
-Log-Section "Step 7: start backend"
+# --- Step 8: start backend ---------------------------------------------------
+Log-Section "Step 8: start backend"
 Log-Backend "Launching -> http://localhost:8000"
 
 $backendCmd = "& { " +
@@ -131,8 +140,8 @@ $backendCmd = "& { " +
 
 Start-Process powershell -ArgumentList @("-NoExit", "-Command", $backendCmd) -WindowStyle Normal
 
-# --- Step 8: start frontend --------------------------------------------------
-Log-Section "Step 8: start frontend"
+# --- Step 9: start frontend --------------------------------------------------
+Log-Section "Step 9: start frontend"
 Log-Frontend "Launching -> http://localhost:3000"
 
 $frontendCmd = "& { " +
@@ -143,8 +152,8 @@ $frontendCmd = "& { " +
 
 Start-Process powershell -ArgumentList @("-NoExit", "-Command", $frontendCmd) -WindowStyle Normal
 
-# --- Step 9: health-check poll -----------------------------------------------
-Log-Section "Step 9: waiting for backend to be ready"
+# --- Step 10: health-check poll ----------------------------------------------
+Log-Section "Step 10: waiting for backend to be ready"
 $ready = $false
 for ($i = 1; $i -le 60; $i++) {
     Start-Sleep -Seconds 1

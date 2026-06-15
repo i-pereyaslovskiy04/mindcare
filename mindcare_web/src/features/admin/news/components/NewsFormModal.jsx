@@ -5,6 +5,9 @@ import ImageUpload from '../../../../components/UI/ImageUpload/ImageUpload';
 import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
 import ContentPreview from '../../../../components/UI/ContentPreview/ContentPreview';
 import Button from '../../../../components/UI/Button/Button';
+import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
+import DateInput, { isoToDateOnly, dateOnlyToPublishedAtIso } from '../../../../components/UI/DateInput';
+import { publishCheckboxLabel, submitButtonLabel } from '../../publishLabels';
 import { getTagsPublic } from '../../../../api/tags.api';
 import { createNews, updateNews } from '../../../../api/news.api';
 import styles from './NewsFormModal.module.css';
@@ -46,7 +49,7 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
         cover:       news.cover_image_url ? { uuid: news.cover_image_uuid || null, url: news.cover_image_url } : null,
         tagUuids:    news.tags?.map(t => t.uuid) || [],
         isPublished: news.is_published || false,
-        publishedAt: news.published_at ? news.published_at.slice(0, 16) : '',
+        publishedAt: isoToDateOnly(news.published_at),
       });
     } else {
       setForm(EMPTY);
@@ -81,7 +84,7 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
         cover_image_uuid: form.cover?.uuid || null,
         tag_uuids:        form.tagUuids,
         is_published:     form.isPublished,
-        published_at:     form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
+        published_at:     dateOnlyToPublishedAtIso(form.publishedAt),
       };
       const saved = isEdit
         ? await updateNews(news.uuid, payload)
@@ -147,23 +150,18 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
 
           <div className={styles.row}>
             <div className={styles.field}>
-              <label className={styles.label}>Дата публикации</label>
-              <input
-                type="datetime-local"
-                className={styles.input}
+              <DateInput
+                label="Дата публикации"
                 value={form.publishedAt}
-                onChange={e => set('publishedAt', e.target.value)}
+                onChange={val => set('publishedAt', val)}
               />
             </div>
             <div className={styles.fieldCheck}>
-              <label className={styles.checkLabel}>
-                <input
-                  type="checkbox"
-                  checked={form.isPublished}
-                  onChange={e => set('isPublished', e.target.checked)}
-                />
-                Опубликовать
-              </label>
+              <Checkbox
+                checked={form.isPublished}
+                onChange={(val) => set('isPublished', val)}
+                label={publishCheckboxLabel()}
+              />
             </div>
           </div>
 
@@ -179,7 +177,7 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
               Предпросмотр
             </Button>
             <Button variant="primary" type="submit" disabled={submitting}>
-              {submitting ? 'Сохранение…' : isEdit ? 'Сохранить' : 'Создать'}
+              {submitButtonLabel({ isEdit, isPublished: form.isPublished, submitting })}
             </Button>
           </div>
         </form>
@@ -193,7 +191,7 @@ export default function NewsFormModal({ open, news, onClose, onSaved }) {
           content={form.content}
           coverUrl={form.cover?.url || null}
           tags={selectedTagNames}
-          publishedAt={form.publishedAt ? new Date(form.publishedAt).toISOString() : null}
+          publishedAt={dateOnlyToPublishedAtIso(form.publishedAt)}
         />
       )}
     </>

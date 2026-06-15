@@ -44,27 +44,6 @@
   margin-top: 24px;
 }
 
-.pageBtn {
-  padding: 7px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--nav-border);
-  background: var(--warm-white);
-  color: var(--text-muted);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.pageBtn:hover:not(:disabled) {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-
-.pageBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 .pageInfo {
   font-size: 13px;

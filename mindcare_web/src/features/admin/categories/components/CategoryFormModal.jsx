@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Modal from '../../../../components/Modal/Modal';
 import { createCategory, updateCategory } from '../../../../api/categories.api';
 import Button from '../../../../components/UI/Button/Button';
+import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import styles from './CategoryFormModal.module.css';
 
 const EMPTY = {
@@ -137,14 +138,11 @@ export default function CategoryFormModal({ open, category, onClose, onSaved }) 
         </div>
 
         <div className={styles.fieldCheck}>
-          <label className={styles.checkLabel}>
-            <input
-              type="checkbox"
-              checked={form.is_active}
-              onChange={e => set('is_active', e.target.checked)}
-            />
-            Активна (показывать в формах добавления материалов)
-          </label>
+          <Checkbox
+            checked={form.is_active}
+            onChange={(val) => set('is_active', val)}
+            label="Активна (показывать в формах добавления материалов)"
+          />
         </div>
 
         {errors._form && (

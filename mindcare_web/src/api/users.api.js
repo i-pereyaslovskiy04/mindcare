@@ -41,11 +41,29 @@ export function createUser(data) {
   });
 }
 
-/** PATCH /api/admin/users/:uuid — partial update. */
+/**
+ * PATCH /api/admin/users/:uuid — partial update.
+ *
+ * Allowlist: defensive filtering — только эти поля уходят на backend,
+ * неизвестные поля отбрасываются. role и legal basis fields допустимы
+ * (Stage 31n): при смене роли на staff/admin backend требует
+ * legal_basis_confirmed + basis_type + basis_reference (Stage 31f-fix).
+ * Вызывающий код (useUserForm) гарантирует, что role/legal basis
+ * присутствуют только при реальной смене роли.
+ */
+const EDITABLE_FIELDS = [
+  'full_name', 'phone', 'is_active',
+  'role', 'legal_basis_confirmed', 'basis_type', 'basis_reference', 'legal_basis_comment',
+];
+
 export function updateUser(uuid, data) {
+  const body = {};
+  for (const key of EDITABLE_FIELDS) {
+    if (data[key] !== undefined) body[key] = data[key];
+  }
   return apiFetch(`${BASE}/${uuid}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(body),
   });
 }
 

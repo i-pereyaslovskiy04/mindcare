@@ -19,8 +19,9 @@ Safe for multi-instance deployments and server restarts.
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
+from app.core.normalization import normalize_email, mask_email
 from app.db.session import SessionLocal
 from app.db.models import OtpVerification
 
@@ -33,7 +34,7 @@ MAX_ATTEMPTS    = 5
 
 def _utcnow() -> datetime:
     """Naive UTC timestamp — совместимо с DateTime (без timezone) в ORM."""
-    return datetime.utcnow()
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _hash_code(plaintext_code: str) -> str:
@@ -62,6 +63,7 @@ def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
     - Возвращает plaintext-код для отправки по email.
       В БД хранится ТОЛЬКО хеш — plaintext нигде не сохраняется.
     """
+    email = normalize_email(email)
     plaintext_code = str(secrets.randbelow(1_000_000)).zfill(6)
     code_hash      = _hash_code(plaintext_code)
     now            = _utcnow()
@@ -100,7 +102,7 @@ def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
 
         db.commit()
 
-    log.info("[OTP] Code created/updated for %s", email)
+    log.info("[OTP] Code created/updated for %s", mask_email(email))
     return plaintext_code   # plaintext возвращается caller'у для отправки по email
 
 
@@ -119,6 +121,7 @@ def verify_otp(email: str, code: str) -> dict:
       3. Превышены попытки   → запись удаляется
       4. Неверный код        → attempts++; удаляется на последней попытке
     """
+    email = normalize_email(email)
     now = _utcnow()
 
     with SessionLocal() as db:
@@ -154,7 +157,7 @@ def verify_otp(email: str, code: str) -> dict:
             db.commit()
             log.info(
                 "[OTP] Wrong code for %s, attempts=%d, remaining=%d",
-                email, record.attempts, remaining,
+                mask_email(email), record.attempts, remaining,
             )
             raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
 
@@ -162,12 +165,13 @@ def verify_otp(email: str, code: str) -> dict:
         db.delete(record)
         db.commit()
 
-    log.info("[OTP] Verification OK for %s", email)
+    log.info("[OTP] Verification OK for %s", mask_email(email))
     return user_data
 
 
 def delete_otp(email: str) -> None:
     """Удаляет OTP-запись для email. No-op если записи нет."""
+    email = normalize_email(email)
     with SessionLocal() as db:
         db.query(OtpVerification).filter(OtpVerification.email == email).delete(
             synchronize_session=False

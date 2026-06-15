@@ -5,6 +5,7 @@ import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 import { getNewsById } from '../../api/news.api';
+import Tag from '../../components/UI/Tag/Tag';
 import styles from './NewsItemPage.module.css';
 
 function formatDate(iso) {
@@ -80,7 +81,7 @@ export default function NewsItemPage() {
                 {news.tags?.length > 0 && (
                   <div className={styles.tags}>
                     {news.tags.map(t => (
-                      <span key={t.uuid} className={styles.tag}>{t.name}</span>
+                      <Tag key={t.uuid} variant="public">{t.name}</Tag>
                     ))}
                   </div>
                 )}

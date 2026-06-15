@@ -44,6 +44,9 @@ from app.db.models.consents import (  # noqa: F401
     ConsentRecord,
 )
 
+# ── legal basis ───────────────────────────────────────────────────────────────
+from app.db.models.legal_basis import UserLegalBasisRecord  # noqa: F401
+
 # ── media ─────────────────────────────────────────────────────────────────────
 from app.db.models.media import (  # noqa: F401
     MediaFile,
@@ -86,6 +89,12 @@ from app.db.models.consultations import (  # noqa: F401
     SessionNote,
 )
 
+# ── chat (FK → therapy_engagements, users) ───────────────────────────────────
+from app.db.models.chat import (  # noqa: F401
+    ChatConversation,
+    ChatMessage,
+)
+
 # ── notifications ─────────────────────────────────────────────────────────────
 from app.db.models.notifications import (  # noqa: F401
     NotificationTemplate,
@@ -110,6 +119,8 @@ __all__ = [
     "StudentProfile", "PsychologistProfile", "EmergencyContact",
     # consents
     "Consent", "ConsentRecord",
+    # legal basis
+    "UserLegalBasisRecord",
     # media
     "MediaFile", "MediaVersion",
     # content
@@ -120,6 +131,8 @@ __all__ = [
     "TestResult", "TestResultScale", "StudentAnswer",
     # consultations
     "TherapyEngagement", "ScheduleRule", "ScheduleException", "Appointment", "SessionNote",
+    # chat
+    "ChatConversation", "ChatMessage",
     # notifications
     "NotificationTemplate", "Notification",
     # audit
