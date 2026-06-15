@@ -130,8 +130,13 @@ npm test -- --testPathPattern=client.test.js
 ✅ Добавить или обновить тесты для изменённой логики
 ✅ Запустить релевантный pytest перед завершением задачи
 ✅ Если тесты не добавлены — объяснить причину в финальном отчёте
+✅ Для изменений auth UoW — failure-injection тесты на реальном состоянии БД
 ❌ Не утверждать "покрыто тестами", если покрыта только конкретная зона
 ```
+
+Финальный отчёт по любой задаче (особенно docs/fix-промпты) должен содержать:
+что изменено · какие тесты добавлены/прогнаны (или почему нет) · что НЕ трогалось ·
+оставшиеся pending-риски.
 
 ### Команды
 
@@ -167,20 +172,26 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **228 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **282 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 
 | Файл | Что покрыто |
 |------|-------------|
-| `tests/test_change_password.py` | `service.change_password` — 13 сценариев |
-| `tests/test_encryption.py` | `app.core.encryption` — 21 сценарий |
+| `tests/test_change_password.py` | `service.change_password` — атомарный UoW, мок storage — 13 сценариев |
+| `tests/test_encryption.py` | `app.core.encryption` — 26 сценариев |
 | `tests/test_normalization.py` | `normalize_email` + OTP/storage нормализация — 16 |
 | `tests/test_smtp_transport.py` | SMTP TLS/SSL transport — 21 |
+| `tests/test_email_error_sanitization.py` | санитизация SMTP/auth ошибок клиенту (Stage 31m-fix-a) — 11 |
 | `tests/test_rate_limit.py` | sliding-window limiter (unit) — 18 |
 | `tests/test_session_security.py` | generate/hash session token (unit) — 8 |
+| `tests/test_auth_hardening_b1.py` | OTP log masking / consent IP-UA / fail on missing role (Stage 31m-fix-b1) — 6 |
+| `tests/integration/test_register_confirm_atomic.py` | атомарный registration confirm UoW + failure-injection (Stage 31m-fix-b2) — 8 |
+| `tests/integration/test_register_consent_context.py` | IP/User-Agent в consent_records при confirm — 1 |
+| `tests/integration/test_password_uow_atomic.py` | атомарные password reset confirm + change password UoW, failure-injection (Stage 31m-fix-b3) — 11 |
 | `tests/integration/test_email_normalization_api.py` | register/login/reset API — 11 |
 | `tests/integration/test_rate_limit_api.py` | 429-поведение auth API — 10 |
 | `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end — 9 |
 | `tests/integration/test_legal_basis_api.py` | legal basis records API — 11 |
+| `tests/integration/test_admin_role_patch_legal_basis.py` | legal basis при смене роли (Stage 31f-fix) — 12 |
 | `tests/integration/test_session_notes_api.py` | access policy session_notes (Stage 25b) — 15 |
 | `tests/integration/test_touch_session.py` | debounce touch_session (Stage 26) — 9 |
 | `tests/integration/test_chat_models.py` | constraints chat-таблиц (Stage 28b) — 6 |
@@ -318,6 +329,17 @@ mindcare_api/
 ✅ Metadata-путь session_notes не должен вызывать decrypt_text
 ✅ Chat content доступен только student/psychologist — участникам therapy_engagement
 ✅ Chat content шифруется при записи и не попадает в logs/audit
+✅ Auth бизнес-операции АТОМАРНЫ (Stage 31m-fix-b2/b3): registration confirm,
+   password reset confirm, change password — одна SessionLocal() + один commit.
+   password+revoke sessions (и consume OTP) — в одной транзакции
+✅ OTP consume только ПОСЛЕ успешных core DB-изменений, тем же commit
+   (validate без удаления; при сбое core-шага OTP не теряется)
+✅ Хеш нового пароля считать ДО открытия транзакции (bcrypt медленный)
+✅ Новые auth/security изменения требуют failure-injection тестов на реальном
+   состоянии БД (см. test_register_confirm_atomic, test_password_uow_atomic)
+❌ Не возвращать старую модель «несколько независимых commit в одной auth-операции»
+❌ Не выполнять SMTP/email-отправку внутри core DB-транзакции
+❌ Не делать system/auth_log уведомления частью core-транзакции — soft-fail после commit
 ❌ Не добавлять admin/supervisor доступ к chat content без отдельного compliance/security этапа
 ❌ Не расширять admin-доступ к therapeutic content без отдельного compliance-решения
 ❌ Не использовать consent_records как суррогат legal basis для staff-ролей
@@ -887,3 +909,15 @@ Conventional Commits:
   SHA-256 hash-on-lookup; зачистка старых plaintext-строк — отдельный maintenance-этап
 - ~~Нет legal basis для admin-created users~~ — закрыто (Stage 23b): `user_legal_basis_records`;
   backfill `--apply` выполнить при деплое
+- ~~Raw SMTP/auth ошибки клиенту, `[object Object]` на 422, незамаскированный email в логах~~ —
+  закрыто (Stage 31m-fix-a): client.js парсит 422 detail array, SMTP/auth errors санитизированы,
+  email маскируется `mask_email`
+- ~~OTP INFO-логи раскрывают email; confirm не передаёт IP/UA в consent; `_assign_role` silent skip~~ —
+  закрыто (Stage 31m-fix-b1): OTP-логи маскируют email, consent получает IP/User-Agent, роль обязана существовать
+- ~~Registration confirm не атомарен (user без consent при сбое)~~ — закрыто (Stage 31m-fix-b2):
+  один UoW/commit (user/role/consent + consume OTP); welcome — soft-fail после commit
+- ~~Password reset confirm / change password не атомарны (пароль изменён, старые сессии живы)~~ —
+  закрыто (Stage 31m-fix-b3): password_hash + revoke sessions (+ consume OTP) в одной транзакции;
+  system-уведомление soft-fail после commit
+- Остаётся pending (deferred): OTP concurrency / `SELECT … FOR UPDATE`; `_get_primary_role`
+  read-fallback `"student"`; transactional outbox для post-commit уведомлений

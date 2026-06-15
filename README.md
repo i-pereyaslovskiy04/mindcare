@@ -107,7 +107,7 @@ mindcare/
 │   │   ├── ensure_audit_partitions.py   # Создание будущих партиций audit-таблиц
 │   │   ├── backfill_legal_basis.py      # Backfill legal basis records (--dry-run по умолчанию)
 │   │   └── test_smtp.py                 # Диагностика SMTP-соединения
-│   ├── tests/                       # 188 тестов: unit + integration (см. «Тестирование»)
+│   ├── tests/                       # 282 теста: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -345,7 +345,7 @@ lifespan() startup
 
 ## Тестирование
 
-Текущий статус: **188 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
+Текущий статус: **282 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
 
 ```bash
 # Backend
@@ -368,12 +368,17 @@ npm run build
 
 | Файл | Покрытие |
 |------|----------|
-| `tests/test_change_password.py` | смена пароля (13) |
-| `tests/test_encryption.py` | Fernet encryption helper (21) |
+| `tests/test_change_password.py` | смена пароля — атомарный UoW, мок storage (13) |
+| `tests/test_encryption.py` | Fernet encryption helper (26) |
 | `tests/test_normalization.py` | нормализация email (16) |
 | `tests/test_smtp_transport.py` | SMTP TLS/SSL transport (21) |
+| `tests/test_email_error_sanitization.py` | санитизация SMTP/auth ошибок клиенту (11) |
 | `tests/test_rate_limit.py` | rate limiter unit (18) |
 | `tests/test_session_security.py` | session token hashing unit (8) |
+| `tests/test_auth_hardening_b1.py` | OTP log masking / consent IP-UA / fail on missing role (6) |
+| `tests/integration/test_register_confirm_atomic.py` | атомарный registration confirm UoW + failure-injection (8) |
+| `tests/integration/test_register_consent_context.py` | IP/User-Agent в consent_records при confirm (1) |
+| `tests/integration/test_password_uow_atomic.py` | атомарные password reset confirm + change password UoW, failure-injection (11) |
 | `tests/integration/test_email_normalization_api.py` | register/login/reset API (11) |
 | `tests/integration/test_rate_limit_api.py` | 429-поведение auth API (10) |
 | `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end (9) |
@@ -394,9 +399,18 @@ npm run build
 
 **Rate limiting (Stage 21).** Auth-эндпоинты (login, register init/confirm, password reset init/confirm) защищены in-memory sliding-window лимитером (`app/core/rate_limit.py`): лимиты по IP и нормализованному email, 429 с единым сообщением без раскрытия существования аккаунта. **MVP-ограничение:** состояние per-process, сбрасывается при рестарте; для multi-worker/multi-instance production нужен Redis/shared storage (отдельный этап).
 
-**OTP-коды.** Plaintext-код отправляется пользователю по email. В БД хранится только `SHA-256(code)` в `otp_verifications`. Код действителен 10 минут. Верификация — сравнение хешей. После успешной верификации запись удаляется.
+**OTP-коды.** Plaintext-код отправляется пользователю по email. В БД хранится только `SHA-256(code)` в `otp_verifications`. Код действителен 10 минут. Верификация — сравнение хешей. В атомарных flows (registration confirm, password reset confirm) OTP **валидируется без удаления** и потребляется (удаляется) тем же commit, что и основная операция — при сбое core-шага OTP не теряется. INFO-логи OTP маскируют email (`mask_email`).
 
 **Пароли.** bcrypt напрямую (`import bcrypt`). Никакого MD5/SHA для паролей.
+
+**Атомарность auth-операций (Stage 31m-fix-b2/b3).** Бизнес-операции auth выполняются как единый unit-of-work — одна `SessionLocal()` + один финальный `commit`, без нескольких независимых commit внутри одной операции:
+- **registration confirm** — validate OTP → создать/реактивировать пользователя → роль `student` → все `consent_records` → consume OTP → commit. Сбой любого core-шага откатывает пользователя/роль/согласия, OTP остаётся;
+- **password reset confirm** — validate OTP → `password_hash` → revoke всех сессий → consume OTP → commit;
+- **change password** — verify current password → `password_hash` → revoke всех сессий → commit.
+
+Хеш нового пароля считается **до** открытия транзакции (bcrypt медленный). Email отправляется на init-шаге (вне транзакции); welcome/security system-уведомления публикуются **после** commit и остаются best-effort/soft-fail (их сбой не откатывает основную операцию и не раскрывает plaintext). `auth_log` — fire-and-forget вне core-транзакции. Transactional outbox на текущем этапе отсутствует. Покрыто failure-injection тестами: `tests/integration/test_register_confirm_atomic.py`, `tests/integration/test_password_uow_atomic.py`.
+
+**Санитизация ошибок (Stage 31m-fix-a).** Raw SMTP/auth exceptions не отдаются клиенту; frontend `api/client.js` корректно парсит FastAPI/Pydantic 422 `detail` (array of objects) и не показывает `[object Object]`; email в auth/SMTP логах маскируется через `mask_email`.
 
 **Аудит.** Все auth-события (login, logout, failed_login, register, password_reset) пишутся в `auth_log` через `audit.log_auth_event()`. Fire-and-forget, ошибки записи не влияют на основной ответ.
 
@@ -482,7 +496,11 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 - Redis/shared storage для rate limiting при multi-worker деплое;
 - request-scoped DB session (debounce `touch_session` закрыт в Stage 26);
 - `target_user_id` в auth_log для поиска операций по субъекту;
-- retention policy для chat_messages (открытый продуктовый вопрос).
+- retention policy для chat_messages (открытый продуктовый вопрос);
+- OTP concurrency / row locking: атомарные confirm-flows не берут `SELECT … FOR UPDATE`, при гонке двух confirm возможен двойной проход валидации (deferred);
+- `_get_primary_role` read-fallback `"student"` при отсутствии активной роли (auth/storage) — cleanup deferred;
+- transactional outbox для гарантированной доставки post-commit уведомлений (deferred);
+- UI просмотра `user_legal_basis_records` в карточке пользователя админки.
 
 **Закрытые compliance-риски:**
 
