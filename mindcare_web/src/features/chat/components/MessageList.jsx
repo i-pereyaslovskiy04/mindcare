@@ -13,7 +13,13 @@ function dayLabel(iso) {
   return d.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
 }
 
-export default function MessageList({ messages, contact, emptyText }) {
+export default function MessageList({
+  messages,
+  contact,
+  emptyText,
+  editable = false,
+  onStartEdit = null,
+}) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -44,6 +50,8 @@ export default function MessageList({ messages, contact, emptyText }) {
               showAuthorHeader={showAuthorHeader}
               authorName={authorName}
               authorRole={authorRole}
+              editable={editable}
+              onStartEdit={onStartEdit}
             />
           </Fragment>
         );

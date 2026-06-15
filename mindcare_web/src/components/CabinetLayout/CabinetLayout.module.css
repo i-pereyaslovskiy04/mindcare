@@ -1,10 +1,30 @@
 /* ── APP SHELL ─────────────────────────────────────────────────── */
 .app {
+  /* единая высота шапки sidebar (brand) и шапки content (topbar/breadcrumb);
+     наследуется в .brand и .topbar через var (Stage 31x-hotfix) */
+  --cabinet-header-height: 73px;
+  position: relative;
   display: grid;
   grid-template-columns: 264px 1fr;
   height: 100vh;
   overflow: hidden;
   background: var(--warm-white);
+}
+
+/* Единая непрерывная линия под header-рядом через sidebar и content одной
+   полосой поверх вертикального divider'а (border-right у .sidebar). Заменяет
+   два отдельных border-bottom (brand + topbar), которые на разной высоте/DPI
+   давали разрыв на стыке колонок. */
+.app::after {
+  content: "";
+  position: absolute;
+  top: var(--cabinet-header-height);
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--nav-border);
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* ── SIDEBAR ────────────────────────────────────────────────────── */
@@ -17,15 +37,21 @@
   overflow: hidden;
 }
 
-/* Brand */
+/* Brand. Высота согласована с .topbar через var --cabinet-header-height;
+   горизонтальную линию рисует общий .app::after, поэтому border-bottom здесь
+   НЕ ставим (в drawer он восстанавливается отдельным правилом ниже). */
 .brand {
-  padding: 22px 24px 18px;
+  box-sizing: border-box;
+  min-height: var(--cabinet-header-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 24px;
   font-family: 'Cormorant Garamond', serif;
   font-size: 20px;
   font-weight: 400;
   color: var(--espresso);
   letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--nav-border);
   line-height: 1.3;
   flex-shrink: 0;
 }
@@ -220,14 +246,16 @@
   height: 100vh;
 }
 
-/* Topbar */
+/* Topbar. Высота согласована с .brand через var --cabinet-header-height;
+   горизонтальную линию рисует общий .app::after, border-bottom здесь не нужен. */
 .topbar {
+  box-sizing: border-box;
+  min-height: var(--cabinet-header-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 36px;
   background: var(--warm-white);
-  border-bottom: 1px solid var(--nav-border);
   flex-shrink: 0;
   gap: 16px;
 }
@@ -369,6 +397,12 @@
   z-index: 100;
   box-shadow: 0 8px 30px rgba(74, 55, 40, 0.28);
 }
+/* Drawer — отдельный fixed-элемент вне .app, общий .app::after до него не
+   достаёт, поэтому brand'у возвращаем собственный нижний разделитель. */
+.mobileDrawer .brand {
+  border-bottom: 1px solid var(--nav-border);
+}
+
 .drawerClose {
   position: absolute;
   top: 12px;

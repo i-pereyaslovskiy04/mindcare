@@ -49,6 +49,7 @@ export default function PsychologistChatPage() {
     sending,
     sendError,
     send,
+    editMessage,
   } = usePsychologistChat();
 
   const {
@@ -177,6 +178,7 @@ export default function PsychologistChatPage() {
           contact={toContact(selected)}
           messages={messages}
           onSend={send}
+          onEdit={editMessage}
           closed={closed}
           sending={sending}
           sendError={sendError}

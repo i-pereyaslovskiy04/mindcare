@@ -1,8 +1,43 @@
-import { mergeMessages, shouldShowAuthorHeader } from './messageShape';
+import { mapApiMessage, mergeMessages, shouldShowAuthorHeader } from './messageShape';
 
 const T1 = '2024-01-01T10:00:00.000Z';
 const T2 = '2024-01-01T11:00:00.000Z';
 const T3 = '2024-01-01T12:00:00.000Z';
+
+describe('mapApiMessage', () => {
+  test('keeps uuid and maps editedAt (Stage 31x)', () => {
+    const out = mapApiMessage({
+      id: 5,
+      uuid: 'm-uuid-5',
+      content: 'привет',
+      is_mine: true,
+      sender_role: 'student',
+      sender_id: 9,
+      created_at: T1,
+      read_at: null,
+      edited_at: T2,
+    });
+    expect(out.uuid).toBe('m-uuid-5');
+    expect(out.editedAt).toBe(T2);
+    expect(out.text).toBe('привет');
+    expect(out.mine).toBe(true);
+  });
+
+  test('editedAt is null when not edited', () => {
+    const out = mapApiMessage({
+      id: 6,
+      uuid: 'm-uuid-6',
+      content: 'x',
+      is_mine: false,
+      sender_role: 'psychologist',
+      sender_id: 3,
+      created_at: T1,
+      read_at: null,
+      edited_at: null,
+    });
+    expect(out.editedAt).toBeNull();
+  });
+});
 
 describe('mergeMessages', () => {
   test('empty incoming returns existing unchanged', () => {

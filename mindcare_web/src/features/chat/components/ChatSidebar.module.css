@@ -7,9 +7,16 @@
   overflow: hidden;
 }
 
+/* Высота согласована с .header диалога через общий var --chat-header-height
+   (задаётся на .shell страницы). Горизонтальную линию рисует единый .shell::after,
+   поэтому здесь border-bottom НЕ ставим (Stage 31x-hotfix-2). */
 .header {
-  padding: 18px 20px 16px;
-  border-bottom: 1px solid var(--nav-border);
+  box-sizing: border-box;
+  min-height: var(--chat-header-height, 72px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 20px;
   flex-shrink: 0;
 }
 

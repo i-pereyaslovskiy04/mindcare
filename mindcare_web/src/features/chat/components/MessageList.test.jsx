@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import MessageList from './MessageList';
 
 // jsdom не реализует scrollIntoView (используется в MessageList useEffect).
@@ -74,4 +74,56 @@ test('G. archived/read-only dialog still shows author headers', () => {
   render(<MessageList messages={messages} contact={contact} />);
   expect(screen.getByText('Иванова Мария')).toBeInTheDocument();
   expect(screen.getByText('Вы')).toBeInTheDocument();
+});
+
+// ── Edit pencil (Stage 31x) ──────────────────────────────────────────────────
+
+const ownMsg = { id: 1, uuid: 'u1', text: 'моё', mine: true, senderId: 5, time: '10:00', createdAt: A };
+const inMsg = { id: 2, uuid: 'u2', text: 'входящее', mine: false, senderId: 7, time: '10:00', createdAt: A };
+
+// Pencil только у своих сообщений, когда чат редактируемый (editable=true).
+test('pencil appears only for own editable user message', () => {
+  render(
+    <MessageList messages={[ownMsg, inMsg]} contact={contact} editable onStartEdit={jest.fn()} />,
+  );
+  // ровно один карандаш — у своего сообщения
+  expect(screen.getAllByRole('button', { name: 'Редактировать сообщение' })).toHaveLength(1);
+});
+
+// editable=false (closed/archive) → карандаша нет даже у своих.
+test('no pencil when chat is not editable (closed/archive)', () => {
+  render(<MessageList messages={[ownMsg, inMsg]} contact={contact} editable={false} />);
+  expect(screen.queryByRole('button', { name: 'Редактировать сообщение' })).not.toBeInTheDocument();
+});
+
+// System-сообщение не получает карандаш даже при editable.
+test('no pencil for system message', () => {
+  const sys = { id: 3, text: 'служебное', system: true, time: '10:00', createdAt: A };
+  render(
+    <MessageList messages={[sys]} contact={{ name: 'Системные', initials: '' }} editable onStartEdit={jest.fn()} />,
+  );
+  expect(screen.queryByRole('button', { name: 'Редактировать сообщение' })).not.toBeInTheDocument();
+});
+
+// Клик по карандашу вызывает onStartEdit с сообщением.
+test('clicking pencil calls onStartEdit with the message', () => {
+  const onStartEdit = jest.fn();
+  render(<MessageList messages={[ownMsg]} contact={contact} editable onStartEdit={onStartEdit} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Редактировать сообщение' }));
+  expect(onStartEdit).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'u1' }));
+});
+
+// H. Отредактированное сообщение показывает метку «изменено».
+test('H. edited message shows "изменено" label', () => {
+  const edited = { ...ownMsg, text: 'новый текст', editedAt: '2024-01-01T10:05:00.000Z' };
+  render(<MessageList messages={[edited]} contact={contact} editable onStartEdit={jest.fn()} />);
+  expect(screen.getByText('новый текст')).toBeInTheDocument();
+  expect(screen.getByText(/изменено/)).toBeInTheDocument();
+});
+
+// J. «Старое» своё сообщение по-прежнему редактируемо в активном чате (нет time-limit).
+test('J. old own message still editable in active chat', () => {
+  const old = { ...ownMsg, createdAt: '2023-01-01T10:00:00.000Z' };
+  render(<MessageList messages={[old]} contact={contact} editable onStartEdit={jest.fn()} />);
+  expect(screen.getByRole('button', { name: 'Редактировать сообщение' })).toBeInTheDocument();
 });

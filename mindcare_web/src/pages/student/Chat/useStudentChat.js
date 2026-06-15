@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  editStudentMessage,
   getStudentConversations,
   getStudentConversationMessages,
   markStudentConversationRead,
@@ -200,6 +201,31 @@ export function useStudentChat() {
     }
   }, [loadList]);
 
+  // Редактирование своего сообщения (Stage 31x): PATCH → точечная замена по uuid,
+  // порядок сообщений сохраняется (createdAt не меняется). Без полной перезагрузки.
+  const editMessage = useCallback(async (messageUuid, text) => {
+    const uuid = selectedRef.current;
+    if (!uuid || !messageUuid) return false;
+    setSending(true);
+    setSendError(null);
+    try {
+      const msg = await editStudentMessage(uuid, messageUuid, text);
+      if (selectedRef.current === uuid) {
+        const mapped = mapMessage(msg);
+        setMessages((prev) => prev.map((m) => (m.uuid === mapped.uuid ? mapped : m)));
+      }
+      return true;
+    } catch (e) {
+      if (selectedRef.current === uuid) {
+        setSendError(errText(e, 'Не удалось изменить сообщение. Попробуйте ещё раз.'));
+        if (e?.status === 409) loadList({ silent: true });
+      }
+      return false;
+    } finally {
+      setSending(false);
+    }
+  }, [loadList]);
+
   return {
     conversations,
     listLoading,
@@ -216,5 +242,6 @@ export function useStudentChat() {
     sending,
     sendError,
     send,
+    editMessage,
   };
 }

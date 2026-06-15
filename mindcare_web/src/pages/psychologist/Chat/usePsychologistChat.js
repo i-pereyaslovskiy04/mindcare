@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  editPsychologistMessage,
   getPsychologistConversation,
   getPsychologistConversationMessages,
   getPsychologistConversations,
@@ -216,6 +217,47 @@ export function usePsychologistChat() {
     }
   }, []);
 
+  // Редактирование своего сообщения (Stage 31x): PATCH → точечная замена по uuid,
+  // порядок сообщений сохраняется (createdAt не меняется). Без полной перезагрузки.
+  const editMessage = useCallback(async (messageUuid, text) => {
+    const uuid = selectedRef.current;
+    if (!uuid || !messageUuid) return false;
+    setSending(true);
+    setSendError(null);
+    try {
+      const msg = await editPsychologistMessage(uuid, messageUuid, text);
+      if (selectedRef.current === uuid) {
+        const mapped = mapMessage(msg);
+        setMessages((prev) => prev.map((m) => (m.uuid === mapped.uuid ? mapped : m)));
+      }
+      return true;
+    } catch (e) {
+      if (selectedRef.current === uuid) {
+        setSendError(errText(e, 'Не удалось изменить сообщение. Попробуйте ещё раз.'));
+        if (e?.status === 409) {
+          getPsychologistConversation(uuid)
+            .then((conv) =>
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.uuid === uuid
+                    ? {
+                        ...c,
+                        engagement_status: conv.engagement_status,
+                        last_message_at: conv.last_message_at,
+                      }
+                    : c,
+                ),
+              ),
+            )
+            .catch(() => {});
+        }
+      }
+      return false;
+    } finally {
+      setSending(false);
+    }
+  }, []);
+
   return {
     conversations,
     listLoading,
@@ -232,5 +274,6 @@ export function usePsychologistChat() {
     sending,
     sendError,
     send,
+    editMessage,
   };
 }

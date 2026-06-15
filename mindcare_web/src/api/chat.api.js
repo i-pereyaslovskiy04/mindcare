@@ -64,6 +64,12 @@ export const sendStudentConversationMessage = (conversationUuid, content) =>
 export const markStudentConversationRead = (conversationUuid) =>
   apiFetch(`/api/chat/student/conversations/${conversationUuid}/read`, { method: 'POST' });
 
+export const editStudentMessage = (conversationUuid, messageUuid, content) =>
+  apiFetch(`/api/chat/student/conversations/${conversationUuid}/messages/${messageUuid}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content }),
+  });
+
 /**
  * Psychologist side (Stage 28e): беседы со своими студентами по engagements.
  */
@@ -99,6 +105,12 @@ export const sendPsychologistConversationMessage = (conversationUuid, content) =
 
 export const markPsychologistConversationRead = (conversationUuid) =>
   apiFetch(`/api/chat/conversations/${conversationUuid}/read`, { method: 'POST' });
+
+export const editPsychologistMessage = (conversationUuid, messageUuid, content) =>
+  apiFetch(`/api/chat/conversations/${conversationUuid}/messages/${messageUuid}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content }),
+  });
 
 /**
  * System conversation (Stage 29b/29c): read-only feed системных уведомлений

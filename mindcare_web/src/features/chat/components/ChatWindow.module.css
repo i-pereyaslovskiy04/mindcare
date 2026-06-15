@@ -14,12 +14,16 @@
 }
 
 /* ---- header ---- */
+/* Высота согласована с .header списка через общий var --chat-header-height
+   (задаётся на .shell страницы). Горизонтальную линию рисует единый
+   .shell::after, поэтому border-bottom здесь НЕ ставим (Stage 31x-hotfix-2). */
 .header {
+  box-sizing: border-box;
+  min-height: var(--chat-header-height, 72px);
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 16px 22px;
-  border-bottom: 1px solid var(--nav-border);
   flex-shrink: 0;
   background: var(--warm-white);
 }
@@ -160,6 +164,19 @@
   gap: 3px;
 }
 
+/* строка bubble + карандаш: align-items center центрирует карандаш по высоте
+   bubble (а не по всей колонке с author header / meta), Stage 31x-hotfix */
+.bubbleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* у своих сообщений карандаш слева от bubble (к центру переписки) */
+.msgMe .bubbleRow {
+  flex-direction: row-reverse;
+}
+
 /* ---- author header (VK-style подпись отправителя над группой) ---- */
 .authorHeader {
   font-size: 11.5px;
@@ -218,6 +235,47 @@
   font-size: 11px;
   color: var(--text-light);
   letter-spacing: -1px;
+}
+
+/* тихая метка отредактированного сообщения (Stage 31x) */
+.editedMark {
+  color: var(--text-light);
+  font-style: italic;
+}
+
+/* карандаш правки: только у своих сообщений; на desktop виден по hover/focus.
+   Вертикальное центрирование по bubble обеспечивает .bubbleRow (align-items). */
+.editBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-light);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.msg:hover .editBtn,
+.editBtn:focus-visible {
+  opacity: 1;
+}
+
+.editBtn:hover {
+  background: var(--sand);
+  color: var(--coffee);
+}
+
+/* touch-устройства без hover: карандаш у своих сообщений виден всегда */
+@media (hover: none) {
+  .editBtn {
+    opacity: 1;
+  }
 }
 
 /* link inside bubble (frontend linkify) */
@@ -287,6 +345,44 @@
   color: var(--text-muted);
   text-align: center;
   flex-shrink: 0;
+}
+
+/* ---- composer (input + optional edit banner, Stage 31x) ---- */
+.composer {
+  flex-shrink: 0;
+}
+
+/* панель режима редактирования над input */
+.editBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--nav-border);
+  background: var(--sand);
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.editBannerLabel {
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.editCancel {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--coffee);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: inherit;
+}
+
+.editCancel:hover {
+  text-decoration: underline;
 }
 
 /* ---- input row ---- */

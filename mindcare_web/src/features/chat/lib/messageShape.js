@@ -14,6 +14,7 @@ export function formatTime(iso) {
 export function mapApiMessage(m) {
   return {
     id: m.id,
+    uuid: m.uuid,
     text: m.content,
     mine: m.is_mine === true,
     system: m.sender_role === 'system',
@@ -21,6 +22,7 @@ export function mapApiMessage(m) {
     time: formatTime(m.created_at),
     createdAt: m.created_at,
     readAt: m.read_at || null,
+    editedAt: m.edited_at || null,
   };
 }
 
