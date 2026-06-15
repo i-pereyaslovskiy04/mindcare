@@ -97,6 +97,20 @@ sidebar; правила сворачивания заскоуплены под `
 На `≤600px` `.app` = `grid-template-columns: 1fr` (фикс пустого кабинета), topbar разгружен
 (скрыты bell/mail, оставлены hamburger + breadcrumb + logout). Drawer пока без focus-trap.
 
+**Admin users — смена роли (Stage 31n / 31n-hotfix):** в `UserEditModal` роль
+редактируема (правило Stage 31h «read-only» отменено). Поле «Роль пользователя» —
+под ФИО; edit-options только `psychologist`/`supervisor`/`admin` (`student` не
+selectable, отображается через `Select` `displayLabel`). При реальной смене роли на
+staff/admin `useUserForm` показывает блок legal basis и шлёт `role` + legal basis
+поля в PATCH (иначе `role` не отправляется); валидация требует основание только при
+смене на staff/admin. Backend policy без изменений: PATCH роли на staff/admin требует
+запись `user_legal_basis_records` атомарно (defense-in-depth, не заменяется UI).
+
+**Shared `Select` `displayLabel` (Stage 31n-hotfix):** опциональный prop — показывает
+текущее значение, которого намеренно нет в `options` (как выбранное, но без появления
+в dropdown). Backward-compatible: без него поведение прежнее (placeholder при value не
+из options). Подробнее — `docs/UI_COMPONENTS_GUIDE.md`.
+
 **Полная документация:** `mindcare_web/ARCHITECTURE.md`
 
 ---

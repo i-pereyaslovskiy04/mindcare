@@ -323,6 +323,16 @@ mindcare_api/
    (legal_basis_confirmed + basis_type + basis_reference); смена роли и запись
    user_legal_basis_records атомарны; metadata: action=role_change/old_role/new_role.
    staff → student основания не требует и старые записи не удаляет (Stage 31f-fix)
+✅ Роль в admin edit-модалке РЕДАКТИРУЕМА (Stage 31n; правило Stage 31h «role
+   read-only» отменено) — но безопасно: при реальной смене на staff/admin UI
+   показывает блок legal basis и шлёт его поля; backend PATCH guard обязателен
+   как defense-in-depth (не полагаться только на UI)
+✅ student НЕ selectable в admin edit-dropdown (Stage 31n-hotfix; студенты —
+   self-registration). Текущая роль student показывается через Select displayLabel,
+   но недоступна для выбора. student как target роли из UI не отправляется
+❌ Не делать роль read-only в admin edit и не слать role без legal basis при смене на staff
+❌ Не писать «админ подтверждает согласие пользователя» — только «документированное
+   основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
 ✅ session_notes: psychologist — только свои; supervisor — content только поштучно
    и под audit (session_note_content_read); admin — metadata-only без decrypt
 ✅ Staff-чтение терапевтического content ОБЯЗАНО писать audit-событие (без plaintext)

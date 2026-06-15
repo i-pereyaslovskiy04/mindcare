@@ -131,7 +131,25 @@
   - `staff → student` основания не требует и старые записи не удаляет; смена не-роли — не требует;
   - тесты: `tests/integration/test_admin_role_patch_legal_basis.py` (12); backend full suite **245 passed**.
     Без миграций (использовано существующее JSONB-поле `metadata`)
-- **UI просмотра legal basis records** в карточке пользователя админки
+- **~~Admin edit роли пользователя через UI~~** ✅ Закрыто (Stage 31n / 31n-hotfix), frontend-only
+  - Stage 31h сделал роль read-only в `UserEditModal` — **правило отменено**; роль снова
+    редактируема, но безопасно: при реальной смене на staff/admin UI показывает блок legal
+    basis и шлёт `role` + `legal_basis_confirmed`/`basis_type`/`basis_reference`(+опц. comment)
+    в PATCH; если роль не менялась — `role` не отправляется и основание не требуется;
+  - Stage 31n-hotfix: поле «Роль пользователя» перенесено под ФИО; edit-dropdown содержит
+    только `psychologist`/`supervisor`/`admin` — `student` не selectable (студенты —
+    self-registration); текущая роль `student` отображается через shared `Select` `displayLabel`,
+    но недоступна для повторного выбора; добавлен optional `displayLabel` в shared `Select`
+    (backward-compatible);
+  - формулировка подтверждения — «документированное основание для назначения роли» (не «согласие»);
+  - backend legal basis policy и PATCH guard (Stage 31f-fix) **не менялись** — UI поверх
+    существующей защиты (defense-in-depth);
+  - тесты (frontend): `roleLabels.test.js` (edit options без student), `UserEditModal.smoke.test.jsx`
+    (порядок поля, текущая роль student, dropdown без «Студент», раскрытие legal basis),
+    обновлены `useUserForm.test.js` / `users.api.test.js`; итог **14 suites / 75 tests**;
+  - **pending:** manual visual smoke edit-модалки (desktop/mobile) перед demo.
+- **UI просмотра legal basis records** в карточке пользователя админки (отдельный pending-этап;
+  смена роли пишет запись, но просмотр истории оснований в UI ещё не реализован)
 - **Chat MVP** — one-to-one чат поверх `therapy_engagements` — **MVP завершён**:
   - ✅ Stage 28b: DB foundation — миграция `d8f3a6c1e9b4` (`chat_conversations`
     UNIQUE по engagement_id + `chat_messages` c partial-индексами), модели

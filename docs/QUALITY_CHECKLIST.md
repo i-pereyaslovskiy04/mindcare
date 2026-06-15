@@ -144,6 +144,18 @@ Supervisor не должен роутиться в `/admin/*`.
 `basis_reference`), которое пишется в `user_legal_basis_records`. PATCH без основания
 backend обязан отклонять (роль не меняется). `consent_records` для staff не использовать.
 
+**Admin edit роли пользователя (Stage 31n / 31n-hotfix).** Роль в edit-модалке
+**редактируема** (не read-only — старое правило Stage 31h отменено):
+- при реальной смене роли на `psychologist`/`supervisor`/`admin` UI обязан показать
+  блок legal basis и отправить `role` + `legal_basis_confirmed`/`basis_type`/
+  `basis_reference` (+опц. `legal_basis_comment`); без основания submit не проходит;
+- `student` **не selectable** в edit-dropdown (студенты — через self-registration);
+  текущая роль `student` отображается через `Select displayLabel`, но недоступна для выбора;
+- если роль не менялась — legal basis не требуется и `role` в PATCH не отправляется;
+- формулировка подтверждения — «документированное основание для назначения роли
+  и обработки ПДн», НИКОГДА не «согласие пользователя»;
+- backend PATCH guard остаётся обязательным defense-in-depth (не полагаться только на UI).
+
 ---
 
 ## 5. Backend / Alembic rules
@@ -246,11 +258,15 @@ backend обязан отклонять (роль не меняется). `conse
 
 Итого backend: **282 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **12 suites / 61 tests** (после Stage 31m-fix-a) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **14 suites / 75 tests** (после Stage 31n-hotfix) —
+admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
+`UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
+раскрытие legal basis); плюс предыдущие —
 chat (LinkifiedText, messageShape, Chat smoke), admin users (phone, useUserForm, users.api),
 publishLabels, DateInput (dateHelpers, popoverPosition, DateInput) и client.js error-parsing
-(FastAPI/Pydantic 422 detail array). DOM-тесты модалок не ведутся (хрупкий setup
-Tiptap/ImageUpload/MultiSelect) — покрытие через pure helpers.
+(FastAPI/Pydantic 422 detail array). DOM-тесты модалок с Tiptap/ImageUpload/MultiSelect
+не ведутся (хрупкий setup) — покрытие через pure helpers; лёгкий render-smoke допустим
+там, где модалка не тянет тяжёлые редакторы (например `UserEditModal.smoke.test.jsx`).
 
 ### Обязательные проверки перед PR
 
