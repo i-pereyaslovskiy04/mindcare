@@ -1,7 +1,13 @@
 import LinkifiedText from '../lib/LinkifiedText';
 import styles from './ChatWindow.module.css';
 
-export default function MessageItem({ message, contactInitials }) {
+export default function MessageItem({
+  message,
+  contactInitials,
+  showAuthorHeader = false,
+  authorName = '',
+  authorRole = null,
+}) {
   // Системное уведомление: нейтральный bubble, без аватара и без receipts.
   if (message.system) {
     return (
@@ -21,6 +27,12 @@ export default function MessageItem({ message, contactInitials }) {
       {!isMe && <div className={styles.msgAvatar}>{contactInitials}</div>}
 
       <div className={styles.msgContent}>
+        {showAuthorHeader && (
+          <div className={`${styles.authorHeader} ${isMe ? styles.authorHeaderMe : ''}`}>
+            <span className={styles.authorName}>{authorName}</span>
+            {authorRole && <span className={styles.authorRole}> · {authorRole}</span>}
+          </div>
+        )}
         <div className={`${styles.bubble} ${isMe ? styles.bubbleMe : ''}`}>
           <LinkifiedText text={message.text} />
         </div>

@@ -24,6 +24,7 @@ function toContact(conv) {
     name: conv.student.full_name,
     initials: initialsOf(conv.student.full_name),
     role: closed ? 'Диалог закрыт' : 'Студент',
+    authorRole: 'пациент',
     lastMsg: closed ? 'Диалог закрыт' : 'Активный диалог',
     time: formatLastTime(conv.last_message_at),
     unread: conv.unread_count,

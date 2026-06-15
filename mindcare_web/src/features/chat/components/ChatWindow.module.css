@@ -160,6 +160,32 @@
   gap: 3px;
 }
 
+/* ---- author header (VK-style подпись отправителя над группой) ---- */
+.authorHeader {
+  font-size: 11.5px;
+  line-height: 1.2;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* свои сообщения справа → подпись прижата вправо, как и bubble */
+.authorHeaderMe {
+  text-align: right;
+}
+
+.authorName {
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.authorRole {
+  font-weight: 500;
+  color: var(--text-light);
+}
+
 .bubble {
   padding: 10px 14px;
   border-radius: 14px;

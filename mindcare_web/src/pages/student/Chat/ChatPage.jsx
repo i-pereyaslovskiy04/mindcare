@@ -24,6 +24,7 @@ function toContact(conv) {
     name: conv.partner.full_name,
     initials: initialsOf(conv.partner.full_name),
     role: closed ? 'Диалог закрыт' : 'Психолог',
+    authorRole: 'психолог',
     lastMsg: closed ? 'История доступна для чтения' : 'Ваш психолог',
     time: formatLastTime(conv.last_message_at),
     unread: conv.unread_count || 0,
