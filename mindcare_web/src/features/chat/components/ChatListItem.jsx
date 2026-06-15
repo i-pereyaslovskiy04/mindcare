@@ -11,8 +11,10 @@ export default function ChatListItem({ contact, isActive, onClick }) {
       type="button"
       className={[
         styles.item,
+        // selected — единый стиль для всех типов (обычный/архивный/system).
         isActive ? styles.itemActive : '',
-        contact.system ? styles.itemSystem : '',
+        // мягкое приглушение только для архивных (read-only), без своего selected.
+        contact.muted ? styles.itemMuted : '',
         hasUnread ? styles.itemUnread : '',
       ].filter(Boolean).join(' ')}
       onClick={onClick}

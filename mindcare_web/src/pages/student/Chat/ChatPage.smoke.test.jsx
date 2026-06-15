@@ -49,7 +49,9 @@ beforeEach(() => {
 test('student ChatPage renders dialog list (list mode)', async () => {
   render(<ChatPage />);
   expect(await screen.findByText('Иван Петров')).toBeInTheDocument();
-  expect(screen.getByText('Системные уведомления')).toBeInTheDocument();
+  expect(
+    screen.getByRole('heading', { level: 2, name: 'Системные уведомления' }),
+  ).toBeInTheDocument();
 });
 
 test('student ChatPage opens thread (back button path) without crashing', async () => {

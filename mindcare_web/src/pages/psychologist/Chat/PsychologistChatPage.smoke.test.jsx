@@ -45,9 +45,11 @@ test('psychologist ChatPage renders conversation list + placeholder (no auto-ope
   render(<PsychologistChatPage />);
   // заголовок раздела
   expect(await screen.findByText('Сообщения')).toBeInTheDocument();
-  // клиентский диалог и системная беседа в списке
+  // клиентский диалог и секция системных уведомлений в списке
   expect(await screen.findByText('Анна Смирнова')).toBeInTheDocument();
-  expect(screen.getByText('Системные уведомления')).toBeInTheDocument();
+  expect(
+    screen.getByRole('heading', { level: 2, name: 'Системные уведомления' }),
+  ).toBeInTheDocument();
   // VK-like: ничего не открыто — показан placeholder
   expect(
     screen.getByText('Выберите диалог, чтобы открыть переписку.'),

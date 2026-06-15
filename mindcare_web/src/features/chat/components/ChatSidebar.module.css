@@ -34,30 +34,60 @@
   overflow-y: auto;
 }
 
-/* ---- archive (collapsible, Stage 31s) ---- */
+/* ---- sections (Stage 31v): Архив / Сообщения / Системные уведомления ---- */
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+/* тонкий разделитель между секциями, без тяжёлых рамок */
+.section + .section {
+  border-top: 1px solid var(--nav-border);
+}
+
+.archiveSection,
+.messagesSection,
+.systemSection {
+  /* модификаторы-хуки секций; общий вид задаёт .section */
+}
+
+.sectionHeader {
+  padding: 12px 16px 6px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-light);
+  line-height: 1.2;
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- archive section header (collapsible toggle) ---- */
 .archiveRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 12px 16px;
+  padding: 12px 16px 6px;
   border: none;
-  border-bottom: 1px solid var(--nav-border);
-  background: var(--sand);
+  background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s;
-}
-
-.archiveRow:hover {
-  background: var(--milk);
 }
 
 .archiveChevron {
   display: inline-block;
-  font-size: 11px;
-  color: var(--coffee);
-  transition: transform 0.15s;
+  font-size: 10px;
+  color: var(--text-light);
+  transition: transform 0.15s, color 0.15s;
 }
 
 .archiveChevronOpen {
@@ -65,14 +95,20 @@
 }
 
 .archiveTitle {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--espresso);
-  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-light);
+}
+
+.archiveRow:hover .archiveTitle,
+.archiveRow:hover .archiveChevron {
+  color: var(--coffee);
 }
 
 .archiveCount {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-light);
 }
 
@@ -86,6 +122,15 @@
   border-radius: 10px;
   min-width: 18px;
   text-align: center;
+}
+
+/* archive body: вложенный, приглушённый блок с левой линией (вторичный) */
+.archiveBody {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px 12px;
+  border-left: 2px solid var(--latte);
+  background: rgba(139, 111, 71, 0.04);
 }
 
 /* ---- list item ---- */
@@ -168,15 +213,26 @@
   background: var(--text-light);
 }
 
-/* system conversation: закреплена сверху, нейтральный маркер */
-.itemSystem {
-  background: var(--cream);
-}
+/* system conversation использует ТОТ ЖЕ базовый стиль карточки и selected,
+   что обычный диалог. Единственное мягкое отличие — иконка-колокольчик
+   вместо аватара (см. .avatarSystem) и текст «Уведомления MindCare».
+   Отдельного фона/подложки/selected у system-беседы нет (Stage 31u). */
 
 .avatarSystem {
   background: var(--sand);
   color: var(--coffee);
   border: 1px solid var(--nav-border);
+}
+
+/* Архивные (закрытые/read-only) диалоги — чуть приглушены, но selected у них
+   тот же общий .itemActive (Stage 31u). */
+.itemMuted .name {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.itemMuted .avatar {
+  opacity: 0.85;
 }
 
 .info {
