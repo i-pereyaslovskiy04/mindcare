@@ -21,7 +21,7 @@ import uuid as _uuid
 from typing import Optional
 
 from app.chat import storage
-from app.chat.audit import log_conversation_created
+from app.chat.audit import log_conversation_created, log_message_edited
 
 
 class ChatError(Exception):
@@ -249,6 +249,68 @@ def mark_read(current_user: dict, conversation_uuid: str) -> int:
     return storage.mark_read(conv.id, reader_id=psychologist_id)
 
 
+# ─── Edit message (Stage 31x) ────────────────────────────────────────────────
+#
+# Политика: редактировать можно ТОЛЬКО своё user-сообщение и ТОЛЬКО пока
+# engagement активен. Без ограничения по времени. system-сообщения и чужие
+# правке недоступны. Все «нельзя» в активном чате (не найдено / чужое / system /
+# удалено) сводятся к 404 — приватность: чужое/недоступное неотличимо.
+# Закрытый/архивный чат → 409 (как send). Audit пишется soft-fail без plaintext.
+
+
+def _apply_message_edit(
+    *,
+    conv,
+    eng,
+    actor_user_id: int,
+    actor_role: str,
+    message_uuid: str,
+    content: str,
+) -> dict:
+    if eng.status != "active":
+        raise ChatError(_CLOSED, status_code=409)
+    try:
+        _uuid.UUID(message_uuid)
+    except ValueError:
+        raise ChatError(_NOT_FOUND, status_code=404)
+
+    result = storage.update_message_content(
+        conversation_id=conv.id,
+        message_uuid=message_uuid,
+        actor_user_id=actor_user_id,
+        client_id=eng.client_id,
+        new_content=content,
+    )
+    if result["status"] != "ok":
+        # not_found / not_owner / forbidden_system / deleted → 404 (скрываем).
+        raise ChatError(_NOT_FOUND, status_code=404)
+
+    msg = result["message"]
+    # Audit-факт без plaintext/ciphertext; soft-fail, не ломает правку.
+    log_message_edited(
+        actor_id=actor_user_id,
+        actor_role=actor_role,
+        conversation_id=conv.id,
+        conversation_uuid=str(conv.uuid),
+        message_id=msg["id"],
+        message_uuid=msg["uuid"],
+    )
+    return msg
+
+
+def edit_message(
+    current_user: dict, conversation_uuid: str, message_uuid: str, content: str,
+) -> dict:
+    """Psychologist редактирует своё сообщение в своей активной беседе."""
+    psychologist_id = int(current_user["id"])
+    conv, eng = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
+    return _apply_message_edit(
+        conv=conv, eng=eng,
+        actor_user_id=psychologist_id, actor_role=current_user["role"],
+        message_uuid=message_uuid, content=content,
+    )
+
+
 # ─── Student conversation list / archive (Stage 31t) ─────────────────────────
 #
 # Единая с психологом модель: список бесед студента (active + non-empty inactive),
@@ -322,6 +384,19 @@ def mark_student_conversation_read(
     student_id = int(current_user["id"])
     conv, _eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
     return storage.mark_read(conv.id, reader_id=student_id)
+
+
+def edit_student_conversation_message(
+    current_user: dict, conversation_uuid: str, message_uuid: str, content: str,
+) -> dict:
+    """Student редактирует своё сообщение в своей активной беседе (Stage 31x)."""
+    student_id = int(current_user["id"])
+    conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
+    return _apply_message_edit(
+        conv=conv, eng=eng,
+        actor_user_id=student_id, actor_role=current_user["role"],
+        message_uuid=message_uuid, content=content,
+    )
 
 
 # ─── System conversation (Stage 29b) ────────────────────────────────────────

@@ -95,6 +95,7 @@ def _message_to_dict(
         "content":     plaintext,
         "created_at":  msg.created_at,
         "read_at":     msg.read_at,
+        "edited_at":   msg.edited_at,
     }
 
 
@@ -496,6 +497,71 @@ def create_message(
             "content":     content,   # plaintext отправителю, без повторного decrypt
             "created_at":  msg.created_at,
             "read_at":     msg.read_at,
+            "edited_at":   msg.edited_at,
+        }
+
+
+def update_message_content(
+    *,
+    conversation_id: int,
+    message_uuid: str,
+    actor_user_id: int,
+    client_id: int,
+    new_content: str,
+    now: Optional[datetime] = None,
+) -> dict:
+    """
+    Редактирование своего user-сообщения (Stage 31x).
+
+    Permission/kind-проверки делаются здесь (нужна строка) и возвращаются
+    как status-discriminator — service маппит его в HTTP. Возможные результаты:
+      {"status": "ok", "message": <read dict с plaintext + edited_at>}
+      {"status": "not_found"}         — сообщения нет в этой беседе
+      {"status": "forbidden_system"}  — message_kind != 'user' (system нельзя)
+      {"status": "not_owner"}         — чужое сообщение
+      {"status": "deleted"}           — удалённое (deleted_at не NULL)
+
+    content перезаписывается encrypt_text(new) в одной транзакции; old plaintext
+    НЕ расшифровывается и НЕ логируется; история версий не ведётся (only edited_at).
+    Time-limit намеренно отсутствует: правка разрешена, пока чат активен.
+    """
+    now = now or datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        msg = (
+            db.query(ChatMessage)
+            .filter(
+                ChatMessage.conversation_id == conversation_id,
+                ChatMessage.uuid == message_uuid,
+            )
+            .first()
+        )
+        if msg is None:
+            return {"status": "not_found"}
+        if msg.message_kind != "user":
+            return {"status": "forbidden_system"}
+        if msg.sender_id != actor_user_id:
+            return {"status": "not_owner"}
+        if msg.deleted_at is not None:
+            return {"status": "deleted"}
+
+        msg.content = encrypt_text(new_content)   # перезапись ciphertext, без old decrypt
+        msg.edited_at = now
+        db.commit()
+        db.refresh(msg)
+
+        return {
+            "status": "ok",
+            "message": {
+                "id":          msg.id,
+                "uuid":        str(msg.uuid),
+                "sender_id":   msg.sender_id,
+                "sender_role": "student" if msg.sender_id == client_id else "psychologist",
+                "is_mine":     True,
+                "content":     new_content,   # plaintext отправителю, без повторного decrypt
+                "created_at":  msg.created_at,
+                "read_at":     msg.read_at,
+                "edited_at":   msg.edited_at,
+            },
         }
 
 

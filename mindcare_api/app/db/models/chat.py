@@ -145,6 +145,8 @@ class ChatMessage(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     read_at         = Column(DateTime(timezone=True))
+    # NULL — сообщение не редактировалось; иначе момент последней правки (Stage 31x).
+    edited_at       = Column(DateTime(timezone=True))
     deleted_at      = Column(DateTime(timezone=True))
 
     conversation = relationship("ChatConversation", back_populates="messages")

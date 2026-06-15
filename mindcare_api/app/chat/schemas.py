@@ -76,6 +76,7 @@ class ChatMessageRead(BaseModel):
     content:     str                      # plaintext (decrypt после проверки прав)
     created_at:  datetime
     read_at:     Optional[datetime]
+    edited_at:   Optional[datetime] = None  # NULL — не редактировалось (Stage 31x)
 
 
 class ChatMessagesResponse(BaseModel):
@@ -85,6 +86,22 @@ class ChatMessagesResponse(BaseModel):
 class ChatMessageCreate(BaseModel):
     """Body отправки сообщения. sender_id НЕ принимается — только из сессии."""
     content: str = Field(description="Текст сообщения, 1..10000 символов")
+
+    @field_validator("content")
+    @classmethod
+    def _strip_and_check(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Сообщение не может быть пустым")
+        if len(v) > 10000:
+            raise ValueError("Сообщение слишком длинное (максимум 10000 символов)")
+        return v
+
+
+class ChatMessageEdit(BaseModel):
+    """Body редактирования сообщения (Stage 31x). Те же правила, что и create:
+    strip, 1..10000 символов. sender/идентификаторы — из URL/сессии, не из body."""
+    content: str = Field(description="Новый текст сообщения, 1..10000 символов")
 
     @field_validator("content")
     @classmethod

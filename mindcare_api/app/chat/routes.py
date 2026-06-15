@@ -18,6 +18,7 @@ from app.chat import service
 from app.chat.schemas import (
     ChatConversationRead,
     ChatMessageCreate,
+    ChatMessageEdit,
     ChatMessageRead,
     ChatMessagesResponse,
     ChatReadResponse,
@@ -191,6 +192,30 @@ def student_send_message(
         )
 
 
+@router.patch(
+    "/student/conversations/{conversation_uuid}/messages/{message_uuid}",
+    response_model=ChatMessageRead,
+)
+def student_edit_message(
+    conversation_uuid: str,
+    message_uuid:      str,
+    body:              ChatMessageEdit,
+    current_user:      dict = Depends(require_role("student")),
+):
+    _check_send_limit(int(current_user["id"]))
+    try:
+        return service.edit_student_conversation_message(
+            current_user, conversation_uuid, message_uuid, body.content,
+        )
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось изменить сообщение",
+        )
+
+
 @router.post(
     "/student/conversations/{conversation_uuid}/read", response_model=ChatReadResponse,
 )
@@ -273,6 +298,30 @@ def send_message(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось отправить сообщение",
+        )
+
+
+@router.patch(
+    "/conversations/{conversation_uuid}/messages/{message_uuid}",
+    response_model=ChatMessageRead,
+)
+def edit_message(
+    conversation_uuid: str,
+    message_uuid:      str,
+    body:              ChatMessageEdit,
+    current_user:      dict = Depends(require_role("psychologist")),
+):
+    _check_send_limit(int(current_user["id"]))
+    try:
+        return service.edit_message(
+            current_user, conversation_uuid, message_uuid, body.content,
+        )
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось изменить сообщение",
         )
 
 
