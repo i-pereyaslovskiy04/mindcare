@@ -73,7 +73,40 @@
   - full fix decrypt-error в content-list психолога (одна битая заметка валит
     список; metadata-пути уже не подвержены)
 
+**~~Auth error leakage: raw SMTP/auth exceptions, `[object Object]` на 422, email в логах~~** ✅ Закрыто (Stage 31m-fix-a)
+- frontend `api/client.js` парсит FastAPI/Pydantic 422 `detail` (array of `{loc,msg,type}`) — больше нет `[object Object]`
+- SMTP/auth ошибки санитизированы: raw exception не отдаётся клиенту
+- email в auth/SMTP логах маскируется через `mask_email` (`app/core/normalization.py`)
+- Тесты: `tests/test_email_error_sanitization.py` (11)
+
+**~~OTP INFO-логи раскрывают email; confirm не пишет IP/UA в consent; `_assign_role` silent skip~~** ✅ Закрыто (Stage 31m-fix-b1)
+- OTP INFO-логи маскируют email; `register_confirm` route передаёт IP/User-Agent в `consent_records`;
+  `_assign_role` бросает `RegistrationDataError` при отсутствующей роли (раньше молча пропускал → роль маскировалась дефолтом)
+- Тесты: `tests/test_auth_hardening_b1.py` (6), `tests/integration/test_register_consent_context.py` (1)
+
+**~~Registration confirm не атомарен (возможен user без consent при сбое)~~** ✅ Закрыто (Stage 31m-fix-b2)
+- `storage.register_confirm_atomic`: validate OTP без удаления → user/reactivate → role `student` →
+  все `consent_records` → consume OTP → один commit. Сбой core-шага откатывает всё, OTP остаётся;
+  welcome/system message — soft-fail после commit
+- Тесты: `tests/integration/test_register_confirm_atomic.py` (8, с failure-injection)
+
+**~~Password reset confirm / change password не атомарны (пароль изменён, старые сессии остаются)~~** ✅ Закрыто (Stage 31m-fix-b3)
+- `storage.password_reset_confirm_atomic`: validate OTP без удаления → `password_hash` → revoke всех сессий →
+  consume OTP → один commit;
+- `storage.change_password_atomic`: verify current password (callback внутри транзакции) → `password_hash` →
+  revoke всех сессий → один commit;
+- сбой revoke sessions откатывает смену пароля; OTP не теряется; новый хеш считается до транзакции;
+  system-уведомление soft-fail после commit; `auth_log` soft-fail вне core-транзакции
+- Тесты: `tests/integration/test_password_uow_atomic.py` (11, с failure-injection); backend full suite **282 passed**
+
 **Открытые security/future направления (после Stages 21–25b):**
+- **OTP concurrency / row locking** — атомарные confirm-flows не берут `SELECT … FOR UPDATE`;
+  при гонке двух одновременных confirm возможен двойной проход OTP-валидации. Решение —
+  `SELECT FOR UPDATE` или conditional update. **Deferred** (вне scope Stage 31m-fix-b3)
+- **`_get_primary_role` read-fallback `"student"`** — при отсутствии активной роли `auth/storage._get_primary_role`
+  возвращает дефолт `"student"`; cleanup (явная ошибка вместо тихого дефолта на чтении) — deferred
+- **Transactional outbox** — гарантированная доставка post-commit уведомлений (welcome/security/engagement);
+  сейчас они best-effort soft-fail. **Deferred** (намеренно не делаем на этом этапе)
 - **HttpOnly Secure SameSite cookie + CSRF** вместо localStorage-токена
   (текущий localStorage — осознанный MVP-компромисс, Stage 18f)
 - **Redis/shared storage для rate limiting** при multi-worker/multi-instance деплое
@@ -98,7 +131,25 @@
   - `staff → student` основания не требует и старые записи не удаляет; смена не-роли — не требует;
   - тесты: `tests/integration/test_admin_role_patch_legal_basis.py` (12); backend full suite **245 passed**.
     Без миграций (использовано существующее JSONB-поле `metadata`)
-- **UI просмотра legal basis records** в карточке пользователя админки
+- **~~Admin edit роли пользователя через UI~~** ✅ Закрыто (Stage 31n / 31n-hotfix), frontend-only
+  - Stage 31h сделал роль read-only в `UserEditModal` — **правило отменено**; роль снова
+    редактируема, но безопасно: при реальной смене на staff/admin UI показывает блок legal
+    basis и шлёт `role` + `legal_basis_confirmed`/`basis_type`/`basis_reference`(+опц. comment)
+    в PATCH; если роль не менялась — `role` не отправляется и основание не требуется;
+  - Stage 31n-hotfix: поле «Роль пользователя» перенесено под ФИО; edit-dropdown содержит
+    только `psychologist`/`supervisor`/`admin` — `student` не selectable (студенты —
+    self-registration); текущая роль `student` отображается через shared `Select` `displayLabel`,
+    но недоступна для повторного выбора; добавлен optional `displayLabel` в shared `Select`
+    (backward-compatible);
+  - формулировка подтверждения — «документированное основание для назначения роли» (не «согласие»);
+  - backend legal basis policy и PATCH guard (Stage 31f-fix) **не менялись** — UI поверх
+    существующей защиты (defense-in-depth);
+  - тесты (frontend): `roleLabels.test.js` (edit options без student), `UserEditModal.smoke.test.jsx`
+    (порядок поля, текущая роль student, dropdown без «Студент», раскрытие legal basis),
+    обновлены `useUserForm.test.js` / `users.api.test.js`; итог **14 suites / 75 tests**;
+  - **pending:** manual visual smoke edit-модалки (desktop/mobile) перед demo.
+- **UI просмотра legal basis records** в карточке пользователя админки (отдельный pending-этап;
+  смена роли пишет запись, но просмотр истории оснований в UI ещё не реализован)
 - **Chat MVP** — one-to-one чат поверх `therapy_engagements` — **MVP завершён**:
   - ✅ Stage 28b: DB foundation — миграция `d8f3a6c1e9b4` (`chat_conversations`
     UNIQUE по engagement_id + `chat_messages` c partial-индексами), модели

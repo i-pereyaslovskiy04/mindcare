@@ -50,6 +50,23 @@ class PaginatedChatConversationsResponse(BaseModel):
     size:  int
 
 
+class StudentChatConversationListItem(BaseModel):
+    """Элемент списка бесед студента (partner = психолог)."""
+    uuid:              str
+    partner:           ChatUserRead
+    engagement_status: str
+    last_message_at:   Optional[datetime]
+    unread_count:      int
+    peer_is_online:    bool = False
+
+
+class PaginatedStudentConversationsResponse(BaseModel):
+    items: list[StudentChatConversationListItem]
+    total: int
+    page:  int
+    size:  int
+
+
 class ChatMessageRead(BaseModel):
     id:          int                      # курсор для before/after пагинации
     uuid:        str

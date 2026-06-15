@@ -4,25 +4,12 @@ import { useUserForm } from '../hooks/useUserForm';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
+import { CREATE_ROLE_OPTIONS } from '../roleLabels';
+import { BASIS_TYPE_OPTIONS, CREATE_LEGAL_BASIS_LABEL } from '../legalBasis';
 import styles from './UserCreateModal.module.css';
 
-const ROLE_OPTIONS = [
-  { value: 'supervisor',   label: 'Супервизор' },
-  { value: 'psychologist', label: 'Психолог' },
-  { value: 'admin',        label: 'Администратор' },
-];
-
-const BASIS_TYPE_OPTIONS = [
-  { value: 'service_duty',         label: 'Служебная необходимость' },
-  { value: 'employment',           label: 'Трудовое основание' },
-  { value: 'contract',             label: 'Договор' },
-  { value: 'administrative_order', label: 'Административный приказ' },
-  { value: 'other',                label: 'Иное' },
-];
-
-const LEGAL_BASIS_LABEL =
-  'Подтверждаю наличие документированного основания для создания ' +
-  'учётной записи и обработки персональных данных пользователя.';
+const ROLE_OPTIONS = CREATE_ROLE_OPTIONS;
+const LEGAL_BASIS_LABEL = CREATE_LEGAL_BASIS_LABEL;
 
 export default function UserCreateModal({ open, onClose, onCreated }) {
   const [createdUser, setCreatedUser] = useState(null);

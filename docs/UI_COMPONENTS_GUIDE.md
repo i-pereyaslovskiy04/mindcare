@@ -192,6 +192,15 @@ Tag — это display-only `<span>`, не button.
 
 Не создавать локальные `<select>` без проверки этого компонента.
 
+**Optional `displayLabel` (Stage 31n-hotfix).** Показывает текущее значение,
+которого намеренно нет в `options` (значение отображается как выбранное, но в
+выпадающем списке не предлагается). Use-case: текущая роль `student` у
+редактируемого пользователя — она отображается, но `options` admin edit содержат
+только staff/admin (`psychologist`/`supervisor`/`admin`), поэтому вернуться к
+`student` через dropdown нельзя. **Backward compatible:** без `displayLabel`
+`Select` работает как раньше (если `value` нет в `options` — показывается
+`placeholder`).
+
 ---
 
 ## MultiSelect

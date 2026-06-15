@@ -44,11 +44,17 @@ export function createUser(data) {
 /**
  * PATCH /api/admin/users/:uuid — partial update.
  *
- * Allowlist: обычное редактирование меняет только эти поля. role намеренно
- * исключена — роль задаётся при создании и не меняется через edit-форму
- * (смена роли на staff требует legal basis — отдельный backend-флоу).
+ * Allowlist: defensive filtering — только эти поля уходят на backend,
+ * неизвестные поля отбрасываются. role и legal basis fields допустимы
+ * (Stage 31n): при смене роли на staff/admin backend требует
+ * legal_basis_confirmed + basis_type + basis_reference (Stage 31f-fix).
+ * Вызывающий код (useUserForm) гарантирует, что role/legal basis
+ * присутствуют только при реальной смене роли.
  */
-const EDITABLE_FIELDS = ['full_name', 'phone', 'is_active'];
+const EDITABLE_FIELDS = [
+  'full_name', 'phone', 'is_active',
+  'role', 'legal_basis_confirmed', 'basis_type', 'basis_reference', 'legal_basis_comment',
+];
 
 export function updateUser(uuid, data) {
   const body = {};

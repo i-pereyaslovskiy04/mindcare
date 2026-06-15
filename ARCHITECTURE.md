@@ -57,8 +57,19 @@ mindcare_api/
     ensure_audit_partitions.py  - CLI: создание будущих партиций audit-таблиц
     backfill_legal_basis.py     - CLI: backfill legal basis records (--dry-run default)
     test_smtp.py                - CLI: диагностика SMTP
-  tests/                 - 188 тестов (unit + integration), запуск: .\test.ps1
+  tests/                 - 282 теста (unit + integration), запуск: .\test.ps1
 ```
+
+**Auth: атомарность операций (Stage 31m-fix-b2/b3).** Бизнес-операции auth —
+unit-of-work в одной `SessionLocal()` с одним финальным `commit`:
+- **registration confirm** — user/reactivate + role + все consent_records + consume OTP;
+- **password reset confirm** — update password_hash + revoke sessions + consume OTP;
+- **change password** — verify current + update password_hash + revoke sessions.
+
+SMTP/email не выполняется внутри DB-транзакции (письмо — на init-шаге). `auth_log`
+и system-уведомления — soft-fail вне core-транзакции (после commit). Transactional
+outbox на текущем этапе отсутствует. Failure-injection тесты обязательны для изменений
+этих UoW (`test_register_confirm_atomic`, `test_password_uow_atomic`).
 
 **Полная документация:** `CLAUDE.md`, `docs/backend_architecture.md`
 
@@ -85,6 +96,20 @@ list/thread на `≤900px` (в шапке чата кнопка «назад»)
 sidebar; правила сворачивания заскоуплены под `.sidebar`, чтобы drawer оставался полным).
 На `≤600px` `.app` = `grid-template-columns: 1fr` (фикс пустого кабинета), topbar разгружен
 (скрыты bell/mail, оставлены hamburger + breadcrumb + logout). Drawer пока без focus-trap.
+
+**Admin users — смена роли (Stage 31n / 31n-hotfix):** в `UserEditModal` роль
+редактируема (правило Stage 31h «read-only» отменено). Поле «Роль пользователя» —
+под ФИО; edit-options только `psychologist`/`supervisor`/`admin` (`student` не
+selectable, отображается через `Select` `displayLabel`). При реальной смене роли на
+staff/admin `useUserForm` показывает блок legal basis и шлёт `role` + legal basis
+поля в PATCH (иначе `role` не отправляется); валидация требует основание только при
+смене на staff/admin. Backend policy без изменений: PATCH роли на staff/admin требует
+запись `user_legal_basis_records` атомарно (defense-in-depth, не заменяется UI).
+
+**Shared `Select` `displayLabel` (Stage 31n-hotfix):** опциональный prop — показывает
+текущее значение, которого намеренно нет в `options` (как выбранное, но без появления
+в dropdown). Backward-compatible: без него поведение прежнее (placeholder при value не
+из options). Подробнее — `docs/UI_COMPONENTS_GUIDE.md`.
 
 **Полная документация:** `mindcare_web/ARCHITECTURE.md`
 

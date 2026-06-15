@@ -30,6 +30,41 @@ export const markMyConversationRead = () =>
   apiFetch('/api/chat/my-conversation/read', { method: 'POST' });
 
 /**
+ * Student side list/archive (Stage 31t): беседы студента по engagements
+ * (active + non-empty inactive), чтение/отправка/read по conversation uuid.
+ * Старые /my-conversation* остаются для legacy/back-compat.
+ */
+
+export const getStudentConversations = ({ page, size } = {}) => {
+  const params = new URLSearchParams();
+  if (page != null) params.set('page', page);
+  if (size != null) params.set('size', size);
+  const qs = params.toString();
+  return apiFetch(`/api/chat/student/conversations${qs ? `?${qs}` : ''}`);
+};
+
+export const getStudentConversationMessages = (
+  conversationUuid,
+  { limit, before, after } = {},
+) => {
+  const params = new URLSearchParams();
+  if (limit != null) params.set('limit', limit);
+  if (before != null) params.set('before', before);
+  if (after != null) params.set('after', after);
+  const qs = params.toString();
+  return apiFetch(`/api/chat/student/conversations/${conversationUuid}/messages${qs ? `?${qs}` : ''}`);
+};
+
+export const sendStudentConversationMessage = (conversationUuid, content) =>
+  apiFetch(`/api/chat/student/conversations/${conversationUuid}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+
+export const markStudentConversationRead = (conversationUuid) =>
+  apiFetch(`/api/chat/student/conversations/${conversationUuid}/read`, { method: 'POST' });
+
+/**
  * Psychologist side (Stage 28e): беседы со своими студентами по engagements.
  */
 

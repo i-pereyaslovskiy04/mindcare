@@ -50,7 +50,7 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **188 passed**.
+Текущий ожидаемый статус: **282 passed**.
 
 ### Alembic
 
@@ -144,6 +144,18 @@ Supervisor не должен роутиться в `/admin/*`.
 `basis_reference`), которое пишется в `user_legal_basis_records`. PATCH без основания
 backend обязан отклонять (роль не меняется). `consent_records` для staff не использовать.
 
+**Admin edit роли пользователя (Stage 31n / 31n-hotfix).** Роль в edit-модалке
+**редактируема** (не read-only — старое правило Stage 31h отменено):
+- при реальной смене роли на `psychologist`/`supervisor`/`admin` UI обязан показать
+  блок legal basis и отправить `role` + `legal_basis_confirmed`/`basis_type`/
+  `basis_reference` (+опц. `legal_basis_comment`); без основания submit не проходит;
+- `student` **не selectable** в edit-dropdown (студенты — через self-registration);
+  текущая роль `student` отображается через `Select displayLabel`, но недоступна для выбора;
+- если роль не менялась — legal basis не требуется и `role` в PATCH не отправляется;
+- формулировка подтверждения — «документированное основание для назначения роли
+  и обработки ПДн», НИКОГДА не «согласие пользователя»;
+- backend PATCH guard остаётся обязательным defense-in-depth (не полагаться только на UI).
+
 ---
 
 ## 5. Backend / Alembic rules
@@ -174,6 +186,18 @@ backend обязан отклонять (роль не меняется). `conse
 - Logout UI внутри кабинетов — только в topbar layout (`CabinetLayout`, `AdminLayout`).
 - Не дублировать logout-кнопки на settings pages.
 - Изменения auth/session/token cleanup — отдельным PR.
+
+**Атомарность auth-операций (Stage 31m-fix-b2/b3 — инварианты, не ломать):**
+
+- Auth бизнес-операции атомарны: одна `SessionLocal()` + один финальный `commit`
+  (registration confirm, password reset confirm, change password).
+- Обновление пароля и отзыв сессий — в одной транзакции (не два независимых commit).
+- OTP потребляется (delete) только после успешных core DB-изменений, тем же commit;
+  validate OTP без удаления, чтобы при сбое core-шага код не терялся.
+- SMTP/email не выполнять внутри DB-транзакции; system/auth_log уведомления —
+  soft-fail после commit, их сбой не откатывает core-операцию.
+- Изменения этих UoW требуют **failure-injection тестов на реальном состоянии БД**
+  (`test_register_confirm_atomic`, `test_password_uow_atomic`) — недостаточно мокать service.
 
 ---
 
@@ -227,17 +251,22 @@ backend обязан отклонять (роль не меняется). `conse
 
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
-| **Unit** | Service/helper business logic, без реальной БД | 102 теста: change_password (13), encryption (26), normalization (16), smtp_transport (21), rate_limit (18), session_security (8) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 143 теста: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12) |
+| **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 163 теста: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), register_confirm_atomic (8), register_consent_context (1), password_uow_atomic (11), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12) |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **188 passed** (`.\test.ps1`).
+Итого backend: **282 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **11 suites / 53 tests** —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **14 suites / 75 tests** (после Stage 31n-hotfix) —
+admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
+`UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
+раскрытие legal basis); плюс предыдущие —
 chat (LinkifiedText, messageShape, Chat smoke), admin users (phone, useUserForm, users.api),
-publishLabels, и DateInput (dateHelpers, popoverPosition, DateInput). DOM-тесты модалок
-не ведутся (хрупкий setup Tiptap/ImageUpload/MultiSelect) — покрытие через pure helpers.
+publishLabels, DateInput (dateHelpers, popoverPosition, DateInput) и client.js error-parsing
+(FastAPI/Pydantic 422 detail array). DOM-тесты модалок с Tiptap/ImageUpload/MultiSelect
+не ведутся (хрупкий setup) — покрытие через pure helpers; лёгкий render-smoke допустим
+там, где модалка не тянет тяжёлые редакторы (например `UserEditModal.smoke.test.jsx`).
 
 ### Обязательные проверки перед PR
 

@@ -153,6 +153,23 @@
   margin-bottom: 20px;
 }
 
+/* ── Блок документированного основания (показывается при смене роли на staff) ── */
+
+.legalBasisGroup {
+  padding: 14px 16px 2px;
+  margin-bottom: 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--cream);
+}
+
+.legalBasisNote {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 /* ── Скелетон ── */
 
 .skeleton {

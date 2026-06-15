@@ -24,6 +24,7 @@ from app.chat.schemas import (
     MyConversationResponse,
     MySystemConversationResponse,
     PaginatedChatConversationsResponse,
+    PaginatedStudentConversationsResponse,
 )
 
 router = APIRouter(
@@ -118,6 +119,87 @@ def my_mark_read(
 ):
     try:
         updated = service.mark_my_read(current_user)
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return {"updated_count": updated}
+
+
+# ─── Student conversation list / archive (Stage 31t) ────────────────────────
+#
+# Единая с психологом модель: список бесед студента + чтение/отправка/read по
+# conversation_uuid. Доступ строго к своим беседам (service: client_id == user).
+
+@router.get(
+    "/student/conversations", response_model=PaginatedStudentConversationsResponse,
+)
+def list_student_conversations(
+    page:         int  = Query(default=1, ge=1),
+    size:         int  = Query(default=20, ge=1, le=100),
+    current_user: dict = Depends(require_role("student")),
+):
+    items, total = service.list_student_conversations(current_user, page=page, size=size)
+    return {"items": items, "total": total, "page": page, "size": size}
+
+
+@router.get(
+    "/student/conversations/{conversation_uuid}/messages",
+    response_model=ChatMessagesResponse,
+)
+def student_conversation_messages(
+    conversation_uuid: str,
+    limit:             int           = Query(default=50, ge=1, le=100),
+    before:            Optional[int] = Query(default=None, ge=1),
+    after:             Optional[int] = Query(default=None, ge=0),
+    current_user:      dict          = Depends(require_role("student")),
+):
+    try:
+        items = service.get_student_conversation_messages(
+            current_user, conversation_uuid,
+            limit=limit, before_id=before, after_id=after,
+        )
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось загрузить сообщения",
+        )
+    return {"items": items}
+
+
+@router.post(
+    "/student/conversations/{conversation_uuid}/messages",
+    response_model=ChatMessageRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def student_send_message(
+    conversation_uuid: str,
+    body:              ChatMessageCreate,
+    current_user:      dict = Depends(require_role("student")),
+):
+    _check_send_limit(int(current_user["id"]))
+    try:
+        return service.send_student_conversation_message(
+            current_user, conversation_uuid, body.content,
+        )
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось отправить сообщение",
+        )
+
+
+@router.post(
+    "/student/conversations/{conversation_uuid}/read", response_model=ChatReadResponse,
+)
+def student_mark_read(
+    conversation_uuid: str,
+    current_user:      dict = Depends(require_role("student")),
+):
+    try:
+        updated = service.mark_student_conversation_read(current_user, conversation_uuid)
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return {"updated_count": updated}

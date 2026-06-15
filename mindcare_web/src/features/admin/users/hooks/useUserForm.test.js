@@ -15,7 +15,7 @@ beforeEach(() => {
   api.createUser.mockResolvedValue({});
 });
 
-test('edit submit sends allowlisted payload WITHOUT role', async () => {
+test('edit submit WITHOUT role change sends only profile fields, no role/legal basis', async () => {
   const onSuccess = jest.fn();
   const { result } = renderHook(() =>
     useUserForm({ mode: 'edit', uuid: 'u1', onSuccess }),
@@ -37,6 +37,125 @@ test('edit submit sends allowlisted payload WITHOUT role', async () => {
     is_active: true,
   });
   expect(payload).not.toHaveProperty('role');
+  expect(payload).not.toHaveProperty('legal_basis_confirmed');
+});
+
+function changeRole(result, role) {
+  act(() => {
+    result.current.handleChange({ target: { name: 'role', value: role } });
+  });
+}
+
+test('role change to staff WITHOUT legal_basis_confirmed → validation error, no request', async () => {
+  api.getUser.mockResolvedValueOnce({
+    full_name: 'Студент Один', phone: '', role: 'student', is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  changeRole(result, 'psychologist');
+  act(() => { result.current.handleSubmit({ preventDefault() {} }); });
+
+  expect(result.current.errors.legal_basis_confirmed).toBeTruthy();
+  expect(result.current.errors.basis_reference).toBeTruthy();
+  expect(api.updateUser).not.toHaveBeenCalled();
+});
+
+test('role change student → psychologist with legal basis sends role + legal basis fields', async () => {
+  api.getUser.mockResolvedValueOnce({
+    full_name: 'Студент Два', phone: '', role: 'student', is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  changeRole(result, 'psychologist');
+  act(() => {
+    result.current.handleChange({ target: { name: 'basis_type', value: 'employment' } });
+  });
+  act(() => {
+    result.current.handleChange({ target: { name: 'basis_reference', value: 'приказ №7', type: 'text' } });
+  });
+  act(() => {
+    result.current.handleChange({ target: { name: 'legal_basis_confirmed', type: 'checkbox', checked: true } });
+  });
+  act(() => { result.current.handleSubmit({ preventDefault() {} }); });
+
+  await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
+  const [, payload] = api.updateUser.mock.calls[0];
+  expect(payload.role).toBe('psychologist');
+  expect(payload.legal_basis_confirmed).toBe(true);
+  expect(payload.basis_type).toBe('employment');
+  expect(payload.basis_reference).toBe('приказ №7');
+  expect(payload.legal_basis_comment).toBeNull();
+});
+
+test('role change staff → student does NOT require legal basis', async () => {
+  api.getUser.mockResolvedValueOnce({
+    full_name: 'Психолог Раз', phone: '', role: 'psychologist', is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  changeRole(result, 'student');
+  act(() => { result.current.handleSubmit({ preventDefault() {} }); });
+
+  await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
+  const [, payload] = api.updateUser.mock.calls[0];
+  expect(payload.role).toBe('student');
+  expect(payload).not.toHaveProperty('legal_basis_confirmed');
+  expect(payload).not.toHaveProperty('basis_type');
+});
+
+test('role change psychologist → supervisor requires legal basis', async () => {
+  api.getUser.mockResolvedValueOnce({
+    full_name: 'Психолог Два', phone: '', role: 'psychologist', is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  changeRole(result, 'supervisor');
+  act(() => { result.current.handleSubmit({ preventDefault() {} }); });
+
+  // без подтверждения основания — ошибка, запроса нет
+  expect(result.current.errors.legal_basis_confirmed).toBeTruthy();
+  expect(api.updateUser).not.toHaveBeenCalled();
+});
+
+test('role value is preserved on submit (not lost) after change', async () => {
+  api.getUser.mockResolvedValueOnce({
+    full_name: 'Админ Раз', phone: '', role: 'admin', is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  changeRole(result, 'supervisor');
+  expect(result.current.values.role).toBe('supervisor');
+  expect(result.current.initialRole).toBe('admin');
+
+  act(() => {
+    result.current.handleChange({ target: { name: 'basis_type', value: 'contract' } });
+  });
+  act(() => {
+    result.current.handleChange({ target: { name: 'basis_reference', value: 'договор №3', type: 'text' } });
+  });
+  act(() => {
+    result.current.handleChange({ target: { name: 'legal_basis_confirmed', type: 'checkbox', checked: true } });
+  });
+  act(() => { result.current.handleSubmit({ preventDefault() {} }); });
+
+  await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
+  const [, payload] = api.updateUser.mock.calls[0];
+  expect(payload.role).toBe('supervisor');
 });
 
 test('edit submit sends phone in masked format', async () => {

@@ -34,7 +34,7 @@ class ChatError(Exception):
 
 
 _NOT_FOUND = "Диалог не найден"
-_CLOSED = "Диалог закрыт: консультационная связь завершена"
+_CLOSED = "Диалог закрыт: чат завершён."
 
 
 def _conversation_read_dict(conv, eng, *, current_user_id: int) -> dict:
@@ -102,6 +102,10 @@ def get_my_conversation(
                 ip=ip,
                 user_agent=user_agent,
             )
+    elif eng.status != "active" and not storage.conversation_has_messages(conv.id):
+        # Пустая неактивная (transferred/closed) беседа — артефакт, скрываем
+        # её и от студента (Stage 31p), как и в списке психолога.
+        return {"conversation": None}
 
     return {
         "conversation": _conversation_read_dict(
@@ -243,6 +247,81 @@ def mark_read(current_user: dict, conversation_uuid: str) -> int:
     psychologist_id = int(current_user["id"])
     conv, _eng = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
     return storage.mark_read(conv.id, reader_id=psychologist_id)
+
+
+# ─── Student conversation list / archive (Stage 31t) ─────────────────────────
+#
+# Единая с психологом модель: список бесед студента (active + non-empty inactive),
+# чтение/отправка/read по conversation_uuid. Доступ строго к своим беседам:
+# engagement.client_id == student.id. Старые /my-conversation* остаются (badge
+# legacy + back-compat) и не удаляются.
+
+def list_student_conversations(
+    current_user: dict, *, page: int, size: int,
+) -> tuple[list[dict], int]:
+    return storage.list_conversations_for_student(
+        int(current_user["id"]), page=page, size=size,
+    )
+
+
+def _resolve_student_conversation_by_uuid(student_id: int, conversation_uuid: str):
+    """(conversation, engagement) если студент — участник, иначе 404.
+    Чужая/несуществующая беседа неотличимы (404). inactive разрешён (read-only)."""
+    try:
+        _uuid.UUID(conversation_uuid)
+    except ValueError:
+        raise ChatError(_NOT_FOUND, status_code=404)
+
+    row = storage.get_conversation_by_uuid(conversation_uuid)
+    if row is None:
+        raise ChatError(_NOT_FOUND, status_code=404)
+    conv, eng = row
+    if eng.client_id != student_id:
+        raise ChatError(_NOT_FOUND, status_code=404)
+    return conv, eng
+
+
+def get_student_conversation_messages(
+    current_user: dict,
+    conversation_uuid: str,
+    *,
+    limit: int,
+    before_id: Optional[int],
+    after_id: Optional[int],
+) -> list[dict]:
+    student_id = int(current_user["id"])
+    conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
+    return storage.get_messages(
+        conv.id,
+        current_user_id=student_id,
+        client_id=eng.client_id,
+        limit=limit,
+        before_id=before_id,
+        after_id=after_id,
+    )
+
+
+def send_student_conversation_message(
+    current_user: dict, conversation_uuid: str, content: str,
+) -> dict:
+    student_id = int(current_user["id"])
+    conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
+    if eng.status != "active":
+        raise ChatError(_CLOSED, status_code=409)
+    return storage.create_message(
+        conv.id,
+        sender_id=student_id,        # только из сессии — spoof невозможен
+        content=content,
+        client_id=eng.client_id,
+    )
+
+
+def mark_student_conversation_read(
+    current_user: dict, conversation_uuid: str,
+) -> int:
+    student_id = int(current_user["id"])
+    conv, _eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
+    return storage.mark_read(conv.id, reader_id=student_id)
 
 
 # ─── System conversation (Stage 29b) ────────────────────────────────────────

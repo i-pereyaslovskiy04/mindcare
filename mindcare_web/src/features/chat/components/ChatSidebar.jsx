@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import ChatListItem from './ChatListItem';
 import styles from './ChatSidebar.module.css';
 
@@ -9,16 +10,57 @@ function dialogWord(n) {
   return 'диалогов';
 }
 
-export default function ChatSidebar({ contacts, activeId, onSelect }) {
+/**
+ * Список диалогов. Порядок: «Архив» (свёрнут по умолчанию) → активные →
+ * системная беседа (она передаётся внутри `contacts` последней). archivedContacts
+ * рендерятся только при раскрытии и не входят в основной список.
+ */
+export default function ChatSidebar({ contacts, archivedContacts = [], activeId, onSelect }) {
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const hasArchive = archivedContacts.length > 0;
+  const archiveUnread = archivedContacts.reduce((sum, c) => sum + (c.unread || 0), 0);
+  const total = contacts.length + archivedContacts.length;
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
         <div className={styles.headerTitle}>Сообщения</div>
         <div className={styles.headerCount}>
-          {contacts.length} {dialogWord(contacts.length)}
+          {total} {dialogWord(total)}
         </div>
       </div>
       <div className={styles.list}>
+        {hasArchive && (
+          <>
+            <button
+              type="button"
+              className={styles.archiveRow}
+              aria-expanded={archiveOpen}
+              onClick={() => setArchiveOpen((v) => !v)}
+            >
+              <span
+                className={`${styles.archiveChevron} ${archiveOpen ? styles.archiveChevronOpen : ''}`}
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+              <span className={styles.archiveTitle}>Архив</span>
+              <span className={styles.archiveCount}>{archivedContacts.length}</span>
+              {archiveUnread > 0 && (
+                <span className={styles.archiveUnread}>{archiveUnread}</span>
+              )}
+            </button>
+            {archiveOpen &&
+              archivedContacts.map((contact) => (
+                <ChatListItem
+                  key={contact.id}
+                  contact={contact}
+                  isActive={contact.id === activeId}
+                  onClick={() => onSelect(contact.id)}
+                />
+              ))}
+          </>
+        )}
         {contacts.map((contact) => (
           <ChatListItem
             key={contact.id}

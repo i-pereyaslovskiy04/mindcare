@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import {
-  getMyConversation,
+  getStudentConversations,
   getPsychologistConversations,
   getSystemConversation,
 } from '../../../api/chat.api';
@@ -32,8 +32,8 @@ export function useMessagesBadge() {
       let dialogs = 0;
       try {
         if (user.role === 'student') {
-          const { conversation } = await getMyConversation();
-          if (conversation && conversation.unread_count > 0) dialogs += 1;
+          const data = await getStudentConversations({ page: 1, size: 100 });
+          dialogs += data.items.filter((c) => c.unread_count > 0).length;
         } else {
           const data = await getPsychologistConversations({ page: 1, size: 100 });
           dialogs += data.items.filter((c) => c.unread_count > 0).length;

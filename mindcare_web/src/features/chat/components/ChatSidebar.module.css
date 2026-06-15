@@ -34,6 +34,60 @@
   overflow-y: auto;
 }
 
+/* ---- archive (collapsible, Stage 31s) ---- */
+.archiveRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 1px solid var(--nav-border);
+  background: var(--sand);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.archiveRow:hover {
+  background: var(--milk);
+}
+
+.archiveChevron {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--coffee);
+  transition: transform 0.15s;
+}
+
+.archiveChevronOpen {
+  transform: rotate(90deg);
+}
+
+.archiveTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--espresso);
+  letter-spacing: 0.02em;
+}
+
+.archiveCount {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+.archiveUnread {
+  margin-left: auto;
+  background: var(--coffee);
+  color: var(--milk);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
 /* ---- list item ---- */
 .item {
   display: flex;

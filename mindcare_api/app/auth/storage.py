@@ -29,6 +29,22 @@ class RegistrationDataError(RuntimeError):
     """
 
 
+class UserNotFoundError(RuntimeError):
+    """
+    Пользователь не найден при атомарной операции с паролем
+    (change_password_atomic / password_reset_confirm_atomic).
+    Service-слой мапит на HTTP 404.
+    """
+
+
+class InvalidCurrentPasswordError(RuntimeError):
+    """
+    Текущий пароль не совпал при change_password_atomic.
+    Service-слой мапит на HTTP 400. Проверка выполняется ВНУТРИ
+    транзакции (callback), поэтому ни password_hash, ни сессии не меняются.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Вспомогательные функции
 # ---------------------------------------------------------------------------
@@ -340,6 +356,172 @@ def update_user_password(user_id: str, password_hash: str) -> None:
         db.commit()
 
 
+def _revoke_all_user_sessions_in_session(db, user_id: int) -> None:
+    """
+    Отзывает все сессии пользователя ВНУТРИ переданной сессии (без commit).
+
+    Выделено отдельным хелпером, чтобы атомарные UoW-функции переиспользовали
+    одну логику отзыва и чтобы failure-injection тесты могли точечно подменить
+    этот шаг (проверка rollback при сбое именно на отзыве сессий).
+    """
+    db.query(UserSession).filter(
+        UserSession.user_id == user_id
+    ).update({"is_revoked": True}, synchronize_session=False)
+
+
+def _consume_otp(db, record) -> None:
+    """
+    Удаляет OTP-запись ВНУТРИ переданной сессии (без commit).
+
+    Отдельный хелпер — чтобы потребление OTP было явным последним шагом UoW
+    и чтобы failure-injection тесты могли проверить сценарий «сбой после
+    обновления пароля, но до фиксации потребления OTP» (rollback всего).
+    """
+    db.delete(record)
+
+
+def change_password_atomic(
+    user_id: str,
+    verify_current,
+    new_password_hash: str,
+) -> dict:
+    """
+    Атомарная смена пароля авторизованного пользователя (Stage 31m-fix-b3).
+
+    В ОДНОЙ сессии и ОДНОМ финальном commit:
+      1. найти пользователя (не soft-deleted);
+      2. проверить текущий пароль через callback verify_current(stored_hash);
+      3. обновить password_hash;
+      4. отозвать ВСЕ сессии пользователя;
+      5. commit.
+
+    verify_current — функция (stored_hash: str) -> bool; bcrypt-проверка
+    выполняется внутри транзакции, но до UPDATE строка не блокируется
+    (plain SELECT в PostgreSQL не держит row lock), поэтому медленный bcrypt
+    не удерживает блокировку. new_password_hash вычисляется ВНЕ транзакции.
+
+    Если verify_current(...) → False, бросается InvalidCurrentPasswordError
+    ДО любых изменений: пароль и сессии не трогаются. Сбой на шаге отзыва
+    сессий поднимает исключение до commit → транзакция откатывается целиком,
+    password_hash остаётся прежним (не частичный успех).
+
+    Бросает:
+      UserNotFoundError           — пользователь не найден (→ HTTP 404);
+      InvalidCurrentPasswordError — неверный текущий пароль (→ HTTP 400).
+
+    Возвращает dict пользователя (для post-commit soft-fail уведомления).
+    """
+    with SessionLocal() as db:
+        user = (
+            db.query(User)
+            .filter(User.id == int(user_id), User.deleted_at.is_(None))
+            .first()
+        )
+        if user is None:
+            raise UserNotFoundError("Пользователь не найден")
+
+        if not verify_current(user.password_hash):
+            raise InvalidCurrentPasswordError("Неверный текущий пароль")
+
+        user.password_hash = new_password_hash
+        user.updated_at = datetime.now(timezone.utc)
+        _revoke_all_user_sessions_in_session(db, user.id)
+
+        db.commit()
+        db.refresh(user)
+        return _user_to_dict(user, db)
+
+
+def password_reset_confirm_atomic(
+    email: str,
+    code: str,
+    new_password_hash: str,
+) -> dict:
+    """
+    Атомарное подтверждение сброса пароля по OTP (Stage 31m-fix-b3).
+
+    В ОДНОЙ сессии и ОДНОМ финальном commit (после успешной OTP-валидации):
+      1. validate OTP (без удаления, если код верный);
+      2. найти пользователя (не soft-deleted);
+      3. обновить password_hash;
+      4. отозвать ВСЕ сессии пользователя;
+      5. consume (delete) OTP;
+      6. commit.
+
+    OTP потребляется ТОЛЬКО вместе с успешным обновлением пароля и отзывом
+    сессий — одним commit. Любой сбой core-шага (2–5) поднимает исключение
+    до commit → rollback: пароль не меняется, сессии не отзываются, OTP НЕ
+    теряется (повторная попытка возможна тем же кодом, пока он не истёк).
+
+    OTP failure-пути (не найден / истёк / превышены попытки / неверный код)
+    сохраняют текущую политику attempts: для них выполняется отдельный commit,
+    пароль при этом не трогается.
+
+    new_password_hash вычисляется ВНЕ транзакции (на service-слое).
+
+    Бросает:
+      ValueError        — проблема OTP (service → HTTP 400);
+      UserNotFoundError — OTP верный, но пользователь не найден (→ HTTP 404);
+                          OTP при этом НЕ потребляется (rollback).
+    """
+    email = normalize_email(email)
+    now = _utcnow()
+
+    with SessionLocal() as db:
+        # ── 1. OTP validation (зеркалит verify_otp / register_confirm_atomic) ──
+        record = (
+            db.query(OtpVerification)
+            .filter(OtpVerification.email == email)
+            .first()
+        )
+        if not record:
+            raise ValueError("Код не найден или уже использован")
+
+        if now > record.expires_at:
+            db.delete(record)
+            db.commit()
+            raise ValueError("Срок действия кода истёк. Запросите код заново")
+
+        if record.attempts >= MAX_ATTEMPTS:
+            db.delete(record)
+            db.commit()
+            raise ValueError("Превышено число попыток. Запросите код заново")
+
+        if not _verify_code(code, record.code):
+            record.attempts += 1
+            remaining = MAX_ATTEMPTS - record.attempts
+            if remaining <= 0:
+                db.delete(record)
+                db.commit()
+                raise ValueError(
+                    "Неверный код. Попытки исчерпаны. Запросите код заново"
+                )
+            db.commit()
+            raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
+
+        # ── OTP верный. Дальше — core UoW без промежуточных commit. ──────────
+        user = (
+            db.query(User)
+            .filter(User.email == email, User.deleted_at.is_(None))
+            .first()
+        )
+        if user is None:
+            # OTP валиден, но пользователя нет (например, удалён между init и
+            # confirm): откатываемся, OTP сохраняется (commit не выполняется).
+            raise UserNotFoundError("Пользователь не найден")
+
+        user.password_hash = new_password_hash
+        user.updated_at = datetime.now(timezone.utc)
+        _revoke_all_user_sessions_in_session(db, user.id)
+
+        # Потребить OTP в той же транзакции — последним шагом перед commit.
+        _consume_otp(db, record)
+
+        db.commit()
+        db.refresh(user)
+        return _user_to_dict(user, db)
+
+
 # ---------------------------------------------------------------------------
 # Сессии (заменяют JWT refresh-токены)
 # ---------------------------------------------------------------------------
@@ -411,11 +593,15 @@ def revoke_session(token: str) -> None:
 
 
 def revoke_all_user_sessions(user_id: str) -> None:
-    """Отзывает все сессии пользователя (например, после смены пароля)."""
+    """
+    Отзывает все сессии пользователя в отдельной транзакции.
+
+    Оставлено для не-атомарных flows; атомарные UoW (change_password_atomic,
+    password_reset_confirm_atomic) отзывают сессии внутри своей транзакции
+    через _revoke_all_user_sessions_in_session, без отдельного commit.
+    """
     with SessionLocal() as db:
-        db.query(UserSession).filter(
-            UserSession.user_id == int(user_id)
-        ).update({"is_revoked": True}, synchronize_session=False)
+        _revoke_all_user_sessions_in_session(db, int(user_id))
         db.commit()
 
 

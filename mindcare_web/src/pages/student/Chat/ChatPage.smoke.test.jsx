@@ -10,17 +10,22 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  chatApi.getMyConversation.mockResolvedValue({
-    conversation: {
-      uuid: 'eng-1',
-      partner: { id: 2, full_name: 'Иван Петров' },
-      engagement_status: 'active',
-      last_message_at: null,
-      unread_count: 0,
-      peer_is_online: true,
-    },
+  chatApi.getStudentConversations.mockResolvedValue({
+    items: [
+      {
+        uuid: 'eng-1',
+        partner: { id: 2, full_name: 'Иван Петров' },
+        engagement_status: 'active',
+        last_message_at: null,
+        unread_count: 0,
+        peer_is_online: true,
+      },
+    ],
+    total: 1,
+    page: 1,
+    size: 20,
   });
-  chatApi.getMyConversationMessages.mockResolvedValue({
+  chatApi.getStudentConversationMessages.mockResolvedValue({
     items: [
       {
         id: 1,
@@ -34,8 +39,8 @@ beforeEach(() => {
       },
     ],
   });
-  chatApi.sendMyConversationMessage.mockResolvedValue({});
-  chatApi.markMyConversationRead.mockResolvedValue({ updated_count: 0 });
+  chatApi.sendStudentConversationMessage.mockResolvedValue({});
+  chatApi.markStudentConversationRead.mockResolvedValue({ updated_count: 0 });
   chatApi.getSystemConversation.mockResolvedValue({ conversation: null });
   chatApi.getSystemMessages.mockResolvedValue({ items: [] });
   chatApi.markSystemConversationRead.mockResolvedValue({ updated_count: 0 });

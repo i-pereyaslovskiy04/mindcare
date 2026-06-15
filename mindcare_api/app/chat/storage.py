@@ -165,6 +165,37 @@ def get_or_create_conversation(engagement_id: int) -> tuple[ChatConversation, bo
         return conv, True
 
 
+def ensure_engagement_conversation(
+    db, engagement_id: int,
+) -> tuple[ChatConversation, bool]:
+    """
+    Session-aware get-or-create engagement-беседы (Stage 31o).
+
+    В отличие от get_or_create_conversation, работает ВНУТРИ уже открытой
+    транзакции caller'а: НЕ открывает свою Session и НЕ делает commit, только
+    flush. Создание беседы откатывается вместе с транзакцией caller'а
+    (например, assign/transfer психолога), поэтому engagement не может
+    остаться без беседы.
+
+    Идемпотентна; уважает UNIQUE(engagement_id). Возвращает (conversation,
+    created). Статус engagement здесь не проверяется — это ответственность
+    caller'а (assign/transfer передают свежую active-связь; repair-скрипт
+    фильтрует active).
+    """
+    existing = (
+        db.query(ChatConversation)
+        .filter(ChatConversation.engagement_id == engagement_id)
+        .first()
+    )
+    if existing is not None:
+        return existing, False
+
+    conv = ChatConversation(engagement_id=engagement_id)
+    db.add(conv)
+    db.flush()   # назначает conv.id/conv.uuid; без commit
+    return conv, True
+
+
 def get_conversation_by_uuid(
     conversation_uuid: str,
 ) -> Optional[tuple[ChatConversation, TherapyEngagement]]:
@@ -187,6 +218,20 @@ def get_conversation_by_uuid(
         return conv, eng
 
 
+def conversation_has_messages(conversation_id: int) -> bool:
+    """True, если у беседы есть хотя бы одно не удалённое сообщение (Stage 31p)."""
+    with SessionLocal() as db:
+        return (
+            db.query(ChatMessage.id)
+            .filter(
+                ChatMessage.conversation_id == conversation_id,
+                ChatMessage.deleted_at.is_(None),
+            )
+            .first()
+            is not None
+        )
+
+
 def get_user_brief(user_id: int) -> Optional[dict]:
     with SessionLocal() as db:
         user = db.query(User).filter(User.id == user_id).first()
@@ -202,7 +247,12 @@ def list_conversations_for_psychologist(
     size: int = 20,
 ) -> tuple[list[dict], int]:
     """Список бесед психолога: студент, статус engagement, unread_count.
-    Preview последнего сообщения намеренно не возвращается (N decrypt)."""
+    Preview последнего сообщения намеренно не возвращается (N decrypt).
+
+    Видимость (Stage 31p): active-беседа показывается всегда (даже пустая);
+    inactive/transferred/closed — только если есть хотя бы одно не удалённое
+    сообщение. Пустые неактивные беседы (артефакты ошибочного назначения)
+    скрываются на уровне query, физически не удаляются."""
     with SessionLocal() as db:
         unread_subq = (
             select(func.count(ChatMessage.id))
@@ -216,6 +266,18 @@ def list_conversations_for_psychologist(
             .scalar_subquery()
         )
 
+        # active ИЛИ есть хотя бы одно не удалённое сообщение.
+        has_message = (
+            select(ChatMessage.id)
+            .where(
+                ChatMessage.conversation_id == ChatConversation.id,
+                ChatMessage.deleted_at.is_(None),
+            )
+            .correlate(ChatConversation)
+            .exists()
+        )
+        visible = (TherapyEngagement.status == "active") | has_message
+
         base = (
             db.query(ChatConversation, TherapyEngagement, User, unread_subq)
             .join(
@@ -224,6 +286,7 @@ def list_conversations_for_psychologist(
             )
             .join(User, User.id == TherapyEngagement.client_id)
             .filter(TherapyEngagement.psychologist_id == psychologist_id)
+            .filter(visible)
         )
 
         total = (
@@ -233,6 +296,7 @@ def list_conversations_for_psychologist(
                 TherapyEngagement.id == ChatConversation.engagement_id,
             )
             .filter(TherapyEngagement.psychologist_id == psychologist_id)
+            .filter(visible)
             .scalar()
         ) or 0
 
@@ -260,6 +324,87 @@ def list_conversations_for_psychologist(
         online = get_online_user_ids([it["student"]["id"] for it in items])
         for it in items:
             it["peer_is_online"] = it["student"]["id"] in online
+        return items, total
+
+
+def list_conversations_for_student(
+    student_id: int,
+    *,
+    page: int = 1,
+    size: int = 20,
+) -> tuple[list[dict], int]:
+    """Список бесед студента: психолог (partner), статус engagement, unread_count
+    (Stage 31t). Та же visibility policy, что у психолога (Stage 31p/31s):
+    active — всегда; inactive — только если есть не удалённые сообщения."""
+    with SessionLocal() as db:
+        unread_subq = (
+            select(func.count(ChatMessage.id))
+            .where(
+                ChatMessage.conversation_id == ChatConversation.id,
+                ChatMessage.sender_id != student_id,
+                ChatMessage.read_at.is_(None),
+                ChatMessage.deleted_at.is_(None),
+            )
+            .correlate(ChatConversation)
+            .scalar_subquery()
+        )
+
+        has_message = (
+            select(ChatMessage.id)
+            .where(
+                ChatMessage.conversation_id == ChatConversation.id,
+                ChatMessage.deleted_at.is_(None),
+            )
+            .correlate(ChatConversation)
+            .exists()
+        )
+        visible = (TherapyEngagement.status == "active") | has_message
+
+        base = (
+            db.query(ChatConversation, TherapyEngagement, User, unread_subq)
+            .join(
+                TherapyEngagement,
+                TherapyEngagement.id == ChatConversation.engagement_id,
+            )
+            .join(User, User.id == TherapyEngagement.psychologist_id)
+            .filter(TherapyEngagement.client_id == student_id)
+            .filter(visible)
+        )
+
+        total = (
+            db.query(func.count(ChatConversation.id))
+            .join(
+                TherapyEngagement,
+                TherapyEngagement.id == ChatConversation.engagement_id,
+            )
+            .filter(TherapyEngagement.client_id == student_id)
+            .filter(visible)
+            .scalar()
+        ) or 0
+
+        rows = (
+            base.order_by(
+                desc(func.coalesce(
+                    ChatConversation.last_message_at, ChatConversation.created_at,
+                ))
+            )
+            .offset((page - 1) * size)
+            .limit(size)
+            .all()
+        )
+
+        items = []
+        for conv, eng, psych, unread in rows:
+            items.append({
+                "uuid":              str(conv.uuid),
+                "partner":           {"id": psych.id, "full_name": psych.full_name},
+                "engagement_status": eng.status,
+                "last_message_at":   conv.last_message_at,
+                "unread_count":      int(unread or 0),
+            })
+        online = get_online_user_ids([it["partner"]["id"] for it in items])
+        for it in items:
+            it["peer_is_online"] = it["partner"]["id"] in online
         return items, total
 
 

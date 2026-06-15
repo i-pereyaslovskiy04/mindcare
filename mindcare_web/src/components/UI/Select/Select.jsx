@@ -28,6 +28,9 @@ const CheckIcon = () => (
  *   onChange    — (value) => void
  *   disabled    — boolean
  *   error       — error message string
+ *   displayLabel — optional label to show when `value` has no matching option
+ *                  (e.g. a current value intentionally excluded from selectable
+ *                  options). Display only — it never appears in the dropdown.
  */
 export default function Select({
   label,
@@ -40,6 +43,7 @@ export default function Select({
   className,
   style,
   panelZIndex = 2100,
+  displayLabel,
 }) {
   const [isOpen, setIsOpen]       = useState(false);
   const [activeIndex, setActive]  = useState(-1);
@@ -170,8 +174,8 @@ export default function Select({
         onClick={() => (isOpen ? closeDropdown() : openDropdown())}
         onKeyDown={handleKeyDown}
       >
-        <span className={selectedOption ? styles.value : styles.placeholder}>
-          {selectedOption ? selectedOption.label : placeholder}
+        <span className={selectedOption || displayLabel ? styles.value : styles.placeholder}>
+          {selectedOption ? selectedOption.label : (displayLabel ?? placeholder)}
         </span>
         <span className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ''}`} aria-hidden="true">
           <ChevronIcon />

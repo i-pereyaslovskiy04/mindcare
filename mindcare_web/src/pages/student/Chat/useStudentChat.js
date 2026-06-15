@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  getMyConversation,
-  getMyConversationMessages,
-  markMyConversationRead,
-  sendMyConversationMessage,
+  getStudentConversations,
+  getStudentConversationMessages,
+  markStudentConversationRead,
+  sendStudentConversationMessage,
 } from '../../../api/chat.api';
 import {
   mapApiMessage as mapMessage,
@@ -11,120 +11,145 @@ import {
 } from '../../../features/chat/lib/messageShape';
 import { notifyMessagesUpdated } from '../../../features/chat/lib/messagesEvents';
 
-const META_POLL_MS = 30000;   // обновление unread/назначения психолога в списке
+const POLL_MESSAGES_MS = 8000;   // новые сообщения выбранной активной беседы
+const POLL_LIST_MS = 30000;      // обновление unread_count / появление новых бесед
+const LIST_PAGE_SIZE = 100;
 const HISTORY_LIMIT = 100;
-const SNAPSHOT_LIMIT = 50;    // снапшот для live refresh (read_at + новые)
+const SNAPSHOT_LIMIT = 50;       // снапшот для live refresh (read_at + новые)
 
-/** Достаёт человекочитаемый текст ошибки; raw HTTP-статусы заменяет fallback'ом. */
+const STATUS_FALLBACK = {
+  403: 'Нет доступа к этому чату',
+  404: 'Диалог не найден или недоступен',
+  409: 'Диалог закрыт',
+  429: 'Слишком много сообщений. Попробуйте позже.',
+};
+
+/** Человекочитаемый текст ошибки; raw HTTP-статусы заменяются fallback'ом. */
 function errText(e, fallback) {
   const m = e?.message;
   if (typeof m === 'string' && m && !m.includes('[object') && !/^HTTP \d+$/.test(m)) {
     return m;
   }
-  return fallback;
+  return STATUS_FALLBACK[e?.status] || fallback;
 }
 
 /**
- * Диалог студента с психологом.
+ * Диалоги студента (Stage 31t — единая с психологом list-модель).
  *
- * VK-like: вход в раздел НЕ открывает диалог и НЕ помечает прочитанным.
- *   - refreshMeta — только метаданные беседы (имя/статус/unread) для списка,
- *     без сообщений и без mark-read; крутится на интервале;
- *   - open()   — явное открытие: грузит сообщения + mark-read (вызывает страница
- *     по клику пользователя);
- *   - pollNew  — snapshot+merge живого обновления открытого диалога;
- *   - close()  — уход с диалога.
+ * Список бесед (active + non-empty inactive) с психологами; выбор по uuid;
+ * чтение/отправка/read по conversation uuid. VK-like: вход НЕ открывает диалог
+ * и НЕ помечает прочитанным — open/mark-read только по явному клику.
  */
 export function useStudentChat() {
-  const [conversation, setConversation]       = useState(null);
+  const [conversations, setConversations]     = useState([]);
+  const [listLoading, setListLoading]         = useState(true);
+  const [listError, setListError]             = useState(null);
+  const [selectedUuid, setSelectedUuid]       = useState(null);
   const [messages, setMessages]               = useState([]);
-  const [metaLoading, setMetaLoading]         = useState(true);
-  const [metaError, setMetaError]             = useState(null);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError]     = useState(null);
   const [sending, setSending]                 = useState(false);
   const [sendError, setSendError]             = useState(null);
 
+  const selectedRef = useRef(null);  // guard от гонок при переключении беседы
   const lastIdRef   = useRef(0);
-  const openedRef   = useRef(false);
   const pollBusyRef = useRef(false);
 
-  const markReadSafe = useCallback(() => {
-    markMyConversationRead()
-      .then(() => {
-        setConversation((prev) => (prev ? { ...prev, unread_count: 0 } : prev));
-        notifyMessagesUpdated();   // мгновенно гасим badge в меню
-      })
+  const markReadSafe = useCallback((uuid) => {
+    markStudentConversationRead(uuid)
+      .then(notifyMessagesUpdated)   // мгновенно гасим badge в меню
       .catch(() => {});
   }, []);
 
-  // Только метаданные: НЕ грузит сообщения и НЕ помечает прочитанным.
-  const refreshMeta = useCallback(async () => {
+  const loadList = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setListLoading(true);
+      setListError(null);
+    }
     try {
-      const { conversation: conv } = await getMyConversation();
-      setConversation((prev) => {
-        // Если диалог открыт — его unread уже погашен локально, не воскрешаем.
-        if (openedRef.current && conv) return { ...conv, unread_count: 0 };
-        return conv;
-      });
-      setMetaError(null);
-      return conv;
+      const data = await getStudentConversations({ page: 1, size: LIST_PAGE_SIZE });
+      setConversations(
+        data.items.map((c) =>
+          c.uuid === selectedRef.current ? { ...c, unread_count: 0 } : c,
+        ),
+      );
+      return data.items;
     } catch (e) {
-      setMetaError(errText(e, 'Не удалось загрузить чат. Попробуйте ещё раз.'));
+      if (!silent) setListError(errText(e, 'Не удалось загрузить список диалогов.'));
       return null;
     } finally {
-      setMetaLoading(false);
+      if (!silent) setListLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    refreshMeta();
-    const t = setInterval(refreshMeta, META_POLL_MS);
-    return () => clearInterval(t);
-  }, [refreshMeta]);
-
-  // Явное открытие диалога: грузит историю и помечает прочитанным.
-  const open = useCallback(async () => {
-    openedRef.current = true;
-    setMessagesLoading(true);
-    setMessagesError(null);
-    setSendError(null);
-    setMessages([]);
-    lastIdRef.current = 0;
-    try {
-      const { items } = await getMyConversationMessages({ limit: HISTORY_LIMIT });
-      if (!openedRef.current) return;
-      setMessages(items.map(mapMessage));
-      lastIdRef.current = items.length ? items[items.length - 1].id : 0;
-      if (items.some((m) => !m.is_mine && !m.read_at)) markReadSafe();
-    } catch (e) {
-      if (openedRef.current) {
+  const loadMessages = useCallback(
+    async (uuid) => {
+      setMessagesLoading(true);
+      setMessagesError(null);
+      setSendError(null);
+      setMessages([]);
+      lastIdRef.current = 0;
+      try {
+        const { items } = await getStudentConversationMessages(uuid, {
+          limit: HISTORY_LIMIT,
+        });
+        if (selectedRef.current !== uuid) return;
+        setMessages(items.map(mapMessage));
+        lastIdRef.current = items.length ? items[items.length - 1].id : 0;
+        if (items.some((m) => !m.is_mine && !m.read_at)) markReadSafe(uuid);
+        setConversations((prev) =>
+          prev.map((c) => (c.uuid === uuid ? { ...c, unread_count: 0 } : c)),
+        );
+      } catch (e) {
+        if (selectedRef.current !== uuid) return;
         setMessagesError(errText(e, 'Не удалось загрузить сообщения.'));
+      } finally {
+        if (selectedRef.current === uuid) setMessagesLoading(false);
       }
-    } finally {
-      setMessagesLoading(false);
-    }
-  }, [markReadSafe]);
+    },
+    [markReadSafe],
+  );
 
-  const close = useCallback(() => {
-    openedRef.current = false;
-    setMessages([]);
-    lastIdRef.current = 0;
+  const selectConversation = useCallback(
+    (uuid) => {
+      if (selectedRef.current === uuid) return;
+      selectedRef.current = uuid;
+      setSelectedUuid(uuid);
+      loadMessages(uuid);
+    },
+    [loadMessages],
+  );
+
+  const reloadMessages = useCallback(() => {
+    if (selectedRef.current) loadMessages(selectedRef.current);
+  }, [loadMessages]);
+
+  const deselect = useCallback(() => {
+    selectedRef.current = null;
+    setSelectedUuid(null);
   }, []);
+
+  // Первичная загрузка списка. VK-like: НЕ выбираем диалог автоматически.
+  useEffect(() => {
+    loadList();
+  }, [loadList]);
 
   const pollNew = useCallback(async () => {
-    if (!openedRef.current || pollBusyRef.current) return;
+    const uuid = selectedRef.current;
+    if (!uuid || pollBusyRef.current) return;
     pollBusyRef.current = true;
     try {
-      const { items } = await getMyConversationMessages({ limit: SNAPSHOT_LIMIT });
-      if (!openedRef.current) return;
+      const { items } = await getStudentConversationMessages(uuid, {
+        limit: SNAPSHOT_LIMIT,
+      });
+      if (selectedRef.current !== uuid) return;
       const mapped = items.map(mapMessage);
       if (mapped.length) {
         const lastId = mapped[mapped.length - 1].id;
         if (lastId > lastIdRef.current) lastIdRef.current = lastId;
       }
       setMessages((prev) => mergeMessages(prev, mapped));
-      if (mapped.some((m) => !m.mine && !m.readAt)) markReadSafe();
+      if (mapped.some((m) => !m.mine && !m.readAt)) markReadSafe(uuid);
     } catch {
       // Разовая сетевая ошибка poll'а — без баннера, повтор по интервалу.
     } finally {
@@ -132,29 +157,64 @@ export function useStudentChat() {
     }
   }, [markReadSafe]);
 
+  const selected = conversations.find((c) => c.uuid === selectedUuid) ?? null;
+  const isActive = selected?.engagement_status === 'active';
+
+  // Polling сообщений выбранной активной беседы (закрытая read-only — новых не будет).
+  useEffect(() => {
+    if (!selectedUuid || !isActive || messagesLoading || messagesError) return undefined;
+    const t = setInterval(pollNew, POLL_MESSAGES_MS);
+    return () => clearInterval(t);
+  }, [selectedUuid, isActive, messagesLoading, messagesError, pollNew]);
+
+  // Редкий polling списка: unread других бесед и появление нового психолога.
+  useEffect(() => {
+    if (listLoading || listError) return undefined;
+    const t = setInterval(() => loadList({ silent: true }), POLL_LIST_MS);
+    return () => clearInterval(t);
+  }, [listLoading, listError, loadList]);
+
   const send = useCallback(async (text) => {
+    const uuid = selectedRef.current;
+    if (!uuid) return false;
     setSending(true);
     setSendError(null);
     try {
-      const msg = await sendMyConversationMessage(text);
-      if (msg.id > lastIdRef.current) lastIdRef.current = msg.id;
-      setMessages((prev) =>
-        prev.some((m) => m.id === msg.id) ? prev : [...prev, mapMessage(msg)],
-      );
+      const msg = await sendStudentConversationMessage(uuid, text);
+      if (selectedRef.current === uuid) {
+        if (msg.id > lastIdRef.current) lastIdRef.current = msg.id;
+        setMessages((prev) =>
+          prev.some((m) => m.id === msg.id) ? prev : [...prev, mapMessage(msg)],
+        );
+      }
       return true;
     } catch (e) {
-      setSendError(errText(e, 'Не удалось отправить сообщение. Попробуйте ещё раз.'));
+      if (selectedRef.current === uuid) {
+        setSendError(errText(e, 'Не удалось отправить сообщение. Попробуйте ещё раз.'));
+        // Engagement закрылся во время диалога: тихо обновляем список (статус/closed-state).
+        if (e?.status === 409) loadList({ silent: true });
+      }
       return false;
     } finally {
       setSending(false);
     }
-  }, []);
+  }, [loadList]);
 
   return {
-    conversation, messages,
-    metaLoading, metaError,
-    messagesLoading, messagesError,
-    sending, sendError,
-    refreshMeta, open, close, pollNew, send,
+    conversations,
+    listLoading,
+    listError,
+    reloadList: loadList,
+    selected,
+    selectedUuid,
+    selectConversation,
+    deselect,
+    messages,
+    messagesLoading,
+    messagesError,
+    reloadMessages,
+    sending,
+    sendError,
+    send,
   };
 }

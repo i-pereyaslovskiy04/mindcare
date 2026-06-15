@@ -7,6 +7,11 @@
 > core/encryption.py, core/rate_limit.py, db/models/legal_basis.py.
 > Known security debt section below is also stale — все перечисленные риски закрыты,
 > включая rate limiting (Stage 21), hashed session tokens (Stage 22b) и legal basis (Stage 23b) — see BACKLOG.md.
+> **Section 4 (Auth Flow) is superseded** by the atomic unit-of-work refactor (Stage 31m-fix-b2/b3):
+> registration confirm, password reset confirm и change password теперь выполняются как
+> одна Session/один commit (password update + revoke sessions + consume OTP в одной транзакции),
+> а не последовательностью независимых commit как описано ниже. Current source: `README.md` § Безопасность,
+> `CLAUDE.md`, `ARCHITECTURE.md`.
 
 > Last snapshot: 2026-05-21
 

@@ -8,6 +8,7 @@ import {
   SYSTEM_NOTICE,
   formatLastTime,
   initialsOf,
+  splitConversations,
   systemContact,
 } from '../../../features/chat/lib/conversationView';
 import { usePsychologistChat } from './usePsychologistChat';
@@ -116,8 +117,11 @@ export default function PsychologistChatPage() {
       </div>
     );
   } else {
-    // Список: клиентские диалоги первыми, «Системные уведомления» — всегда последними.
-    const contacts = [...conversations.map(toContact), systemContact(sysConv)];
+    // Группировка (Stage 31s): архив (закрытые с историей) — сверху и свёрнут;
+    // активные диалоги — в основном списке; «Системные уведомления» — последними.
+    const { archived, active } = splitConversations(conversations);
+    const archivedContacts = archived.map(toContact);
+    const contacts = [...active.map(toContact), systemContact(sysConv)];
 
     let pane;
     if (systemSelected) {
@@ -182,7 +186,12 @@ export default function PsychologistChatPage() {
 
     body = (
       <div className={`${styles.shell} ${threadOpen ? styles.threadOpen : ''}`}>
-        <ChatSidebar contacts={contacts} activeId={activeId} onSelect={handleSelect} />
+        <ChatSidebar
+          contacts={contacts}
+          archivedContacts={archivedContacts}
+          activeId={activeId}
+          onSelect={handleSelect}
+        />
         {pane}
       </div>
     );
