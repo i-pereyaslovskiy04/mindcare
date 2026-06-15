@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getUser, createUser, updateUser } from '../../../../api/users.api';
 import { formatPhoneInput } from '../phone';
+import { isStaffRole } from '../roleLabels';
+import { VALID_BASIS_TYPES } from '../legalBasis';
 
 const CREATE_INITIAL = {
   full_name: '',
@@ -12,11 +14,19 @@ const CREATE_INITIAL = {
   basis_reference: '',
   legal_basis_comment: '',
 };
+const EDIT_INITIAL = {
+  full_name: '',
+  phone: '',
+  role: '',
+  is_active: true,
+  // Документированное основание для смены роли на staff/admin (НЕ «согласие»).
+  legal_basis_confirmed: false,
+  basis_type: 'service_duty',
+  basis_reference: '',
+  legal_basis_comment: '',
+};
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_ROLES = ['psychologist', 'admin', 'supervisor'];
-const VALID_BASIS_TYPES = [
-  'service_duty', 'employment', 'contract', 'administrative_order', 'other',
-];
 
 function validateCreate(values) {
   const errs = {};
@@ -34,22 +44,64 @@ function validateCreate(values) {
   return errs;
 }
 
-function validateEdit(values) {
+/**
+ * Legal basis нужен ТОЛЬКО когда роль реально изменилась и новая роль —
+ * staff/admin (psychologist/supervisor/admin). staff → student, student без
+ * смены и unchanged роль основания не требуют (совпадает с backend Stage 31f-fix).
+ */
+function roleChangeNeedsBasis(values, initialRole) {
+  return values.role !== initialRole && isStaffRole(values.role);
+}
+
+function validateEdit(values, initialRole) {
   const errs = {};
   if (!values.full_name || values.full_name.trim().length < 2)
     errs.full_name = 'Минимум 2 символа';
-  // Роль не редактируется в обычной форме (read-only) — не валидируем и не шлём.
+
+  if (roleChangeNeedsBasis(values, initialRole)) {
+    if (!values.legal_basis_confirmed)
+      errs.legal_basis_confirmed =
+        'Подтвердите наличие документированного основания';
+    if (!VALID_BASIS_TYPES.includes(values.basis_type))
+      errs.basis_type = 'Выберите тип основания';
+    if (!values.basis_reference || !values.basis_reference.trim())
+      errs.basis_reference = 'Укажите документ-основание';
+  }
   return errs;
+}
+
+/**
+ * Минимальный PATCH-payload для edit:
+ *   - всегда: full_name, phone, is_active;
+ *   - role — только если реально изменилась (иначе не отправляем);
+ *   - legal basis fields — только при смене роли на staff/admin.
+ * Невалидный legal basis сюда не доходит — отсекается validateEdit до submit.
+ */
+function buildEditPayload(values, initialRole) {
+  const payload = {
+    full_name: values.full_name,
+    phone:     values.phone,
+    is_active: values.is_active,
+  };
+  if (values.role !== initialRole) {
+    payload.role = values.role;
+    if (isStaffRole(values.role)) {
+      payload.legal_basis_confirmed = values.legal_basis_confirmed;
+      payload.basis_type           = values.basis_type;
+      payload.basis_reference      = values.basis_reference?.trim() || null;
+      payload.legal_basis_comment  = values.legal_basis_comment?.trim() || null;
+    }
+  }
+  return payload;
 }
 
 export function useUserForm({ mode, uuid, onSuccess }) {
   const isCreate = mode === 'create';
 
-  const [values, setValues] = useState(
-    isCreate
-      ? CREATE_INITIAL
-      : { full_name: '', phone: '', role: '', is_active: true }
-  );
+  const [values, setValues] = useState(isCreate ? CREATE_INITIAL : EDIT_INITIAL);
+  // Исходная роль пользователя — чтобы понять, изменилась ли роль (legal basis
+  // нужен только при реальной смене на staff/admin). null до загрузки.
+  const [initialRole, setInitialRole] = useState(null);
   const [errors, setErrors]       = useState({});
   const [loading, setLoading]     = useState(!isCreate);
   const [submitting, setSubmitting] = useState(false);
@@ -64,7 +116,9 @@ export function useUserForm({ mode, uuid, onSuccess }) {
     getUser(uuid)
       .then((user) => {
         if (cancelled) return;
+        setInitialRole(user.role);
         setValues({
+          ...EDIT_INITIAL,
           full_name: user.full_name,
           phone:     user.phone || '',
           role:      user.role,
@@ -95,23 +149,18 @@ export function useUserForm({ mode, uuid, onSuccess }) {
   function handleSubmit(e) {
     e.preventDefault();
 
-    const errs = isCreate ? validateCreate(values) : validateEdit(values);
+    const errs = isCreate ? validateCreate(values) : validateEdit(values, initialRole);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setSubmitting(true);
-    // Пустые опциональные поля основания отправляем как null, не ''
-    // Edit: явный allowlist — role в PATCH не отправляется (задаётся при создании).
     const payload = isCreate
       ? {
+          // Пустые опциональные поля основания отправляем как null, не ''
           ...values,
           basis_reference: values.basis_reference?.trim() || null,
           legal_basis_comment: values.legal_basis_comment?.trim() || null,
         }
-      : {
-          full_name: values.full_name,
-          phone:     values.phone,
-          is_active: values.is_active,
-        };
+      : buildEditPayload(values, initialRole);
     const request = isCreate ? createUser(payload) : updateUser(uuid, payload);
 
     request
@@ -127,5 +176,5 @@ export function useUserForm({ mode, uuid, onSuccess }) {
 
   return isCreate
     ? { values, errors, loading: false, submitting, handleChange, handleSubmit, reset }
-    : { values, errors, loading, submitting, handleChange, handleSubmit };
+    : { values, errors, loading, submitting, handleChange, handleSubmit, initialRole };
 }
