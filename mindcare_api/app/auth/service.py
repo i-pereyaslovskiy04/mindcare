@@ -157,23 +157,29 @@ def password_reset_init(email: str) -> None:
 def password_reset_confirm(
     email: str, code: str, new_password: str
 ) -> None:
-    """Проверяет OTP, обновляет пароль, отзывает все сессии пользователя."""
+    """
+    Подтверждает сброс пароля атомарно (Stage 31m-fix-b3).
+
+    Валидация OTP, обновление password_hash, отзыв всех сессий пользователя и
+    потребление OTP выполняются как одна core DB-транзакция в
+    storage.password_reset_confirm_atomic — без частичных состояний. Хеш нового
+    пароля считается ДО открытия транзакции (bcrypt медленный). Если OTP верный,
+    но любой следующий шаг падает, всё откатывается и OTP не теряется.
+    """
     if len(new_password) < 8:
         raise AuthError("Пароль должен быть не короче 8 символов", 422)
 
-    from app.auth import otp_service
-
+    new_password_hash = _hash(new_password)
     try:
-        otp_service.verify_otp(email, code)
+        storage.password_reset_confirm_atomic(
+            email=email,
+            code=code,
+            new_password_hash=new_password_hash,
+        )
+    except storage.UserNotFoundError:
+        raise AuthError("Пользователь не найден", 404)
     except ValueError as e:
         raise AuthError(str(e), 400)
-
-    user = storage.find_user_by_email(email)
-    if not user:
-        raise AuthError("Пользователь не найден", 404)
-
-    storage.update_user_password(user["id"], _hash(new_password))
-    storage.revoke_all_user_sessions(user["id"])
 
 
 # ---------------------------------------------------------------------------
@@ -195,24 +201,36 @@ def change_password(
     new_password: str,
     new_password_confirm: str,
 ) -> None:
-    """Меняет пароль авторизованного пользователя и отзывает все его сессии."""
+    """
+    Меняет пароль авторизованного пользователя атомарно (Stage 31m-fix-b3).
+
+    Поиск пользователя, проверка текущего пароля, обновление password_hash и
+    отзыв ВСЕХ сессий выполняются как одна core DB-транзакция в
+    storage.change_password_atomic — без частичных состояний (сбой на отзыве
+    сессий откатывает и смену пароля). Хеш нового пароля считается ДО открытия
+    транзакции (bcrypt медленный); проверка текущего пароля — внутри транзакции
+    через callback. System-уведомление — soft-fail ПОСЛЕ успешного commit.
+    """
     if new_password != new_password_confirm:
         raise AuthError("Новый пароль и подтверждение не совпадают", 422)
     if len(new_password) < 8:
         raise AuthError("Пароль должен быть не короче 8 символов", 422)
 
-    user = storage.find_user_by_id(user_id)
-    if not user:
+    new_password_hash = _hash(new_password)
+    try:
+        user = storage.change_password_atomic(
+            user_id=user_id,
+            verify_current=lambda stored_hash: _verify(current_password, stored_hash),
+            new_password_hash=new_password_hash,
+        )
+    except storage.UserNotFoundError:
         raise AuthError("Пользователь не найден", 404)
-
-    if not _verify(current_password, user["hashed_password"]):
+    except storage.InvalidCurrentPasswordError:
         raise AuthError("Неверный текущий пароль", 400)
 
-    storage.update_user_password(user_id, _hash(new_password))
-    storage.revoke_all_user_sessions(user_id)
-
-    # System-уведомление (soft-fail, content не логируется). Timestamp в event_key —
-    # чтобы каждая смена пароля давала отдельное сообщение.
+    # System-уведомление (soft-fail, content не логируется). Вне core-транзакции:
+    # пароль уже изменён и сессии отозваны, сбой уведомления это не откатывает.
+    # Timestamp в event_key — чтобы каждая смена пароля давала отдельное сообщение.
     from datetime import datetime, timezone
     from app.chat.system_publisher import publish_system_message
     _ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
