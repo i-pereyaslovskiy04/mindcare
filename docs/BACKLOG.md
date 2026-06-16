@@ -223,6 +223,29 @@
     hamburger + breadcrumb + logout); удалён описательный подзаголовок под «Сообщения».
     Frontend-only; добавлен `ChatPage.smoke.test.jsx` (render list/thread). Ручной browser
     smoke desktop/tablet/mobile остаётся обязательным перед demo
+  - ✅ Stage 31y: **меню действий со своим сообщением** — кебаб-меню «…»
+    (`MessageActionsMenu`) вместо отдельной кнопки-карандаша, пункты «Редактировать»/
+    «Удалить»; удаление через confirm-диалог (`DeleteMessageDialog`, на shared
+    `Modal`/`Button`); меню недоступно для system-сообщений и в закрытой/архивной
+    беседе. Frontend-only
+  - ✅ Stage 31y-hotfix: **скрытие удалённых сообщений** — удалённые сообщения больше
+    не показываются плейсхолдером в ленте; soft delete в БД/audit сохранён
+    (физического удаления строки нет); runtime-текст «Сообщение удалено» не
+    используется; `MessageList` фильтрует `messages.filter(m => !m.deleted)` до
+    расчёта date-сепараторов/author-header. Frontend-only
+  - ✅ Stage 31z: **`MessageBubble` — выделение визуального компонента** —
+    `MessageItem` (полный компонент сообщения: own/incoming/system, author header,
+    avatar/layout, `canManage`, меню действий) и `MessageBubble` (feature-specific
+    визуальный bubble: текст + linkify + meta) разделены; meta (время/«изменено»/
+    ✓/✓✓) — внутри bubble; system-сообщения рендерятся как bubble от «MindCare».
+    Frontend-only
+  - ✅ Stage 31z-hotfix: **компактная Telegram-style meta** — `.bubble` через
+    `display:flex;flex-wrap:wrap;align-items:flex-end`: короткое сообщение и meta —
+    в одну строку, длинное — meta переносится вниз-направо без JS-измерения ширины;
+    кебаб-меню остаётся соседом bubble, не переносится внутрь него. Hardening:
+    system-сообщения никогда не считаются исходящими (даже при `mine=true` от
+    backend) и никогда не показывают «изменено» (даже при наличии `editedAt`).
+    Frontend-only; обновлены `MessageBubble.module.css`, `MessageList.test.jsx`
   - **Ограничения Messenger MVP** (зафиксированы осознанно, не баги):
     - presence приблизительный — не realtime; порог 10 минут; зависит от
       `user_sessions.last_active` и debounce `touch_session` 300с;
@@ -245,7 +268,15 @@
     break-glass access; Action Center / колокольчик; system messages для заданий/
     материалов/анкет/legal announcements; усиление a11y mobile drawer (focus-trap/`inert`);
     глубокий рефакторинг chat-модуля (split `storage.py`, общий `useChatThread`,
-    shared `MessengerPageShell`) — см. Stage 31a audit
+    shared `MessengerPageShell`) — см. Stage 31a audit; ручной browser smoke
+    мобильного/узкого viewport для кебаб-меню + bubble (Stage 31z-hotfix, не проверен
+    в браузере); live-реконсиляция удаления для собеседника во время polling (сейчас
+    исчезновение чужого удалённого сообщения у собеседника видно только после
+    следующего poll/перезагрузки треда); общий параметризуемый hook для
+    student/psychologist chat flow (`useStudentChat.js`/`usePsychologistChat.js`
+    структурно дублируются — см. read-only audit chat-компонентов); интеграционный
+    тест полного edit-флоу через `ChatWindow` (сейчас edit покрыт точечно в
+    `MessageList.test.jsx`, не end-to-end через `ChatWindow`)
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

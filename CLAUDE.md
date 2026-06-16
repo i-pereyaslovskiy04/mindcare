@@ -893,6 +893,16 @@ Conventional Commits:
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read
   только по явному клику), глобальный nav badge + per-dialog unread, system-беседа
   последняя в списке, approximate online/offline (`peer_is_online`, порог 10 мин)
+- **Действия со своим сообщением (Stage 31y/31y-hotfix):** меню «…» (`MessageActionsMenu`,
+  не отдельная кнопка-карандаш) — «Редактировать»/«Удалить»; удаление — через confirm-диалог,
+  soft delete на backend; удалённые сообщения скрыты из ленты БЕЗ плейсхолдера «Сообщение
+  удалено» (техническая запись остаётся только для audit/security, участникам не показывается)
+- **MessageBubble (Stage 31z/31z-hotfix):** визуальное облачко сообщения — отдельный
+  feature-specific компонент `src/features/chat/components/MessageBubble` (НЕ глобальный
+  shared UI, не переносить в `src/components/UI` без второго независимого потребителя);
+  meta (время/«изменено»/✓/✓✓) внутри bubble, компактно для коротких сообщений, с переносом
+  вниз-направо для длинных (Telegram-style); system-сообщения всегда как bubble от «MindCare»,
+  без меню действий, без «изменено», без read receipts
 - Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
 - **Mobile (Stage 30d):** Messenger `≤900px` — list/thread (back-кнопка в шапке чата);
   CabinetLayout `>980px` full sidebar / `601–980px` icon-rail / `≤600px` мобильный drawer

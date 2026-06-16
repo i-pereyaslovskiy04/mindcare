@@ -520,6 +520,48 @@ State lives in: useMaterials hook → MaterialsPage props → SearchBar
 Технические имена API, модулей и моделей остаются `categories` и `tags`.
 Не переименовывать файлы и URL ради UI-терминов.
 
+### Messenger / Chat UI (Stage 31y–31z-hotfix)
+
+```
+MessageList (features/chat/components/MessageList.jsx)
+├── фильтрует messages.filter(m => !m.deleted) — удалённые не попадают в рендер
+├── date-сепараторы + author header (shouldShowAuthorHeader, lib/messageShape.js)
+└── MessageItem (на каждое видимое сообщение)
+    ├── определяет own/incoming/system, авто-собирает header/avatar/layout
+    ├── manageable + onStartEdit/onRequestDelete → проп в MessageActionsMenu
+    ├── MessageBubble — визуальный компонент (variant: incoming|outgoing|system)
+    │   └── текст (linkify) + meta (время · «изменено» · ✓/✓✓) ВНУТРИ bubble
+    ├── MessageActionsMenu — кебаб-меню «…», сосед bubble (не внутри него)
+    │   └── «Редактировать» / «Удалить» — только для своих сообщений в active engagement
+    └── DeleteMessageDialog — confirm перед удалением (shared Modal/Button)
+```
+
+**MessageBubble — governance:** feature-specific компонент чата
+(`src/features/chat/components/MessageBubble.jsx` + `.module.css`), НЕ глобальный
+shared UI. Не переносить в `src/components/UI` пока нет второго независимого
+потребителя за пределами Messenger (см. `docs/UI_COMPONENTS_GUIDE.md`). Перед
+добавлением новых chat-контролов — проверить существующие `features/chat/components/`
+и `src/components/UI`.
+
+**Meta-формат внутри bubble:** `изменено · время · ✓/✓✓` —
+- «изменено» — только если есть `editedAt` И сообщение не системное;
+- read receipts (✓/✓✓) — только у исходящих (`mine`) пользовательских сообщений;
+  входящие и системные — без receipts;
+- CSS: `.bubble{display:flex;flex-wrap:wrap;align-items:flex-end}`,
+  `.text{flex:0 1 auto;min-width:0}`, `.meta{flex:0 0 auto;margin-left:auto}` —
+  короткий текст и meta в одну строку, длинный — meta переносится вниз-направо
+  (Telegram-style), без JS-измерения ширины.
+
+**Delete policy:** удаление своего сообщения — soft delete на backend (нет
+физического `DELETE` строки); запись/шифротекст остаются для audit/security.
+`MessageList` скрывает `deleted` сообщения из ленты — без какого-либо placeholder
+текста («Сообщение удалено» не используется и не должен использоваться).
+
+**System messages:** отдельный `variant="system"` в `MessageBubble` — header
+«MindCare», текст слева, время внутри bubble, без меню действий, без «изменено»,
+без read receipts; никогда не считаются исходящими, даже если backend пришлёт
+`mine=true` (defensive guard в `MessageItem`).
+
 ---
 
 ## 6. Data Flow

@@ -90,6 +90,15 @@ live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts �
 точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat/attachments — postponed.
 Diary/tasks/calendar студента остаются accepted demo/mock.
 
+**Message actions / bubble (Stage 31y–31z-hotfix):** свои сообщения в активной беседе —
+меню «…» (`MessageActionsMenu`) с «Редактировать»/«Удалить» вместо отдельной кнопки-карандаша;
+удаление — через confirm-диалог (`DeleteMessageDialog`), soft delete на backend, удалённые
+сообщения скрыты из ленты без плейсхолдера. Визуальное облачко выделено в отдельный
+feature-specific `MessageBubble` (не shared UI): meta (время/«изменено»/✓/✓✓) — внутри bubble,
+компактно для коротких сообщений и с переносом вниз-направо для длинных (Telegram-style);
+system-сообщения всегда bubble от «MindCare», без меню действий и без read receipts. Подробнее —
+`mindcare_web/ARCHITECTURE.md`.
+
 **Mobile (Stage 30d):** breakpoints различаются по слоям — Messenger переключается в
 list/thread на `≤900px` (в шапке чата кнопка «назад»); CabinetLayout: `>980px` full sidebar,
 `601–980px` icon-rail, `≤600px` мобильный drawer (`sidebarInner` переиспользуется из desktop

@@ -321,7 +321,13 @@ npm run build
 - read receipts ✓/✓✓ по `read_at`; live refresh — snapshot `limit=50` + `mergeMessages`;
 - linkify только http/https, **без `dangerouslySetInnerHTML`**, `rel="noopener noreferrer"`;
 - approximate presence (`peer_is_online`) — точка online/offline, без last-seen-текста;
-- mobile `≤900px` — list/thread, back-кнопка в шапке открытого чата.
+- mobile `≤900px` — list/thread, back-кнопка в шапке открытого чата;
+- действия со своим сообщением — только через кебаб-меню «…» (`MessageActionsMenu`),
+  не отдельная кнопка-карандаш; недоступны для system-сообщений и в закрытой/архивной беседе;
+- удаление — только после confirm (`DeleteMessageDialog`); soft delete на backend; удалённое
+  сообщение пропадает из ленты **без плейсхолдера** «Сообщение удалено»;
+- `MessageBubble` — meta (время/«изменено»/✓/✓✓) внутри bubble; receipts только у исходящих
+  пользовательских сообщений; system-сообщения — без меню действий, без «изменено», без receipts.
 
 **Тесты (backend — на alembic head + dev PostgreSQL):**
 
@@ -333,7 +339,13 @@ npm run build
 
 **Frontend:**
 
-- `mindcare_web/src/pages/student/Chat/ChatPage.smoke.test.jsx` — render list/thread.
+- `mindcare_web/src/pages/student/Chat/ChatPage.smoke.test.jsx` — render list/thread (student);
+- `mindcare_web/src/pages/psychologist/Chat/PsychologistChatPage.smoke.test.jsx` — то же (psychologist);
+- `mindcare_web/src/features/chat/components/ChatWindow.test.jsx`;
+- `mindcare_web/src/features/chat/components/ChatSidebar.test.jsx`;
+- `mindcare_web/src/features/chat/components/MessageList.test.jsx` — фильтрация deleted, bubble/meta, kebab-меню;
+- `mindcare_web/src/features/chat/components/MessageInput.test.jsx`;
+- `mindcare_web/src/features/chat/lib/LinkifiedText.test.jsx`.
 
 **Manual smoke (обязателен перед demo — машинно не проверяется):**
 
@@ -343,4 +355,12 @@ npm run build
 - mobile drawer: открытие/закрытие (backdrop/✕/Escape/клик по пункту), навигация;
 - mobile topbar `≤600px`: hamburger + breadcrumb + logout видны, bell/mail скрыты;
 - read receipts ✓→✓✓; unread badge гаснет только после явного открытия;
-- linkify: ссылка кликабельна, текст с `<script>` отображается как текст (не исполняется).
+- linkify: ссылка кликабельна, текст с `<script>` отображается как текст (не исполняется);
+- своё короткое сообщение → bubble компактный, meta (время/✓✓) в одну строку с текстом;
+- своё длинное сообщение → текст оборачивается, meta переносится вниз-направо;
+- входящее сообщение → время внутри bubble, без read receipts;
+- system-сообщение → header «MindCare», текст слева, время внутри bubble, без меню действий;
+- редактирование через кебаб-меню → текст и пометка «изменено» обновляются на месте;
+- удаление через кебаб-меню + confirm → сообщение пропадает из ленты без плейсхолдера;
+- закрытая/архивная беседа → кебаб-меню действий не отображается;
+- mobile/узкий viewport → bubble + кебаб-меню не разваливают layout (нет overflow/обрезки).

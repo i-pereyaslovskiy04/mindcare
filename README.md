@@ -469,7 +469,18 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
 - live refresh: snapshot (limit=50) + `mergeMessages` — `read_at` обновляется без F5
   в пределах последних 50 сообщений;
 - linkify http/https only (без `dangerouslySetInnerHTML`, `target=_blank rel=noopener noreferrer`);
-- read receipts ✓/✓✓ по `read_at`; online/offline точкой в списке и шапке (без last-seen-текста).
+- read receipts ✓/✓✓ по `read_at`; online/offline точкой в списке и шапке (без last-seen-текста);
+- **действия со своим сообщением (Stage 31y):** меню «…» (`MessageActionsMenu`) вместо отдельной
+  кнопки-карандаша — «Редактировать»/«Удалить»; меню недоступно в закрытой/архивной беседе и для
+  system-сообщений;
+- **удаление (Stage 31y-hotfix):** удаление подтверждается диалогом (`DeleteMessageDialog`),
+  затем soft delete на backend; удалённое сообщение пропадает из ленты **без плейсхолдера**
+  «Сообщение удалено» — техническая запись (шифротекст) остаётся для audit/security, не
+  отображается участникам;
+- **MessageBubble (Stage 31z/31z-hotfix):** визуальное облачко вынесено в отдельный
+  feature-specific компонент (`incoming`/`outgoing`/`system`); meta (время · «изменено» · ✓/✓✓)
+  — внутри bubble, компактно для короткого текста, с переносом вниз-направо для длинного
+  (Telegram-style); меню действий — рядом с bubble, не внутри него.
 
 *Mobile (Stage 30d + hotfixes):*
 - Messenger `≤900px` — режим list/thread (Telegram/VK): сначала список диалогов, по
