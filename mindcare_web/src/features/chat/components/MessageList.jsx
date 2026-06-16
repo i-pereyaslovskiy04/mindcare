@@ -43,9 +43,10 @@ export default function MessageList({
         const showSep = label && label !== prevLabel;
         if (label) prevLabel = label;
         const showAuthorHeader = shouldShowAuthorHeader(visible, idx);
-        // Подпись автора: «Вы» для своих, «ФИО · роль» для собеседника.
-        const authorName = msg.mine ? 'Вы' : contact.name;
-        const authorRole = msg.mine ? null : contact.authorRole || null;
+        // Подпись автора: «MindCare» для системных, «Вы» для своих,
+        // «ФИО · роль» для собеседника.
+        const authorName = msg.system ? 'MindCare' : msg.mine ? 'Вы' : contact.name;
+        const authorRole = msg.system ? null : msg.mine ? null : contact.authorRole || null;
         return (
           <Fragment key={msg.id}>
             {showSep && <div className={styles.dateSep}>{label}</div>}

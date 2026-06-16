@@ -1,0 +1,67 @@
+/* ============================================================
+   MessageBubble — облачко сообщения (Stage 31z): текст + meta
+   (время/edited/read receipts) внутри одного bubble, Telegram-style.
+   ============================================================ */
+
+.bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  color: var(--text-main);
+  word-break: break-word;
+}
+
+.bubbleOutgoing {
+  background: var(--espresso);
+  color: var(--milk);
+  border-color: var(--espresso);
+}
+
+/* system-сообщения (MindCare): тот же фундамент, что incoming, чуть нейтральнее фон */
+.bubbleSystem {
+  background: var(--sand);
+}
+
+.text {
+  text-align: left;
+}
+
+/* link inside bubble (frontend linkify) */
+.bubble a {
+  color: inherit;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+/* ---- meta: время / edited / read receipts, внутри bubble снизу справа ---- */
+.meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: currentColor;
+  opacity: 0.65;
+  white-space: normal;
+}
+
+.time {
+  white-space: nowrap;
+}
+
+.editedMark {
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.receipt {
+  font-size: 11px;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}

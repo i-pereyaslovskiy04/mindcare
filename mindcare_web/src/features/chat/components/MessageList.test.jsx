@@ -54,15 +54,74 @@ test('author header reappears after sender switch', () => {
   expect(screen.getByText('Вы')).toBeInTheDocument();
 });
 
-// F. System conversation: служебные сообщения без human author header.
-test('F. system messages do not render a human author header', () => {
+// F. System conversation: сообщение рендерится как обычный bubble с подписью «MindCare».
+test('F. system messages render as a normal bubble with "MindCare" author header', () => {
   const messages = [
     { id: 1, text: 'Чат с психологом создан.', system: true, time: '10:00', createdAt: A },
   ];
   render(<MessageList messages={messages} contact={{ name: 'Системные уведомления', initials: '' }} />);
   expect(screen.getByText('Чат с психологом создан.')).toBeInTheDocument();
+  expect(screen.getByText('MindCare')).toBeInTheDocument();
   expect(screen.queryByText('Вы')).not.toBeInTheDocument();
+  // подпись из contact (название диалога в сайдбаре) не используется как author header
   expect(screen.queryByText('Системные уведомления')).not.toBeInTheDocument();
+});
+
+// F2. У system-сообщения нет role-подписи (не «пациент/психолог») и нет read receipts.
+test('F2. system messages have no human role label and no read receipts', () => {
+  const messages = [
+    { id: 1, text: 'Системное уведомление.', system: true, time: '10:00', createdAt: A },
+  ];
+  render(<MessageList messages={messages} contact={contact} />);
+  // contact.authorRole = 'психолог' нигде не должен появиться рядом с system-сообщением
+  expect(screen.queryByText('психолог', { exact: false })).not.toBeInTheDocument();
+  expect(screen.queryByTitle('Прочитано')).not.toBeInTheDocument();
+  expect(screen.queryByTitle('Отправлено')).not.toBeInTheDocument();
+});
+
+// F3. Несколько system-сообщений подряд показывают «MindCare» один раз (VK-style группировка).
+test('F3. consecutive system messages show "MindCare" header only once', () => {
+  const messages = [
+    { id: 1, text: 'Первое уведомление', system: true, time: '10:00', createdAt: A },
+    { id: 2, text: 'Второе уведомление', system: true, time: '10:00', createdAt: B },
+  ];
+  render(<MessageList messages={messages} contact={contact} />);
+  expect(screen.getAllByText('MindCare')).toHaveLength(1);
+});
+
+// F4 (Stage 31z). System bubble использует bubble-like фундамент (тот же .bubble,
+// что у обычных сообщений), а не отдельный центрированный баннер; вариант — system,
+// не outgoing.
+test('F4. system message uses bubble-like foundation, not the outgoing variant', () => {
+  const messages = [
+    { id: 1, text: 'Системное уведомление.', system: true, time: '10:00', createdAt: A },
+  ];
+  render(<MessageList messages={messages} contact={contact} />);
+  // тот же bubble, что у обычных сообщений: текст и время вместе внутри одного
+  // элемента с системным вариантом, без outgoing-варианта (своих сообщений).
+  const bubble = screen.getByText(
+    (_, el) => el.textContent === 'Системное уведомление.10:00' && el.className.split(' ').includes('bubble'),
+  );
+  expect(bubble.className.split(' ')).toContain('bubbleSystem');
+  expect(bubble.className.split(' ')).not.toContain('bubbleOutgoing');
+});
+
+// F5 (robustness hotfix после Stage 31z). Даже если system-сообщение пришло
+// с mine=true, оно всё равно рендерится как system bubble (variant=system),
+// не outgoing, и без actions menu/read receipts.
+test('F5. system message with mine=true is still rendered as system, not outgoing', () => {
+  const messages = [
+    { id: 1, uuid: 'sys-1', text: 'Системное уведомление.', system: true, mine: true, time: '10:00', createdAt: A },
+  ];
+  render(<MessageList messages={messages} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={jest.fn()} />);
+  const bubble = screen.getByText(
+    (_, el) => el.textContent === 'Системное уведомление.10:00' && el.className.split(' ').includes('bubble'),
+  );
+  expect(bubble.className.split(' ')).toContain('bubbleSystem');
+  expect(bubble.className.split(' ')).not.toContain('bubbleOutgoing');
+  expect(screen.queryByRole('button', { name: MENU })).not.toBeInTheDocument();
+  expect(screen.queryByTitle('Отправлено')).not.toBeInTheDocument();
+  expect(screen.queryByTitle('Прочитано')).not.toBeInTheDocument();
 });
 
 // G. Архивный/read-only диалог рендерится тем же MessageList → headers работают.
@@ -150,6 +209,46 @@ test('H. edited message shows "изменено" label', () => {
   render(<MessageList messages={[edited]} contact={contact} manageable onStartEdit={jest.fn()} />);
   expect(screen.getByText('новый текст')).toBeInTheDocument();
   expect(screen.getByText(/изменено/)).toBeInTheDocument();
+});
+
+// ── MessageBubble: text + meta (time/edited/read receipts) внутри bubble (Stage 31z) ──
+
+// K. Своё сообщение: текст и время рендерятся внутри одного и того же bubble
+// (а не отдельным meta-блоком снизу с большим внешним отступом).
+test('K. own message renders text and time inside the same bubble', () => {
+  const msg = { id: 1, text: 'Привет', mine: true, senderId: 5, time: '10:00', createdAt: A, readAt: null };
+  render(<MessageList messages={[msg]} contact={contact} />);
+  const bubble = screen.getByText(
+    (_, el) => el.textContent.startsWith('Привет10:00') && el.className.split(' ').includes('bubble'),
+  );
+  expect(bubble).toBeInTheDocument();
+});
+
+// L. Своё непрочитанное сообщение показывает одну галочку («Отправлено»).
+test('L. own unread message shows a single checkmark (Отправлено)', () => {
+  const msg = { id: 1, text: 'X', mine: true, senderId: 5, time: '10:00', createdAt: A, readAt: null };
+  render(<MessageList messages={[msg]} contact={contact} />);
+  const receipt = screen.getByTitle('Отправлено');
+  expect(receipt).toHaveTextContent('✓');
+  expect(receipt).not.toHaveTextContent('✓✓');
+  expect(screen.queryByTitle('Прочитано')).not.toBeInTheDocument();
+});
+
+// M. Своё прочитанное сообщение показывает две галочки («Прочитано»).
+test('M. own read message shows a double checkmark (Прочитано)', () => {
+  const msg = { id: 1, text: 'X', mine: true, senderId: 5, time: '10:00', createdAt: A, readAt: B };
+  render(<MessageList messages={[msg]} contact={contact} />);
+  expect(screen.getByTitle('Прочитано')).toHaveTextContent('✓✓');
+  expect(screen.queryByTitle('Отправлено')).not.toBeInTheDocument();
+});
+
+// N. Входящее сообщение показывает время, но без галочек прочитано/отправлено.
+test('N. incoming message shows time without read checkmarks', () => {
+  const msg = { id: 1, text: 'Привет', mine: false, senderId: 7, time: '10:00', createdAt: A };
+  render(<MessageList messages={[msg]} contact={contact} />);
+  expect(screen.getByText('10:00')).toBeInTheDocument();
+  expect(screen.queryByTitle('Отправлено')).not.toBeInTheDocument();
+  expect(screen.queryByTitle('Прочитано')).not.toBeInTheDocument();
 });
 
 // J. «Старое» своё сообщение по-прежнему управляемо в активном чате (нет time-limit).

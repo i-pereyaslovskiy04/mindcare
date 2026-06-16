@@ -156,9 +156,25 @@ describe('shouldShowAuthorHeader', () => {
     expect(shouldShowAuthorHeader(msgs, 2)).toBe(true);
   });
 
-  test('header never shown for a system message itself', () => {
+  test('header shown for a system message like any other first message', () => {
     const msgs = [{ id: 1, system: true, createdAt: a }];
-    expect(shouldShowAuthorHeader(msgs, 0)).toBe(false);
+    expect(shouldShowAuthorHeader(msgs, 0)).toBe(true);
+  });
+
+  test('header not repeated for consecutive system messages', () => {
+    const msgs = [
+      { id: 1, system: true, createdAt: a },
+      { id: 2, system: true, createdAt: b },
+    ];
+    expect(shouldShowAuthorHeader(msgs, 1)).toBe(false);
+  });
+
+  test('header appears when switching from a system message to a human sender', () => {
+    const msgs = [
+      { id: 1, system: true, createdAt: a },
+      { id: 2, senderId: 7, createdAt: b },
+    ];
+    expect(shouldShowAuthorHeader(msgs, 1)).toBe(true);
   });
 
   test('header appears on a new calendar date', () => {

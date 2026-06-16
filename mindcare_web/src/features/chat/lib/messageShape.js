@@ -3,8 +3,9 @@
  *
  * Backend ChatMessageRead → { id, text, mine, system, time, createdAt, readAt }.
  *   mine   — рисуем справа («моё»), показываем read receipts;
- *   system — message_kind='system' (sender_role='system'): нейтральный стиль,
- *            без аватара, без receipts, не «моё».
+ *   system — message_kind='system' (sender_role='system'): обычный incoming
+ *            bubble с подписью «MindCare» вместо ФИО, без меню действий,
+ *            без read receipts, не «моё».
  */
 
 export function formatTime(iso) {
@@ -37,6 +38,7 @@ function sameDay(aIso, bIso) {
 
 /** Идентификатор автора для группировки (fallback на mine, если sender_id нет). */
 function authorKey(m) {
+  if (m.system) return 'system';
   if (m.senderId != null) return `id:${m.senderId}`;
   return m.mine ? 'me' : 'peer';
 }
@@ -47,19 +49,18 @@ function authorKey(m) {
  *
  * Header показывается у ПЕРВОГО сообщения группы. Группа прерывается, если:
  *   - это первое сообщение в списке;
- *   - предыдущий элемент — system-сообщение (после служебного сепаратора);
  *   - сменилась календарная дата (после date-сепаратора в MessageList);
- *   - сменился отправитель;
+ *   - сменился отправитель (включая переход human ↔ system — authorKey различает их);
  *   - большой перерыв во времени (≥ AUTHOR_HEADER_GAP_MS) у того же автора.
  *
- * Для system-сообщений header не показывается никогда (нет human-автора).
+ * System-сообщения получают header по той же логике, что и обычные —
+ * подпись «MindCare» вместо ФИО собеседника (см. MessageList).
  */
 export function shouldShowAuthorHeader(messages, index) {
   const msg = messages[index];
-  if (!msg || msg.system) return false;
+  if (!msg) return false;
   if (index === 0) return true;
   const prev = messages[index - 1];
-  if (prev.system) return true;
   if (!sameDay(prev.createdAt, msg.createdAt)) return true;
   if (authorKey(prev) !== authorKey(msg)) return true;
   const dt = Date.parse(msg.createdAt) - Date.parse(prev.createdAt);
