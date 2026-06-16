@@ -85,7 +85,9 @@ export default function MessageInput({
           aria-label={isEditing ? 'Сохранить' : 'Отправить'}
         >
           <Icon name={isEditing ? 'edit' : 'send'} size={14} />
-          {isEditing ? (sending ? 'Сохранение…' : 'Сохранить') : sending ? 'Отправка…' : 'Отправить'}
+          <span className={styles.sendLabel}>
+            {isEditing ? (sending ? 'Сохранение…' : 'Сохранить') : sending ? 'Отправка…' : 'Отправить'}
+          </span>
         </button>
       </div>
     </div>

@@ -377,4 +377,20 @@
   .backBtn {
     display: inline-flex;
   }
+
+  /* Compact icon-only send/save button (Stage 31z-hotfix2): текстовая
+     кнопка «Отправить»/«Сохранить» на узком экране была шире, чем нужно,
+     рядом с input. На mobile показываем только иконку самолётика/edit. */
+  .sendBtn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .sendLabel {
+    display: none;
+  }
 }

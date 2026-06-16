@@ -73,3 +73,38 @@ test('normal send calls onSend when not editing', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
   await waitFor(() => expect(onSend).toHaveBeenCalledWith('привет'));
 });
+
+// H. Send button остаётся доступным (accessible name) и содержит иконку
+// самолётика, даже когда текстовый label скрыт CSS-медиа-запросом на mobile
+// (Stage 31z-hotfix2: icon-only compact button на узком экране).
+test('H. send button keeps accessible name and icon when text label is hidden on mobile', () => {
+  render(<MessageInput onSend={jest.fn()} />);
+  const button = screen.getByRole('button', { name: 'Отправить' });
+  expect(button).toHaveAttribute('aria-label', 'Отправить');
+  // Icon — декоративный svg без role/text, доступа через Testing Library queries нет.
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(button.querySelector('svg')).toBeInTheDocument();
+  expect(button).toHaveTextContent('Отправить');
+});
+
+// I. Disabled state не сломан icon-only вёрсткой: пустой текст → кнопка disabled.
+test('I. send button is disabled when input is empty', () => {
+  render(<MessageInput onSend={jest.fn()} />);
+  expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled();
+});
+
+// J. В edit mode тот же icon-only паттерн: accessible name и иконка edit сохраняются.
+test('J. save button in edit mode keeps accessible name and icon', () => {
+  render(
+    <MessageInput
+      onSend={jest.fn()}
+      editing={{ uuid: 'u1', text: 'текст' }}
+      onSubmitEdit={jest.fn()}
+      onCancelEdit={jest.fn()}
+    />,
+  );
+  const button = screen.getByRole('button', { name: 'Сохранить' });
+  expect(button).toHaveAttribute('aria-label', 'Сохранить');
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(button.querySelector('svg')).toBeInTheDocument();
+});
