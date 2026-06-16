@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatWindow from './ChatWindow';
 
@@ -52,6 +53,30 @@ test('confirming deletion calls onDelete with the message uuid', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
 
   await waitFor(() => expect(onDelete).toHaveBeenCalledWith('u1'));
+});
+
+// После успешного удаления сообщение исчезает из ленты (без плейсхолдера).
+// Stateful-harness повторяет контракт хука: onDelete(uuid) убирает сообщение из state.
+test('after confirming delete the message disappears from the feed (no placeholder)', async () => {
+  function Harness() {
+    const [messages, setMessages] = useState([ownMsg]);
+    const onDelete = (uuid) => {
+      setMessages((prev) => prev.filter((m) => m.uuid !== uuid));
+      return Promise.resolve(true);
+    };
+    return (
+      <ChatWindow contact={contact} messages={messages} onSend={jest.fn()} onEdit={jest.fn()} onDelete={onDelete} />
+    );
+  }
+  render(<Harness />);
+
+  expect(screen.getByText('моё сообщение')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Действия с сообщением' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Удалить' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+
+  await waitFor(() => expect(screen.queryByText('моё сообщение')).not.toBeInTheDocument());
+  expect(screen.queryByText('Сообщение удалено')).not.toBeInTheDocument();
 });
 
 // Closed/read-only беседа: меню действий не показывается (нельзя удалять/править).

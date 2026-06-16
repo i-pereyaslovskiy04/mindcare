@@ -159,22 +159,26 @@ test('J. old own message still has actions menu in active chat', () => {
   expect(screen.getByRole('button', { name: MENU })).toBeInTheDocument();
 });
 
-// ── Deleted placeholder (Stage 31y) ───────────────────────────────────────────
+// ── Deleted messages hidden from the feed (Stage 31y-hotfix) ──────────────────
 
-// Удалённое сообщение рендерится как «Сообщение удалено», без меню и без текста.
-test('deleted message renders neutral placeholder without actions or original text', () => {
+// Удалённое сообщение НЕ рендерится: ни bubble, ни плейсхолдера, ни меню.
+test('deleted message is not rendered at all (no placeholder)', () => {
   const deleted = { ...ownMsg, text: '', deleted: true };
   render(
     <MessageList messages={[deleted]} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={jest.fn()} />,
   );
-  expect(screen.getByText('Сообщение удалено')).toBeInTheDocument();
+  expect(screen.queryByText('Сообщение удалено')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: MENU })).not.toBeInTheDocument();
+  // ничего не осталось → пустое состояние ленты
+  expect(screen.getByText('Сообщений пока нет.')).toBeInTheDocument();
 });
 
-// Даже если у удалённого сообщения остался text (на всякий случай) — он не рендерится.
-test('deleted message does not render its content/linkify', () => {
-  const deleted = { ...ownMsg, text: 'секрет', deleted: true };
-  render(<MessageList messages={[deleted]} contact={contact} manageable onStartEdit={jest.fn()} />);
+// Текст удалённого сообщения не показывается, видимые соседи рендерятся как обычно.
+test('deleted message is filtered out, remaining messages still render', () => {
+  const deleted = { ...ownMsg, id: 1, uuid: 'u1', text: 'секрет', deleted: true };
+  const kept = { id: 2, uuid: 'u2', text: 'видимое', mine: true, senderId: 5, time: '10:01', createdAt: A };
+  render(<MessageList messages={[deleted, kept]} contact={contact} manageable onStartEdit={jest.fn()} />);
   expect(screen.queryByText('секрет')).not.toBeInTheDocument();
-  expect(screen.getByText('Сообщение удалено')).toBeInTheDocument();
+  expect(screen.queryByText('Сообщение удалено')).not.toBeInTheDocument();
+  expect(screen.getByText('видимое')).toBeInTheDocument();
 });

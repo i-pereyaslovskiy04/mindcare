@@ -1,11 +1,12 @@
 """
-Stage 31y — удаление своих сообщений Messenger (DELETE, soft delete).
+Stage 31y (+ 31y-hotfix) — удаление своих сообщений Messenger (DELETE, soft delete).
 
 Политика (как у edit): своё user-сообщение, только в active engagement;
-system/чужие → 404; повторное удаление идемпотентно (200). Удалённое сообщение
-остаётся в ленте как placeholder (is_deleted=True, content=""), исходный текст
-наружу не отдаётся, в БД хранится только enc:v1: (ciphertext не перезаписан
-plaintext'ом). Audit chat_message_deleted без текста.
+system/чужие → 404; повторное удаление идемпотентно (200). DELETE-ответ —
+технический (is_deleted=True, content=""), но в обычной выдаче GET messages
+удалённое сообщение НЕ возвращается вовсе (без плейсхолдера). В БД остаётся
+deleted_at + enc:v1: ciphertext (не перезаписан plaintext'ом).
+Audit chat_message_deleted без текста.
 
 Requires dev PostgreSQL on alembic head + DATA_ENCRYPTION_KEY.
 """
@@ -110,7 +111,7 @@ def _setup_active(client):
     return s_token, s_id, p_token, p_id, sup_id, eng, conv
 
 
-# ─── A. author deletes own message → placeholder, ciphertext preserved ────────
+# ─── A. author deletes own message → hidden from GET, ciphertext preserved ────
 
 def test_student_deletes_own_message(client):
     s_token, *_rest, conv = _setup_active(client)
@@ -120,7 +121,7 @@ def test_student_deletes_own_message(client):
     r = _student_delete(client, s_token, conv, sent["uuid"])
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["is_deleted"] is True
+    assert body["is_deleted"] is True   # технический ответ операции
     assert body["content"] == ""
     assert body["uuid"] == sent["uuid"]
 
@@ -131,12 +132,11 @@ def test_student_deletes_own_message(client):
         assert row.content.startswith(ENCRYPTION_PREFIX)
         assert secret not in row.content
 
-    # В ленте удалённое сообщение присутствует как placeholder без исходного текста.
+    # В обычной выдаче удалённое сообщение отсутствует (без плейсхолдера/текста).
     items = _student_messages(client, s_token, conv)
-    target = next(m for m in items if m["uuid"] == sent["uuid"])
-    assert target["is_deleted"] is True
-    assert target["content"] == ""
+    assert all(m["uuid"] != sent["uuid"] for m in items)
     assert secret not in str(items)
+    assert "удал" not in str(items).lower()
 
 
 def test_psychologist_deletes_own_message(client):
@@ -205,6 +205,24 @@ def test_repeated_delete_is_idempotent(client):
     r2 = _student_delete(client, s_token, conv, sent["uuid"])
     assert r2.status_code == 200
     assert r2.json()["is_deleted"] is True
+
+
+# ─── D2. deleting the last message: feed falls back to previous, no placeholder ─
+
+def test_deleting_last_message_falls_back_to_previous(client):
+    s_token, *_rest, conv = _setup_active(client)
+    first = _student_send(client, s_token, conv, "первое")
+    last = _student_send(client, s_token, conv, "последнее-уд")
+
+    r = _student_delete(client, s_token, conv, last["uuid"])
+    assert r.status_code == 200
+
+    items = _student_messages(client, s_token, conv)
+    uuids = [m["uuid"] for m in items]
+    assert last["uuid"] not in uuids          # удалённое скрыто
+    assert first["uuid"] in uuids             # предыдущее осталось
+    assert items[-1]["uuid"] == first["uuid"]  # последнее видимое — предыдущее
+    assert "удал" not in str(items).lower()    # никакого «Сообщение удалено»
 
 
 # ─── E. cannot delete in closed (transferred) engagement → 409 ────────────────

@@ -444,14 +444,16 @@ def get_messages(
       after_id  — polling: только новые после указанного;
       без курсоров — последние limit сообщений.
 
-    Удалённые сообщения НЕ исключаются: они нужны как нейтральный плейсхолдер
-    «Сообщение удалено» в ленте (история не становится «дырявой»). content
-    удалённого не расшифровывается и не отдаётся (_message_to_dict). Снапшот-
-    polling (limit без курсора) поэтому подхватывает и факт удаления.
+    Удалённые сообщения (deleted_at IS NOT NULL) НЕ возвращаются (Stage 31y-hotfix):
+    в пользовательской ленте они скрыты полностью, без плейсхолдера «Сообщение
+    удалено» (в психологическом чате такой маркер тревожит). Soft delete и audit
+    остаются в БД; скрытие — только на уровне выдачи. Порядок оставшихся сообщений
+    и last_message_at не меняются.
     """
     with SessionLocal() as db:
         q = db.query(ChatMessage).filter(
             ChatMessage.conversation_id == conversation_id,
+            ChatMessage.deleted_at.is_(None),
         )
 
         if after_id is not None:

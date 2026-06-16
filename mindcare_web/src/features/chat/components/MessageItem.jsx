@@ -24,27 +24,12 @@ export default function MessageItem({
     );
   }
 
-  const isMe = message.mine;
+  // Удалённое сообщение полностью скрыто из ленты (Stage 31y-hotfix): без bubble
+  // и без плейсхолдера «Сообщение удалено». Defense-in-depth — MessageList и так
+  // отфильтровывает deleted до рендера, но на случай прямой передачи возвращаем null.
+  if (message.deleted) return null;
 
-  // Удалённое сообщение: нейтральный placeholder, без content/linkify, без меню,
-  // без receipts и метки «изменено». История не становится «дырявой».
-  if (message.deleted) {
-    return (
-      <div className={`${styles.msg} ${isMe ? styles.msgMe : ''}`}>
-        {!isMe && <div className={styles.msgAvatar}>{contactInitials}</div>}
-        <div className={styles.msgContent}>
-          <div className={styles.bubbleRow}>
-            <div className={`${styles.bubble} ${styles.bubbleDeleted}`}>
-              Сообщение удалено
-            </div>
-          </div>
-          <div className={`${styles.msgTime} ${isMe ? styles.msgTimeRight : ''}`}>
-            {message.time}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isMe = message.mine;
 
   // Меню действий: только своё user-сообщение, чат управляем (manageable), есть uuid.
   const canManage = manageable && isMe && !message.system && Boolean(message.uuid);

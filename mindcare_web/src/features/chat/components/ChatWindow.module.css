@@ -264,14 +264,6 @@
   }
 }
 
-/* placeholder удалённого сообщения: нейтральный, приглушённый, курсив */
-.bubbleDeleted {
-  background: var(--sand);
-  border-color: var(--nav-border);
-  color: var(--text-light);
-  font-style: italic;
-}
-
 /* link inside bubble (frontend linkify) */
 .bubble a,
 .systemBubble a {

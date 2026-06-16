@@ -27,18 +27,22 @@ export default function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Удалённые сообщения скрыты из ленты (Stage 31y-hotfix): фильтруем до расчёта
+  // author-header/date-сепараторов, чтобы они считались по видимым сообщениям.
+  const visible = messages.filter((m) => !m.deleted);
+
   let prevLabel = null;
 
   return (
     <div className={styles.messages}>
-      {messages.length === 0 && (
+      {visible.length === 0 && (
         <div className={styles.threadEmpty}>{emptyText || 'Сообщений пока нет.'}</div>
       )}
-      {messages.map((msg, idx) => {
+      {visible.map((msg, idx) => {
         const label = msg.createdAt ? dayLabel(msg.createdAt) : null;
         const showSep = label && label !== prevLabel;
         if (label) prevLabel = label;
-        const showAuthorHeader = shouldShowAuthorHeader(messages, idx);
+        const showAuthorHeader = shouldShowAuthorHeader(visible, idx);
         // Подпись автора: «Вы» для своих, «ФИО · роль» для собеседника.
         const authorName = msg.mine ? 'Вы' : contact.name;
         const authorRole = msg.mine ? null : contact.authorRole || null;

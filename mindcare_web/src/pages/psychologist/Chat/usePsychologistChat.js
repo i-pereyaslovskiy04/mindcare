@@ -259,17 +259,16 @@ export function usePsychologistChat() {
     }
   }, []);
 
-  // Удаление своего сообщения (Stage 31y): DELETE → точечная замена по uuid на
-  // deleted-плейсхолдер (порядок и createdAt сохраняются). Без перезагрузки.
+  // Удаление своего сообщения (Stage 31y-hotfix): DELETE → сообщение убирается
+  // из ленты (без плейсхолдера). Порядок оставшихся сообщений сохраняется.
   const deleteMessage = useCallback(async (messageUuid) => {
     const uuid = selectedRef.current;
     if (!uuid || !messageUuid) return false;
     setSendError(null);
     try {
-      const msg = await deletePsychologistMessage(uuid, messageUuid);
+      await deletePsychologistMessage(uuid, messageUuid);
       if (selectedRef.current === uuid) {
-        const mapped = mapMessage(msg);
-        setMessages((prev) => prev.map((m) => (m.uuid === mapped.uuid ? mapped : m)));
+        setMessages((prev) => prev.filter((m) => m.uuid !== messageUuid));
       }
       return true;
     } catch (e) {
