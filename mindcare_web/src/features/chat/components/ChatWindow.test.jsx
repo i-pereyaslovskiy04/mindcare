@@ -84,3 +84,29 @@ test('no actions menu in a closed conversation', () => {
   renderWindow({ closed: true });
   expect(screen.queryByRole('button', { name: 'Действия с сообщением' })).not.toBeInTheDocument();
 });
+
+// Stage 31aa: полный edit-flow через ChatWindow — kebab-меню → «Редактировать»
+// → composer в edit mode с прежним текстом → submit → onEdit(uuid, newText) →
+// edit mode сброшен. Раньше этот путь был покрыт только частями (отдельно
+// MessageList/MessageActionsMenu и отдельно MessageInput), без проверки связки.
+test('full edit-flow through ChatWindow: kebab menu → edit composer → submit calls onEdit, then resets', async () => {
+  const onEdit = jest.fn().mockResolvedValue(true);
+  renderWindow({ onEdit });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Действия с сообщением' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Редактировать' }));
+
+  // composer перешёл в edit mode: видна панель + input заполнен старым текстом.
+  expect(screen.getByText('Редактирование сообщения')).toBeInTheDocument();
+  const input = screen.getByRole('textbox');
+  expect(input).toHaveValue('моё сообщение');
+
+  fireEvent.change(input, { target: { value: 'обновлённое сообщение' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+  await waitFor(() => expect(onEdit).toHaveBeenCalledWith('u1', 'обновлённое сообщение'));
+
+  // после успешного submit edit-mode сброшен: баннер исчез, composer вернулся к «Отправить».
+  await waitFor(() => expect(screen.queryByText('Редактирование сообщения')).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Отправить' })).toBeInTheDocument();
+});
