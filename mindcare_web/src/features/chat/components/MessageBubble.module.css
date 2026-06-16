@@ -3,14 +3,20 @@
    (время/edited/read receipts) внутри одного bubble, Telegram-style.
    ============================================================ */
 
+/* Stage 31z-hotfix: bubble — flex-wrap (row), не column. Короткое сообщение
+   и meta помещаются в одну строку («текст   19:00 ✓✓»), потому что bubble
+   шире своего max-content нет (shrink-to-fit) — margin-left: auto на .meta
+   не создаёт лишнего зазора. Длинный текст занимает всю доступную ширину
+   (flex-shrink сжимает .text до wrap), и meta переносится на отдельную
+   flex-строку снизу справа — это стандартный приём для Telegram-like meta. */
 .bubble {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  padding: 7px 10px 6px;
   border-radius: 14px;
   font-size: 13.5px;
-  line-height: 1.5;
+  line-height: 1.35;
   background: var(--warm-white);
   border: 1px solid var(--nav-border);
   color: var(--text-main);
@@ -29,6 +35,8 @@
 }
 
 .text {
+  flex: 0 1 auto;
+  min-width: 0;
   text-align: left;
 }
 
@@ -42,13 +50,17 @@
 /* ---- meta: время / edited / read receipts, внутри bubble снизу справа ---- */
 .meta {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-top: 2px;
+  padding-left: 8px;
   font-size: 10.5px;
+  line-height: 1;
   color: currentColor;
   opacity: 0.65;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .time {

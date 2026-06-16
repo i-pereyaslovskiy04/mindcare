@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import MessageList from './MessageList';
 
 // jsdom не реализует scrollIntoView (используется в MessageList useEffect).
@@ -201,6 +201,20 @@ test('menu Удалить calls onRequestDelete with the message', () => {
   fireEvent.click(screen.getByRole('button', { name: MENU }));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Удалить' }));
   expect(onRequestDelete).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'u1' }));
+});
+
+// Stage 31z-hotfix: kebab-меню остаётся sibling рядом с bubble (внутри
+// .bubbleRow), а не внутри самого bubble — bubble остаётся чисто
+// presentational и не содержит интерактивных элементов.
+test('actions menu button is a sibling of the bubble, not nested inside it', () => {
+  render(
+    <MessageList messages={[ownMsg]} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={jest.fn()} />,
+  );
+  const bubble = screen.getByText(
+    (_, el) => el.textContent.startsWith('моё10:00') && el.className.split(' ').includes('bubble'),
+  );
+  expect(within(bubble).queryByRole('button', { name: MENU })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: MENU })).toBeInTheDocument();
 });
 
 // H. Отредактированное сообщение показывает метку «изменено».
