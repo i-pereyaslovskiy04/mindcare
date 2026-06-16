@@ -124,6 +124,22 @@ test('F5. system message with mine=true is still rendered as system, not outgoin
   expect(screen.queryByTitle('Прочитано')).not.toBeInTheDocument();
 });
 
+test('F6. system message with editedAt does not show edited label', () => {
+  const messages = [
+    {
+      id: 1,
+      text: 'Системное уведомление.',
+      system: true,
+      time: '10:00',
+      createdAt: A,
+      editedAt: B,
+    },
+  ];
+  render(<MessageList messages={messages} contact={contact} />);
+  expect(screen.getByText('Системное уведомление.')).toBeInTheDocument();
+  expect(screen.queryByText(/изменено/)).not.toBeInTheDocument();
+});
+
 // G. Архивный/read-only диалог рендерится тем же MessageList → headers работают.
 test('G. archived/read-only dialog still shows author headers', () => {
   const messages = [

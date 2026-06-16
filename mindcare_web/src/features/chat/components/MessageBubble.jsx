@@ -15,6 +15,7 @@ import styles from './MessageBubble.module.css';
 export default function MessageBubble({ variant = 'incoming', text, time, editedAt = null, readAt = null }) {
   const isOutgoing = variant === 'outgoing';
   const isSystem = variant === 'system';
+  const showEditedMark = Boolean(editedAt) && !isSystem;
 
   return (
     <div
@@ -24,7 +25,7 @@ export default function MessageBubble({ variant = 'incoming', text, time, edited
         <LinkifiedText text={text} />
       </div>
       <div className={styles.meta}>
-        {editedAt && <span className={styles.editedMark}>изменено </span>}
+        {showEditedMark && <span className={styles.editedMark}>изменено </span>}
         <span className={styles.time}>{time}</span>
         {isOutgoing && (
           <span
