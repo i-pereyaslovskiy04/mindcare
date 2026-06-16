@@ -216,6 +216,28 @@ def student_edit_message(
         )
 
 
+@router.delete(
+    "/student/conversations/{conversation_uuid}/messages/{message_uuid}",
+    response_model=ChatMessageRead,
+)
+def student_delete_message(
+    conversation_uuid: str,
+    message_uuid:      str,
+    current_user:      dict = Depends(require_role("student")),
+):
+    try:
+        return service.delete_student_conversation_message(
+            current_user, conversation_uuid, message_uuid,
+        )
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось удалить сообщение",
+        )
+
+
 @router.post(
     "/student/conversations/{conversation_uuid}/read", response_model=ChatReadResponse,
 )
@@ -322,6 +344,26 @@ def edit_message(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось изменить сообщение",
+        )
+
+
+@router.delete(
+    "/conversations/{conversation_uuid}/messages/{message_uuid}",
+    response_model=ChatMessageRead,
+)
+def delete_message(
+    conversation_uuid: str,
+    message_uuid:      str,
+    current_user:      dict = Depends(require_role("psychologist")),
+):
+    try:
+        return service.delete_message(current_user, conversation_uuid, message_uuid)
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось удалить сообщение",
         )
 
 

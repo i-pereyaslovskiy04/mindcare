@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import ChatHeader from './ChatHeader';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
+import DeleteMessageDialog from './DeleteMessageDialog';
 import styles from './ChatWindow.module.css';
 
 export default function ChatWindow({
@@ -9,6 +10,7 @@ export default function ChatWindow({
   messages,
   onSend,
   onEdit = null,
+  onDelete = null,
   closed = false,
   sending = false,
   sendError = null,
@@ -19,16 +21,23 @@ export default function ChatWindow({
 }) {
   // editing = { uuid, text } редактируемого сообщения либо null.
   const [editing, setEditing] = useState(null);
+  // pendingDelete = сообщение, ожидающее подтверждения удаления, либо null.
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // composer скрыт у системной беседы (readOnly) и у закрытого engagement.
   const showComposer = !readOnly && !closed;
-  // правка возможна только пока есть composer (активный engagement) и есть onEdit.
-  const canEditChat = showComposer && Boolean(onEdit);
+  // действия (правка/удаление) возможны, пока есть composer (активный
+  // engagement) и переданы соответствующие обработчики.
+  const canManageChat = showComposer && (Boolean(onEdit) || Boolean(onDelete));
 
-  // Если беседу закрыли/переключили — сбросить edit-mode.
+  // Если беседу закрыли/переключили — сбросить edit/delete-mode.
   useEffect(() => {
-    if (!canEditChat) setEditing(null);
-  }, [canEditChat, contact?.id]);
+    if (!canManageChat) {
+      setEditing(null);
+      setPendingDelete(null);
+    }
+  }, [canManageChat, contact?.id]);
 
   const handleStartEdit = useCallback((message) => {
     setEditing({ uuid: message.uuid, text: message.text });
@@ -46,6 +55,23 @@ export default function ChatWindow({
     [editing, onEdit],
   );
 
+  const handleRequestDelete = useCallback((message) => {
+    setPendingDelete(message);
+  }, []);
+
+  const handleCancelDelete = useCallback(() => setPendingDelete(null), []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDelete || !onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete(pendingDelete.uuid);
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
+  }, [pendingDelete, onDelete]);
+
   if (!contact) return null;
 
   return (
@@ -55,8 +81,9 @@ export default function ChatWindow({
         messages={messages}
         contact={contact}
         emptyText={emptyText}
-        editable={canEditChat}
+        manageable={canManageChat}
         onStartEdit={handleStartEdit}
+        onRequestDelete={onDelete ? handleRequestDelete : null}
       />
       {sendError && (
         <div className={styles.sendError} role="alert">
@@ -78,6 +105,13 @@ export default function ChatWindow({
             : 'Диалог закрыт. История переписки доступна только для чтения.'}
         </div>
       )}
+
+      <DeleteMessageDialog
+        open={Boolean(pendingDelete)}
+        deleting={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 }

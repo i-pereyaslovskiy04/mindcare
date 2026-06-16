@@ -50,6 +50,7 @@ export default function PsychologistChatPage() {
     sendError,
     send,
     editMessage,
+    deleteMessage,
   } = usePsychologistChat();
 
   const {
@@ -179,6 +180,7 @@ export default function PsychologistChatPage() {
           messages={messages}
           onSend={send}
           onEdit={editMessage}
+          onDelete={deleteMessage}
           closed={closed}
           sending={sending}
           sendError={sendError}

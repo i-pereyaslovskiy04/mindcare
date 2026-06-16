@@ -1,0 +1,75 @@
+.wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Kebab-триггер: на desktop виден по hover сообщения / focus (как был карандаш).
+   Видимость по hover задаёт родительский .msg в ChatWindow.module.css. */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text-light);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.trigger:hover {
+  background: var(--sand);
+  color: var(--coffee);
+}
+
+/* всплывающее меню */
+.menu {
+  position: absolute;
+  top: 100%;
+  margin-top: 4px;
+  min-width: 150px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(74, 55, 40, 0.16);
+}
+
+/* у своих сообщений (kebab слева от bubble) меню удобнее прижать вправо */
+.wrap:last-child .menu {
+  right: 0;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+
+.item:hover {
+  background: var(--sand);
+}
+
+/* danger — аккуратно, без агрессивной заливки: красный текст, мягкий hover */
+.itemDanger {
+  color: var(--error);
+}
+
+.itemDanger:hover {
+  background: var(--error-bg);
+}

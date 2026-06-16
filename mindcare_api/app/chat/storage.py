@@ -69,22 +69,39 @@ def _message_to_dict(
     current_user_id: int,
     client_id: Optional[int],
 ) -> dict:
-    """Response dict с расшифрованным content. Вызывать только после проверки прав.
+    """Response dict. Вызывать только после проверки прав.
 
     system-сообщение (message_kind='system', sender_id IS NULL) не обращается
     к engagement.client_id: sender_role='system', is_mine=False.
-    """
-    try:
-        plaintext = decrypt_text(msg.content)
-    except (ValueError, RuntimeError) as exc:
-        raise RuntimeError(f"Message decryption failed (id={msg.id})") from exc
 
+    Удалённое сообщение (deleted_at IS NOT NULL): content НЕ расшифровывается
+    и наружу не отдаётся (плейсхолдер на стороне UI); возвращается is_deleted=True.
+    """
     if msg.message_kind == "system":
         sender_role = "system"
         is_mine = False
     else:
         sender_role = "student" if msg.sender_id == client_id else "psychologist"
         is_mine = msg.sender_id == current_user_id
+
+    if msg.deleted_at is not None:
+        return {
+            "id":          msg.id,
+            "uuid":        str(msg.uuid),
+            "sender_id":   msg.sender_id,
+            "sender_role": sender_role,
+            "is_mine":     is_mine,
+            "content":     "",          # исходный текст удалённого не отдаём
+            "created_at":  msg.created_at,
+            "read_at":     msg.read_at,
+            "edited_at":   None,
+            "is_deleted":  True,
+        }
+
+    try:
+        plaintext = decrypt_text(msg.content)
+    except (ValueError, RuntimeError) as exc:
+        raise RuntimeError(f"Message decryption failed (id={msg.id})") from exc
 
     return {
         "id":          msg.id,
@@ -96,6 +113,7 @@ def _message_to_dict(
         "created_at":  msg.created_at,
         "read_at":     msg.read_at,
         "edited_at":   msg.edited_at,
+        "is_deleted":  False,
     }
 
 
@@ -425,11 +443,15 @@ def get_messages(
       before_id — история: limit сообщений старше указанного;
       after_id  — polling: только новые после указанного;
       без курсоров — последние limit сообщений.
+
+    Удалённые сообщения НЕ исключаются: они нужны как нейтральный плейсхолдер
+    «Сообщение удалено» в ленте (история не становится «дырявой»). content
+    удалённого не расшифровывается и не отдаётся (_message_to_dict). Снапшот-
+    polling (limit без курсора) поэтому подхватывает и факт удаления.
     """
     with SessionLocal() as db:
         q = db.query(ChatMessage).filter(
             ChatMessage.conversation_id == conversation_id,
-            ChatMessage.deleted_at.is_(None),
         )
 
         if after_id is not None:
@@ -561,6 +583,71 @@ def update_message_content(
                 "created_at":  msg.created_at,
                 "read_at":     msg.read_at,
                 "edited_at":   msg.edited_at,
+            },
+        }
+
+
+def soft_delete_message(
+    *,
+    conversation_id: int,
+    message_uuid: str,
+    actor_user_id: int,
+    client_id: int,
+    now: Optional[datetime] = None,
+) -> dict:
+    """
+    Soft delete своего user-сообщения (Stage 31y).
+
+    Permission/kind-проверки здесь (нужна строка), результат — status-discriminator,
+    который service маппит в HTTP:
+      {"status": "ok", "message": <deleted placeholder dict>}
+      {"status": "not_found"}         — сообщения нет в этой беседе
+      {"status": "forbidden_system"}  — message_kind != 'user' (system нельзя)
+      {"status": "not_owner"}         — чужое сообщение
+
+    Идемпотентность: повторное удаление уже удалённого своего сообщения —
+    тоже "ok" (тот же плейсхолдер), без ошибки.
+
+    Физического DELETE нет: проставляется deleted_at. content (ciphertext)
+    НЕ перезаписывается plaintext'ом и наружу не отдаётся (_message_to_dict).
+    last_message_at и read_at не трогаются: удаление не создаёт unread-событий
+    и не меняет порядок ленты.
+    """
+    now = now or datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        msg = (
+            db.query(ChatMessage)
+            .filter(
+                ChatMessage.conversation_id == conversation_id,
+                ChatMessage.uuid == message_uuid,
+            )
+            .first()
+        )
+        if msg is None:
+            return {"status": "not_found"}
+        if msg.message_kind != "user":
+            return {"status": "forbidden_system"}
+        if msg.sender_id != actor_user_id:
+            return {"status": "not_owner"}
+
+        if msg.deleted_at is None:
+            msg.deleted_at = now
+            db.commit()
+            db.refresh(msg)
+
+        return {
+            "status": "ok",
+            "message": {
+                "id":          msg.id,
+                "uuid":        str(msg.uuid),
+                "sender_id":   msg.sender_id,
+                "sender_role": "student" if msg.sender_id == client_id else "psychologist",
+                "is_mine":     True,
+                "content":     "",          # исходный текст удалённого не отдаём
+                "created_at":  msg.created_at,
+                "read_at":     msg.read_at,
+                "edited_at":   None,
+                "is_deleted":  True,
             },
         }
 

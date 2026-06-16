@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  deleteStudentMessage,
   editStudentMessage,
   getStudentConversations,
   getStudentConversationMessages,
@@ -226,6 +227,28 @@ export function useStudentChat() {
     }
   }, [loadList]);
 
+  // Удаление своего сообщения (Stage 31y): DELETE → точечная замена по uuid на
+  // deleted-плейсхолдер (порядок и createdAt сохраняются). Без перезагрузки.
+  const deleteMessage = useCallback(async (messageUuid) => {
+    const uuid = selectedRef.current;
+    if (!uuid || !messageUuid) return false;
+    setSendError(null);
+    try {
+      const msg = await deleteStudentMessage(uuid, messageUuid);
+      if (selectedRef.current === uuid) {
+        const mapped = mapMessage(msg);
+        setMessages((prev) => prev.map((m) => (m.uuid === mapped.uuid ? mapped : m)));
+      }
+      return true;
+    } catch (e) {
+      if (selectedRef.current === uuid) {
+        setSendError(errText(e, 'Не удалось удалить сообщение. Попробуйте ещё раз.'));
+        if (e?.status === 409) loadList({ silent: true });
+      }
+      return false;
+    }
+  }, [loadList]);
+
   return {
     conversations,
     listLoading,
@@ -243,5 +266,6 @@ export function useStudentChat() {
     sendError,
     send,
     editMessage,
+    deleteMessage,
   };
 }

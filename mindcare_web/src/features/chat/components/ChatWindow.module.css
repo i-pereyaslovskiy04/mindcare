@@ -243,39 +243,33 @@
   font-style: italic;
 }
 
-/* карандаш правки: только у своих сообщений; на desktop виден по hover/focus.
-   Вертикальное центрирование по bubble обеспечивает .bubbleRow (align-items). */
-.editBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-light);
-  border-radius: 6px;
-  cursor: pointer;
+/* kebab-меню действий: только у своих сообщений; на desktop появляется по
+   hover сообщения / focus триггера. Вертикальное центрирование по bubble
+   обеспечивает .bubbleRow (align-items). Сам триггер стилизован в
+   MessageActionsMenu.module.css; здесь — только видимость (hover/focus). */
+.msgActions {
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition: opacity 0.15s;
 }
 
-.msg:hover .editBtn,
-.editBtn:focus-visible {
+.msg:hover .msgActions,
+.msgActions:focus-visible {
   opacity: 1;
 }
 
-.editBtn:hover {
-  background: var(--sand);
-  color: var(--coffee);
-}
-
-/* touch-устройства без hover: карандаш у своих сообщений виден всегда */
+/* touch-устройства без hover: меню действий у своих сообщений видно всегда */
 @media (hover: none) {
-  .editBtn {
+  .msgActions {
     opacity: 1;
   }
+}
+
+/* placeholder удалённого сообщения: нейтральный, приглушённый, курсив */
+.bubbleDeleted {
+  background: var(--sand);
+  border-color: var(--nav-border);
+  color: var(--text-light);
+  font-style: italic;
 }
 
 /* link inside bubble (frontend linkify) */

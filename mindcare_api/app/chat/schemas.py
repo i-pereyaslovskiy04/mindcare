@@ -73,10 +73,11 @@ class ChatMessageRead(BaseModel):
     sender_id:   Optional[int]            # None для system-сообщения
     sender_role: str                      # student / psychologist / system
     is_mine:     bool
-    content:     str                      # plaintext (decrypt после проверки прав)
+    content:     str                      # plaintext (decrypt после проверки прав); "" для удалённого
     created_at:  datetime
     read_at:     Optional[datetime]
     edited_at:   Optional[datetime] = None  # NULL — не редактировалось (Stage 31x)
+    is_deleted:  bool = False                # True — soft-deleted, content не отдаётся (Stage 31y)
 
 
 class ChatMessagesResponse(BaseModel):

@@ -70,6 +70,11 @@ export const editStudentMessage = (conversationUuid, messageUuid, content) =>
     body: JSON.stringify({ content }),
   });
 
+export const deleteStudentMessage = (conversationUuid, messageUuid) =>
+  apiFetch(`/api/chat/student/conversations/${conversationUuid}/messages/${messageUuid}`, {
+    method: 'DELETE',
+  });
+
 /**
  * Psychologist side (Stage 28e): беседы со своими студентами по engagements.
  */
@@ -110,6 +115,11 @@ export const editPsychologistMessage = (conversationUuid, messageUuid, content) 
   apiFetch(`/api/chat/conversations/${conversationUuid}/messages/${messageUuid}`, {
     method: 'PATCH',
     body: JSON.stringify({ content }),
+  });
+
+export const deletePsychologistMessage = (conversationUuid, messageUuid) =>
+  apiFetch(`/api/chat/conversations/${conversationUuid}/messages/${messageUuid}`, {
+    method: 'DELETE',
   });
 
 /**

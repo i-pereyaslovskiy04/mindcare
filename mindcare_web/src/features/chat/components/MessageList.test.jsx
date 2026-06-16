@@ -76,54 +76,105 @@ test('G. archived/read-only dialog still shows author headers', () => {
   expect(screen.getByText('Вы')).toBeInTheDocument();
 });
 
-// ── Edit pencil (Stage 31x) ──────────────────────────────────────────────────
+// ── Actions menu: Редактировать / Удалить (Stage 31y) ─────────────────────────
 
 const ownMsg = { id: 1, uuid: 'u1', text: 'моё', mine: true, senderId: 5, time: '10:00', createdAt: A };
 const inMsg = { id: 2, uuid: 'u2', text: 'входящее', mine: false, senderId: 7, time: '10:00', createdAt: A };
 
-// Pencil только у своих сообщений, когда чат редактируемый (editable=true).
-test('pencil appears only for own editable user message', () => {
+const MENU = 'Действия с сообщением';
+
+// Меню только у своих сообщений, когда чат управляем (manageable=true).
+test('actions menu appears only for own manageable user message', () => {
   render(
-    <MessageList messages={[ownMsg, inMsg]} contact={contact} editable onStartEdit={jest.fn()} />,
+    <MessageList
+      messages={[ownMsg, inMsg]}
+      contact={contact}
+      manageable
+      onStartEdit={jest.fn()}
+      onRequestDelete={jest.fn()}
+    />,
   );
-  // ровно один карандаш — у своего сообщения
-  expect(screen.getAllByRole('button', { name: 'Редактировать сообщение' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: MENU })).toHaveLength(1);
 });
 
-// editable=false (closed/archive) → карандаша нет даже у своих.
-test('no pencil when chat is not editable (closed/archive)', () => {
-  render(<MessageList messages={[ownMsg, inMsg]} contact={contact} editable={false} />);
-  expect(screen.queryByRole('button', { name: 'Редактировать сообщение' })).not.toBeInTheDocument();
+// manageable=false (closed/archive) → меню нет даже у своих.
+test('no actions menu when chat is not manageable (closed/archive)', () => {
+  render(<MessageList messages={[ownMsg, inMsg]} contact={contact} manageable={false} />);
+  expect(screen.queryByRole('button', { name: MENU })).not.toBeInTheDocument();
 });
 
-// System-сообщение не получает карандаш даже при editable.
-test('no pencil for system message', () => {
+// System-сообщение не получает меню даже при manageable.
+test('no actions menu for system message', () => {
   const sys = { id: 3, text: 'служебное', system: true, time: '10:00', createdAt: A };
   render(
-    <MessageList messages={[sys]} contact={{ name: 'Системные', initials: '' }} editable onStartEdit={jest.fn()} />,
+    <MessageList messages={[sys]} contact={{ name: 'Системные', initials: '' }} manageable onStartEdit={jest.fn()} />,
   );
-  expect(screen.queryByRole('button', { name: 'Редактировать сообщение' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: MENU })).not.toBeInTheDocument();
 });
 
-// Клик по карандашу вызывает onStartEdit с сообщением.
-test('clicking pencil calls onStartEdit with the message', () => {
+// Меню открывается и содержит «Редактировать» и «Удалить».
+test('opening the menu shows Редактировать and Удалить', () => {
+  render(
+    <MessageList messages={[ownMsg]} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={jest.fn()} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: MENU }));
+  expect(screen.getByRole('menuitem', { name: 'Редактировать' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: 'Удалить' })).toBeInTheDocument();
+});
+
+// «Редактировать» из меню запускает существующий edit flow (onStartEdit).
+test('menu Редактировать calls onStartEdit with the message', () => {
   const onStartEdit = jest.fn();
-  render(<MessageList messages={[ownMsg]} contact={contact} editable onStartEdit={onStartEdit} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Редактировать сообщение' }));
+  render(
+    <MessageList messages={[ownMsg]} contact={contact} manageable onStartEdit={onStartEdit} onRequestDelete={jest.fn()} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: MENU }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Редактировать' }));
   expect(onStartEdit).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'u1' }));
+});
+
+// «Удалить» из меню вызывает onRequestDelete с сообщением (подтверждение — выше).
+test('menu Удалить calls onRequestDelete with the message', () => {
+  const onRequestDelete = jest.fn();
+  render(
+    <MessageList messages={[ownMsg]} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={onRequestDelete} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: MENU }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Удалить' }));
+  expect(onRequestDelete).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'u1' }));
 });
 
 // H. Отредактированное сообщение показывает метку «изменено».
 test('H. edited message shows "изменено" label', () => {
   const edited = { ...ownMsg, text: 'новый текст', editedAt: '2024-01-01T10:05:00.000Z' };
-  render(<MessageList messages={[edited]} contact={contact} editable onStartEdit={jest.fn()} />);
+  render(<MessageList messages={[edited]} contact={contact} manageable onStartEdit={jest.fn()} />);
   expect(screen.getByText('новый текст')).toBeInTheDocument();
   expect(screen.getByText(/изменено/)).toBeInTheDocument();
 });
 
-// J. «Старое» своё сообщение по-прежнему редактируемо в активном чате (нет time-limit).
-test('J. old own message still editable in active chat', () => {
+// J. «Старое» своё сообщение по-прежнему управляемо в активном чате (нет time-limit).
+test('J. old own message still has actions menu in active chat', () => {
   const old = { ...ownMsg, createdAt: '2023-01-01T10:00:00.000Z' };
-  render(<MessageList messages={[old]} contact={contact} editable onStartEdit={jest.fn()} />);
-  expect(screen.getByRole('button', { name: 'Редактировать сообщение' })).toBeInTheDocument();
+  render(<MessageList messages={[old]} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={jest.fn()} />);
+  expect(screen.getByRole('button', { name: MENU })).toBeInTheDocument();
+});
+
+// ── Deleted placeholder (Stage 31y) ───────────────────────────────────────────
+
+// Удалённое сообщение рендерится как «Сообщение удалено», без меню и без текста.
+test('deleted message renders neutral placeholder without actions or original text', () => {
+  const deleted = { ...ownMsg, text: '', deleted: true };
+  render(
+    <MessageList messages={[deleted]} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={jest.fn()} />,
+  );
+  expect(screen.getByText('Сообщение удалено')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: MENU })).not.toBeInTheDocument();
+});
+
+// Даже если у удалённого сообщения остался text (на всякий случай) — он не рендерится.
+test('deleted message does not render its content/linkify', () => {
+  const deleted = { ...ownMsg, text: 'секрет', deleted: true };
+  render(<MessageList messages={[deleted]} contact={contact} manageable onStartEdit={jest.fn()} />);
+  expect(screen.queryByText('секрет')).not.toBeInTheDocument();
+  expect(screen.getByText('Сообщение удалено')).toBeInTheDocument();
 });

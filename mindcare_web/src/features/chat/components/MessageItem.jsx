@@ -1,5 +1,5 @@
-import Icon from '../../../components/Icon/Icon';
 import LinkifiedText from '../lib/LinkifiedText';
+import MessageActionsMenu from './MessageActionsMenu';
 import styles from './ChatWindow.module.css';
 
 export default function MessageItem({
@@ -8,8 +8,9 @@ export default function MessageItem({
   showAuthorHeader = false,
   authorName = '',
   authorRole = null,
-  editable = false,
+  manageable = false,
   onStartEdit = null,
+  onRequestDelete = null,
 }) {
   // Системное уведомление: нейтральный bubble, без аватара и без receipts.
   if (message.system) {
@@ -24,8 +25,29 @@ export default function MessageItem({
   }
 
   const isMe = message.mine;
-  // Карандаш: только своё user-сообщение, чат активен (editable), есть uuid.
-  const canEdit = editable && isMe && !message.system && Boolean(message.uuid);
+
+  // Удалённое сообщение: нейтральный placeholder, без content/linkify, без меню,
+  // без receipts и метки «изменено». История не становится «дырявой».
+  if (message.deleted) {
+    return (
+      <div className={`${styles.msg} ${isMe ? styles.msgMe : ''}`}>
+        {!isMe && <div className={styles.msgAvatar}>{contactInitials}</div>}
+        <div className={styles.msgContent}>
+          <div className={styles.bubbleRow}>
+            <div className={`${styles.bubble} ${styles.bubbleDeleted}`}>
+              Сообщение удалено
+            </div>
+          </div>
+          <div className={`${styles.msgTime} ${isMe ? styles.msgTimeRight : ''}`}>
+            {message.time}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Меню действий: только своё user-сообщение, чат управляем (manageable), есть uuid.
+  const canManage = manageable && isMe && !message.system && Boolean(message.uuid);
 
   return (
     <div className={`${styles.msg} ${isMe ? styles.msgMe : ''}`}>
@@ -38,21 +60,18 @@ export default function MessageItem({
             {authorRole && <span className={styles.authorRole}> · {authorRole}</span>}
           </div>
         )}
-        {/* bubble + карандаш в одной строке: карандаш центрируется по высоте
-            самого bubble, а не по всей колонке с meta/time (Stage 31x-hotfix). */}
+        {/* bubble + меню действий в одной строке: kebab центрируется по высоте
+            bubble (а не по всей колонке с meta/time). */}
         <div className={styles.bubbleRow}>
           <div className={`${styles.bubble} ${isMe ? styles.bubbleMe : ''}`}>
             <LinkifiedText text={message.text} />
           </div>
-          {canEdit && (
-            <button
-              type="button"
-              className={styles.editBtn}
-              onClick={() => onStartEdit(message)}
-              aria-label="Редактировать сообщение"
-            >
-              <Icon name="edit" size={14} />
-            </button>
+          {canManage && (
+            <MessageActionsMenu
+              triggerClassName={styles.msgActions}
+              onEdit={() => onStartEdit?.(message)}
+              onDelete={() => onRequestDelete?.(message)}
+            />
           )}
         </div>
         <div className={`${styles.msgTime} ${isMe ? styles.msgTimeRight : ''}`}>

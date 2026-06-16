@@ -17,8 +17,9 @@ export default function MessageList({
   messages,
   contact,
   emptyText,
-  editable = false,
+  manageable = false,
   onStartEdit = null,
+  onRequestDelete = null,
 }) {
   const bottomRef = useRef(null);
 
@@ -50,8 +51,9 @@ export default function MessageList({
               showAuthorHeader={showAuthorHeader}
               authorName={authorName}
               authorRole={authorRole}
-              editable={editable}
+              manageable={manageable}
               onStartEdit={onStartEdit}
+              onRequestDelete={onRequestDelete}
             />
           </Fragment>
         );

@@ -23,6 +23,7 @@ export function mapApiMessage(m) {
     createdAt: m.created_at,
     readAt: m.read_at || null,
     editedAt: m.edited_at || null,
+    deleted: m.is_deleted === true,
   };
 }
 

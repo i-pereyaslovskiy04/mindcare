@@ -88,6 +88,43 @@ def log_message_edited(
         )
 
 
+def log_message_deleted(
+    *,
+    actor_id:          int,
+    actor_role:        str,
+    conversation_id:   int,
+    conversation_uuid: str,
+    message_id:        int,
+    message_uuid:      str,
+) -> None:
+    """Факт удаления (soft delete) сообщения (Stage 31y). Soft-fail: сбой audit
+    не ломает удаление (consistent с log_message_edited). Метаданные ТОЛЬКО
+    технические — ни текста, ни ciphertext."""
+    try:
+        with SessionLocal() as db:
+            db.add(AuditLog(
+                user_id=actor_id,
+                user_role=actor_role,
+                event_type="chat_message_deleted",
+                entity_type="chat_message",
+                entity_id=message_id,
+                description=f"chat_message_deleted: id={message_id}",
+                log_metadata={
+                    "conversation_uuid": conversation_uuid,
+                    "conversation_id":   conversation_id,
+                    "message_uuid":      message_uuid,
+                    "actor_id":          actor_id,
+                },
+            ))
+            db.commit()
+    except Exception as exc:
+        print(
+            f"[AUDIT FAIL] chat_message_deleted "
+            f"(message id={message_id}): {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+
+
 def log_system_conversation_created(
     *,
     recipient_id:      int,

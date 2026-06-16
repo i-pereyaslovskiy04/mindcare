@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  deletePsychologistMessage,
   editPsychologistMessage,
   getPsychologistConversation,
   getPsychologistConversationMessages,
@@ -258,6 +259,27 @@ export function usePsychologistChat() {
     }
   }, []);
 
+  // Удаление своего сообщения (Stage 31y): DELETE → точечная замена по uuid на
+  // deleted-плейсхолдер (порядок и createdAt сохраняются). Без перезагрузки.
+  const deleteMessage = useCallback(async (messageUuid) => {
+    const uuid = selectedRef.current;
+    if (!uuid || !messageUuid) return false;
+    setSendError(null);
+    try {
+      const msg = await deletePsychologistMessage(uuid, messageUuid);
+      if (selectedRef.current === uuid) {
+        const mapped = mapMessage(msg);
+        setMessages((prev) => prev.map((m) => (m.uuid === mapped.uuid ? mapped : m)));
+      }
+      return true;
+    } catch (e) {
+      if (selectedRef.current === uuid) {
+        setSendError(errText(e, 'Не удалось удалить сообщение. Попробуйте ещё раз.'));
+      }
+      return false;
+    }
+  }, []);
+
   return {
     conversations,
     listLoading,
@@ -275,5 +297,6 @@ export function usePsychologistChat() {
     sendError,
     send,
     editMessage,
+    deleteMessage,
   };
 }

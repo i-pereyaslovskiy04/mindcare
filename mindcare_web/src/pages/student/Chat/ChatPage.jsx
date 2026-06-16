@@ -50,6 +50,7 @@ export default function ChatPage() {
     sendError,
     send,
     editMessage,
+    deleteMessage,
   } = useStudentChat();
 
   const {
@@ -176,6 +177,7 @@ export default function ChatPage() {
           messages={messages}
           onSend={send}
           onEdit={editMessage}
+          onDelete={deleteMessage}
           closed={closed}
           sending={sending}
           sendError={sendError}

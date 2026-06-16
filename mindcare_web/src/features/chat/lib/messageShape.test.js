@@ -37,6 +37,22 @@ describe('mapApiMessage', () => {
     });
     expect(out.editedAt).toBeNull();
   });
+
+  test('maps is_deleted → deleted (Stage 31y)', () => {
+    const del = mapApiMessage({
+      id: 7, uuid: 'm-uuid-7', content: '', is_mine: true,
+      sender_role: 'student', sender_id: 9, created_at: T1,
+      read_at: null, edited_at: null, is_deleted: true,
+    });
+    expect(del.deleted).toBe(true);
+
+    const live = mapApiMessage({
+      id: 8, uuid: 'm-uuid-8', content: 'жив', is_mine: true,
+      sender_role: 'student', sender_id: 9, created_at: T1,
+      read_at: null, edited_at: null,
+    });
+    expect(live.deleted).toBe(false);
+  });
 });
 
 describe('mergeMessages', () => {

@@ -21,7 +21,9 @@ import uuid as _uuid
 from typing import Optional
 
 from app.chat import storage
-from app.chat.audit import log_conversation_created, log_message_edited
+from app.chat.audit import (
+    log_conversation_created, log_message_deleted, log_message_edited,
+)
 
 
 class ChatError(Exception):
@@ -311,6 +313,64 @@ def edit_message(
     )
 
 
+# ─── Delete message (Stage 31y) ──────────────────────────────────────────────
+#
+# Soft delete. Та же политика, что и edit: удалить можно ТОЛЬКО своё user-
+# сообщение и ТОЛЬКО пока engagement активен. system/чужие → 404 (скрываем).
+# Повторное удаление своего сообщения идемпотентно (storage возвращает "ok").
+# Закрытый/архивный чат → 409. Audit chat_message_deleted soft-fail без текста.
+
+
+def _apply_message_delete(
+    *,
+    conv,
+    eng,
+    actor_user_id: int,
+    actor_role: str,
+    message_uuid: str,
+) -> dict:
+    if eng.status != "active":
+        raise ChatError(_CLOSED, status_code=409)
+    try:
+        _uuid.UUID(message_uuid)
+    except ValueError:
+        raise ChatError(_NOT_FOUND, status_code=404)
+
+    result = storage.soft_delete_message(
+        conversation_id=conv.id,
+        message_uuid=message_uuid,
+        actor_user_id=actor_user_id,
+        client_id=eng.client_id,
+    )
+    if result["status"] != "ok":
+        # not_found / not_owner / forbidden_system → 404 (скрываем).
+        raise ChatError(_NOT_FOUND, status_code=404)
+
+    msg = result["message"]
+    log_message_deleted(
+        actor_id=actor_user_id,
+        actor_role=actor_role,
+        conversation_id=conv.id,
+        conversation_uuid=str(conv.uuid),
+        message_id=msg["id"],
+        message_uuid=msg["uuid"],
+    )
+    return msg
+
+
+def delete_message(
+    current_user: dict, conversation_uuid: str, message_uuid: str,
+) -> dict:
+    """Psychologist удаляет своё сообщение в своей активной беседе."""
+    psychologist_id = int(current_user["id"])
+    conv, eng = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
+    return _apply_message_delete(
+        conv=conv, eng=eng,
+        actor_user_id=psychologist_id, actor_role=current_user["role"],
+        message_uuid=message_uuid,
+    )
+
+
 # ─── Student conversation list / archive (Stage 31t) ─────────────────────────
 #
 # Единая с психологом модель: список бесед студента (active + non-empty inactive),
@@ -396,6 +456,19 @@ def edit_student_conversation_message(
         conv=conv, eng=eng,
         actor_user_id=student_id, actor_role=current_user["role"],
         message_uuid=message_uuid, content=content,
+    )
+
+
+def delete_student_conversation_message(
+    current_user: dict, conversation_uuid: str, message_uuid: str,
+) -> dict:
+    """Student удаляет своё сообщение в своей активной беседе (Stage 31y)."""
+    student_id = int(current_user["id"])
+    conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
+    return _apply_message_delete(
+        conv=conv, eng=eng,
+        actor_user_id=student_id, actor_role=current_user["role"],
+        message_uuid=message_uuid,
     )
 
 
