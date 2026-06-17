@@ -10,12 +10,15 @@ Polling-based: клиент опрашивает messages?after=<id> раз в 7
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import FileResponse
 
 from app.auth.deps import get_current_user, require_role
 from app.core.rate_limit import RateLimitExceeded, check as rate_limit_check
 from app.chat import service
+from app.chat.attachment_service import safe_content_disposition
 from app.chat.schemas import (
+    ChatAttachmentRead,
     ChatConversationRead,
     ChatMessageCreate,
     ChatMessageEdit,
@@ -104,6 +107,7 @@ def my_send_message(
             body.content,
             ip=_client_ip(request),
             user_agent=request.headers.get("user-agent"),
+            attachment_uuids=[str(u) for u in body.attachment_uuids],
         )
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
@@ -182,6 +186,7 @@ def student_send_message(
     try:
         return service.send_student_conversation_message(
             current_user, conversation_uuid, body.content,
+            attachment_uuids=[str(u) for u in body.attachment_uuids],
         )
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
@@ -252,6 +257,48 @@ def student_mark_read(
     return {"updated_count": updated}
 
 
+@router.post(
+    "/student/conversations/{conversation_uuid}/attachments",
+    response_model=ChatAttachmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def student_upload_attachment(
+    conversation_uuid: str,
+    file:              UploadFile = File(...),
+    current_user:      dict       = Depends(require_role("student")),
+):
+    data = file.file.read()
+    try:
+        return service.upload_attachment_student(current_user, conversation_uuid, file, data)
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.get(
+    "/student/conversations/{conversation_uuid}/attachments/{attachment_uuid}/download",
+)
+def student_download_attachment(
+    conversation_uuid: str,
+    attachment_uuid:   str,
+    current_user:      dict = Depends(require_role("student")),
+):
+    try:
+        path, filename, mime_type = service.download_attachment_student(
+            current_user, conversation_uuid, attachment_uuid,
+        )
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return FileResponse(
+        path=str(path),
+        media_type=mime_type,
+        headers={
+            "Content-Disposition":  safe_content_disposition(filename),
+            "Cache-Control":        "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 # ─── Psychologist ─────────────────────────────────────────────────────────────
 
 @router.get("/conversations", response_model=PaginatedChatConversationsResponse)
@@ -313,7 +360,10 @@ def send_message(
 ):
     _check_send_limit(int(current_user["id"]))
     try:
-        return service.send_message(current_user, conversation_uuid, body.content)
+        return service.send_message(
+            current_user, conversation_uuid, body.content,
+            attachment_uuids=[str(u) for u in body.attachment_uuids],
+        )
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     except RuntimeError:
@@ -377,6 +427,48 @@ def mark_read(
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return {"updated_count": updated}
+
+
+@router.post(
+    "/conversations/{conversation_uuid}/attachments",
+    response_model=ChatAttachmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def psychologist_upload_attachment(
+    conversation_uuid: str,
+    file:              UploadFile = File(...),
+    current_user:      dict       = Depends(require_role("psychologist")),
+):
+    data = file.file.read()
+    try:
+        return service.upload_attachment_psychologist(current_user, conversation_uuid, file, data)
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.get(
+    "/conversations/{conversation_uuid}/attachments/{attachment_uuid}/download",
+)
+def psychologist_download_attachment(
+    conversation_uuid: str,
+    attachment_uuid:   str,
+    current_user:      dict = Depends(require_role("psychologist")),
+):
+    try:
+        path, filename, mime_type = service.download_attachment_psychologist(
+            current_user, conversation_uuid, attachment_uuid,
+        )
+    except service.ChatError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return FileResponse(
+        path=str(path),
+        media_type=mime_type,
+        headers={
+            "Content-Disposition":  safe_content_disposition(filename),
+            "Cache-Control":        "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # ─── System conversation (Stage 29b) ────────────────────────────────────────

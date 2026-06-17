@@ -18,10 +18,15 @@ content шифруется в storage (encrypt-on-write); decrypt — тольк
 """
 
 import uuid as _uuid
+from pathlib import Path
 from typing import Optional
 
+from fastapi import UploadFile
+
 from app.chat import storage
+from app.chat import attachment_service as _att_svc
 from app.chat.audit import (
+    log_attachment_downloaded, log_attachment_uploaded,
     log_conversation_created, log_message_deleted, log_message_edited,
 )
 
@@ -144,6 +149,7 @@ def send_my_message(
     *,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    attachment_uuids: Optional[list] = None,
 ) -> dict:
     student_id = int(current_user["id"])
     eng = storage.get_engagement_for_student(student_id)
@@ -164,12 +170,16 @@ def send_my_message(
             user_agent=user_agent,
         )
 
-    return storage.create_message(
-        conv.id,
-        sender_id=student_id,        # только из сессии — spoof невозможен
-        content=content,
-        client_id=eng.client_id,
-    )
+    try:
+        return storage.create_message(
+            conv.id,
+            sender_id=student_id,
+            content=content,
+            client_id=eng.client_id,
+            attachment_uuids=attachment_uuids,
+        )
+    except ValueError as e:
+        raise ChatError(str(e), status_code=400)
 
 
 def mark_my_read(current_user: dict) -> int:
@@ -231,18 +241,27 @@ def get_messages(
     )
 
 
-def send_message(current_user: dict, conversation_uuid: str, content: str) -> dict:
+def send_message(
+    current_user: dict,
+    conversation_uuid: str,
+    content: str,
+    attachment_uuids: Optional[list] = None,
+) -> dict:
     psychologist_id = int(current_user["id"])
     conv, eng = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
     if eng.status != "active":
         raise ChatError(_CLOSED, status_code=409)
 
-    return storage.create_message(
-        conv.id,
-        sender_id=psychologist_id,   # только из сессии
-        content=content,
-        client_id=eng.client_id,
-    )
+    try:
+        return storage.create_message(
+            conv.id,
+            sender_id=psychologist_id,
+            content=content,
+            client_id=eng.client_id,
+            attachment_uuids=attachment_uuids,
+        )
+    except ValueError as e:
+        raise ChatError(str(e), status_code=400)
 
 
 def mark_read(current_user: dict, conversation_uuid: str) -> int:
@@ -424,18 +443,25 @@ def get_student_conversation_messages(
 
 
 def send_student_conversation_message(
-    current_user: dict, conversation_uuid: str, content: str,
+    current_user: dict,
+    conversation_uuid: str,
+    content: str,
+    attachment_uuids: Optional[list] = None,
 ) -> dict:
     student_id = int(current_user["id"])
     conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
     if eng.status != "active":
         raise ChatError(_CLOSED, status_code=409)
-    return storage.create_message(
-        conv.id,
-        sender_id=student_id,        # только из сессии — spoof невозможен
-        content=content,
-        client_id=eng.client_id,
-    )
+    try:
+        return storage.create_message(
+            conv.id,
+            sender_id=student_id,
+            content=content,
+            client_id=eng.client_id,
+            attachment_uuids=attachment_uuids,
+        )
+    except ValueError as e:
+        raise ChatError(str(e), status_code=400)
 
 
 def mark_student_conversation_read(
@@ -469,6 +495,157 @@ def delete_student_conversation_message(
         conv=conv, eng=eng,
         actor_user_id=student_id, actor_role=current_user["role"],
         message_uuid=message_uuid,
+    )
+
+
+# ─── Attachments (Stage 32c) ──────────────────────────────────────────────────
+#
+# Upload: pre-upload pattern — файл сохраняется до создания сообщения.
+# message_id = NULL в момент upload; привязывается при send (create_message).
+# Download: download разрешён участникам (active и closed/archive).
+# System conversation: upload/download запрещены.
+# Admin/supervisor: доступа нет (403 на уровне роутера).
+
+def _do_upload_attachment(
+    actor_user_id: int,
+    actor_role:    str,
+    conv,
+    eng,
+    file:          UploadFile,
+    data:          bytes,
+) -> dict:
+    """Общая логика upload для student/psychologist после resolve беседы."""
+    from app.chat import attachment_storage as fs
+
+    # System-беседу блокируем
+    if getattr(conv, "type", "engagement") == "system":
+        raise ChatError("Вложения в системную беседу не разрешены", status_code=403)
+
+    # Upload разрешён только в активной беседе
+    if eng.status != "active":
+        raise ChatError(_CLOSED, status_code=409)
+
+    # Валидация файла
+    try:
+        _att_svc.validate_upload(file, data)
+    except _att_svc.AttachmentValidationError as e:
+        raise ChatError(e.message, status_code=e.status_code)
+
+    mime     = _att_svc.normalize_mime(file)
+    is_image = _att_svc.is_image_mime(mime)
+    key      = fs.generate_storage_key()
+
+    result = storage.save_attachment(
+        conversation_id=conv.id,
+        uploader_id=actor_user_id,
+        original_filename=file.filename,
+        storage_key=key,
+        mime_type=mime,
+        file_size=len(data),
+        is_image=is_image,
+        data=data,
+    )
+
+    # Audit soft-fail: сбой audit не ломает upload
+    log_attachment_uploaded(
+        actor_id=actor_user_id,
+        actor_role=actor_role,
+        conversation_id=conv.id,
+        conversation_uuid=str(conv.uuid),
+        attachment_uuid=result["uuid"],
+        file_size=result["file_size"],
+        mime_type=result["mime_type"],
+    )
+
+    return result
+
+
+def upload_attachment_student(
+    current_user:  dict,
+    conversation_uuid: str,
+    file:          UploadFile,
+    data:          bytes,
+) -> dict:
+    """Student загружает вложение в свою активную беседу."""
+    student_id = int(current_user["id"])
+    conv, eng  = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
+    return _do_upload_attachment(
+        student_id, current_user["role"], conv, eng, file, data,
+    )
+
+
+def upload_attachment_psychologist(
+    current_user:  dict,
+    conversation_uuid: str,
+    file:          UploadFile,
+    data:          bytes,
+) -> dict:
+    """Psychologist загружает вложение в свою активную беседу."""
+    psychologist_id = int(current_user["id"])
+    conv, eng       = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
+    return _do_upload_attachment(
+        psychologist_id, current_user["role"], conv, eng, file, data,
+    )
+
+
+def _do_download_attachment(
+    actor_user_id: int,
+    actor_role:    str,
+    conv,
+    attachment_uuid: str,
+) -> tuple[Path, str, str]:
+    """
+    Общая логика download. Возвращает (path, original_filename, mime_type).
+    Download разрешён участникам active и closed/archive беседы.
+    """
+    from app.chat import attachment_storage as fs
+
+    if getattr(conv, "type", "engagement") == "system":
+        raise ChatError(_NOT_FOUND, status_code=404)
+
+    att = storage.get_attachment_for_download(attachment_uuid, conv.id)
+    if att is None:
+        raise ChatError(_NOT_FOUND, status_code=404)
+
+    try:
+        path = fs.open_for_read(att.storage_key)
+    except FileNotFoundError:
+        raise ChatError("Файл вложения не найден", status_code=404)
+
+    # Audit soft-fail
+    log_attachment_downloaded(
+        actor_id=actor_user_id,
+        actor_role=actor_role,
+        conversation_id=conv.id,
+        conversation_uuid=str(conv.uuid),
+        attachment_uuid=str(att.uuid),
+        mime_type=att.mime_type,
+    )
+
+    return path, att.original_filename, att.mime_type
+
+
+def download_attachment_student(
+    current_user:    dict,
+    conversation_uuid: str,
+    attachment_uuid: str,
+) -> tuple[Path, str, str]:
+    """Student скачивает вложение из своей беседы (active или closed)."""
+    student_id = int(current_user["id"])
+    conv, _eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
+    return _do_download_attachment(student_id, current_user["role"], conv, attachment_uuid)
+
+
+def download_attachment_psychologist(
+    current_user:    dict,
+    conversation_uuid: str,
+    attachment_uuid: str,
+) -> tuple[Path, str, str]:
+    """Psychologist скачивает вложение из своей беседы (active или closed)."""
+    psychologist_id = int(current_user["id"])
+    conv, _eng      = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
+    return _do_download_attachment(
+        psychologist_id, current_user["role"], conv, attachment_uuid,
     )
 
 

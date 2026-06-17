@@ -125,6 +125,78 @@ def log_message_deleted(
         )
 
 
+def log_attachment_uploaded(
+    *,
+    actor_id:          int,
+    actor_role:        str,
+    conversation_id:   int,
+    conversation_uuid: str,
+    attachment_uuid:   str,
+    file_size:         int,
+    mime_type:         str,
+) -> None:
+    """Факт загрузки вложения (Stage 32c). Soft-fail.
+    Не логируется: storage_key, original_filename, checksum, содержимое файла."""
+    try:
+        with SessionLocal() as db:
+            db.add(AuditLog(
+                user_id=actor_id,
+                user_role=actor_role,
+                event_type="chat_attachment_uploaded",
+                entity_type="chat_attachment",
+                description=f"chat_attachment_uploaded: uuid={attachment_uuid}",
+                log_metadata={
+                    "conversation_uuid": conversation_uuid,
+                    "conversation_id":   conversation_id,
+                    "attachment_uuid":   attachment_uuid,
+                    "file_size":         file_size,
+                    "mime_type":         mime_type,
+                },
+            ))
+            db.commit()
+    except Exception as exc:
+        print(
+            f"[AUDIT FAIL] chat_attachment_uploaded "
+            f"(uuid={attachment_uuid}): {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+
+
+def log_attachment_downloaded(
+    *,
+    actor_id:          int,
+    actor_role:        str,
+    conversation_id:   int,
+    conversation_uuid: str,
+    attachment_uuid:   str,
+    mime_type:         str,
+) -> None:
+    """Факт скачивания вложения (Stage 32c). Soft-fail.
+    Не логируется: storage_key, original_filename, содержимое файла."""
+    try:
+        with SessionLocal() as db:
+            db.add(AuditLog(
+                user_id=actor_id,
+                user_role=actor_role,
+                event_type="chat_attachment_downloaded",
+                entity_type="chat_attachment",
+                description=f"chat_attachment_downloaded: uuid={attachment_uuid}",
+                log_metadata={
+                    "conversation_uuid": conversation_uuid,
+                    "conversation_id":   conversation_id,
+                    "attachment_uuid":   attachment_uuid,
+                    "mime_type":         mime_type,
+                },
+            ))
+            db.commit()
+    except Exception as exc:
+        print(
+            f"[AUDIT FAIL] chat_attachment_downloaded "
+            f"(uuid={attachment_uuid}): {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+
+
 def log_system_conversation_created(
     *,
     recipient_id:      int,

@@ -15,11 +15,13 @@ from typing import Optional
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.encryption import decrypt_text, encrypt_text
 from app.db.session import SessionLocal
 from app.db.models import (
-    ChatConversation, ChatMessage, TherapyEngagement, User, UserSession,
+    ChatAttachment, ChatConversation, ChatMessage, TherapyEngagement, User, UserSession,
 )
 
 
@@ -63,6 +65,18 @@ def is_user_online(user_id: int) -> bool:
 
 # ─── Mappers ──────────────────────────────────────────────────────────────────
 
+def _attachment_to_dict(att: ChatAttachment) -> dict:
+    """Сериализация вложения. storage_key и checksum наружу не отдаются."""
+    return {
+        "uuid":              str(att.uuid),
+        "original_filename": att.original_filename,
+        "mime_type":         att.mime_type,
+        "file_size":         att.file_size,
+        "is_image":          att.is_image,
+        "created_at":        att.created_at,
+    }
+
+
 def _message_to_dict(
     msg: ChatMessage,
     *,
@@ -84,6 +98,13 @@ def _message_to_dict(
         sender_role = "student" if msg.sender_id == client_id else "psychologist"
         is_mine = msg.sender_id == current_user_id
 
+    # Вложения: исключаем soft-deleted; relationship уже загружен (selectinload).
+    atts = [
+        _attachment_to_dict(a)
+        for a in (msg.attachments or [])
+        if a.deleted_at is None
+    ]
+
     if msg.deleted_at is not None:
         return {
             "id":          msg.id,
@@ -96,6 +117,7 @@ def _message_to_dict(
             "read_at":     msg.read_at,
             "edited_at":   None,
             "is_deleted":  True,
+            "attachments": atts,
         }
 
     try:
@@ -114,6 +136,7 @@ def _message_to_dict(
         "read_at":     msg.read_at,
         "edited_at":   msg.edited_at,
         "is_deleted":  False,
+        "attachments": atts,
     }
 
 
@@ -451,9 +474,13 @@ def get_messages(
     и last_message_at не меняются.
     """
     with SessionLocal() as db:
-        q = db.query(ChatMessage).filter(
-            ChatMessage.conversation_id == conversation_id,
-            ChatMessage.deleted_at.is_(None),
+        q = (
+            db.query(ChatMessage)
+            .options(selectinload(ChatMessage.attachments))
+            .filter(
+                ChatMessage.conversation_id == conversation_id,
+                ChatMessage.deleted_at.is_(None),
+            )
         )
 
         if after_id is not None:
@@ -493,9 +520,18 @@ def create_message(
     sender_id: int,
     content: str,
     client_id: int,
+    attachment_uuids: Optional[list] = None,
 ) -> dict:
-    """Encrypt-on-write + обновление last_message_at в одной транзакции."""
+    """
+    Encrypt-on-write + обновление last_message_at в одной транзакции.
+
+    Stage 32c: attachment_uuids — список UUID уже загруженных вложений.
+    Привязка attachment.message_id = msg.id в той же транзакции.
+    ValueError если вложения недоступны (чужие/не orphan/другой conversation).
+    """
     now = datetime.now(timezone.utc)
+    uuid_strs = [str(u) for u in (attachment_uuids or [])]
+
     with SessionLocal() as db:
         msg = ChatMessage(
             conversation_id=conversation_id,
@@ -503,6 +539,19 @@ def create_message(
             content=encrypt_text(content),
         )
         db.add(msg)
+        db.flush()   # получаем msg.id до commit
+
+        # Привязать вложения в той же транзакции.
+        atts: list[ChatAttachment] = []
+        if uuid_strs:
+            atts = _link_attachments_to_message(
+                db,
+                attachment_uuids=uuid_strs,
+                message_id=msg.id,
+                uploader_id=sender_id,
+                conversation_id=conversation_id,
+            )
+
         db.query(ChatConversation).filter(
             ChatConversation.id == conversation_id
         ).update(
@@ -522,7 +571,192 @@ def create_message(
             "created_at":  msg.created_at,
             "read_at":     msg.read_at,
             "edited_at":   msg.edited_at,
+            "attachments": [_attachment_to_dict(a) for a in atts],
         }
+
+
+# ─── Attachments (Stage 32c) ──────────────────────────────────────────────────
+
+def _link_attachments_to_message(
+    db,
+    *,
+    attachment_uuids: list[str],
+    message_id: int,
+    uploader_id: int,
+    conversation_id: int,
+) -> list[ChatAttachment]:
+    """
+    Привязывает orphan-вложения к сообщению внутри открытой транзакции.
+
+    Проверяет: вложения существуют, принадлежат этой беседе, загружены текущим
+    пользователем, не привязаны к другому сообщению, не удалены.
+    Проверяет лимит CHAT_FILE_MAX_FILES_PER_MESSAGE.
+
+    Выбрасывает ValueError при любом нарушении — транзакция caller'а откатится.
+    """
+    if not attachment_uuids:
+        return []
+
+    max_count = settings.CHAT_FILE_MAX_FILES_PER_MESSAGE
+    if len(attachment_uuids) > max_count:
+        raise ValueError(
+            f"Слишком много вложений. Максимум {max_count} файлов в одном сообщении"
+        )
+
+    atts = (
+        db.query(ChatAttachment)
+        .filter(
+            ChatAttachment.uuid.in_(attachment_uuids),
+            ChatAttachment.conversation_id == conversation_id,
+            ChatAttachment.uploader_id == uploader_id,
+            ChatAttachment.message_id.is_(None),
+            ChatAttachment.deleted_at.is_(None),
+        )
+        .all()
+    )
+
+    if len(atts) != len(attachment_uuids):
+        raise ValueError(
+            "Некоторые вложения недоступны, уже использованы или принадлежат другому пользователю"
+        )
+
+    for att in atts:
+        att.message_id = message_id
+
+    return atts
+
+
+def create_attachment_record(
+    *,
+    conversation_id:   int,
+    uploader_id:       int,
+    original_filename: str,
+    storage_key:       str,
+    mime_type:         str,
+    file_size:         int,
+    checksum_sha256:   str,
+    is_image:          bool,
+) -> dict:
+    """
+    Создаёт строку chat_attachments (message_id=NULL — pre-upload).
+    Запись идёт ПОСЛЕ успешной записи файла на диск (caller убеждается).
+    Возвращает dict с uuid и метаданными для ответа API.
+    """
+    att = ChatAttachment(
+        conversation_id=conversation_id,
+        message_id=None,
+        uploader_id=uploader_id,
+        original_filename=original_filename,
+        storage_key=storage_key,
+        mime_type=mime_type,
+        file_size=file_size,
+        checksum_sha256=checksum_sha256,
+        is_image=is_image,
+    )
+    with SessionLocal() as db:
+        db.add(att)
+        db.commit()
+        db.refresh(att)
+        return _attachment_to_dict(att)
+
+
+def save_attachment(
+    *,
+    conversation_id:   int,
+    uploader_id:       int,
+    original_filename: str,
+    storage_key:       str,
+    mime_type:         str,
+    file_size:         int,
+    is_image:          bool,
+    data:              bytes,
+) -> dict:
+    """
+    Атомарное сохранение: сначала запись файла на диск, затем DB-строка.
+
+    Порядок операций:
+      1. Resolve path + write bytes → получаем checksum.
+      2. Открываем транзакцию.
+      3. flush attachment row (получаем uuid).
+      4. db.commit().
+
+    Если запись на диск упала — DB-строка не создаётся.
+    Если DB commit упал — файл остаётся orphan на диске (очищает cleanup-скрипт).
+    """
+    from app.chat import attachment_storage as fs
+
+    checksum = fs.save_file(data, storage_key)
+
+    att = ChatAttachment(
+        conversation_id=conversation_id,
+        message_id=None,
+        uploader_id=uploader_id,
+        original_filename=original_filename,
+        storage_key=storage_key,
+        mime_type=mime_type,
+        file_size=file_size,
+        checksum_sha256=checksum,
+        is_image=is_image,
+    )
+    with SessionLocal() as db:
+        db.add(att)
+        db.commit()
+        db.refresh(att)
+        return _attachment_to_dict(att)
+
+
+def get_attachment_for_download(
+    attachment_uuid: str,
+    conversation_id: int,
+) -> Optional[ChatAttachment]:
+    """
+    Возвращает ChatAttachment если он принадлежит беседе и не удалён.
+    Проверка участника беседы — на уровне service (через resolve_conversation).
+    """
+    with SessionLocal() as db:
+        att = (
+            db.query(ChatAttachment)
+            .filter(
+                ChatAttachment.uuid == attachment_uuid,
+                ChatAttachment.conversation_id == conversation_id,
+                ChatAttachment.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if att is not None:
+            db.expunge(att)
+        return att
+
+
+def get_orphan_attachments(cutoff: datetime) -> list[ChatAttachment]:
+    """
+    Возвращает orphan-вложения (message_id IS NULL, created_at < cutoff,
+    deleted_at IS NULL) для cleanup-скрипта.
+    """
+    with SessionLocal() as db:
+        rows = (
+            db.query(ChatAttachment)
+            .filter(
+                ChatAttachment.message_id.is_(None),
+                ChatAttachment.created_at < cutoff,
+                ChatAttachment.deleted_at.is_(None),
+            )
+            .order_by(ChatAttachment.created_at)
+            .all()
+        )
+        for r in rows:
+            db.expunge(r)
+        return rows
+
+
+def soft_delete_attachment(attachment_id: int, now: Optional[datetime] = None) -> None:
+    """Soft-delete одной attachment-записи по id (для cleanup-скрипта)."""
+    ts = now or datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        db.query(ChatAttachment).filter(
+            ChatAttachment.id == attachment_id
+        ).update({"deleted_at": ts}, synchronize_session=False)
+        db.commit()
 
 
 def update_message_content(
@@ -795,9 +1029,13 @@ def get_system_messages(
         return []
 
     with SessionLocal() as db:
-        q = db.query(ChatMessage).filter(
-            ChatMessage.conversation_id == conv.id,
-            ChatMessage.deleted_at.is_(None),
+        q = (
+            db.query(ChatMessage)
+            .options(selectinload(ChatMessage.attachments))
+            .filter(
+                ChatMessage.conversation_id == conv.id,
+                ChatMessage.deleted_at.is_(None),
+            )
         )
 
         if after_id is not None:

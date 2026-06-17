@@ -6,10 +6,11 @@ Message response содержит расшифрованный content — он 
 ciphertext наружу не отдаётся никогда.
 """
 
+import uuid as _uuid_module
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ChatUserRead(BaseModel):
@@ -67,6 +68,24 @@ class PaginatedStudentConversationsResponse(BaseModel):
     size:  int
 
 
+# ─── Attachments (Stage 32c) ────────────────────────────────────────────────
+
+class ChatAttachmentRead(BaseModel):
+    """Метаданные вложения в ответе API.
+
+    storage_key и физический путь наружу не отдаются.
+    checksum_sha256 не нужен frontend и тоже скрыт.
+    """
+    uuid:              str
+    original_filename: str
+    mime_type:         str
+    file_size:         int
+    is_image:          bool
+    created_at:        datetime
+
+
+# ─── Messages ───────────────────────────────────────────────────────────────
+
 class ChatMessageRead(BaseModel):
     id:          int                      # курсор для before/after пагинации
     uuid:        str
@@ -78,6 +97,7 @@ class ChatMessageRead(BaseModel):
     read_at:     Optional[datetime]
     edited_at:   Optional[datetime] = None  # NULL — не редактировалось (Stage 31x)
     is_deleted:  bool = False                # True — soft-deleted, content не отдаётся (Stage 31y)
+    attachments: list[ChatAttachmentRead] = Field(default_factory=list)  # Stage 32c
 
 
 class ChatMessagesResponse(BaseModel):
@@ -85,18 +105,27 @@ class ChatMessagesResponse(BaseModel):
 
 
 class ChatMessageCreate(BaseModel):
-    """Body отправки сообщения. sender_id НЕ принимается — только из сессии."""
-    content: str = Field(description="Текст сообщения, 1..10000 символов")
+    """
+    Body отправки сообщения. sender_id НЕ принимается — только из сессии.
 
-    @field_validator("content")
-    @classmethod
-    def _strip_and_check(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Сообщение не может быть пустым")
-        if len(v) > 10000:
+    Stage 32c: content может быть пустым, если переданы attachment_uuids.
+    Нельзя отправить одновременно пустой content и пустой список вложений.
+    """
+    content:          str            = Field(default="", description="Текст сообщения (0..10000 символов)")
+    attachment_uuids: list[_uuid_module.UUID] = Field(
+        default_factory=list,
+        description="UUID вложений, загруженных через upload endpoint (Stage 32c)",
+    )
+
+    @model_validator(mode="after")
+    def _check_not_empty(self) -> "ChatMessageCreate":
+        text = (self.content or "").strip()
+        if not text and not self.attachment_uuids:
+            raise ValueError("Сообщение не может быть пустым (нужен текст или вложение)")
+        if len(text) > 10000:
             raise ValueError("Сообщение слишком длинное (максимум 10000 символов)")
-        return v
+        self.content = text
+        return self
 
 
 class ChatMessageEdit(BaseModel):
