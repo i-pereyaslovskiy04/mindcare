@@ -205,12 +205,14 @@ def test_cannot_edit_deleted_message(client):
     assert r.status_code == 404
 
 
-# ─── H. empty / too long content → 422 ────────────────────────────────────────
+# ─── H. empty / too long content ────────────────────────────────────────────────
+# Stage 32g: whitespace-only content без вложений → 400 from storage (would_be_empty);
+# ранее было 422 от schema, теперь схема принимает "" и делегирует проверку storage.
 
 def test_edit_validation(client):
     s_token, _s_id, *_rest, conv = _setup_active(client)
     sent = _student_send(client, s_token, conv, "норм")
-    assert _student_edit(client, s_token, conv, sent["uuid"], "   ").status_code == 422
+    assert _student_edit(client, s_token, conv, sent["uuid"], "   ").status_code == 400
     assert _student_edit(
         client, s_token, conv, sent["uuid"], "x" * 10001,
     ).status_code == 422

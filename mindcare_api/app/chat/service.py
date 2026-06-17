@@ -287,6 +287,7 @@ def _apply_message_edit(
     actor_role: str,
     message_uuid: str,
     content: str,
+    remove_attachment_uuids: Optional[list] = None,
 ) -> dict:
     if eng.status != "active":
         raise ChatError(_CLOSED, status_code=409)
@@ -301,9 +302,15 @@ def _apply_message_edit(
         actor_user_id=actor_user_id,
         client_id=eng.client_id,
         new_content=content,
+        remove_attachment_uuids=remove_attachment_uuids,
     )
+    if result["status"] == "would_be_empty":
+        raise ChatError(
+            "Нельзя сохранить пустое сообщение: нет текста и все вложения удалены",
+            status_code=400,
+        )
     if result["status"] != "ok":
-        # not_found / not_owner / forbidden_system / deleted → 404 (скрываем).
+        # not_found / not_owner / forbidden_system / deleted / attachment_not_found → 404.
         raise ChatError(_NOT_FOUND, status_code=404)
 
     msg = result["message"]
@@ -320,7 +327,11 @@ def _apply_message_edit(
 
 
 def edit_message(
-    current_user: dict, conversation_uuid: str, message_uuid: str, content: str,
+    current_user: dict,
+    conversation_uuid: str,
+    message_uuid: str,
+    content: str,
+    remove_attachment_uuids: Optional[list] = None,
 ) -> dict:
     """Psychologist редактирует своё сообщение в своей активной беседе."""
     psychologist_id = int(current_user["id"])
@@ -329,6 +340,7 @@ def edit_message(
         conv=conv, eng=eng,
         actor_user_id=psychologist_id, actor_role=current_user["role"],
         message_uuid=message_uuid, content=content,
+        remove_attachment_uuids=remove_attachment_uuids,
     )
 
 
@@ -473,15 +485,20 @@ def mark_student_conversation_read(
 
 
 def edit_student_conversation_message(
-    current_user: dict, conversation_uuid: str, message_uuid: str, content: str,
+    current_user: dict,
+    conversation_uuid: str,
+    message_uuid: str,
+    content: str,
+    remove_attachment_uuids: Optional[list] = None,
 ) -> dict:
-    """Student редактирует своё сообщение в своей активной беседе (Stage 31x)."""
+    """Student редактирует своё сообщение в своей активной беседе (Stage 31x/32g)."""
     student_id = int(current_user["id"])
     conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
     return _apply_message_edit(
         conv=conv, eng=eng,
         actor_user_id=student_id, actor_role=current_user["role"],
         message_uuid=message_uuid, content=content,
+        remove_attachment_uuids=remove_attachment_uuids,
     )
 
 

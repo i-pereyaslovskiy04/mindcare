@@ -128,7 +128,7 @@ test('full edit-flow through ChatWindow: kebab menu → edit composer → submit
   fireEvent.change(input, { target: { value: 'обновлённое сообщение' } });
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
-  await waitFor(() => expect(onEdit).toHaveBeenCalledWith('u1', 'обновлённое сообщение'));
+  await waitFor(() => expect(onEdit).toHaveBeenCalledWith('u1', 'обновлённое сообщение', { removeAttachmentUuids: [] }));
 
   await waitFor(() => expect(screen.queryByText('Редактирование сообщения')).not.toBeInTheDocument());
   expect(screen.getByRole('button', { name: 'Отправить' })).toBeInTheDocument();

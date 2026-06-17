@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import Icon from '../../../components/Icon/Icon';
 import SelectedAttachmentList from './SelectedAttachmentList';
+import EditableAttachmentList from './EditableAttachmentList';
 import styles from './ChatWindow.module.css';
 
 const MAX_LENGTH = 10000; // лимит backend-валидации ChatMessageCreate/Edit
@@ -43,9 +44,10 @@ function isTouchComposerMode() {
 }
 
 /**
- * Composer (Stage 32e/32f):
+ * Composer (Stage 32e/32f/32g):
  *   - Обычная отправка: onSend(text, files) — text и/или файлы.
- *   - Редактирование: editing = { uuid, text } → onSubmitEdit(text); скрепка скрыта.
+ *   - Редактирование: editing = { uuid, text, attachments, removedUuids } →
+ *     onSubmitEdit(text); скрепка скрыта; показывается EditableAttachmentList.
  *   - selectedFiles / attachError / управление файлами хранятся в ChatWindow (Stage 32f).
  *
  * onSend возвращает false при ошибке — текст и файлы НЕ очищаются.
@@ -56,6 +58,7 @@ export default function MessageInput({
   editing = null,
   onSubmitEdit = null,
   onCancelEdit = null,
+  onRemoveEditAttachment = null,
   // Selected files owned by ChatWindow (Stage 32f)
   selectedFiles = [],
   onFilesSelected = null,
@@ -68,6 +71,11 @@ export default function MessageInput({
   const fileInputRef = useRef(null);
   const isEditing = Boolean(editing);
 
+  // Stage 32g: вложения и список убираемых UUID из текущего editing state.
+  const editingAtts = editing?.attachments || [];
+  const editingRemovedUuids = editing?.removedUuids || [];
+  const remainingEditAtts = editingAtts.filter((a) => !editingRemovedUuids.includes(a.uuid));
+
   // Подставить текст при входе в edit-mode, очистить при выходе.
   useEffect(() => {
     setText(editing ? editing.text : '');
@@ -75,7 +83,7 @@ export default function MessageInput({
 
   useLayoutEffect(() => {
     autosizeTextarea(textareaRef.current);
-  }, [text, editing, selectedFiles]);
+  }, [text, editing, selectedFiles, editingRemovedUuids]);
 
   const handleFileChange = (e) => {
     onFilesSelected?.(e.target.files);
@@ -86,15 +94,16 @@ export default function MessageInput({
   const handleSubmit = useCallback(async () => {
     const trimmed = text.trim();
     const hasFiles = selectedFiles.length > 0;
-    if (!trimmed && !hasFiles) return;
     if (sending) return;
 
     if (isEditing) {
-      if (!trimmed) return; // edit требует текст
+      // Разрешён пустой текст, если есть оставшиеся вложения (Stage 32g).
+      if (!trimmed && remainingEditAtts.length === 0) return;
       const ok = await onSubmitEdit(trimmed);
       // При ошибке — текст сохраняем, чтобы правка не потерялась.
       if (ok === false) return;
     } else {
+      if (!trimmed && !hasFiles) return;
       const ok = await onSend(trimmed, selectedFiles);
       if (ok !== false) {
         setText('');
@@ -102,7 +111,7 @@ export default function MessageInput({
       }
       // При ok === false — текст и файлы НЕ трогаем: пользователь видит черновик.
     }
-  }, [text, selectedFiles, sending, isEditing, onSend, onSubmitEdit, onClearFiles]);
+  }, [text, selectedFiles, sending, isEditing, remainingEditAtts, onSend, onSubmitEdit, onClearFiles]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -115,7 +124,9 @@ export default function MessageInput({
     }
   };
 
-  const canSend = (text.trim().length > 0 || selectedFiles.length > 0) && !sending;
+  const canSend = isEditing
+    ? ((text.trim().length > 0 || remainingEditAtts.length > 0) && !sending)
+    : ((text.trim().length > 0 || selectedFiles.length > 0) && !sending);
 
   return (
     <div className={styles.composer}>
@@ -133,12 +144,22 @@ export default function MessageInput({
         </div>
       )}
 
-      {/* Выбранные, но ещё не отправленные файлы — только вне edit-mode */}
+      {/* Выбранные файлы — только вне edit-mode */}
       {!isEditing && (
         <SelectedAttachmentList
           files={selectedFiles}
           onRemove={onRemoveFile}
           uploading={sending}
+        />
+      )}
+
+      {/* Вложения редактируемого сообщения — только в edit-mode (Stage 32g) */}
+      {isEditing && editingAtts.length > 0 && (
+        <EditableAttachmentList
+          attachments={editingAtts}
+          removedUuids={editingRemovedUuids}
+          onRemove={onRemoveEditAttachment}
+          disabled={sending}
         />
       )}
 

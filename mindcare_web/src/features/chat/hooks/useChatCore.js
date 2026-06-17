@@ -254,13 +254,14 @@ export function useChatCore({
   }, [sendMessage, apiUploadAttachment, refreshConversationAfterConflict]);
 
   // PATCH → точечная замена по uuid, порядок сообщений сохраняется.
-  const editMessage = useCallback(async (messageUuid, text) => {
+  // Stage 32g: options.removeAttachmentUuids — UUID вложений для soft-delete.
+  const editMessage = useCallback(async (messageUuid, text, { removeAttachmentUuids = [] } = {}) => {
     const uuid = selectedRef.current;
     if (!uuid || !messageUuid) return false;
     setSending(true);
     setSendError(null);
     try {
-      const msg = await apiEditMessage(uuid, messageUuid, text);
+      const msg = await apiEditMessage(uuid, messageUuid, text, removeAttachmentUuids);
       if (selectedRef.current === uuid) {
         const mapped = mapMessage(msg);
         setMessages((prev) => prev.map((m) => (m.uuid === mapped.uuid ? mapped : m)));

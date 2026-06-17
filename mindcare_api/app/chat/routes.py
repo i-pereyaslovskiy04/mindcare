@@ -211,6 +211,7 @@ def student_edit_message(
     try:
         return service.edit_student_conversation_message(
             current_user, conversation_uuid, message_uuid, body.content,
+            remove_attachment_uuids=[str(u) for u in body.remove_attachment_uuids],
         )
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
@@ -387,6 +388,7 @@ def edit_message(
     try:
         return service.edit_message(
             current_user, conversation_uuid, message_uuid, body.content,
+            remove_attachment_uuids=[str(u) for u in body.remove_attachment_uuids],
         )
     except service.ChatError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)

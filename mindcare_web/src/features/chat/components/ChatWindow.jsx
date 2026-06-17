@@ -31,7 +31,8 @@ export default function ChatWindow({
   onBack = null,
   onDownloadAttachment = null,
 }) {
-  // editing = { uuid, text } редактируемого сообщения либо null.
+  // editing = { uuid, text, attachments, removedUuids } редактируемого сообщения либо null.
+  // Stage 32g: attachments — текущий список вложений; removedUuids — помечены к удалению.
   const [editing, setEditing] = useState(null);
   // pendingDelete = сообщение, ожидающее подтверждения удаления, либо null.
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -68,7 +69,12 @@ export default function ChatWindow({
   }, [canManageChat, contact?.id]);
 
   const handleStartEdit = useCallback((message) => {
-    setEditing({ uuid: message.uuid, text: message.text });
+    setEditing({
+      uuid: message.uuid,
+      text: message.text,
+      attachments: message.attachments || [],
+      removedUuids: [],
+    });
     // Очистить выбранные файлы при входе в edit-mode.
     setSelectedFiles([]);
     setAttachError(null);
@@ -76,10 +82,19 @@ export default function ChatWindow({
 
   const handleCancelEdit = useCallback(() => setEditing(null), []);
 
+  // Stage 32g: помечает вложение к удалению (добавляет uuid в removedUuids).
+  const handleRemoveEditAttachment = useCallback((attUuid) => {
+    setEditing((prev) => {
+      if (!prev) return prev;
+      if (prev.removedUuids.includes(attUuid)) return prev;
+      return { ...prev, removedUuids: [...prev.removedUuids, attUuid] };
+    });
+  }, []);
+
   const handleSubmitEdit = useCallback(
     async (text) => {
       if (!editing) return false;
-      const ok = await onEdit(editing.uuid, text);
+      const ok = await onEdit(editing.uuid, text, { removeAttachmentUuids: editing.removedUuids });
       if (ok !== false) setEditing(null);
       return ok;
     },
@@ -125,16 +140,16 @@ export default function ChatWindow({
   // --- drag-and-drop handlers ---
 
   const handleDragEnter = useCallback((e) => {
-    if (!showComposer || !hasDragFiles(e)) return;
+    if (!showComposer || editing || !hasDragFiles(e)) return;
     dragCounterRef.current += 1;
     setIsDragOver(true);
-  }, [showComposer]);
+  }, [showComposer, editing]);
 
   const handleDragOver = useCallback((e) => {
-    if (!showComposer || !hasDragFiles(e)) return;
+    if (!showComposer || editing || !hasDragFiles(e)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
-  }, [showComposer]);
+  }, [showComposer, editing]);
 
   const handleDragLeave = useCallback(() => {
     if (dragCounterRef.current <= 0) return;
@@ -148,7 +163,7 @@ export default function ChatWindow({
     e.preventDefault();
     dragCounterRef.current = 0;
     setIsDragOver(false);
-    if (!showComposer) return;
+    if (!showComposer || editing) return;
 
     const droppedFiles = Array.from(e.dataTransfer?.files ?? []);
     if (droppedFiles.length === 0) return;
@@ -163,7 +178,7 @@ export default function ChatWindow({
     const { files, error } = mergeSelectedFiles(selectedFiles, nonEmpty);
     setSelectedFiles(files);
     if (error) setAttachError(error);
-  }, [showComposer, selectedFiles]);
+  }, [showComposer, editing, selectedFiles]);
 
   if (!contact) return null;
 
@@ -198,6 +213,7 @@ export default function ChatWindow({
           editing={editing}
           onSubmitEdit={handleSubmitEdit}
           onCancelEdit={handleCancelEdit}
+          onRemoveEditAttachment={handleRemoveEditAttachment}
           selectedFiles={selectedFiles}
           onFilesSelected={handleFilesSelected}
           onRemoveFile={handleRemoveFile}

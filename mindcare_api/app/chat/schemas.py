@@ -10,7 +10,7 @@ import uuid as _uuid_module
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChatUserRead(BaseModel):
@@ -129,19 +129,25 @@ class ChatMessageCreate(BaseModel):
 
 
 class ChatMessageEdit(BaseModel):
-    """Body редактирования сообщения (Stage 31x). Те же правила, что и create:
-    strip, 1..10000 символов. sender/идентификаторы — из URL/сессии, не из body."""
-    content: str = Field(description="Новый текст сообщения, 1..10000 символов")
+    """Body редактирования сообщения (Stage 31x/32g).
 
-    @field_validator("content")
-    @classmethod
-    def _strip_and_check(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Сообщение не может быть пустым")
-        if len(v) > 10000:
+    Stage 32g: добавлено remove_attachment_uuids — UUID вложений для soft-delete
+    при редактировании. content может быть пустым, если после удаления остаётся
+    хотя бы одно вложение; итоговая «не пустое» проверка делается в storage
+    после вычисления остатка. sender/идентификаторы — из URL/сессии, не из body.
+    """
+    content: str = Field(default="", description="Новый текст сообщения (0..10000 символов)")
+    remove_attachment_uuids: list[_uuid_module.UUID] = Field(
+        default_factory=list,
+        description="UUID вложений для soft-delete при редактировании (Stage 32g)",
+    )
+
+    @model_validator(mode="after")
+    def _strip_and_check(self) -> "ChatMessageEdit":
+        self.content = (self.content or "").strip()
+        if len(self.content) > 10000:
             raise ValueError("Сообщение слишком длинное (максимум 10000 символов)")
-        return v
+        return self
 
 
 class ChatReadResponse(BaseModel):

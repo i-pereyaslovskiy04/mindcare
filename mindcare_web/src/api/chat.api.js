@@ -67,10 +67,13 @@ export const sendStudentConversationMessage = (conversationUuid, content, attach
 export const markStudentConversationRead = (conversationUuid) =>
   apiFetch(`/api/chat/student/conversations/${conversationUuid}/read`, { method: 'POST' });
 
-export const editStudentMessage = (conversationUuid, messageUuid, content) =>
+export const editStudentMessage = (conversationUuid, messageUuid, content, removeAttachmentUuids = []) =>
   apiFetch(`/api/chat/student/conversations/${conversationUuid}/messages/${messageUuid}`, {
     method: 'PATCH',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      content,
+      ...(removeAttachmentUuids.length > 0 ? { remove_attachment_uuids: removeAttachmentUuids } : {}),
+    }),
   });
 
 export const deleteStudentMessage = (conversationUuid, messageUuid) =>
@@ -117,10 +120,13 @@ export const sendPsychologistConversationMessage = (conversationUuid, content, a
 export const markPsychologistConversationRead = (conversationUuid) =>
   apiFetch(`/api/chat/conversations/${conversationUuid}/read`, { method: 'POST' });
 
-export const editPsychologistMessage = (conversationUuid, messageUuid, content) =>
+export const editPsychologistMessage = (conversationUuid, messageUuid, content, removeAttachmentUuids = []) =>
   apiFetch(`/api/chat/conversations/${conversationUuid}/messages/${messageUuid}`, {
     method: 'PATCH',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      content,
+      ...(removeAttachmentUuids.length > 0 ? { remove_attachment_uuids: removeAttachmentUuids } : {}),
+    }),
   });
 
 export const deletePsychologistMessage = (conversationUuid, messageUuid) =>

@@ -766,27 +766,33 @@ def update_message_content(
     actor_user_id: int,
     client_id: int,
     new_content: str,
+    remove_attachment_uuids: Optional[list] = None,
     now: Optional[datetime] = None,
 ) -> dict:
     """
-    Редактирование своего user-сообщения (Stage 31x).
+    Редактирование своего user-сообщения (Stage 31x/32g).
 
     Permission/kind-проверки делаются здесь (нужна строка) и возвращаются
     как status-discriminator — service маппит его в HTTP. Возможные результаты:
-      {"status": "ok", "message": <read dict с plaintext + edited_at>}
-      {"status": "not_found"}         — сообщения нет в этой беседе
-      {"status": "forbidden_system"}  — message_kind != 'user' (system нельзя)
-      {"status": "not_owner"}         — чужое сообщение
-      {"status": "deleted"}           — удалённое (deleted_at не NULL)
+      {"status": "ok", "message": <read dict с plaintext + edited_at + attachments>}
+      {"status": "not_found"}            — сообщения нет в этой беседе
+      {"status": "forbidden_system"}     — message_kind != 'user' (system нельзя)
+      {"status": "not_owner"}            — чужое сообщение
+      {"status": "deleted"}              — удалённое (deleted_at не NULL)
+      {"status": "attachment_not_found"} — UUID не принадлежит этому сообщению (Stage 32g)
+      {"status": "would_be_empty"}       — trim(content)=='' и все вложения будут удалены (Stage 32g)
 
-    content перезаписывается encrypt_text(new) в одной транзакции; old plaintext
-    НЕ расшифровывается и НЕ логируется; история версий не ведётся (only edited_at).
-    Time-limit намеренно отсутствует: правка разрешена, пока чат активен.
+    Stage 32g: remove_attachment_uuids — soft-delete вложений в той же транзакции.
+    content перезаписывается encrypt_text(new) без old decrypt и без логирования.
+    История версий не ведётся (only edited_at). Time-limit отсутствует.
     """
     now = now or datetime.now(timezone.utc)
+    remove_uuids_set = {str(u) for u in (remove_attachment_uuids or [])}
+
     with SessionLocal() as db:
         msg = (
             db.query(ChatMessage)
+            .options(selectinload(ChatMessage.attachments))
             .filter(
                 ChatMessage.conversation_id == conversation_id,
                 ChatMessage.uuid == message_uuid,
@@ -802,10 +808,35 @@ def update_message_content(
         if msg.deleted_at is not None:
             return {"status": "deleted"}
 
-        msg.content = encrypt_text(new_content)   # перезапись ciphertext, без old decrypt
+        # Stage 32g: обработка soft-delete вложений.
+        active_atts = [a for a in (msg.attachments or []) if a.deleted_at is None]
+        atts_to_remove = []
+        if remove_uuids_set:
+            atts_to_remove = [a for a in active_atts if str(a.uuid) in remove_uuids_set]
+            # Все запрошенные UUID должны принадлежать этому сообщению и быть активны.
+            if len(atts_to_remove) != len(remove_uuids_set):
+                return {"status": "attachment_not_found"}
+
+        remaining_uuids = {str(a.uuid) for a in active_atts} - remove_uuids_set
+        trimmed = new_content.strip()
+        if not trimmed and not remaining_uuids:
+            return {"status": "would_be_empty"}
+
+        # Soft-delete вложений атомарно с content+edited_at.
+        for att in atts_to_remove:
+            att.deleted_at = now
+
+        msg.content = encrypt_text(trimmed)   # перезапись ciphertext, без old decrypt
         msg.edited_at = now
         db.commit()
         db.refresh(msg)
+
+        # Активные вложения после commit (ORM-коллекция обновлена soft-delete выше).
+        final_atts = [
+            _attachment_to_dict(a)
+            for a in (msg.attachments or [])
+            if a.deleted_at is None
+        ]
 
         return {
             "status": "ok",
@@ -815,10 +846,12 @@ def update_message_content(
                 "sender_id":   msg.sender_id,
                 "sender_role": "student" if msg.sender_id == client_id else "psychologist",
                 "is_mine":     True,
-                "content":     new_content,   # plaintext отправителю, без повторного decrypt
+                "content":     trimmed,       # plaintext отправителю, без повторного decrypt
                 "created_at":  msg.created_at,
                 "read_at":     msg.read_at,
                 "edited_at":   msg.edited_at,
+                "is_deleted":  False,
+                "attachments": final_atts,
             },
         }
 
