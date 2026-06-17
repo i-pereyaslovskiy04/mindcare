@@ -262,6 +262,23 @@ test('K. own message renders text and time inside the same bubble', () => {
   expect(bubble).toBeInTheDocument();
 });
 
+test('multiline message text is rendered as plaintext inside bubble text container', () => {
+  const msg = {
+    id: 1,
+    text: 'строка 1\nстрока 2 https://example.com',
+    mine: true,
+    senderId: 5,
+    time: '10:00',
+    createdAt: A,
+  };
+  render(<MessageList messages={[msg]} contact={contact} />);
+  const text = screen.getByText(
+    (_, el) => el.textContent === 'строка 1\nстрока 2 https://example.com' && el.className.split(' ').includes('text'),
+  );
+  expect(text).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'https://example.com' })).toHaveAttribute('href', 'https://example.com');
+});
+
 // L. Своё непрочитанное сообщение показывает одну галочку («Отправлено»).
 test('L. own unread message shows a single checkmark (Отправлено)', () => {
   const msg = { id: 1, text: 'X', mine: true, senderId: 5, time: '10:00', createdAt: A, readAt: null };

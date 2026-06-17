@@ -38,6 +38,7 @@
   flex: 0 1 auto;
   min-width: 0;
   text-align: left;
+  white-space: pre-wrap;
 }
 
 /* link inside bubble (frontend linkify) */

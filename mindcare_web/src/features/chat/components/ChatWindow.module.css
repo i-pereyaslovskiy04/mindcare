@@ -324,11 +324,16 @@
   background: var(--cream);
   border-radius: 12px;
   padding: 10px 14px;
+  min-height: 40px;
+  max-height: 132px;
   font-size: 13.5px;
+  line-height: 1.35;
   color: var(--text-main);
   outline: none;
   font-family: inherit;
   transition: border-color 0.15s, background 0.15s;
+  resize: none;
+  overflow-y: hidden;
 }
 
 .input:focus {
