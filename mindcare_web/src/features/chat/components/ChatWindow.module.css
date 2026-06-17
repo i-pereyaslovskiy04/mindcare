@@ -307,6 +307,51 @@
   text-decoration: underline;
 }
 
+/* ---- attach button + hidden file input (Stage 32e) ---- */
+.attachBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+
+.attachBtn:hover:not(:disabled) {
+  background: var(--sand);
+  color: var(--espresso);
+}
+
+.attachBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.attachBtn:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 1px;
+}
+
+.fileInput {
+  display: none;
+}
+
+/* Мягкая ошибка прикрепления (слишком много файлов, пустой файл) */
+.attachError {
+  padding: 4px 18px 2px;
+  font-size: 12px;
+  color: var(--error);
+  background: var(--error-bg);
+  flex-shrink: 0;
+}
+
 /* ---- input row ---- */
 .inputRow {
   display: flex;

@@ -55,10 +55,13 @@ export const getStudentConversationMessages = (
   return apiFetch(`/api/chat/student/conversations/${conversationUuid}/messages${qs ? `?${qs}` : ''}`);
 };
 
-export const sendStudentConversationMessage = (conversationUuid, content) =>
+export const sendStudentConversationMessage = (conversationUuid, content, attachmentUuids = []) =>
   apiFetch(`/api/chat/student/conversations/${conversationUuid}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      content,
+      ...(attachmentUuids.length > 0 ? { attachment_uuids: attachmentUuids } : {}),
+    }),
   });
 
 export const markStudentConversationRead = (conversationUuid) =>
@@ -102,10 +105,13 @@ export const getPsychologistConversationMessages = (
   return apiFetch(`/api/chat/conversations/${conversationUuid}/messages${qs ? `?${qs}` : ''}`);
 };
 
-export const sendPsychologistConversationMessage = (conversationUuid, content) =>
+export const sendPsychologistConversationMessage = (conversationUuid, content, attachmentUuids = []) =>
   apiFetch(`/api/chat/conversations/${conversationUuid}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      content,
+      ...(attachmentUuids.length > 0 ? { attachment_uuids: attachmentUuids } : {}),
+    }),
   });
 
 export const markPsychologistConversationRead = (conversationUuid) =>
@@ -141,6 +147,28 @@ export const getSystemMessages = ({ limit, before, after } = {}) => {
 
 export const markSystemConversationRead = () =>
   apiFetch('/api/chat/system-conversation/read', { method: 'POST' });
+
+/**
+ * Загрузка вложения чата (Stage 32e). Multipart/form-data, поле «file».
+ * Возвращает DTO вложения (uuid, original_filename, …).
+ */
+export const uploadStudentAttachment = (conversationUuid, file) => {
+  const form = new FormData();
+  form.append('file', file);
+  return apiFetch(`/api/chat/student/conversations/${conversationUuid}/attachments`, {
+    method: 'POST',
+    body: form,
+  });
+};
+
+export const uploadPsychologistAttachment = (conversationUuid, file) => {
+  const form = new FormData();
+  form.append('file', file);
+  return apiFetch(`/api/chat/conversations/${conversationUuid}/attachments`, {
+    method: 'POST',
+    body: form,
+  });
+};
 
 /**
  * Скачивание вложений чата (Stage 32d).

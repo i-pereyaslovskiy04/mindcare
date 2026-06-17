@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import Icon from '../../../components/Icon/Icon';
+import SelectedAttachmentList from './SelectedAttachmentList';
 import styles from './ChatWindow.module.css';
 
 const MAX_LENGTH = 10000; // лимит backend-валидации ChatMessageCreate/Edit
+const MAX_FILES = 5;      // мягкий client-side лимит (backend — источник истины)
 const FALLBACK_LINE_HEIGHT = 18;
 
 function px(value) {
@@ -42,12 +44,11 @@ function isTouchComposerMode() {
 }
 
 /**
- * Composer. Два режима (Stage 31x):
- *   - обычная отправка: submit → onSend(text);
- *   - редактирование: проп `editing` = { uuid, text } непустой → submit →
- *     onSubmitEdit(text); над input — панель «Редактирование сообщения» +
- *     «Отменить»; Escape отменяет (desktop). После успеха родитель сбрасывает
- *     `editing` в null, что очищает input.
+ * Composer (Stage 32e):
+ *   - обычная отправка: onSend(text, files) — text и/или файлы;
+ *   - редактирование: editing = { uuid, text } → onSubmitEdit(text); скрепка скрыта.
+ *
+ * onSend возвращает false при ошибке — текст и файлы НЕ очищаются.
  */
 export default function MessageInput({
   onSend,
@@ -57,31 +58,67 @@ export default function MessageInput({
   onCancelEdit = null,
 }) {
   const [text, setText] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [attachError, setAttachError] = useState(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const isEditing = Boolean(editing);
 
   // Вход/выход из edit-mode: подставить текст редактируемого сообщения либо очистить.
   useEffect(() => {
     setText(editing ? editing.text : '');
+    if (!editing) setSelectedFiles([]);
   }, [editing]);
 
   useLayoutEffect(() => {
     autosizeTextarea(textareaRef.current);
-  }, [text, editing]);
+  }, [text, editing, selectedFiles]);
+
+  const handleFiles = useCallback((rawFiles) => {
+    setAttachError(null);
+    const valid = [...rawFiles].filter((f) => f.size > 0);
+    const next = [...selectedFiles, ...valid];
+    if (next.length > MAX_FILES) {
+      setAttachError(`Максимум ${MAX_FILES} файлов за раз.`);
+      setSelectedFiles(next.slice(0, MAX_FILES));
+      return;
+    }
+    setSelectedFiles(next);
+  }, [selectedFiles]);
+
+  const handleFileChange = (e) => {
+    handleFiles(e.target.files);
+    // Сбросить value, чтобы тот же файл можно было выбрать повторно.
+    e.target.value = '';
+  };
+
+  const handleRemoveFile = useCallback((index) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setAttachError(null);
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    const hasFiles = selectedFiles.length > 0;
+    if (!trimmed && !hasFiles) return;
+    if (sending) return;
+
     if (isEditing) {
+      if (!trimmed) return; // edit требует текст
       const ok = await onSubmitEdit(trimmed);
       // При успехе родитель сбросит editing→null (useEffect очистит input).
       // При ошибке текст сохраняем, чтобы правка не потерялась.
       if (ok === false) return;
     } else {
-      const ok = await onSend(trimmed);
-      if (ok !== false) setText('');
+      const ok = await onSend(trimmed, selectedFiles);
+      if (ok !== false) {
+        setText('');
+        setSelectedFiles([]);
+        setAttachError(null);
+      }
+      // При ok === false — текст и файлы НЕ трогаем: пользователь видит черновик.
     }
-  }, [text, sending, isEditing, onSend, onSubmitEdit]);
+  }, [text, selectedFiles, sending, isEditing, onSend, onSubmitEdit]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -93,6 +130,8 @@ export default function MessageInput({
       onCancelEdit();
     }
   };
+
+  const canSend = (text.trim().length > 0 || selectedFiles.length > 0) && !sending;
 
   return (
     <div className={styles.composer}>
@@ -109,7 +148,41 @@ export default function MessageInput({
           </button>
         </div>
       )}
+
+      {/* Выбранные, но ещё не отправленные файлы — только вне edit-mode */}
+      {!isEditing && (
+        <SelectedAttachmentList
+          files={selectedFiles}
+          onRemove={handleRemoveFile}
+          uploading={sending}
+        />
+      )}
+
+      {attachError && (
+        <div className={styles.attachError} role="alert">{attachError}</div>
+      )}
+
       <div className={styles.inputRow}>
+        {!isEditing && (
+          <>
+            <button
+              type="button"
+              className={styles.attachBtn}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              aria-label="Прикрепить файл"
+            >
+              <Icon name="paperclip" size={16} aria-hidden="true" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className={styles.fileInput}
+              onChange={handleFileChange}
+            />
+          </>
+        )}
         <textarea
           ref={textareaRef}
           className={styles.input}
@@ -125,7 +198,7 @@ export default function MessageInput({
           type="button"
           className={styles.sendBtn}
           onClick={handleSubmit}
-          disabled={!text.trim() || sending}
+          disabled={!canSend}
           aria-label={isEditing ? 'Сохранить' : 'Отправить'}
         >
           <Icon name={isEditing ? 'edit' : 'send'} size={14} />

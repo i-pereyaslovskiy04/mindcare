@@ -36,6 +36,17 @@ function mockTouchComposer(matches) {
   };
 }
 
+function makeFile(name = 'test.pdf', size = 1024, type = 'application/pdf') {
+  return new File([new ArrayBuffer(size)], name, { type });
+}
+
+// Hidden file input не попадает в accessibility tree, поэтому используем прямой
+// DOM-поиск через querySelector. Все usages идут через эту функцию.
+// eslint-disable-next-line testing-library/no-node-access
+const getFileInput = () => document.querySelector('input[type="file"]');
+
+// ── Edit mode (existing tests, unchanged) ────────────────────────────────────
+
 // D. В режиме редактирования input заполнен текстом + видна панель.
 test('D. edit mode prefills composer and shows banner', () => {
   render(
@@ -100,13 +111,14 @@ test('G. submit in edit mode calls onSubmitEdit, not onSend', async () => {
   expect(onSend).not.toHaveBeenCalled();
 });
 
-// Обычная отправка не сломана: submit без editing вызывает onSend.
-test('normal send calls onSend when not editing', async () => {
+// ── Обычная отправка (updated: onSend(text, files)) ──────────────────────────
+
+test('normal send calls onSend with text and empty files array', async () => {
   const onSend = jest.fn().mockResolvedValue(true);
   render(<MessageInput onSend={onSend} />);
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'привет' } });
   fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
-  await waitFor(() => expect(onSend).toHaveBeenCalledWith('привет'));
+  await waitFor(() => expect(onSend).toHaveBeenCalledWith('привет', []));
 });
 
 test('Enter without Shift sends the message', async () => {
@@ -116,7 +128,7 @@ test('Enter without Shift sends the message', async () => {
   const textarea = screen.getByRole('textbox');
   fireEvent.change(textarea, { target: { value: 'привет' } });
   fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-  await waitFor(() => expect(onSend).toHaveBeenCalledWith('привет'));
+  await waitFor(() => expect(onSend).toHaveBeenCalledWith('привет', []));
   restoreTouch();
 });
 
@@ -159,7 +171,7 @@ test('mobile sends multiline message only by button', async () => {
   expect(onSend).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
-  await waitFor(() => expect(onSend).toHaveBeenCalledWith('строка 1\nстрока 2'));
+  await waitFor(() => expect(onSend).toHaveBeenCalledWith('строка 1\nстрока 2', []));
   restoreTouch();
 });
 
@@ -169,7 +181,7 @@ test('message with internal newlines is sent with newlines preserved', async () 
   const textarea = screen.getByRole('textbox');
   fireEvent.change(textarea, { target: { value: '  строка 1\nстрока 2  ' } });
   fireEvent.keyDown(textarea, { key: 'Enter' });
-  await waitFor(() => expect(onSend).toHaveBeenCalledWith('строка 1\nстрока 2'));
+  await waitFor(() => expect(onSend).toHaveBeenCalledWith('строка 1\nстрока 2', []));
 });
 
 test('whitespace-only message with spaces and newlines is not sent', () => {
@@ -258,7 +270,7 @@ test('textarea resets to one-line height after successful multiline send', async
   setScrollHeight(textarea, 42);
   fireEvent.keyDown(textarea, { key: 'Enter' });
 
-  await waitFor(() => expect(onSend).toHaveBeenCalledWith('1\n2\n3\n4'));
+  await waitFor(() => expect(onSend).toHaveBeenCalledWith('1\n2\n3\n4', []));
   await waitFor(() => expect(textarea).toHaveValue(''));
   expect(textarea.style.height).toBe('42px');
   expect(textarea.style.overflowY).toBe('hidden');
@@ -267,20 +279,18 @@ test('textarea resets to one-line height after successful multiline send', async
 });
 
 // H. Send button остаётся доступным (accessible name) и содержит иконку
-// самолётика, даже когда текстовый label скрыт CSS-медиа-запросом на mobile
-// (Stage 31z-hotfix2: icon-only compact button на узком экране).
+// самолётика, даже когда текстовый label скрыт CSS-медиа-запросом на mobile.
 test('H. send button keeps accessible name and icon when text label is hidden on mobile', () => {
   render(<MessageInput onSend={jest.fn()} />);
   const button = screen.getByRole('button', { name: 'Отправить' });
   expect(button).toHaveAttribute('aria-label', 'Отправить');
-  // Icon — декоративный svg без role/text, доступа через Testing Library queries нет.
   // eslint-disable-next-line testing-library/no-node-access
   expect(button.querySelector('svg')).toBeInTheDocument();
   expect(button).toHaveTextContent('Отправить');
 });
 
-// I. Disabled state не сломан icon-only вёрсткой: пустой текст → кнопка disabled.
-test('I. send button is disabled when input is empty', () => {
+// I. Disabled state: пустой текст И нет файлов → кнопка disabled.
+test('I. send button is disabled when input is empty and no files selected', () => {
   render(<MessageInput onSend={jest.fn()} />);
   expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled();
 });
@@ -299,4 +309,133 @@ test('J. save button in edit mode keeps accessible name and icon', () => {
   expect(button).toHaveAttribute('aria-label', 'Сохранить');
   // eslint-disable-next-line testing-library/no-node-access
   expect(button.querySelector('svg')).toBeInTheDocument();
+});
+
+// ── Attachment picker (Stage 32e) ─────────────────────────────────────────────
+
+test('K. attach button is rendered outside edit mode', () => {
+  render(<MessageInput onSend={jest.fn()} />);
+  expect(screen.getByRole('button', { name: 'Прикрепить файл' })).toBeInTheDocument();
+});
+
+test('K2. attach button is NOT rendered in edit mode', () => {
+  render(
+    <MessageInput
+      onSend={jest.fn()}
+      editing={{ uuid: 'u1', text: 'текст' }}
+      onSubmitEdit={jest.fn()}
+      onCancelEdit={jest.fn()}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: 'Прикрепить файл' })).not.toBeInTheDocument();
+});
+
+test('L. selecting a file shows it in SelectedAttachmentList', () => {
+  render(<MessageInput onSend={jest.fn()} />);
+  const file = makeFile('отчёт.pdf');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(screen.getByText('отчёт.pdf')).toBeInTheDocument();
+});
+
+test('M. can remove selected file before send', () => {
+  render(<MessageInput onSend={jest.fn()} />);
+  const file = makeFile('doc.pdf');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(screen.getByText('doc.pdf')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Убрать doc\.pdf/ }));
+  expect(screen.queryByText('doc.pdf')).not.toBeInTheDocument();
+});
+
+test('N. attachment-only send: empty text + file → onSend(text="", files)', async () => {
+  const onSend = jest.fn().mockResolvedValue(true);
+  render(<MessageInput onSend={onSend} />);
+  const file = makeFile('photo.jpg', 2048, 'image/jpeg');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+  await waitFor(() => expect(onSend).toHaveBeenCalledWith('', [file]));
+});
+
+test('O. text+file send: onSend receives text and files', async () => {
+  const onSend = jest.fn().mockResolvedValue(true);
+  render(<MessageInput onSend={onSend} />);
+  const file = makeFile('attach.pdf');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'смотри вложение' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+  await waitFor(() =>
+    expect(onSend).toHaveBeenCalledWith('смотри вложение', [file]),
+  );
+});
+
+test('P. successful send clears text and files', async () => {
+  const onSend = jest.fn().mockResolvedValue(true);
+  render(<MessageInput onSend={onSend} />);
+  const file = makeFile('doc.pdf');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'текст' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+  await waitFor(() => expect(onSend).toHaveBeenCalled());
+  await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(''));
+  expect(screen.queryByText('doc.pdf')).not.toBeInTheDocument();
+});
+
+test('Q. failed send (onSend returns false) keeps text and files', async () => {
+  const onSend = jest.fn().mockResolvedValue(false);
+  render(<MessageInput onSend={onSend} />);
+  const file = makeFile('doc.pdf');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'черновик' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+  await waitFor(() => expect(onSend).toHaveBeenCalled());
+  expect(screen.getByRole('textbox')).toHaveValue('черновик');
+  expect(screen.getByText('doc.pdf')).toBeInTheDocument();
+});
+
+test('R. attach button disabled when sending=true', () => {
+  render(<MessageInput onSend={jest.fn()} sending />);
+  expect(screen.getByRole('button', { name: 'Прикрепить файл' })).toBeDisabled();
+});
+
+test('R2. send button enabled when only files selected (no text)', () => {
+  render(<MessageInput onSend={jest.fn()} />);
+  const file = makeFile('doc.pdf');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(screen.getByRole('button', { name: 'Отправить' })).not.toBeDisabled();
+});
+
+test('S. max 5 files: selecting more shows error and truncates to 5', () => {
+  render(<MessageInput onSend={jest.fn()} />);
+  const files = Array.from({ length: 7 }, (_, i) => makeFile(`file${i}.pdf`));
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files } });
+  expect(screen.getByRole('alert')).toBeInTheDocument();
+  expect(screen.getByText(/Максимум 5/)).toBeInTheDocument();
+});
+
+test('T. empty file (size=0) is rejected silently', () => {
+  const onSend = jest.fn();
+  render(<MessageInput onSend={onSend} />);
+  const empty = new File([], 'empty.pdf', { type: 'application/pdf' });
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [empty] } });
+  expect(screen.queryByRole('button', { name: /Убрать/ })).not.toBeInTheDocument();
+});
+
+test('U. desktop Enter sends file-only message', async () => {
+  const restoreTouch = mockTouchComposer(false);
+  const onSend = jest.fn().mockResolvedValue(true);
+  render(<MessageInput onSend={onSend} />);
+  const file = makeFile('doc.pdf');
+  const input = getFileInput();
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+  await waitFor(() => expect(onSend).toHaveBeenCalledWith('', [file]));
+  restoreTouch();
 });

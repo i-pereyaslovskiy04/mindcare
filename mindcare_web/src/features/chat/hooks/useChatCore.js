@@ -39,6 +39,7 @@ export function useChatCore({
   getConversation,
   listErrorMessage,
   downloadAttachment: apiDownloadAttachment = null,
+  uploadAttachment: apiUploadAttachment = null,
 }) {
   const [conversations, setConversations]     = useState([]);
   const [listLoading, setListLoading]         = useState(true);
@@ -202,13 +203,38 @@ export function useChatCore({
     return () => clearInterval(t);
   }, [listLoading, listError, loadList]);
 
-  const send = useCallback(async (text) => {
+  // send(text, files?) — загружает файлы (если есть), затем отправляет сообщение.
+  // Возвращает true при успехе, false при любой ошибке (caller не сбрасывает черновик).
+  const send = useCallback(async (text, files = []) => {
     const uuid = selectedRef.current;
     if (!uuid) return false;
+    const trimmedText = typeof text === 'string' ? text.trim() : '';
+    const fileList = Array.isArray(files) ? files : [];
+    const hasFiles = fileList.length > 0;
+    if (!trimmedText && !hasFiles) return false;
+
     setSending(true);
     setSendError(null);
+
     try {
-      const msg = await sendMessage(uuid, text);
+      // Фаза загрузки: сначала pre-upload каждого файла, получаем uuid.
+      let attachmentUuids = [];
+      if (hasFiles && apiUploadAttachment) {
+        try {
+          const results = await Promise.all(
+            fileList.map((f) => apiUploadAttachment(uuid, f)),
+          );
+          attachmentUuids = results.map((r) => r.uuid);
+        } catch (e) {
+          if (selectedRef.current === uuid) {
+            setSendError(errText(e, 'Не удалось загрузить файл. Проверьте размер и формат.'));
+          }
+          return false;
+        }
+      }
+
+      // Фаза отправки: сообщение с текстом и/или attachment_uuids.
+      const msg = await sendMessage(uuid, trimmedText, attachmentUuids);
       if (selectedRef.current === uuid) {
         if (msg.id > lastIdRef.current) lastIdRef.current = msg.id;
         setMessages((prev) =>
@@ -225,7 +251,7 @@ export function useChatCore({
     } finally {
       setSending(false);
     }
-  }, [sendMessage, refreshConversationAfterConflict]);
+  }, [sendMessage, apiUploadAttachment, refreshConversationAfterConflict]);
 
   // PATCH → точечная замена по uuid, порядок сообщений сохраняется.
   const editMessage = useCallback(async (messageUuid, text) => {

@@ -6,6 +6,7 @@ import {
   getStudentConversations,
   markStudentConversationRead,
   sendStudentConversationMessage,
+  uploadStudentAttachment,
 } from '../../../api/chat.api';
 import { useChatCore } from '../../../features/chat/hooks/useChatCore';
 
@@ -27,5 +28,6 @@ export function useStudentChat() {
     getConversation: null,
     listErrorMessage: 'Не удалось загрузить список диалогов.',
     downloadAttachment: downloadStudentAttachment,
+    uploadAttachment: uploadStudentAttachment,
   });
 }

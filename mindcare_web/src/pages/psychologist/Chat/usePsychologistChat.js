@@ -7,6 +7,7 @@ import {
   getPsychologistConversations,
   markPsychologistConversationRead,
   sendPsychologistConversationMessage,
+  uploadPsychologistAttachment,
 } from '../../../api/chat.api';
 import { useChatCore } from '../../../features/chat/hooks/useChatCore';
 
@@ -26,5 +27,6 @@ export function usePsychologistChat() {
     getConversation: getPsychologistConversation,
     listErrorMessage: 'Не удалось загрузить список бесед.',
     downloadAttachment: downloadPsychologistAttachment,
+    uploadAttachment: uploadPsychologistAttachment,
   });
 }
