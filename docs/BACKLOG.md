@@ -253,6 +253,14 @@
     сохранён. Тесты: `features/chat/lib/messageShape.test.js` (+10 тестов, 150 passed).
     MVP-ограничение: reconcile покрывает только последние 50 сообщений (snapshot window
     `limit=50`); история старше этой границы синхронизируется только при переоткрытии диалога.
+  - ✅ Stage 31ad: **useChatCore — общий core hook** — audit (31ad-audit) выявил ~90%
+    дублирования; fix-a: hook-level тесты; fix-b: общие константы + `errText` в
+    `chatHookUtils.js`; fix-c: нормализация 409 у психолога (deleteMessage + helper
+    `refreshConversationAfterConflict`); fix-d: `useChatCore(adapter)` создан
+    (`features/chat/hooks/useChatCore.js`), `useStudentChat` и `usePsychologistChat` —
+    thin wrappers. Public return shape хуков не изменился; page-компоненты не менялись;
+    `useSystemConversation` — отдельный hook, не входит в `useChatCore`; backend/API/
+    Alembic не менялись. 166/166 тестов. Frontend-only.
   - **Ограничения Messenger MVP** (зафиксированы осознанно, не баги):
     - presence приблизительный — не realtime; порог 10 минут; зависит от
       `user_sessions.last_active` и debounce `touch_session` 300с;
@@ -279,11 +287,8 @@
     глубокий рефакторинг chat-модуля (split `storage.py`, общий `useChatThread`,
     shared `MessengerPageShell`) — см. Stage 31a audit; ручной browser smoke
     мобильного/узкого viewport для кебаб-меню + bubble (Stage 31z-hotfix, не проверен
-    в браузере); общий параметризуемый hook для
-    student/psychologist chat flow (`useStudentChat.js`/`usePsychologistChat.js`
-    структурно дублируются — см. read-only audit chat-компонентов); интеграционный
-    тест полного edit-флоу через `ChatWindow` (сейчас edit покрыт точечно в
-    `MessageList.test.jsx`, не end-to-end через `ChatWindow`)
+    в браузере); интеграционный тест полного edit-флоу через `ChatWindow` (сейчас edit
+    покрыт точечно в `MessageList.test.jsx`, не end-to-end через `ChatWindow`)
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

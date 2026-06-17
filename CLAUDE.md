@@ -908,6 +908,12 @@ Conventional Commits:
   (≤ 8 сек) без переоткрытия диалога; без WebSocket/SSE; без placeholder; `mergeMessages`
   сохранён (add/update); MVP-ограничение: reconcile только для последних 50 сообщений
   (история старше snapshot window — при переоткрытии)
+- **Chat hook architecture (Stage 31ad):** `useStudentChat` и `usePsychologistChat` —
+  thin wrappers поверх `useChatCore(adapter)` (`features/chat/hooks/useChatCore.js`);
+  public return shape не изменился; `useSystemConversation` — отдельный hook, не входит
+  в `useChatCore`; backend/API/Alembic/UI-компоненты (`ChatWindow`, `MessageList`,
+  `MessageBubble`) не менялись; 409 Conflict — через optional `getConversation` (student:
+  null → silent list reload; psychologist: `getPsychologistConversation` → точечный refresh)
 - Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
 - **Mobile (Stage 30d):** Messenger `≤900px` — list/thread (back-кнопка в шапке чата);
   CabinetLayout `>980px` full sidebar / `601–980px` icon-rail / `≤600px` мобильный drawer

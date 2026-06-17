@@ -484,6 +484,11 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
   feature-specific компонент (`incoming`/`outgoing`/`system`); meta (время · «изменено» · ✓/✓✓)
   — внутри bubble, компактно для короткого текста, с переносом вниз-направо для длинного
   (Telegram-style); меню действий — рядом с bubble, не внутри него.
+- **Chat hook architecture (Stage 31ad, frontend-only):** `useStudentChat` и
+  `usePsychologistChat` — thin wrappers поверх общего `useChatCore(adapter)`
+  (`features/chat/hooks/`); public API и поведение хуков не изменились;
+  `useSystemConversation` — отдельный hook, не входит в `useChatCore`;
+  backend/API/Alembic/UI-компоненты не менялись.
 
 *Mobile (Stage 30d + hotfixes):*
 - Messenger `≤900px` — режим list/thread (Telegram/VK): сначала список диалогов, по

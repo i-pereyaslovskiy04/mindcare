@@ -342,6 +342,8 @@ npm run build
 
 **Frontend:**
 
+- `mindcare_web/src/pages/student/Chat/useStudentChat.test.js` — hook-level: loadList, select/load messages, stale guard (быстрое переключение), active-only polling, inactive/archive no polling, send 409 fallback (silent list reload через `getConversation: null`);
+- `mindcare_web/src/pages/psychologist/Chat/usePsychologistChat.test.js` — hook-level: select/load messages, stale guard, active-only polling, inactive/archive no polling, send 409 targeted refresh (`getPsychologistConversation`), delete 409 targeted refresh;
 - `mindcare_web/src/pages/student/Chat/ChatPage.smoke.test.jsx` — render list/thread (student);
 - `mindcare_web/src/pages/psychologist/Chat/PsychologistChatPage.smoke.test.jsx` — то же (psychologist);
 - `mindcare_web/src/features/chat/components/ChatWindow.test.jsx`;
@@ -349,6 +351,16 @@ npm run build
 - `mindcare_web/src/features/chat/components/MessageList.test.jsx` — фильтрация deleted, bubble/meta, kebab-меню;
 - `mindcare_web/src/features/chat/components/MessageInput.test.jsx`;
 - `mindcare_web/src/features/chat/lib/LinkifiedText.test.jsx`.
+
+**useChatCore invariants (проверяются hook-level тестами выше):**
+
+- stale guard: `selectedRef` блокирует применение ответов от переключённой беседы;
+- `pollBusyRef` mutex: параллельных poll-запросов нет;
+- active-only polling: `isActive` (engagement_status === 'active') — условие запуска интервала;
+- archive/closed → polling не запускается;
+- student 409 → `getConversation: null` → `loadList({ silent: true })`;
+- psychologist 409 → `getConversation(uuid)` → точечный update `engagement_status`/`last_message_at`;
+- system conversation не обслуживается `useChatCore` (отдельный `useSystemConversation`).
 
 **Manual smoke (обязателен перед demo — машинно не проверяется):**
 

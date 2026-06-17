@@ -557,8 +557,9 @@ shared UI. Не переносить в `src/components/UI` пока нет вт
 `MessageList` скрывает `deleted` сообщения из ленты — без какого-либо placeholder
 текста («Сообщение удалено» не используется и не должен использоваться).
 
-**Polling reconcile (Stage 31ab):** `pollNew` в `useStudentChat` и `usePsychologistChat`
-использует `reconcileMessagesSnapshot` (`lib/messageShape.js`) вместо `mergeMessages`.
+**Polling reconcile (Stage 31ab):** `pollNew` в `useChatCore` (shared core hook,
+wrapped by `useStudentChat` и `usePsychologistChat`) использует
+`reconcileMessagesSnapshot` (`lib/messageShape.js`) вместо `mergeMessages`.
 Функция синхронизирует локальный state со snapshot сервера (limit=50): удаляет из state
 сообщения, которые backend больше не возвращает (soft-deleted). Удалённое сообщение
 исчезает у собеседника после следующего polling tick (≤ 8 сек) без переоткрытия диалога.
@@ -569,6 +570,23 @@ shared UI. Не переносить в `src/components/UI` пока нет вт
 «MindCare», текст слева, время внутри bubble, без меню действий, без «изменено»,
 без read receipts; никогда не считаются исходящими, даже если backend пришлёт
 `mine=true` (defensive guard в `MessageItem`).
+
+**Chat hook architecture (Stage 31ad).** `useStudentChat` и `usePsychologistChat` —
+thin wrapper'ы поверх общего `useChatCore(adapter)` (`features/chat/hooks/useChatCore.js`).
+Core обслуживает: conversations state, selected conversation, messages state,
+loadList / loadMessages, send / editMessage / deleteMessage, mark-read,
+polling (list + messages), stale-response guard (`selectedRef`),
+`lastIdRef` / `knownMaxId`, `pollBusyRef`, `reconcileMessagesSnapshot`,
+409 Conflict via optional `getConversation`.
+Role-specific остаётся в adapter-объекте wrapper'а: API endpoints,
+`getConversation` (null у студента → silent list reload при 409;
+`getPsychologistConversation` у психолога → точечный refresh conversation при 409),
+`listErrorMessage`.
+`useSystemConversation` — отдельный hook, **не входит** в `useChatCore`
+(system conversation — не engagement conversation).
+Page-компоненты (`ChatPage`, `PsychologistChatPage`) не требовали изменений.
+Backend, API-эндпоинты, Alembic, UI-компоненты (`ChatWindow`, `MessageList`,
+`MessageBubble`) не менялись.
 
 ---
 
