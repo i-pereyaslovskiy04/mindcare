@@ -4,7 +4,6 @@ import SelectedAttachmentList from './SelectedAttachmentList';
 import styles from './ChatWindow.module.css';
 
 const MAX_LENGTH = 10000; // лимит backend-валидации ChatMessageCreate/Edit
-const MAX_FILES = 5;      // мягкий client-side лимит (backend — источник истины)
 const FALLBACK_LINE_HEIGHT = 18;
 
 function px(value) {
@@ -44,9 +43,10 @@ function isTouchComposerMode() {
 }
 
 /**
- * Composer (Stage 32e):
- *   - обычная отправка: onSend(text, files) — text и/или файлы;
- *   - редактирование: editing = { uuid, text } → onSubmitEdit(text); скрепка скрыта.
+ * Composer (Stage 32e/32f):
+ *   - Обычная отправка: onSend(text, files) — text и/или файлы.
+ *   - Редактирование: editing = { uuid, text } → onSubmitEdit(text); скрепка скрыта.
+ *   - selectedFiles / attachError / управление файлами хранятся в ChatWindow (Stage 32f).
  *
  * onSend возвращает false при ошибке — текст и файлы НЕ очищаются.
  */
@@ -56,46 +56,32 @@ export default function MessageInput({
   editing = null,
   onSubmitEdit = null,
   onCancelEdit = null,
+  // Selected files owned by ChatWindow (Stage 32f)
+  selectedFiles = [],
+  onFilesSelected = null,
+  onRemoveFile = null,
+  onClearFiles = null,
+  attachError = null,
 }) {
   const [text, setText] = useState('');
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [attachError, setAttachError] = useState(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const isEditing = Boolean(editing);
 
-  // Вход/выход из edit-mode: подставить текст редактируемого сообщения либо очистить.
+  // Подставить текст при входе в edit-mode, очистить при выходе.
   useEffect(() => {
     setText(editing ? editing.text : '');
-    if (!editing) setSelectedFiles([]);
   }, [editing]);
 
   useLayoutEffect(() => {
     autosizeTextarea(textareaRef.current);
   }, [text, editing, selectedFiles]);
 
-  const handleFiles = useCallback((rawFiles) => {
-    setAttachError(null);
-    const valid = [...rawFiles].filter((f) => f.size > 0);
-    const next = [...selectedFiles, ...valid];
-    if (next.length > MAX_FILES) {
-      setAttachError(`Максимум ${MAX_FILES} файлов за раз.`);
-      setSelectedFiles(next.slice(0, MAX_FILES));
-      return;
-    }
-    setSelectedFiles(next);
-  }, [selectedFiles]);
-
   const handleFileChange = (e) => {
-    handleFiles(e.target.files);
+    onFilesSelected?.(e.target.files);
     // Сбросить value, чтобы тот же файл можно было выбрать повторно.
     e.target.value = '';
   };
-
-  const handleRemoveFile = useCallback((index) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
-    setAttachError(null);
-  }, []);
 
   const handleSubmit = useCallback(async () => {
     const trimmed = text.trim();
@@ -106,19 +92,17 @@ export default function MessageInput({
     if (isEditing) {
       if (!trimmed) return; // edit требует текст
       const ok = await onSubmitEdit(trimmed);
-      // При успехе родитель сбросит editing→null (useEffect очистит input).
-      // При ошибке текст сохраняем, чтобы правка не потерялась.
+      // При ошибке — текст сохраняем, чтобы правка не потерялась.
       if (ok === false) return;
     } else {
       const ok = await onSend(trimmed, selectedFiles);
       if (ok !== false) {
         setText('');
-        setSelectedFiles([]);
-        setAttachError(null);
+        onClearFiles?.();
       }
       // При ok === false — текст и файлы НЕ трогаем: пользователь видит черновик.
     }
-  }, [text, selectedFiles, sending, isEditing, onSend, onSubmitEdit]);
+  }, [text, selectedFiles, sending, isEditing, onSend, onSubmitEdit, onClearFiles]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -153,7 +137,7 @@ export default function MessageInput({
       {!isEditing && (
         <SelectedAttachmentList
           files={selectedFiles}
-          onRemove={handleRemoveFile}
+          onRemove={onRemoveFile}
           uploading={sending}
         />
       )}

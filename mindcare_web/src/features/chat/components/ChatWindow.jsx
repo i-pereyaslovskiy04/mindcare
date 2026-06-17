@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ChatHeader from './ChatHeader';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import DeleteMessageDialog from './DeleteMessageDialog';
+import DragDropOverlay from './DragDropOverlay';
+import { mergeSelectedFiles } from '../lib/attachmentSelection';
 import styles from './ChatWindow.module.css';
+
+function hasDragFiles(e) {
+  if (!e.dataTransfer) return false;
+  const { types } = e.dataTransfer;
+  if (!types) return false;
+  if (typeof types.includes === 'function') return types.includes('Files');
+  if (typeof types.contains === 'function') return types.contains('Files');
+  return false;
+}
 
 export default function ChatWindow({
   contact,
@@ -26,11 +37,27 @@ export default function ChatWindow({
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Выбранные, ещё не отправленные файлы (поднято из MessageInput — Stage 32f).
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [attachError, setAttachError] = useState(null);
+
+  // Drag-and-drop state (Stage 32f).
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounterRef = useRef(0);
+
   // composer скрыт у системной беседы (readOnly) и у закрытого engagement.
   const showComposer = !readOnly && !closed;
   // действия (правка/удаление) возможны, пока есть composer (активный
   // engagement) и переданы соответствующие обработчики.
   const canManageChat = showComposer && (Boolean(onEdit) || Boolean(onDelete));
+
+  // Сбросить состояние файлов и drag при смене беседы.
+  useEffect(() => {
+    setSelectedFiles([]);
+    setAttachError(null);
+    setIsDragOver(false);
+    dragCounterRef.current = 0;
+  }, [contact?.id]);
 
   // Если беседу закрыли/переключили — сбросить edit/delete-mode.
   useEffect(() => {
@@ -42,6 +69,9 @@ export default function ChatWindow({
 
   const handleStartEdit = useCallback((message) => {
     setEditing({ uuid: message.uuid, text: message.text });
+    // Очистить выбранные файлы при входе в edit-mode.
+    setSelectedFiles([]);
+    setAttachError(null);
   }, []);
 
   const handleCancelEdit = useCallback(() => setEditing(null), []);
@@ -73,10 +103,79 @@ export default function ChatWindow({
     }
   }, [pendingDelete, onDelete]);
 
+  // --- управление выбранными файлами ---
+
+  const handleFilesSelected = useCallback((rawFiles) => {
+    setAttachError(null);
+    const { files, error } = mergeSelectedFiles(selectedFiles, rawFiles);
+    setSelectedFiles(files);
+    if (error) setAttachError(error);
+  }, [selectedFiles]);
+
+  const handleRemoveFile = useCallback((index) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setAttachError(null);
+  }, []);
+
+  const handleClearFiles = useCallback(() => {
+    setSelectedFiles([]);
+    setAttachError(null);
+  }, []);
+
+  // --- drag-and-drop handlers ---
+
+  const handleDragEnter = useCallback((e) => {
+    if (!showComposer || !hasDragFiles(e)) return;
+    dragCounterRef.current += 1;
+    setIsDragOver(true);
+  }, [showComposer]);
+
+  const handleDragOver = useCallback((e) => {
+    if (!showComposer || !hasDragFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, [showComposer]);
+
+  const handleDragLeave = useCallback(() => {
+    if (dragCounterRef.current <= 0) return;
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+    if (!showComposer) return;
+
+    const droppedFiles = Array.from(e.dataTransfer?.files ?? []);
+    if (droppedFiles.length === 0) return;
+
+    const nonEmpty = droppedFiles.filter((f) => f.size > 0);
+    if (nonEmpty.length === 0) {
+      setAttachError('Пустой файл нельзя прикрепить.');
+      return;
+    }
+
+    setAttachError(null);
+    const { files, error } = mergeSelectedFiles(selectedFiles, nonEmpty);
+    setSelectedFiles(files);
+    if (error) setAttachError(error);
+  }, [showComposer, selectedFiles]);
+
   if (!contact) return null;
 
   return (
-    <div className={styles.window}>
+    <div
+      className={styles.window}
+      data-testid="chat-window"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <ChatHeader contact={contact} onBack={onBack} />
       <MessageList
         messages={messages}
@@ -99,6 +198,11 @@ export default function ChatWindow({
           editing={editing}
           onSubmitEdit={handleSubmitEdit}
           onCancelEdit={handleCancelEdit}
+          selectedFiles={selectedFiles}
+          onFilesSelected={handleFilesSelected}
+          onRemoveFile={handleRemoveFile}
+          onClearFiles={handleClearFiles}
+          attachError={attachError}
         />
       ) : (
         <div className={styles.closedNotice}>
@@ -114,6 +218,8 @@ export default function ChatWindow({
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />
+
+      <DragDropOverlay visible={isDragOver} />
     </div>
   );
 }

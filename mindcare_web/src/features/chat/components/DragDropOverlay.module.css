@@ -1,0 +1,32 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;     /* drag events pass through to ChatWindow */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(250, 245, 238, 0.93); /* warm-white с прозрачностью */
+  border: 2px dashed var(--latte);
+  box-sizing: border-box;
+}
+
+.icon {
+  color: var(--coffee);
+  margin-bottom: 4px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--espresso);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
