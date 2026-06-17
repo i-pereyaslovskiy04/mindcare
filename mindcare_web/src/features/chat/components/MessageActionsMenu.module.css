@@ -26,11 +26,12 @@
 
 /* всплывающее меню */
 .menu {
-  position: absolute;
-  top: 100%;
-  margin-top: 4px;
+  position: fixed;
   min-width: 150px;
-  z-index: 20;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
   padding: 4px;
@@ -38,11 +39,6 @@
   border: 1px solid var(--nav-border);
   border-radius: 10px;
   box-shadow: 0 6px 20px rgba(74, 55, 40, 0.16);
-}
-
-/* у своих сообщений (kebab слева от bubble) меню удобнее прижать вправо */
-.wrap:last-child .menu {
-  right: 0;
 }
 
 .item {

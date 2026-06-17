@@ -197,6 +197,14 @@ test('opening the menu shows Редактировать and Удалить', () 
   expect(screen.getByRole('menuitem', { name: 'Удалить' })).toBeInTheDocument();
 });
 
+test('opened actions menu is rendered in document body', () => {
+  render(
+    <MessageList messages={[ownMsg]} contact={contact} manageable onStartEdit={jest.fn()} onRequestDelete={jest.fn()} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: MENU }));
+  expect(document.body).toContainElement(screen.getByRole('menu'));
+});
+
 // «Редактировать» из меню запускает существующий edit flow (onStartEdit).
 test('menu Редактировать calls onStartEdit with the message', () => {
   const onStartEdit = jest.fn();
