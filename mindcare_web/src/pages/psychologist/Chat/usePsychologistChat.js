@@ -44,6 +44,26 @@ export function usePsychologistChat() {
       .catch(() => {});
   }, []);
 
+  // Точечный refresh conversation при 409 Conflict: engagement закрылся во время диалога —
+  // подтягиваем статус, UI уходит в closed-state. Используется в send/edit/delete.
+  const refreshConversationAfterConflict = useCallback((uuid) => {
+    getPsychologistConversation(uuid)
+      .then((conv) =>
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.uuid === uuid
+              ? {
+                  ...c,
+                  engagement_status: conv.engagement_status,
+                  last_message_at: conv.last_message_at,
+                }
+              : c,
+          ),
+        ),
+      )
+      .catch(() => {});
+  }, []);
+
   const loadList = useCallback(async ({ silent = false } = {}) => {
     if (!silent) {
       setListLoading(true);
@@ -182,30 +202,13 @@ export function usePsychologistChat() {
     } catch (e) {
       if (selectedRef.current === uuid) {
         setSendError(errText(e, 'Не удалось отправить сообщение. Попробуйте ещё раз.'));
-        if (e?.status === 409) {
-          // Engagement закрылся во время диалога: подтягиваем статус, UI уходит в closed-state.
-          getPsychologistConversation(uuid)
-            .then((conv) =>
-              setConversations((prev) =>
-                prev.map((c) =>
-                  c.uuid === uuid
-                    ? {
-                        ...c,
-                        engagement_status: conv.engagement_status,
-                        last_message_at: conv.last_message_at,
-                      }
-                    : c,
-                ),
-              ),
-            )
-            .catch(() => {});
-        }
+        if (e?.status === 409) refreshConversationAfterConflict(uuid);
       }
       return false;
     } finally {
       setSending(false);
     }
-  }, []);
+  }, [refreshConversationAfterConflict]);
 
   // Редактирование своего сообщения (Stage 31x): PATCH → точечная замена по uuid,
   // порядок сообщений сохраняется (createdAt не меняется). Без полной перезагрузки.
@@ -224,29 +227,13 @@ export function usePsychologistChat() {
     } catch (e) {
       if (selectedRef.current === uuid) {
         setSendError(errText(e, 'Не удалось изменить сообщение. Попробуйте ещё раз.'));
-        if (e?.status === 409) {
-          getPsychologistConversation(uuid)
-            .then((conv) =>
-              setConversations((prev) =>
-                prev.map((c) =>
-                  c.uuid === uuid
-                    ? {
-                        ...c,
-                        engagement_status: conv.engagement_status,
-                        last_message_at: conv.last_message_at,
-                      }
-                    : c,
-                ),
-              ),
-            )
-            .catch(() => {});
-        }
+        if (e?.status === 409) refreshConversationAfterConflict(uuid);
       }
       return false;
     } finally {
       setSending(false);
     }
-  }, []);
+  }, [refreshConversationAfterConflict]);
 
   // Удаление своего сообщения (Stage 31y-hotfix): DELETE → сообщение убирается
   // из ленты (без плейсхолдера). Порядок оставшихся сообщений сохраняется.
@@ -263,10 +250,11 @@ export function usePsychologistChat() {
     } catch (e) {
       if (selectedRef.current === uuid) {
         setSendError(errText(e, 'Не удалось удалить сообщение. Попробуйте ещё раз.'));
+        if (e?.status === 409) refreshConversationAfterConflict(uuid);
       }
       return false;
     }
-  }, []);
+  }, [refreshConversationAfterConflict]);
 
   return {
     conversations,

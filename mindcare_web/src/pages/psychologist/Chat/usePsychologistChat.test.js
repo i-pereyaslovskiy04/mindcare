@@ -227,3 +227,43 @@ test('psychologist send 409 refreshes the selected conversation status', async (
     }),
   );
 });
+
+test('psychologist delete 409 calls getPsychologistConversation, updates conversation status, and keeps message', async () => {
+  const msgToDelete = apiMessage(1, { sender_id: 10, sender_role: 'psychologist', is_mine: true });
+  const conflict = Object.assign(new Error('HTTP 409'), { status: 409 });
+  chatApi.getPsychologistConversationMessages.mockResolvedValue({ items: [msgToDelete] });
+  chatApi.deletePsychologistMessage.mockRejectedValue(conflict);
+  chatApi.getPsychologistConversation.mockResolvedValue({
+    ...activeConversation,
+    engagement_status: 'completed',
+    last_message_at: '2024-01-01T10:09:00.000Z',
+  });
+
+  const { result } = renderHook(() => usePsychologistChat());
+
+  await waitFor(() => expect(result.current.listLoading).toBe(false));
+  act(() => {
+    result.current.selectConversation(activeConversation.uuid);
+  });
+  await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+  let deleteResult;
+  await act(async () => {
+    deleteResult = await result.current.deleteMessage(msgToDelete.uuid);
+  });
+
+  // delete отклонён → возвращает false, ставит ошибку
+  expect(deleteResult).toBe(false);
+  expect(result.current.sendError).toBe('Диалог закрыт');
+  // 409 → точечный refresh через getPsychologistConversation
+  expect(chatApi.getPsychologistConversation).toHaveBeenCalledWith(activeConversation.uuid);
+  // conversation обновляется: engagement_status и last_message_at из свежего ответа
+  await waitFor(() =>
+    expect(result.current.selected).toMatchObject({
+      engagement_status: 'completed',
+      last_message_at: '2024-01-01T10:09:00.000Z',
+    }),
+  );
+  // сообщение НЕ удалено из ленты: delete не был подтверждён сервером
+  expect(result.current.messages).toHaveLength(1);
+});
