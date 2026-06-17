@@ -50,7 +50,7 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **282 passed**.
+Текущий ожидаемый статус: **469 passed**.
 
 ### Alembic
 
@@ -252,13 +252,13 @@ backend обязан отклонять (роль не меняется). `conse
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
 | **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 163 теста: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), register_confirm_atomic (8), register_consent_context (1), password_uow_atomic (11), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 350 тестов: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), register_confirm_atomic (8), register_consent_context (1), password_uow_atomic (11), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12), chat_message_edit (10), chat_message_delete (10), chat_bootstrap_on_assignment (4), chat_lifecycle (8), chat_attachment_models (20), chat_attachment_api (37), chat_attachment_edit (18) |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **282 passed** (`.\test.ps1`).
+Итого backend: **469 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **14 suites / 75 tests** (после Stage 31n-hotfix) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **32 suites / 299 tests** (после Stage 32g) —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —
@@ -332,13 +332,60 @@ npm run build
 - `MessageBubble` — meta (время/«изменено»/✓/✓✓) внутри bubble; receipts только у исходящих
   пользовательских сообщений; system-сообщения — без меню действий, без «изменено», без receipts.
 
+**Attachments checklist (backend — проверить при любых изменениях chat attachments):**
+
+- upload valid PDF/JPEG — 200, metadata в БД, физический файл в `CHAT_FILE_STORAGE_DIR`;
+- reject пустой файл — 400;
+- reject заблокированное расширение (.exe/.sh/...) — 400;
+- reject недопустимый MIME — 400;
+- reject слишком большой файл — 413;
+- скачивание участником — 200 с правильным Content-Disposition;
+- скачивание не-участником — 403 или 404;
+- upload в closed engagement — 409;
+- скачивание из closed/archive чата участником — 200 (разрешено);
+- upload в system conversation — запрещён;
+- attachment-only message (без текста) — 200;
+- text+attachment message — 200;
+- edit remove one attachment — 200, оставшиеся attachments в ответе;
+- edit cannot save empty (текст пустой + все вложения удалены) — 400;
+- download soft-deleted attachment — 404;
+- orphan cleanup dry-run (`scripts/cleanup_orphan_attachments.py`) без изменений;
+- orphan cleanup `--apply` убирает файлы с `deleted_at` старше N часов.
+
+**Attachments checklist (frontend — manual smoke):**
+
+- attachment card в incoming bubble — читаемый контраст текста и имени файла;
+- attachment card в outgoing dark bubble — читаемый контраст;
+- attachment-only message видно в ленте;
+- text+attachments message видно в ленте;
+- кнопка «Скачать» в карточке работает (download trigger);
+- скрепка открывает file picker;
+- выбранный файл появляется в `SelectedAttachmentList`;
+- удаление из `SelectedAttachmentList` убирает файл до отправки;
+- drag & drop в активный чат — файл добавляется;
+- drag & drop отклоняется в system/closed/archive чате;
+- drop >5 файлов — ошибка, существующие файлы сохраняются;
+- drop пустого файла — ошибка;
+- edit сообщения — текст и вложения подтягиваются в composer;
+- edit — крестик у вложения убирает его из `EditableAttachmentList`;
+- edit — нельзя сохранить, если текст пустой и все вложения убраны;
+- скрепка и drag & drop заблокированы в edit-mode;
+- mobile — file picker через скрепку работает.
+
 **Тесты (backend — на alembic head + dev PostgreSQL):**
 
 - `tests/integration/test_chat_api.py` — chat MVP end-to-end (20);
 - `tests/integration/test_system_conversation.py` — system conversation backend (17);
 - `tests/integration/test_engagement_system_messages.py` — system messages событий (11);
 - `tests/integration/test_chat_presence.py` — approximate presence (12);
-- `tests/integration/test_chat_models.py` — constraints (6).
+- `tests/integration/test_chat_models.py` — constraints (6);
+- `tests/integration/test_chat_message_edit.py` — edit сообщений (10);
+- `tests/integration/test_chat_message_delete.py` — delete сообщений (10);
+- `tests/integration/test_chat_bootstrap_on_assignment.py` — беседа при назначении (4);
+- `tests/integration/test_chat_lifecycle.py` — lifecycle engagement-беседы (8);
+- `tests/integration/test_chat_attachment_models.py` — constraints attachments (20);
+- `tests/integration/test_chat_attachment_api.py` — upload/download/send/list (37);
+- `tests/integration/test_chat_attachment_edit.py` — edit/remove attachments (18).
 
 **Frontend:**
 

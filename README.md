@@ -48,7 +48,7 @@ HTTP Request
 ```
 mindcare/
 ├── mindcare_api/                    # FastAPI backend — порт 8000
-│   ├── alembic/                     # Конфиг и версии миграций (11 ревизий, head: d8f3a6c1e9b4)
+│   ├── alembic/                     # Конфиг и версии миграций (14 ревизий, head: a9b3e1f7c2d4)
 │   │   ├── env.py
 │   │   └── versions/                # af13ad7a133c … d8f3a6c1e9b4 (см. «История ревизий»)
 │   ├── app/
@@ -72,7 +72,7 @@ mindcare/
 │   │   │       ├── content.py       # articles, news, categories, help_resources, Q&A
 │   │   │       ├── diagnostics.py   # tests, questions, options, test_results
 │   │   │       ├── consultations.py # appointments, schedule_rules, session_notes
-│   │   │       ├── chat.py          # chat_conversations, chat_messages (Stage 28b)
+│   │   │       ├── chat.py          # chat_conversations, chat_messages, chat_attachments (Stage 28b/32b)
 │   │   │       ├── notifications.py # notification_templates, notifications
 │   │   │       ├── audit.py         # auth_log, audit_log, data_change_log
 │   │   │       └── otp.py           # otp_verifications
@@ -103,11 +103,13 @@ mindcare/
 │   │       ├── email_service.py     # Публичный API: send_registration_otp() и др.
 │   │       └── _smtp.py             # Внутренний SMTP-транспорт (не импортировать напрямую)
 │   ├── scripts/
-│   │   ├── create_admin.py              # Создание первого администратора (интерактивный CLI)
-│   │   ├── ensure_audit_partitions.py   # Создание будущих партиций audit-таблиц
-│   │   ├── backfill_legal_basis.py      # Backfill legal basis records (--dry-run по умолчанию)
-│   │   └── test_smtp.py                 # Диагностика SMTP-соединения
-│   ├── tests/                       # 282 теста: unit + integration (см. «Тестирование»)
+│   │   ├── create_admin.py                      # Создание первого администратора (интерактивный CLI)
+│   │   ├── ensure_audit_partitions.py           # Создание будущих партиций audit-таблиц
+│   │   ├── backfill_legal_basis.py              # Backfill legal basis records (--dry-run по умолчанию)
+│   │   ├── cleanup_orphan_attachments.py        # Очистка soft-deleted/осиротевших chat_attachments
+│   │   ├── repair_missing_chat_conversations.py # Восстановление бесед для существующих engagements
+│   │   └── test_smtp.py                         # Диагностика SMTP-соединения
+│   ├── tests/                       # 469 тестов: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -181,6 +183,10 @@ ALLOWED_ORIGINS=http://localhost:3000
 # При nginx: client_max_body_size должен быть NEWS_IMAGE_MAX_SIZE_MB + 5
 NEWS_IMAGE_MAX_SIZE_MB=20
 
+# Приватная директория для хранения файлов чата (chat_attachments, НЕ public static)
+# default: storage/private/chat_attachments
+CHAT_FILE_STORAGE_DIR=storage/private/chat_attachments
+
 # Опциональные
 SESSION_EXPIRE_DAYS=7
 DEBUG=false
@@ -248,7 +254,7 @@ Alembic хранит текущую ревизию в одной строке:
 alembic_version
 ───────────────────
 version_num
-d8f3a6c1e9b4      ← текущий head
+a9b3e1f7c2d4      ← текущий head
 ```
 
 Каждая команда `alembic upgrade head` применяет все недостающие ревизии по цепочке и обновляет эту строку.
@@ -268,7 +274,9 @@ d8f3a6c1e9b4      ← текущий head
 | `e5a8f3c1d2b6` | Normalized email unique index: `lower(trim(email))` |
 | `b6e1f4a7c9d3` | user_legal_basis_records (Stage 23b) |
 | `d8f3a6c1e9b4` | chat_conversations + chat_messages (Stage 28b) |
-| `c4f7a2e9d1b8` | system conversation support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
+| `c4f7a2e9d1b8` | system conversation support: type/recipient_id + message_kind/event_key (Stage 29b) |
+| `f7e9c2a4b8d1` | chat_messages.edited_at (Stage 31z) |
+| `a9b3e1f7c2d4` | chat_attachments table + FK (Stage 32b) — **head** |
 
 ### ORM-модели (48 таблиц, 12 модулей)
 
@@ -282,7 +290,7 @@ d8f3a6c1e9b4      ← текущий head
 | `content.py` | categories, articles, article_categories, news, help_resources, questions_answers |
 | `diagnostics.py` | tests, test_categories, questions, options, question_media, option_media, test_results, test_result_scales, student_answers |
 | `consultations.py` | therapy_engagements, schedule_rules, schedule_exceptions, appointments, session_notes |
-| `chat.py` | chat_conversations, chat_messages |
+| `chat.py` | chat_conversations, chat_messages, chat_attachments |
 | `notifications.py` | notification_templates, notifications |
 | `audit.py` | auth_log, audit_log, data_change_log |
 | `otp.py` | otp_verifications |
@@ -345,7 +353,7 @@ lifespan() startup
 
 ## Тестирование
 
-Текущий статус: **282 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
+Текущий статус: **469 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
 
 ```bash
 # Backend
@@ -502,9 +510,18 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
 `user_sessions.last_active` и debounce `touch_session` 300с); read-receipt live-обновление —
 только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer пока без focus-trap/`inert`.
 
+**Вложения (Stage 32b–32g):** файлы в student↔psychologist engagement чате; отправка через
+скрепку + drag & drop; несколько файлов в одном сообщении; attachment-only message;
+карточки вложений в bubble (`AttachmentCard`/`AttachmentList`); скачивание через auth backend
+(private storage, не public static); редактирование сообщения с удалением отдельных файлов
+(`EditableAttachmentList`); system conversation — upload запрещён. Pending: image preview/lightbox;
+upload progress; retry queue; MIME magic bytes; antivirus; at-rest file encryption; добавление
+файлов в edit-mode; периодическая очистка soft-deleted файлов
+(`scripts/cleanup_orphan_attachments.py --apply`).
+
 *Future / postponed:* **group chat** (отдельный этап после стабилизации, обязателен
 READ-ONLY design audit — см. `docs/BACKLOG.md`); preview последнего сообщения в списке;
-WebSocket/SSE realtime presence; attachments/files; Action Center / колокольчик;
+WebSocket/SSE realtime presence; Action Center / колокольчик;
 staff break-glass access; усиление a11y mobile drawer; глубокий рефакторинг chat-модуля.
 Учебная группа ≠ автоматический чат.
 
@@ -571,7 +588,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
   "status": "ok",
   "db": "connected",
   "tables": 48,
-  "revision": "d8f3a6c1e9b4"
+  "revision": "a9b3e1f7c2d4"
 }
 ```
 
@@ -587,7 +604,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 | `/api/admin/articles/*` + `/api/articles/*` | CRUD articles + public list/item | Admin, Supervisor / Public |
 | `/api/media/upload` | POST upload image | Auth |
 | `/api/session-notes/*` | Session notes (enc:v1: ciphertext): psychologist — свои с content; supervisor — meta-list + audited content read; admin — metadata-only | Psychologist / Supervisor / Admin |
-| `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts, `peer_is_online` presence | Student / Psychologist (admin/supervisor — 403) |
+| `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts, `peer_is_online` presence; attachments upload/download (private storage) | Student / Psychologist (admin/supervisor — 403) |
 | `/api/chat/system-conversation*` | Read-only system conversation (своя беседа): GET conversation/messages, POST read; write только internal publisher | Auth (любая роль — к своей беседе) |
 | `/api/supervisor/*` | Student list, psychologist list, engagements | Supervisor |
 | `/api/psychologist/*` | Cabinet: clients, schedule, appointments | Psychologist |

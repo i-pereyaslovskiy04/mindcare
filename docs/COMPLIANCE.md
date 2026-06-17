@@ -111,8 +111,19 @@ Encryption-at-rest защищает от утечки БД; политика д�
   полного erasure-механизма по запросу субъекта) применимо и к chat-сообщениям
 - **Group chat — postponed**: до реализации требуется отдельный design audit,
   включая access policy и encryption policy для групповых сообщений
-- **Attachments/files — postponed**: загрузка вложений в чат не реализована; до
-  внедрения потребуется отдельная оценка хранения/шифрования/антивируса/ПДн
+- **Attachments/files — реализованы (Stage 32b–32g)**: upload/download вложений в
+  engagement chat. Реализованные меры безопасности: original filename не используется
+  как filesystem path (storage_key на основе UUID); path traversal guard в storage;
+  скачивание только через auth endpoint с проверкой membership; MIME allowlist +
+  extension blocklist; размер ограничен; audit событий upload/download (без content файла).
+  Closed/archive чат: upload запрещён (409), download разрешён участникам.
+  System conversation: upload запрещён, download не предусмотрен.
+  Admin/supervisor: нет доступа к chat attachments (403).
+  **Pending compliance/security:** MIME magic bytes validation (`python-magic` не реализована);
+  antivirus/ClamAV scanning; at-rest encryption физических файлов в FS (MVP хранит
+  файлы unencrypted на диске — только metadata encrypted через Fernet не применяется к FS);
+  S3/MinIO с server-side encryption; retention policy для attachment files;
+  physical file cleanup для soft-deleted записей (скрипт существует, не запускается автоматически)
 - Retention policy для chat messages остаётся открытым продуктовым и
   compliance-вопросом
 
@@ -199,5 +210,6 @@ UUID цели закодирован в строке события (време�
 | Результаты тестов | `test_results` | Специальные категории |
 | Заметки сессий | `session_notes` | Специальные категории |
 | Переписка student ↔ psychologist | `chat_messages` | Специальные категории |
+| Вложения чата (metadata + файл на FS) | `chat_attachments` + `CHAT_FILE_STORAGE_DIR` | Специальные категории |
 | Записи на консультации | `appointments` | Базовые ПДн |
 | IP-адреса | `auth_log` | Анонимизируются через 90 дней |

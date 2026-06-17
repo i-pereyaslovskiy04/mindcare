@@ -280,15 +280,35 @@
       `chat_groups`; `chat_group_members`; roles/moderation; access policy;
       unread/read model; encryption policy; system messages внутри группы;
       privacy/compliance-риски
-  - **Future (chat):** preview последнего сообщения в списке бесед (требует decrypt на
-    список — optional); WebSocket/SSE realtime presence; attachments/files; staff
-    break-glass access; Action Center / колокольчик; system messages для заданий/
-    материалов/анкет/legal announcements; усиление a11y mobile drawer (focus-trap/`inert`);
-    глубокий рефакторинг chat-модуля (split `storage.py`, общий `useChatThread`,
-    shared `MessengerPageShell`) — см. Stage 31a audit; ручной browser smoke
-    мобильного/узкого viewport для кебаб-меню + bubble (Stage 31z-hotfix, не проверен
-    в браузере); интеграционный тест полного edit-флоу через `ChatWindow` (сейчас edit
-    покрыт точечно в `MessageList.test.jsx`, не end-to-end через `ChatWindow`)
+  - ✅ Stage 32b: **chat_attachments DB foundation** — миграция `a9b3e1f7c2d4`
+    (`chat_attachments`: uuid, conversation_id FK, message_id nullable FK,
+    uploader_id FK, original_filename, mime_type, file_size, storage_key, checksum,
+    is_image, deleted_at); model `app/db/models/chat.py`; constraint-тесты
+    (`test_chat_attachment_models.py`, 20)
+  - ✅ Stage 32c: **backend attachment upload/download** — `POST .../attachments`
+    (pre-upload, allowlist MIME, blocklist extensions, size limit, UUID storage_key,
+    private FS `CHAT_FILE_STORAGE_DIR`); `GET .../download` (permission check,
+    streaming response); send with `attachment_uuids`; `test_chat_attachment_api.py` (37)
+  - ✅ Stage 32d + 32d-hotfix: **frontend attachment rendering** — `AttachmentCard`/
+    `AttachmentList` в `MessageBubble`; high-contrast outgoing dark-card fix
+  - ✅ Stage 32e: **composer attachment picker** — скрепка, hidden file input,
+    `SelectedAttachmentList` (pre-send), attachment-only send, text+attachment send,
+    upload error без потери черновика; `SelectedAttachmentList.test.jsx`
+  - ✅ Stage 32f: **drag & drop** — `DragDropOverlay`, counter-based enter/leave,
+    merge с existing selected, empty file/max-files guard; drag disabled in edit-mode;
+    `DragDropOverlay.test.jsx`, `ChatWindow.test.jsx` drag tests
+  - ✅ Stage 32g: **edit/remove individual attachment** — `remove_attachment_uuids`
+    в schema/storage/service/routes; soft delete атомарно с content/edited_at;
+    `EditableAttachmentList` (optimistic UI); `test_chat_attachment_edit.py` (18)
+  - **Future (chat):** preview последнего сообщения в списке бесед; WebSocket/SSE
+    realtime presence; image preview/lightbox; inline image thumbnails; upload
+    progress percent; upload retry queue; MIME magic bytes validation (`python-magic`);
+    antivirus/ClamAV scanning; at-rest encryption физических файлов в FS; S3/MinIO
+    storage backend; добавление новых файлов в edit-mode; orphan/deleted file cleanup
+    schedule (скрипт `scripts/cleanup_orphan_attachments.py --apply` существует, но
+    не запускается автоматически); staff break-glass access; Action Center / колокольчик;
+    system messages для заданий/материалов/анкет/legal announcements; усиление a11y
+    mobile drawer (focus-trap/`inert`); глубокий рефакторинг chat-модуля
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

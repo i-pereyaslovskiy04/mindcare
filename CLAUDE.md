@@ -90,7 +90,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 48 таблиц создаются через `alembic upgrade head`.
+> Все 49 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -172,7 +172,7 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **282 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **469 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -199,6 +199,13 @@ npm run build
 | `tests/integration/test_system_conversation.py` | system conversation backend (Stage 29b) — 17 |
 | `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (Stage 29d) — 11 |
 | `tests/integration/test_chat_presence.py` | approximate online/offline presence (Stage 30c) — 12 |
+| `tests/integration/test_chat_message_edit.py` | редактирование сообщений chat (Stage 31z) — 10 |
+| `tests/integration/test_chat_message_delete.py` | soft delete сообщений chat (Stage 31y) — 10 |
+| `tests/integration/test_chat_bootstrap_on_assignment.py` | создание/восстановление беседы при назначении — 4 |
+| `tests/integration/test_chat_lifecycle.py` | жизненный цикл engagement-беседы (перевод, закрытие) — 8 |
+| `tests/integration/test_chat_attachment_models.py` | constraints chat_attachments (Stage 32b) — 20 |
+| `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
+| `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
 
 ---
 
@@ -235,7 +242,7 @@ mindcare_api/
 │   │   ├── session.py       — engine, SessionLocal
 │   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
 │   │   ├── seed.py          — идемпотентный seed
-│   │   └── models/          — ORM-модели (12 модулей, 48 таблиц; chat.py — Stage 28b)
+│   │   └── models/          — ORM-модели (12 модулей, 49 таблиц; chat.py — Stage 28b/32b)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
@@ -281,17 +288,23 @@ mindcare_api/
 │   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
 │   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
 │   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
-│   │                          system_publisher (idempotency event_key)
+│   │                          system_publisher (idempotency event_key); attachments:
+│   │                          upload/download (private storage, not public static),
+│   │                          send with attachment_uuids, edit remove_attachment_uuids,
+│   │                          soft delete via chat_attachments.deleted_at (Stage 32b–32g)
 │   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
 │   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
 │       ├── _smtp.py         — SMTP транспорт (dev/smtp режимы, внутренний)
 │       └── email_service.py — формирование писем по событиям
 ├── scripts/
-│   ├── create_admin.py            — создание первого админа (+ legal basis record)
-│   ├── ensure_audit_partitions.py — будущие партиции audit-таблиц
-│   ├── backfill_legal_basis.py    — backfill legal basis (--dry-run default)
-│   └── test_smtp.py               — диагностика SMTP
+│   ├── create_admin.py                      — создание первого админа (+ legal basis record)
+│   ├── ensure_audit_partitions.py           — будущие партиции audit-таблиц
+│   ├── backfill_legal_basis.py              — backfill legal basis (--dry-run default)
+│   ├── cleanup_orphan_attachments.py        — очистка soft-deleted/осиротевших chat_attachments
+│   │                                          (--dry-run default, --apply, --hours)
+│   ├── repair_missing_chat_conversations.py — восстановление бесед для существующих engagements
+│   └── test_smtp.py                         — диагностика SMTP
 └── db/
     └── sql/
         ├── full_schema.sql  — полная схема (001-010 склеены)
@@ -358,13 +371,21 @@ mindcare_api/
 ❌ Не использовать async SQLAlchemy — проект на sync psycopg2
 ❌ Не вызывать alembic.command.upgrade() из FastAPI lifespan — deadlock
 ❌ Не вызывать Base.metadata.create_all() — удалён, схема только через Alembic
+✅ Chat attachments хранятся в private directory (`CHAT_FILE_STORAGE_DIR`),
+   не в PostgreSQL и не в public static
+✅ storage_key формируется на основе UUID — original filename не используется как filesystem path
+✅ Скачивание вложений только через auth backend endpoints (permission check участника)
+✅ Аудит для upload/download событий — content файла в audit не пишется
+❌ Не отдавать chat attachments через /static/* или StaticFiles — private storage
+❌ Не давать admin/supervisor доступ к chat attachments без отдельного compliance-этапа
+❌ Не хранить физический файл чата в PostgreSQL (даже как bytea/blob)
 ```
 
 ---
 
 ### База данных: схема
 
-48 таблиц в 12 модулях. Схема управляется через Alembic.
+49 таблиц в 12 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -382,7 +403,9 @@ mindcare_api/
 | `e5a8f3c1d2b6` | add_normalized_email_unique_index: `lower(trim(email))` |
 | `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) |
 | `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
-| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
+| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) |
+| `f7e9c2a4b8d1` | add_chat_message_edited_at: chat_messages.edited_at (Stage 31z) |
+| `a9b3e1f7c2d4` | add_chat_attachments: chat_attachments table + FK (Stage 32b) — **head** |
 
 **Ключевые таблицы:**
 
@@ -396,6 +419,7 @@ mindcare_api/
 | `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
 | `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
+| `chat_attachments` | Вложения чата (Stage 32b): metadata (original_filename, mime_type, file_size, storage_key, checksum, is_image); физический файл — в `CHAT_FILE_STORAGE_DIR` (private FS, не public static); soft delete через `deleted_at`; скачивание только через auth backend endpoint |
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
@@ -722,6 +746,10 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/articles` | Public | ✅ |
 | GET | `/api/articles/{uuid}` | Public | ✅ |
 | GET | `/api/articles/categories` | Public | ✅ |
+| POST | `/api/chat/student/conversations/{uuid}/attachments` | Student | ✅ |
+| GET | `/api/chat/student/conversations/{uuid}/attachments/{att_uuid}/download` | Student | ✅ |
+| POST | `/api/chat/conversations/{uuid}/attachments` | Psychologist | ✅ |
+| GET | `/api/chat/conversations/{uuid}/attachments/{att_uuid}/download` | Psychologist | ✅ |
 
 ## Соглашения по коду
 
@@ -914,6 +942,17 @@ Conventional Commits:
   в `useChatCore`; backend/API/Alembic/UI-компоненты (`ChatWindow`, `MessageList`,
   `MessageBubble`) не менялись; 409 Conflict — через optional `getConversation` (student:
   null → silent list reload; psychologist: `getPsychologistConversation` → точечный refresh)
+- **Attachments Stage 32b–32g:** upload через скрепку / drag&drop; text+attachments;
+  attachment-only message; карточки вложений (`AttachmentCard`/`AttachmentList`);
+  скачивание через auth backend endpoint (private storage, не public static);
+  edit-mode удаление отдельных файлов (`EditableAttachmentList`, `remove_attachment_uuids`);
+  удаление сообщения/вложения — soft delete (`chat_attachments.deleted_at`);
+  физический файл не удаляется сразу — запускать `scripts/cleanup_orphan_attachments.py --apply`.
+  **Pending:** image preview/lightbox; inline thumbnails; upload progress %; retry queue;
+  MIME magic bytes; antivirus; at-rest encryption физических файлов; добавление файлов в edit-mode.
+  Компоненты attachment UI (feature-specific, не global shared UI):
+  `AttachmentCard`, `AttachmentList`, `SelectedAttachmentList` (pre-send picker),
+  `EditableAttachmentList` (edit-mode), `DragDropOverlay` — проверить перед созданием новых
 - Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
 - **Mobile (Stage 30d):** Messenger `≤900px` — list/thread (back-кнопка в шапке чата);
   CabinetLayout `>980px` full sidebar / `601–980px` icon-rail / `≤600px` мобильный drawer
@@ -927,7 +966,7 @@ Conventional Commits:
 - **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,
   обязателен READ-ONLY design audit (см. `docs/BACKLOG.md`); учебная группа ≠
   автоматический чат. Не начинать group chat без отдельного этапа
-- Не добавлять WebSocket/SSE, attachments, Action Center/колокольчик или
+- Не добавлять WebSocket/SSE, Action Center/колокольчик или
   staff-доступ к content без отдельного этапа
 - `questions_answers` — это Q&A-модуль (один вопрос → один ответ), НЕ чат;
   не использовать как основу для чата
