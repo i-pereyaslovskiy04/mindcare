@@ -13,28 +13,14 @@ import {
   reconcileMessagesSnapshot,
 } from '../../../features/chat/lib/messageShape';
 import { notifyMessagesUpdated } from '../../../features/chat/lib/messagesEvents';
-
-const POLL_MESSAGES_MS = 8000;   // новые сообщения выбранной активной беседы
-const POLL_LIST_MS = 30000;      // обновление unread_count / появление новых бесед
-const LIST_PAGE_SIZE = 100;
-const HISTORY_LIMIT = 100;
-const SNAPSHOT_LIMIT = 50;       // снапшот для live refresh (read_at + новые)
-
-const STATUS_FALLBACK = {
-  403: 'Нет доступа к этому чату',
-  404: 'Диалог не найден или недоступен',
-  409: 'Диалог закрыт',
-  429: 'Слишком много сообщений. Попробуйте позже.',
-};
-
-/** Человекочитаемый текст ошибки; raw HTTP-статусы заменяются fallback'ом. */
-function errText(e, fallback) {
-  const m = e?.message;
-  if (typeof m === 'string' && m && !m.includes('[object') && !/^HTTP \d+$/.test(m)) {
-    return m;
-  }
-  return STATUS_FALLBACK[e?.status] || fallback;
-}
+import {
+  HISTORY_LIMIT,
+  LIST_PAGE_SIZE,
+  POLL_LIST_MS,
+  POLL_MESSAGES_MS,
+  SNAPSHOT_LIMIT,
+  errText,
+} from '../../../features/chat/lib/chatHookUtils';
 
 export function usePsychologistChat() {
   const [conversations, setConversations]     = useState([]);
