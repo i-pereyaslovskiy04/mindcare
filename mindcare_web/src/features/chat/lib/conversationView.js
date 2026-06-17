@@ -34,6 +34,10 @@ export function formatLastTime(iso) {
  *
  * Возвращает { archived, active, system }. Порядок внутри групп сохраняется.
  */
+export function hasPresence(contact) {
+  return !contact?.system && typeof contact?.online === 'boolean';
+}
+
 export function splitConversations(conversations) {
   const archived = [];
   const active = [];

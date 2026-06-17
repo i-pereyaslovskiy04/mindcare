@@ -1,9 +1,9 @@
 import Icon from '../../../components/Icon/Icon';
+import { hasPresence } from '../lib/conversationView';
 import styles from './ChatWindow.module.css';
 
 export default function ChatHeader({ contact, onBack = null }) {
-  // presence показываем только у обычных диалогов (у system-беседы его нет).
-  const showPresence = !contact.system && typeof contact.online === 'boolean';
+  const showPresence = hasPresence(contact);
 
   return (
     <div className={styles.header}>

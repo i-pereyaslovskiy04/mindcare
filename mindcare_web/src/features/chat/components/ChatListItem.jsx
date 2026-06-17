@@ -1,10 +1,10 @@
 import Icon from '../../../components/Icon/Icon';
+import { hasPresence } from '../lib/conversationView';
 import styles from './ChatSidebar.module.css';
 
 export default function ChatListItem({ contact, isActive, onClick }) {
   const hasUnread = contact.unread > 0;
-  // presence показываем только у обычных диалогов (у system-беседы его нет).
-  const showPresence = !contact.system && typeof contact.online === 'boolean';
+  const showPresence = hasPresence(contact);
 
   return (
     <button

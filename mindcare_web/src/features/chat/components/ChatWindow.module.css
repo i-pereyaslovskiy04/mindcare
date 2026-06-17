@@ -5,6 +5,12 @@
 
 /* ---- window layout ---- */
 .window {
+  --chat-system-avatar-bg: var(--sand);
+  --chat-system-avatar-color: var(--coffee);
+  --chat-system-avatar-border: var(--nav-border);
+  --chat-presence-online: var(--success);
+  --chat-presence-offline: var(--text-light);
+
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -100,11 +106,11 @@
 }
 
 .presenceOnline {
-  background: var(--success);
+  background: var(--chat-presence-online);
 }
 
 .presenceOffline {
-  background: var(--text-light);
+  background: var(--chat-presence-offline);
 }
 
 /* ---- messages list ---- */
@@ -159,12 +165,6 @@
 }
 
 /* аватар system-сообщений (MindCare): нейтральный, как headerAvatarSystem */
-.msgAvatarSystem {
-  background: var(--sand);
-  color: var(--coffee);
-  border: 1px solid var(--nav-border);
-}
-
 .msgContent {
   display: flex;
   flex-direction: column;
@@ -235,10 +235,11 @@
   }
 }
 
+.msgAvatarSystem,
 .headerAvatarSystem {
-  background: var(--sand);
-  color: var(--coffee);
-  border: 1px solid var(--nav-border);
+  background: var(--chat-system-avatar-bg);
+  color: var(--chat-system-avatar-color);
+  border: 1px solid var(--chat-system-avatar-border);
 }
 
 .threadEmpty {

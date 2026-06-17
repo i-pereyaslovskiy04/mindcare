@@ -1,4 +1,18 @@
-import { splitConversations } from './conversationView';
+import { hasPresence, splitConversations } from './conversationView';
+
+describe('hasPresence', () => {
+  test('shows presence for non-system contacts with boolean online state', () => {
+    expect(hasPresence({ system: false, online: true })).toBe(true);
+    expect(hasPresence({ online: false })).toBe(true);
+  });
+
+  test('hides presence for system contacts and non-boolean online state', () => {
+    expect(hasPresence({ system: true, online: true })).toBe(false);
+    expect(hasPresence({ system: false })).toBe(false);
+    expect(hasPresence({ system: false, online: null })).toBe(false);
+    expect(hasPresence(null)).toBe(false);
+  });
+});
 
 describe('splitConversations', () => {
   test('active conversations go to active, inactive to archived', () => {

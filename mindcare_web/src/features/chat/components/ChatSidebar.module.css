@@ -1,5 +1,11 @@
 /* ---- sidebar panel ---- */
 .sidebar {
+  --chat-system-avatar-bg: var(--sand);
+  --chat-system-avatar-color: var(--coffee);
+  --chat-system-avatar-border: var(--nav-border);
+  --chat-presence-online: var(--success);
+  --chat-presence-offline: var(--text-light);
+
   background: var(--cream);
   border-right: 1px solid var(--nav-border);
   display: flex;
@@ -213,11 +219,11 @@
 }
 
 .presenceOnline {
-  background: var(--success);
+  background: var(--chat-presence-online);
 }
 
 .presenceOffline {
-  background: var(--text-light);
+  background: var(--chat-presence-offline);
 }
 
 /* system conversation использует ТОТ ЖЕ базовый стиль карточки и selected,
@@ -226,9 +232,9 @@
    Отдельного фона/подложки/selected у system-беседы нет (Stage 31u). */
 
 .avatarSystem {
-  background: var(--sand);
-  color: var(--coffee);
-  border: 1px solid var(--nav-border);
+  background: var(--chat-system-avatar-bg);
+  color: var(--chat-system-avatar-color);
+  border: 1px solid var(--chat-system-avatar-border);
 }
 
 /* Архивные (закрытые/read-only) диалоги — чуть приглушены, но selected у них
