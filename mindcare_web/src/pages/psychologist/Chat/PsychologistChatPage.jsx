@@ -24,12 +24,56 @@ function sameParamValue(value, queryValue) {
 
 function matchesStudentQuery(conv, studentQuery) {
   const student = conv.student ?? {};
+  const client = conv.client ?? {};
+  const user = conv.user ?? {};
+  const participant = conv.participant ?? {};
   return (
     sameParamValue(student.uuid, studentQuery) ||
     sameParamValue(student.id, studentQuery) ||
     sameParamValue(conv.student_uuid, studentQuery) ||
-    sameParamValue(conv.student_id, studentQuery)
+    sameParamValue(conv.student_id, studentQuery) ||
+    sameParamValue(conv.studentUuid, studentQuery) ||
+    sameParamValue(conv.studentId, studentQuery) ||
+    sameParamValue(client.uuid, studentQuery) ||
+    sameParamValue(client.id, studentQuery) ||
+    sameParamValue(conv.client_uuid, studentQuery) ||
+    sameParamValue(conv.client_id, studentQuery) ||
+    sameParamValue(conv.clientUuid, studentQuery) ||
+    sameParamValue(conv.clientId, studentQuery) ||
+    sameParamValue(user.uuid, studentQuery) ||
+    sameParamValue(user.id, studentQuery) ||
+    sameParamValue(conv.user_uuid, studentQuery) ||
+    sameParamValue(conv.user_id, studentQuery) ||
+    sameParamValue(conv.userUuid, studentQuery) ||
+    sameParamValue(conv.userId, studentQuery) ||
+    sameParamValue(participant.uuid, studentQuery) ||
+    sameParamValue(participant.id, studentQuery)
   );
+}
+
+function isSystemConversation(conv) {
+  return conv?.type === 'system' || conv?.system === true;
+}
+
+export function findConversationFromQuickChatQuery(
+  conversations,
+  { conversationId, studentId },
+) {
+  if (!Array.isArray(conversations)) return null;
+  const userConversations = conversations.filter((conv) => !isSystemConversation(conv));
+
+  if (conversationId) {
+    return userConversations.find((conv) => (
+      sameParamValue(conv.uuid, conversationId) ||
+      sameParamValue(conv.id, conversationId)
+    )) ?? null;
+  }
+
+  if (studentId) {
+    return userConversations.find((conv) => matchesStudentQuery(conv, studentId)) ?? null;
+  }
+
+  return null;
 }
 
 function toContact(conv) {
@@ -83,6 +127,7 @@ export default function PsychologistChatPage() {
   // VK-like: при входе ничего не выбрано и ничего не открыто (нет авто-mark-read).
   const [systemSelected, setSystemSelected] = useState(false);
   const [quickOpenError, setQuickOpenError] = useState('');
+  const [quickOpenTargetUuid, setQuickOpenTargetUuid] = useState(null);
 
   const queryConversation = searchParams.get('conversation');
   const queryStudent = searchParams.get('student');
@@ -111,19 +156,21 @@ export default function PsychologistChatPage() {
 
     if (listLoading) return;
 
-    const target = queryConversation
-      ? conversations.find((conv) => conv.uuid === queryConversation)
-      : conversations.find((conv) => matchesStudentQuery(conv, queryStudent));
+    const target = findConversationFromQuickChatQuery(conversations, {
+      conversationId: queryConversation,
+      studentId: queryStudent,
+    });
 
     if (target) {
       setQuickOpenError('');
       setSystemSelected(false);
-      selectConversation(target.uuid);
+      setQuickOpenTargetUuid(target.uuid);
+      if (selectedUuid !== target.uuid) selectConversation(target.uuid);
     } else {
+      setQuickOpenTargetUuid(null);
       setQuickOpenError('Диалог со студентом не найден.');
+      setSearchParams({}, { replace: true });
     }
-
-    setSearchParams({}, { replace: true });
   }, [
     conversations,
     hasQuickOpenQuery,
@@ -131,11 +178,19 @@ export default function PsychologistChatPage() {
     queryConversation,
     queryStudent,
     selectConversation,
+    selectedUuid,
     setSearchParams,
   ]);
 
+  useEffect(() => {
+    if (!quickOpenTargetUuid || selectedUuid !== quickOpenTargetUuid) return;
+    setQuickOpenTargetUuid(null);
+    setSearchParams({}, { replace: true });
+  }, [quickOpenTargetUuid, selectedUuid, setSearchParams]);
+
   const handleSelect = (id) => {
     setQuickOpenError('');
+    setQuickOpenTargetUuid(null);
     if (id === SYSTEM_DIALOG_ID) {
       setSystemSelected(true);
       return;

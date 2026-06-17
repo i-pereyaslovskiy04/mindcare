@@ -31,6 +31,7 @@ beforeEach(() => {
   useStudentCard.mockReturnValue({
     student: {
       student_id: 7,
+      student_uuid: 'student-uuid-7',
       full_name: 'Анна Смирнова',
       email: 'anna@example.test',
       assigned_at: '2026-01-10T10:00:00Z',
