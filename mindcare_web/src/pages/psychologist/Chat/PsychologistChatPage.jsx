@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Button from '../../../components/UI/Button/Button';
 import ChatSidebar from '../../../features/chat/components/ChatSidebar';
 import ChatWindow from '../../../features/chat/components/ChatWindow';
@@ -17,6 +18,20 @@ import styles from './PsychologistChatPage.module.css';
 const SYSTEM_META_POLL_MS = 30000;
 const SYSTEM_MSG_POLL_MS = 8000;
 
+function sameParamValue(value, queryValue) {
+  return value !== undefined && value !== null && String(value) === queryValue;
+}
+
+function matchesStudentQuery(conv, studentQuery) {
+  const student = conv.student ?? {};
+  return (
+    sameParamValue(student.uuid, studentQuery) ||
+    sameParamValue(student.id, studentQuery) ||
+    sameParamValue(conv.student_uuid, studentQuery) ||
+    sameParamValue(conv.student_id, studentQuery)
+  );
+}
+
 function toContact(conv) {
   const closed = conv.engagement_status !== 'active';
   return {
@@ -33,6 +48,7 @@ function toContact(conv) {
 }
 
 export default function PsychologistChatPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     conversations,
     listLoading,
@@ -66,6 +82,11 @@ export default function PsychologistChatPage() {
 
   // VK-like: при входе ничего не выбрано и ничего не открыто (нет авто-mark-read).
   const [systemSelected, setSystemSelected] = useState(false);
+  const [quickOpenError, setQuickOpenError] = useState('');
+
+  const queryConversation = searchParams.get('conversation');
+  const queryStudent = searchParams.get('student');
+  const hasQuickOpenQuery = Boolean(queryConversation || queryStudent);
 
   // Лёгкий poll метаданных системной беседы (unread в списке).
   useEffect(() => {
@@ -85,7 +106,36 @@ export default function PsychologistChatPage() {
     };
   }, [systemSelected, sysOpen, sysPollNew, sysClose]);
 
+  useEffect(() => {
+    if (!hasQuickOpenQuery) return;
+
+    if (listLoading) return;
+
+    const target = queryConversation
+      ? conversations.find((conv) => conv.uuid === queryConversation)
+      : conversations.find((conv) => matchesStudentQuery(conv, queryStudent));
+
+    if (target) {
+      setQuickOpenError('');
+      setSystemSelected(false);
+      selectConversation(target.uuid);
+    } else {
+      setQuickOpenError('Диалог со студентом не найден.');
+    }
+
+    setSearchParams({}, { replace: true });
+  }, [
+    conversations,
+    hasQuickOpenQuery,
+    listLoading,
+    queryConversation,
+    queryStudent,
+    selectConversation,
+    setSearchParams,
+  ]);
+
   const handleSelect = (id) => {
+    setQuickOpenError('');
     if (id === SYSTEM_DIALOG_ID) {
       setSystemSelected(true);
       return;
@@ -156,6 +206,7 @@ export default function PsychologistChatPage() {
       // Ничего не выбрано — нейтральный placeholder (VK-like), без mark-read.
       pane = (
         <div className={styles.paneState}>
+          {quickOpenError && <p className={styles.stateText}>{quickOpenError}</p>}
           <p className={styles.stateTitle}>Выберите диалог, чтобы открыть переписку.</p>
           <p className={styles.stateText}>Непрочитанные диалоги отмечены в списке слева.</p>
         </div>
