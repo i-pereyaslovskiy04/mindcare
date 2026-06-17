@@ -1,5 +1,6 @@
 import {
   deletePsychologistMessage,
+  downloadPsychologistAttachment,
   editPsychologistMessage,
   getPsychologistConversation,
   getPsychologistConversationMessages,
@@ -24,5 +25,6 @@ export function usePsychologistChat() {
     markConversationRead: markPsychologistConversationRead,
     getConversation: getPsychologistConversation,
     listErrorMessage: 'Не удалось загрузить список бесед.',
+    downloadAttachment: downloadPsychologistAttachment,
   });
 }

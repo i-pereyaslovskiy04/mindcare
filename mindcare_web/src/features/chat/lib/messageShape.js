@@ -12,6 +12,23 @@ export function formatTime(iso) {
   return new Date(iso).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
 }
 
+function normalizeAttachment(a) {
+  if (!a || typeof a !== 'object') return null;
+  return {
+    uuid: a.uuid ?? null,
+    originalFilename: a.original_filename ?? a.originalFilename ?? null,
+    mimeType: a.mime_type ?? a.mimeType ?? null,
+    fileSize: a.file_size ?? a.fileSize ?? null,
+    isImage: a.is_image ?? a.isImage ?? false,
+    createdAt: a.created_at ?? a.createdAt ?? null,
+  };
+}
+
+function normalizeAttachments(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(normalizeAttachment).filter(Boolean);
+}
+
 export function mapApiMessage(m) {
   return {
     id: m.id,
@@ -25,6 +42,7 @@ export function mapApiMessage(m) {
     readAt: m.read_at || null,
     editedAt: m.edited_at || null,
     deleted: m.is_deleted === true,
+    attachments: normalizeAttachments(m.attachments),
   };
 }
 

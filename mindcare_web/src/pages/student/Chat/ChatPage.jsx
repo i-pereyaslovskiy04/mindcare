@@ -51,6 +51,7 @@ export default function ChatPage() {
     send,
     editMessage,
     deleteMessage,
+    downloadAttachment,
   } = useStudentChat();
 
   const {
@@ -182,6 +183,7 @@ export default function ChatPage() {
           sending={sending}
           sendError={sendError}
           onBack={handleBack}
+          onDownloadAttachment={downloadAttachment}
         />
       );
     }

@@ -38,6 +38,7 @@ export function useChatCore({
   markConversationRead,
   getConversation,
   listErrorMessage,
+  downloadAttachment: apiDownloadAttachment = null,
 }) {
   const [conversations, setConversations]     = useState([]);
   const [listLoading, setListLoading]         = useState(true);
@@ -250,6 +251,19 @@ export function useChatCore({
     }
   }, [apiEditMessage, refreshConversationAfterConflict]);
 
+  // Скачать вложение текущей беседы (Stage 32d). Возвращает { blob, filename }.
+  // Ошибку пробрасывает наверх — компонент показывает её локально.
+  const downloadAttachment = useCallback(
+    async (attachment) => {
+      const uuid = selectedRef.current;
+      if (!uuid || !attachment?.uuid || !apiDownloadAttachment) {
+        throw new Error('Download unavailable');
+      }
+      return apiDownloadAttachment(uuid, attachment.uuid);
+    },
+    [apiDownloadAttachment],
+  );
+
   // DELETE → убирает сообщение из ленты без плейсхолдера; только при успехе.
   const deleteMessage = useCallback(async (messageUuid) => {
     const uuid = selectedRef.current;
@@ -288,5 +302,6 @@ export function useChatCore({
     send,
     editMessage,
     deleteMessage,
+    downloadAttachment,
   };
 }

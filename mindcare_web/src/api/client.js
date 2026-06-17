@@ -61,6 +61,29 @@ async function _parseError(res) {
   return err;
 }
 
+/**
+ * Скачивает ресурс как Blob с Auth-заголовком.
+ * Возвращает { blob, filename } — filename из Content-Disposition или null.
+ */
+export async function apiFetchBlob(url, options = {}) {
+  const token = _cfg.getToken?.();
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    window.dispatchEvent(new Event('auth:session-expired'));
+  }
+  if (!res.ok) throw await _parseError(res);
+  const blob = await res.blob();
+  let filename = null;
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename[^;=\n]*=['"]?([^'"\n;]+)['"]?/i);
+  if (m) filename = decodeURIComponent(m[1].trim());
+  return { blob, filename };
+}
+
 export async function apiFetch(url, options = {}) {
   const token = _cfg.getToken?.();
 

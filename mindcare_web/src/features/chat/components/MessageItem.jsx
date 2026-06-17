@@ -12,6 +12,7 @@ export default function MessageItem({
   manageable = false,
   onStartEdit = null,
   onRequestDelete = null,
+  onDownloadAttachment = null,
 }) {
   // Удалённое сообщение полностью скрыто из ленты (Stage 31y-hotfix): без bubble
   // и без плейсхолдера «Сообщение удалено». Defense-in-depth — MessageList и так
@@ -52,6 +53,8 @@ export default function MessageItem({
             time={message.time}
             editedAt={message.editedAt}
             readAt={message.readAt}
+            attachments={message.attachments || []}
+            onDownloadAttachment={onDownloadAttachment}
           />
           {canManage && (
             <MessageActionsMenu

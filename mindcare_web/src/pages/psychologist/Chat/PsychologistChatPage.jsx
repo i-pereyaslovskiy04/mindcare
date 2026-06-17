@@ -111,6 +111,7 @@ export default function PsychologistChatPage() {
     send,
     editMessage,
     deleteMessage,
+    downloadAttachment,
   } = usePsychologistChat();
 
   const {
@@ -291,6 +292,7 @@ export default function PsychologistChatPage() {
           sending={sending}
           sendError={sendError}
           onBack={handleBack}
+          onDownloadAttachment={downloadAttachment}
         />
       );
     }

@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, apiFetchBlob } from './client';
 
 /**
  * Chat API (student side, Stage 28d).
@@ -141,3 +141,17 @@ export const getSystemMessages = ({ limit, before, after } = {}) => {
 
 export const markSystemConversationRead = () =>
   apiFetch('/api/chat/system-conversation/read', { method: 'POST' });
+
+/**
+ * Скачивание вложений чата (Stage 32d).
+ * Возвращает { blob, filename } — filename из Content-Disposition или null.
+ */
+export const downloadStudentAttachment = (conversationUuid, attachmentUuid) =>
+  apiFetchBlob(
+    `/api/chat/student/conversations/${conversationUuid}/attachments/${attachmentUuid}/download`,
+  );
+
+export const downloadPsychologistAttachment = (conversationUuid, attachmentUuid) =>
+  apiFetchBlob(
+    `/api/chat/conversations/${conversationUuid}/attachments/${attachmentUuid}/download`,
+  );

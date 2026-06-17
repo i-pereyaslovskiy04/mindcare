@@ -227,6 +227,104 @@ test('menu Удалить calls onRequestDelete with the message', () => {
   expect(onRequestDelete).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'u1' }));
 });
 
+// ── Attachments in messages (Stage 32d) ──────────────────────────────────────
+
+beforeAll(() => {
+  global.URL.createObjectURL = jest.fn(() => 'blob:test');
+  global.URL.revokeObjectURL = jest.fn();
+});
+
+const docAtt = {
+  uuid: 'att-1',
+  originalFilename: 'файл.pdf',
+  mimeType: 'application/pdf',
+  fileSize: 2048,
+  isImage: false,
+};
+
+test('P1. message with text + attachment renders both', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: 'смотри вложение', mine: false, senderId: 7,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(
+    <MessageList messages={[msg]} contact={contact} onDownloadAttachment={jest.fn()} />,
+  );
+  expect(screen.getByText('смотри вложение')).toBeInTheDocument();
+  expect(screen.getByText('файл.pdf')).toBeInTheDocument();
+});
+
+test('P2. attachment-only message renders card without crashing', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: null, mine: false, senderId: 7,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(
+    <MessageList messages={[msg]} contact={contact} onDownloadAttachment={jest.fn()} />,
+  );
+  // Имя файла видно — карточка отрендерилась
+  expect(screen.getByText('файл.pdf')).toBeInTheDocument();
+  // Кнопка скачивания присутствует
+  expect(screen.getByRole('button', { name: /Скачать файл\.pdf/ })).toBeInTheDocument();
+});
+
+test('P3. outgoing message with attachment renders download button', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: 'держи', mine: true, senderId: 5,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(
+    <MessageList
+      messages={[msg]}
+      contact={contact}
+      manageable
+      onStartEdit={jest.fn()}
+      onDownloadAttachment={jest.fn()}
+    />,
+  );
+  expect(screen.getByRole('button', { name: /Скачать файл\.pdf/ })).toBeInTheDocument();
+});
+
+test('P4. incoming message with attachment renders download button', () => {
+  const msg = {
+    id: 1, uuid: 'u2', text: 'входящий', mine: false, senderId: 7,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(
+    <MessageList messages={[msg]} contact={contact} onDownloadAttachment={jest.fn()} />,
+  );
+  expect(screen.getByRole('button', { name: /Скачать файл\.pdf/ })).toBeInTheDocument();
+});
+
+test('P5. system message ignores attachments (no download button)', () => {
+  const msg = {
+    id: 1, text: 'Системное уведомление', system: true,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(
+    <MessageList
+      messages={[msg]}
+      contact={{ name: 'Системные', initials: '' }}
+      onDownloadAttachment={jest.fn()}
+    />,
+  );
+  // Текст системного сообщения есть
+  expect(screen.getByText('Системное уведомление')).toBeInTheDocument();
+  // Кнопка скачивания НЕ рендерится для system-сообщений
+  expect(screen.queryByRole('button', { name: /Скачать/ })).not.toBeInTheDocument();
+});
+
+test('P6. meta (time) still visible for message with attachment', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: 'текст', mine: false, senderId: 7,
+    time: '11:30', createdAt: A, attachments: [docAtt],
+  };
+  render(
+    <MessageList messages={[msg]} contact={contact} onDownloadAttachment={jest.fn()} />,
+  );
+  expect(screen.getByText('11:30')).toBeInTheDocument();
+});
+
 // Stage 31z-hotfix: kebab-меню остаётся sibling рядом с bubble (внутри
 // .bubbleRow), а не внутри самого bubble — bubble остаётся чисто
 // presentational и не содержит интерактивных элементов.

@@ -20,6 +20,7 @@ export default function MessageList({
   manageable = false,
   onStartEdit = null,
   onRequestDelete = null,
+  onDownloadAttachment = null,
 }) {
   const bottomRef = useRef(null);
 
@@ -59,6 +60,7 @@ export default function MessageList({
               manageable={manageable}
               onStartEdit={onStartEdit}
               onRequestDelete={onRequestDelete}
+              onDownloadAttachment={onDownloadAttachment}
             />
           </Fragment>
         );

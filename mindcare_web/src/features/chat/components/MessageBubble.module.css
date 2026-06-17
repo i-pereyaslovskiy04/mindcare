@@ -34,6 +34,13 @@
   background: var(--sand);
 }
 
+/* contentBlock: обёртка для сообщений с вложениями — занимает всю ширину строки,
+   вытесняя .meta на отдельную flex-строку ниже. */
+.contentBlock {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 .text {
   flex: 0 1 auto;
   min-width: 0;

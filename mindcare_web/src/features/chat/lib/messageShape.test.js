@@ -4,6 +4,124 @@ const T1 = '2024-01-01T10:00:00.000Z';
 const T2 = '2024-01-01T11:00:00.000Z';
 const T3 = '2024-01-01T12:00:00.000Z';
 
+// ── Attachments normalization (Stage 32d) ─────────────────────────────────────
+
+describe('mapApiMessage — attachments', () => {
+  const base = {
+    id: 10,
+    uuid: 'm-10',
+    content: 'привет',
+    is_mine: true,
+    sender_role: 'student',
+    sender_id: 9,
+    created_at: '2024-01-01T10:00:00.000Z',
+    read_at: null,
+    edited_at: null,
+  };
+
+  test('message without attachments → attachments: []', () => {
+    const out = mapApiMessage({ ...base });
+    expect(out.attachments).toEqual([]);
+  });
+
+  test('message with null attachments → attachments: []', () => {
+    const out = mapApiMessage({ ...base, attachments: null });
+    expect(out.attachments).toEqual([]);
+  });
+
+  test('normalizes one attachment (snake_case → camelCase)', () => {
+    const out = mapApiMessage({
+      ...base,
+      attachments: [
+        {
+          uuid: 'att-1',
+          original_filename: 'отчёт.pdf',
+          mime_type: 'application/pdf',
+          file_size: 153600,
+          is_image: false,
+          created_at: '2024-01-01T10:01:00.000Z',
+        },
+      ],
+    });
+    expect(out.attachments).toHaveLength(1);
+    expect(out.attachments[0]).toMatchObject({
+      uuid: 'att-1',
+      originalFilename: 'отчёт.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 153600,
+      isImage: false,
+    });
+  });
+
+  test('normalizes multiple attachments', () => {
+    const out = mapApiMessage({
+      ...base,
+      attachments: [
+        { uuid: 'a1', original_filename: 'a.pdf', mime_type: 'application/pdf', file_size: 1024, is_image: false, created_at: null },
+        { uuid: 'a2', original_filename: 'b.jpg', mime_type: 'image/jpeg', file_size: 2048, is_image: true, created_at: null },
+      ],
+    });
+    expect(out.attachments).toHaveLength(2);
+    expect(out.attachments[0].uuid).toBe('a1');
+    expect(out.attachments[1].isImage).toBe(true);
+  });
+
+  test('corrupted/null attachment entries are filtered out', () => {
+    const out = mapApiMessage({
+      ...base,
+      attachments: [null, { uuid: 'a1', original_filename: 'ok.pdf' }, undefined],
+    });
+    expect(out.attachments).toHaveLength(1);
+    expect(out.attachments[0].uuid).toBe('a1');
+  });
+});
+
+describe('mergeMessages — attachments preserved', () => {
+  const T1 = '2024-01-01T10:00:00.000Z';
+  const T2 = '2024-01-01T11:00:00.000Z';
+
+  test('mergeMessages preserves attachments in existing message', () => {
+    const att = { uuid: 'a1', originalFilename: 'doc.pdf', fileSize: 1024, isImage: false };
+    const existing = [{ id: 1, createdAt: T1, attachments: [att] }];
+    const incoming = [{ id: 2, createdAt: T2, attachments: [] }];
+    const out = mergeMessages(existing, incoming);
+    expect(out[0].attachments).toEqual([att]);
+  });
+
+  test('mergeMessages updates attachments from incoming', () => {
+    const newAtt = { uuid: 'a2', originalFilename: 'new.pdf', fileSize: 2048, isImage: false };
+    const existing = [{ id: 1, createdAt: T1, attachments: [] }];
+    const incoming = [{ id: 1, createdAt: T1, attachments: [newAtt] }];
+    const out = mergeMessages(existing, incoming);
+    expect(out[0].attachments).toEqual([newAtt]);
+  });
+});
+
+describe('reconcileMessagesSnapshot — attachments preserved', () => {
+  const t = (n) => `2024-01-01T10:0${n}:00.000Z`;
+  const att = { uuid: 'a1', originalFilename: 'doc.pdf', fileSize: 512, isImage: false };
+
+  test('reconcileMessagesSnapshot preserves attachments from snapshot', () => {
+    const current = [{ id: 1, createdAt: t(1), attachments: [] }];
+    const snapshot = [{ id: 1, createdAt: t(1), attachments: [att] }];
+    const result = reconcileMessagesSnapshot(current, snapshot);
+    expect(result[0].attachments).toEqual([att]);
+  });
+
+  test('reconcileMessagesSnapshot keeps attachments for history messages below window', () => {
+    const current = [
+      { id: 1, createdAt: t(1), attachments: [att] },
+      { id: 3, createdAt: t(3), attachments: [] },
+    ];
+    const snapshot = [{ id: 3, createdAt: t(3), attachments: [] }];
+    const result = reconcileMessagesSnapshot(current, snapshot);
+    const history = result.find((m) => m.id === 1);
+    expect(history.attachments).toEqual([att]);
+  });
+});
+
+// ── Original tests ─────────────────────────────────────────────────────────────
+
 describe('mapApiMessage', () => {
   test('keeps uuid and maps editedAt (Stage 31x)', () => {
     const out = mapApiMessage({

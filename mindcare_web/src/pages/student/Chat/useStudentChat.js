@@ -1,5 +1,6 @@
 import {
   deleteStudentMessage,
+  downloadStudentAttachment,
   editStudentMessage,
   getStudentConversationMessages,
   getStudentConversations,
@@ -25,5 +26,6 @@ export function useStudentChat() {
     markConversationRead: markStudentConversationRead,
     getConversation: null,
     listErrorMessage: 'Не удалось загрузить список диалогов.',
+    downloadAttachment: downloadStudentAttachment,
   });
 }

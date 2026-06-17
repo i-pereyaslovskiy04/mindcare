@@ -18,6 +18,7 @@ export default function ChatWindow({
   readOnlyNotice = null,
   emptyText,
   onBack = null,
+  onDownloadAttachment = null,
 }) {
   // editing = { uuid, text } редактируемого сообщения либо null.
   const [editing, setEditing] = useState(null);
@@ -84,6 +85,7 @@ export default function ChatWindow({
         manageable={canManageChat}
         onStartEdit={handleStartEdit}
         onRequestDelete={onDelete ? handleRequestDelete : null}
+        onDownloadAttachment={onDownloadAttachment}
       />
       {sendError && (
         <div className={styles.sendError} role="alert">

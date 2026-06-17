@@ -1,0 +1,121 @@
+/* AttachmentCard — компактная карточка вложения внутри bubble (Stage 32d). */
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  min-width: 0;
+  max-width: 280px;
+}
+
+/* Outgoing bubble: светлее фон карточки под тёмным фоном bubble */
+:global(.bubbleOutgoing) .card {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.fileIcon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--coffee);
+  opacity: 0.75;
+}
+
+:global(.bubbleOutgoing) .fileIcon {
+  color: var(--milk);
+  opacity: 0.8;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--espresso);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+:global(.bubbleOutgoing) .name {
+  color: var(--milk);
+}
+
+.size {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+:global(.bubbleOutgoing) .size {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.error {
+  font-size: 10.5px;
+  color: var(--error);
+  line-height: 1.2;
+}
+
+:global(.bubbleOutgoing) .error {
+  color: #ffb3b3;
+}
+
+.downloadBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  padding: 0;
+}
+
+.downloadBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.downloadBtn:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 1px;
+}
+
+.downloadBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+:global(.bubbleOutgoing) .downloadBtn {
+  color: var(--milk);
+}
+
+:global(.bubbleOutgoing) .downloadBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.loadingDots {
+  font-size: 14px;
+  line-height: 1;
+}
+
+@media (max-width: 900px) {
+  .card {
+    max-width: 220px;
+  }
+}
