@@ -1,4 +1,4 @@
-/* AttachmentCard — компактная карточка вложения внутри bubble (Stage 32d). */
+/* AttachmentCard — компактная карточка вложения внутри bubble (Stage 32d/32d-hotfix). */
 
 .card {
   display: flex;
@@ -11,9 +11,10 @@
   max-width: 280px;
 }
 
-/* Outgoing bubble: светлее фон карточки под тёмным фоном bubble */
-:global(.bubbleOutgoing) .card {
-  background: rgba(255, 255, 255, 0.15);
+/* Outgoing bubble: класс добавляется через prop (не :global — CSS Modules хэширует имя). */
+.cardOutgoing {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .fileIcon {
@@ -24,9 +25,9 @@
   opacity: 0.75;
 }
 
-:global(.bubbleOutgoing) .fileIcon {
+.cardOutgoing .fileIcon {
   color: var(--milk);
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .info {
@@ -47,7 +48,7 @@
   line-height: 1.3;
 }
 
-:global(.bubbleOutgoing) .name {
+.cardOutgoing .name {
   color: var(--milk);
 }
 
@@ -57,8 +58,8 @@
   line-height: 1.2;
 }
 
-:global(.bubbleOutgoing) .size {
-  color: rgba(255, 255, 255, 0.65);
+.cardOutgoing .size {
+  color: rgba(237, 228, 211, 0.72);
 }
 
 .error {
@@ -67,7 +68,7 @@
   line-height: 1.2;
 }
 
-:global(.bubbleOutgoing) .error {
+.cardOutgoing .error {
   color: #ffb3b3;
 }
 
@@ -101,12 +102,16 @@
   cursor: not-allowed;
 }
 
-:global(.bubbleOutgoing) .downloadBtn {
+.cardOutgoing .downloadBtn {
   color: var(--milk);
 }
 
-:global(.bubbleOutgoing) .downloadBtn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+.cardOutgoing .downloadBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cardOutgoing .downloadBtn:focus-visible {
+  outline-color: var(--milk);
 }
 
 .loadingDots {

@@ -164,3 +164,10 @@ test('attachment with missing fields does not crash', () => {
   // Показывает fallback "Файл"
   expect(screen.getByText('Файл')).toBeInTheDocument();
 });
+
+// Stage 32d-hotfix: outgoing variant — filename и кнопка скачивания доступны.
+test('outgoing prop: renders filename and download button in outgoing context', () => {
+  render(<AttachmentCard attachment={docAtt} onDownload={jest.fn()} outgoing />);
+  expect(screen.getByText('отчёт.pdf')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Скачать отчёт\.pdf/ })).toBeInTheDocument();
+});

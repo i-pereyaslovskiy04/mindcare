@@ -36,7 +36,7 @@ export default function MessageBubble({
         // contentBlock берёт всю ширину строки, вытесняя meta в отдельную строку.
         <div className={styles.contentBlock}>
           {text && <div className={styles.text}><LinkifiedText text={text} /></div>}
-          <AttachmentList attachments={attachments} onDownloadAttachment={onDownloadAttachment} />
+          <AttachmentList attachments={attachments} onDownloadAttachment={onDownloadAttachment} outgoing={isOutgoing} />
         </div>
       ) : (
         <div className={styles.text}>

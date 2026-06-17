@@ -34,7 +34,7 @@ export function triggerBlobDownload(blob, filename) {
  *   onDownload      — async (attachment) => { blob, filename }; null/undefined → disabled
  *   disabled        — дополнительный disable (например, нет onDownload)
  */
-export default function AttachmentCard({ attachment, onDownload, disabled = false }) {
+export default function AttachmentCard({ attachment, onDownload, disabled = false, outgoing = false }) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -58,7 +58,7 @@ export default function AttachmentCard({ attachment, onDownload, disabled = fals
   };
 
   return (
-    <div className={styles.card}>
+    <div className={`${styles.card} ${outgoing ? styles.cardOutgoing : ''}`}>
       <span className={styles.fileIcon} aria-hidden="true">
         <Icon name={attachment.isImage ? 'image' : 'file'} size={16} />
       </span>

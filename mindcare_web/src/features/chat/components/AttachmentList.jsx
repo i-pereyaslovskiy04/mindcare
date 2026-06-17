@@ -9,7 +9,7 @@ import styles from './AttachmentList.module.css';
  *   attachments           — массив нормализованных attachment-объектов
  *   onDownloadAttachment  — async (attachment) => { blob, filename } | null
  */
-export default function AttachmentList({ attachments, onDownloadAttachment }) {
+export default function AttachmentList({ attachments, onDownloadAttachment, outgoing = false }) {
   if (!attachments || attachments.length === 0) return null;
 
   return (
@@ -20,6 +20,7 @@ export default function AttachmentList({ attachments, onDownloadAttachment }) {
           attachment={att}
           onDownload={onDownloadAttachment}
           disabled={!onDownloadAttachment}
+          outgoing={outgoing}
         />
       ))}
     </div>
