@@ -466,8 +466,11 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
   явного клика (placeholder справа);
 - unread: глобальный nav badge (по числу диалогов) + per-dialog badge/маркер/bold/фон;
 - system conversation: всегда видна, **последняя** в списке, read-only, без composer;
-- live refresh: snapshot (limit=50) + `mergeMessages` — `read_at` обновляется без F5
-  в пределах последних 50 сообщений;
+- live refresh: snapshot polling (limit=50) + `reconcileMessagesSnapshot` (`pollNew`) —
+  `read_at` обновляется и удалённые сообщения синхронизируются без F5; сообщение,
+  удалённое участником A, исчезает у участника B после следующего polling tick (≤ 8 сек),
+  без плейсхолдера, без переоткрытия диалога; `mergeMessages` (add/update) сохранён;
+  MVP-ограничение: reconcile покрывает только последние 50 сообщений;
 - linkify http/https only (без `dangerouslySetInnerHTML`, `target=_blank rel=noopener noreferrer`);
 - read receipts ✓/✓✓ по `read_at`; online/offline точкой в списке и шапке (без last-seen-текста);
 - **действия со своим сообщением (Stage 31y):** меню «…» (`MessageActionsMenu`) вместо отдельной

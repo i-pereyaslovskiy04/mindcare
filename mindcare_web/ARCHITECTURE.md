@@ -557,6 +557,14 @@ shared UI. Не переносить в `src/components/UI` пока нет вт
 `MessageList` скрывает `deleted` сообщения из ленты — без какого-либо placeholder
 текста («Сообщение удалено» не используется и не должен использоваться).
 
+**Polling reconcile (Stage 31ab):** `pollNew` в `useStudentChat` и `usePsychologistChat`
+использует `reconcileMessagesSnapshot` (`lib/messageShape.js`) вместо `mergeMessages`.
+Функция синхронизирует локальный state со snapshot сервера (limit=50): удаляет из state
+сообщения, которые backend больше не возвращает (soft-deleted). Удалённое сообщение
+исчезает у собеседника после следующего polling tick (≤ 8 сек) без переоткрытия диалога.
+`mergeMessages` (add/update only) сохранён. MVP-ограничение: reconcile покрывает только
+последние 50 сообщений; история старше snapshot window — только при переоткрытии.
+
 **System messages:** отдельный `variant="system"` в `MessageBubble` — header
 «MindCare», текст слева, время внутри bubble, без меню действий, без «изменено»,
 без read receipts; никогда не считаются исходящими, даже если backend пришлёт

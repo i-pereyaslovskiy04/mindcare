@@ -318,7 +318,10 @@ npm run build
 - при входе в раздел диалог НЕ открывается автоматически (VK-like);
 - **mark-read только после явного клика** по диалогу (не на входе, не на hover);
 - unread: глобальный nav badge (по числу диалогов) + per-dialog badge/dot/bold/фон;
-- read receipts ✓/✓✓ по `read_at`; live refresh — snapshot `limit=50` + `mergeMessages`;
+- read receipts ✓/✓✓ по `read_at`; live refresh — snapshot polling (limit=50) +
+  `reconcileMessagesSnapshot` (`pollNew`): удалённые сообщения исчезают у собеседника
+  после следующего tick (≤ 8 сек), без переоткрытия диалога; `mergeMessages` (add/update)
+  сохранён;
 - linkify только http/https, **без `dangerouslySetInnerHTML`**, `rel="noopener noreferrer"`;
 - approximate presence (`peer_is_online`) — точка online/offline, без last-seen-текста;
 - mobile `≤900px` — list/thread, back-кнопка в шапке открытого чата;
@@ -361,6 +364,8 @@ npm run build
 - входящее сообщение → время внутри bubble, без read receipts;
 - system-сообщение → header «MindCare», текст слева, время внутри bubble, без меню действий;
 - редактирование через кебаб-меню → текст и пометка «изменено» обновляются на месте;
-- удаление через кебаб-меню + confirm → сообщение пропадает из ленты без плейсхолдера;
+- удаление через кебаб-меню + confirm (пользователь A) → у A сообщение пропадает немедленно;
+  у B сообщение пропадает после следующего polling tick (≤ 8 сек) без переоткрытия диалога;
+  placeholder «Сообщение удалено» не появляется ни у A, ни у B;
 - закрытая/архивная беседа → кебаб-меню действий не отображается;
 - mobile/узкий viewport → bubble + кебаб-меню не разваливают layout (нет overflow/обрезки).

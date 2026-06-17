@@ -903,6 +903,11 @@ Conventional Commits:
   meta (время/«изменено»/✓/✓✓) внутри bubble, компактно для коротких сообщений, с переносом
   вниз-направо для длинных (Telegram-style); system-сообщения всегда как bubble от «MindCare»,
   без меню действий, без «изменено», без read receipts
+- **Polling reconcile (Stage 31ab):** `reconcileMessagesSnapshot` в `pollNew` (student +
+  psychologist) — удалённое сообщение исчезает у собеседника после следующего polling tick
+  (≤ 8 сек) без переоткрытия диалога; без WebSocket/SSE; без placeholder; `mergeMessages`
+  сохранён (add/update); MVP-ограничение: reconcile только для последних 50 сообщений
+  (история старше snapshot window — при переоткрытии)
 - Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
 - **Mobile (Stage 30d):** Messenger `≤900px` — list/thread (back-кнопка в шапке чата);
   CabinetLayout `>980px` full sidebar / `601–980px` icon-rail / `≤600px` мобильный drawer
@@ -910,7 +915,9 @@ Conventional Commits:
   `.app`=`grid 1fr` (фикс пустого кабинета) и разгруженный topbar (скрыты bell/mail).
   Breakpoints разные по слоям: Messenger=900px, Cabinet=600px (+980 icon-rail) — не «выравнивать»
 - **Ограничения MVP** (не баги): presence приблизительный (порог 10 мин, не realtime);
-  read-receipt live только в snapshot `limit=50`; без WebSocket/SSE; drawer без focus-trap
+  read-receipt live только в snapshot `limit=50`; без WebSocket/SSE; drawer без focus-trap;
+  snapshot reconcile ограничен последними 50 сообщениями (история старше snapshot window
+  синхронизируется только при переоткрытии диалога)
 - **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,
   обязателен READ-ONLY design audit (см. `docs/BACKLOG.md`); учебная группа ≠
   автоматический чат. Не начинать group chat без отдельного этапа

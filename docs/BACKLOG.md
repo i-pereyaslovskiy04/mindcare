@@ -246,12 +246,21 @@
     system-сообщения никогда не считаются исходящими (даже при `mine=true` от
     backend) и никогда не показывают «изменено» (даже при наличии `editedAt`).
     Frontend-only; обновлены `MessageBubble.module.css`, `MessageList.test.jsx`
+  - ✅ Stage 31ab: **snapshot reconcile при polling** — `reconcileMessagesSnapshot`
+    в `pollNew` (student + psychologist): удалённое сообщение исчезает у собеседника
+    после следующего polling tick (≤ 8 сек) без переоткрытия диалога; без WebSocket/SSE;
+    без placeholder; backend/API/Alembic не менялись; `mergeMessages` (add/update)
+    сохранён. Тесты: `features/chat/lib/messageShape.test.js` (+10 тестов, 150 passed).
+    MVP-ограничение: reconcile покрывает только последние 50 сообщений (snapshot window
+    `limit=50`); история старше этой границы синхронизируется только при переоткрытии диалога.
   - **Ограничения Messenger MVP** (зафиксированы осознанно, не баги):
     - presence приблизительный — не realtime; порог 10 минут; зависит от
       `user_sessions.last_active` и debounce `touch_session` 300с;
     - read-receipt live-обновление только в пределах snapshot `limit=50`;
     - без WebSocket/SSE (polling 8s/30s);
-    - mobile drawer пока без focus-trap / `inert` фона
+    - mobile drawer пока без focus-trap / `inert` фона;
+    - snapshot reconcile при polling ограничен последними 50 сообщениями; история
+      старше snapshot window синхронизируется только при переоткрытии диалога
   - **Group chat — postponed / future:**
     - не входит в текущий Messenger MVP; **не начат и не проектируется** на этом этапе
     - текущий Messenger покрывает только student↔psychologist one-to-one chat и
@@ -270,9 +279,7 @@
     глубокий рефакторинг chat-модуля (split `storage.py`, общий `useChatThread`,
     shared `MessengerPageShell`) — см. Stage 31a audit; ручной browser smoke
     мобильного/узкого viewport для кебаб-меню + bubble (Stage 31z-hotfix, не проверен
-    в браузере); live-реконсиляция удаления для собеседника во время polling (сейчас
-    исчезновение чужого удалённого сообщения у собеседника видно только после
-    следующего poll/перезагрузки треда); общий параметризуемый hook для
+    в браузере); общий параметризуемый hook для
     student/psychologist chat flow (`useStudentChat.js`/`usePsychologistChat.js`
     структурно дублируются — см. read-only audit chat-компонентов); интеграционный
     тест полного edit-флоу через `ChatWindow` (сейчас edit покрыт точечно в
