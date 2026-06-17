@@ -33,7 +33,7 @@ deleted_at — soft delete; физическое удаление сообщен
 import uuid as _uuid
 
 from sqlalchemy import (
-    BigInteger, CheckConstraint, Column, DateTime, ForeignKey,
+    BigInteger, Boolean, CheckConstraint, Column, DateTime, ForeignKey,
     Index, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -151,3 +151,108 @@ class ChatMessage(Base):
 
     conversation = relationship("ChatConversation", back_populates="messages")
     sender       = relationship("User")
+    # Список вложений сообщения (Stage 32b). Lazy-load по умолчанию;
+    # в текущем _message_to_dict не используется — loadable явно в Stage 32c.
+    attachments  = relationship(
+        "ChatAttachment",
+        back_populates="message",
+        order_by="ChatAttachment.created_at",
+        primaryjoin="ChatMessage.id == foreign(ChatAttachment.message_id)",
+    )
+
+
+class ChatAttachment(Base):
+    """
+    Метаданные вложений чата (Stage 32b).
+
+    SECURITY NOTES:
+      - Файл в PostgreSQL не хранится — только metadata.
+      - original_filename используется ТОЛЬКО для Content-Disposition при
+        скачивании; путь к файлу строится из storage_key (UUID-based).
+        Path traversal невозможен архитектурно.
+      - Доступ к файлам проверяется через conversation_id/engagement при
+        каждом запросе (download endpoint, Stage 32c).
+      - Admin/supervisor не получают доступ к chat attachments (те же
+        ограничения, что и на chat content).
+      - deleted_at — soft delete; физические файлы не удаляются (retention).
+
+    message_id nullable:
+      Pre-upload window: файл загружается до создания сообщения.
+      После привязки message application-layer не допускает NULL
+      в бизнес-операциях, но схема остаётся nullable для безопасной
+      очистки orphan-записей (message_id IS NULL AND created_at < cutoff).
+
+    FK policy: RESTRICT для всех FK — safety-net против случайного
+      hard-delete chat-записей (в prod используется только soft delete).
+    """
+    __tablename__ = "chat_attachments"
+    __table_args__ = (
+        Index("ix_chat_attachments_conversation", "conversation_id"),
+        Index(
+            "ix_chat_attachments_message", "message_id",
+            postgresql_where=sa_text("message_id IS NOT NULL"),
+        ),
+        Index("ix_chat_attachments_uploader", "uploader_id"),
+        Index("ix_chat_attachments_created_at", "created_at"),
+    )
+
+    id               = Column(BigInteger, primary_key=True, autoincrement=True)
+    uuid             = Column(
+        UUID(as_uuid=True), unique=True, nullable=False, default=_uuid.uuid4
+    )
+
+    # Беседа всегда известна при upload (permission scope).
+    conversation_id  = Column(
+        Integer,
+        ForeignKey("chat_conversations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    # NULL пока message не создан (pre-upload window); привязывается при send.
+    message_id       = Column(
+        BigInteger,
+        ForeignKey("chat_messages.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    uploader_id      = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    # Метаданные файла
+    # original_filename — показывается пользователю; НЕ используется как путь FS.
+    original_filename = Column(String(500), nullable=False)
+    # storage_key — UUID-based относительный путь внутри CHAT_FILE_STORAGE_DIR.
+    # Пример: '2026/06/550e8400-e29b-41d4-a716-446655440000.pdf'
+    storage_key      = Column(String(1000), unique=True, nullable=False)
+    mime_type        = Column(String(100), nullable=False)
+    file_size        = Column(BigInteger, nullable=False)
+    # SHA-256 hex-дайджест; вычисляется при upload (Stage 32c).
+    # Nullable — чтобы DB-схема была полноценной до реализации upload.
+    checksum_sha256  = Column(String(64), nullable=True)
+
+    # 'local_private' (MVP) | 's3' (future)
+    storage_backend  = Column(
+        String(50), nullable=False, server_default="local_private"
+    )
+    # True — inline preview; False — скачать как файл.
+    is_image         = Column(
+        Boolean, nullable=False, server_default=sa_text("false")
+    )
+    # False в MVP; зарезервирован для at-rest шифрования файлов (Stage 32x+).
+    encrypted_at_rest = Column(
+        Boolean, nullable=False, server_default=sa_text("false")
+    )
+
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    conversation = relationship("ChatConversation")
+    message      = relationship(
+        "ChatMessage",
+        back_populates="attachments",
+        foreign_keys=[message_id],
+    )
+    uploader     = relationship("User")
