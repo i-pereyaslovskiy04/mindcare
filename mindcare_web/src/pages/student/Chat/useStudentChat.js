@@ -9,7 +9,7 @@ import {
 } from '../../../api/chat.api';
 import {
   mapApiMessage as mapMessage,
-  mergeMessages,
+  reconcileMessagesSnapshot,
 } from '../../../features/chat/lib/messageShape';
 import { notifyMessagesUpdated } from '../../../features/chat/lib/messagesEvents';
 
@@ -140,6 +140,8 @@ export function useStudentChat() {
     const uuid = selectedRef.current;
     if (!uuid || pollBusyRef.current) return;
     pollBusyRef.current = true;
+    // Фиксируем наибольший известный id ДО запроса: защита от race concurrent-send.
+    const knownMaxId = lastIdRef.current;
     try {
       const { items } = await getStudentConversationMessages(uuid, {
         limit: SNAPSHOT_LIMIT,
@@ -150,7 +152,9 @@ export function useStudentChat() {
         const lastId = mapped[mapped.length - 1].id;
         if (lastId > lastIdRef.current) lastIdRef.current = lastId;
       }
-      setMessages((prev) => mergeMessages(prev, mapped));
+      // reconcileMessagesSnapshot: удаляет из локального state сообщения, которых
+      // больше нет в snapshot (soft-deleted на сервере собеседником).
+      setMessages((prev) => reconcileMessagesSnapshot(prev, mapped, knownMaxId));
       if (mapped.some((m) => !m.mine && !m.readAt)) markReadSafe(uuid);
     } catch {
       // Разовая сетевая ошибка poll'а — без баннера, повтор по интервалу.

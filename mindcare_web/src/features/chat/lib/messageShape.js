@@ -91,3 +91,61 @@ export function mergeMessages(existing, incoming) {
     return a.id - b.id;
   });
 }
+
+/**
+ * Snapshot reconciliation: синхронизирует локальный список с полным server snapshot'ом
+ * и удаляет сообщения, которые backend больше не возвращает (soft-deleted).
+ *
+ * Безопасно ТОЛЬКО для polling с полным snapshot (не для partial/cursor pagination).
+ * Snapshot «окно» определяется как [minSnapshotId, maxSnapshotId]:
+ *   • id < minSnapshotId — история за пределами snapshot limit → сохраняется без изменений;
+ *   • id > maxSnapshotId AND id > knownMaxId — отправлено параллельно с in-flight запросом
+ *     (race), ещё не вошло в snapshot → сохраняется;
+ *   • всё остальное, отсутствующее в snapshot → soft-deleted → удаляется.
+ *
+ * knownMaxId — наибольший id, известный до начала API-вызова (lastIdRef.current).
+ * По умолчанию 0: все сообщения выше maxSnapshotId защищены — безопасный fallback
+ * для пустого state. При реальном polling всегда передавать lastIdRef.current.
+ *
+ * Известное ограничение MVP: сообщения ниже snapshot window (id < minSnapshotId,
+ * т.е. история старше SNAPSHOT_LIMIT) не reconcile-ятся — они были загружены через
+ * HISTORY_LIMIT и выходят за пределы snapshot. Полная синхронизация только при
+ * перезагрузке диалога.
+ */
+export function reconcileMessagesSnapshot(currentMessages, snapshotMessages, knownMaxId = 0) {
+  if (!snapshotMessages || snapshotMessages.length === 0) return currentMessages;
+
+  const snapshotById = new Map();
+  for (const m of snapshotMessages) snapshotById.set(m.id, m);
+
+  const ids = snapshotMessages.map((m) => m.id);
+  const minId = Math.min(...ids);
+  const maxId = Math.max(...ids);
+
+  const result = new Map();
+
+  for (const m of currentMessages) {
+    if (m.id < minId) {
+      // Ниже snapshot window (история за пределами limit) — сохраняем без изменений.
+      result.set(m.id, m);
+    } else if (m.id > maxId && m.id > knownMaxId) {
+      // Выше snapshot window И новее, чем было известно до начала запроса —
+      // отправлено параллельно с in-flight GET → сохраняем.
+      result.set(m.id, m);
+    }
+    // id в [minId, maxId] не в snapshot: soft-deleted → пропускаем.
+    // id > maxId но <= knownMaxId: было известно до запроса, не вернулось → deleted → пропускаем.
+  }
+
+  // Добавляем/обновляем все сообщения из snapshot (snapshot-данные приоритетнее).
+  for (const m of snapshotMessages) {
+    result.set(m.id, m);
+  }
+
+  return Array.from(result.values()).sort((a, b) => {
+    const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+    const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+    if (ta !== tb) return ta - tb;
+    return a.id - b.id;
+  });
+}

@@ -10,7 +10,7 @@ import {
 } from '../../../api/chat.api';
 import {
   mapApiMessage as mapMessage,
-  mergeMessages,
+  reconcileMessagesSnapshot,
 } from '../../../features/chat/lib/messageShape';
 import { notifyMessagesUpdated } from '../../../features/chat/lib/messagesEvents';
 
@@ -139,8 +139,11 @@ export function usePsychologistChat() {
     const uuid = selectedRef.current;
     if (!uuid || pollBusyRef.current) return;
     pollBusyRef.current = true;
+    // Фиксируем наибольший известный id ДО запроса: защита от race concurrent-send.
+    const knownMaxId = lastIdRef.current;
     try {
-      // Снапшот + merge: новые сообщения И обновление read_at уже загруженных.
+      // Snapshot reconciliation: новые сообщения, обновление read_at/editedAt,
+      // и удаление из локального state сообщений, удалённых собеседником.
       const { items } = await getPsychologistConversationMessages(uuid, {
         limit: SNAPSHOT_LIMIT,
       });
@@ -150,7 +153,7 @@ export function usePsychologistChat() {
         const lastId = mapped[mapped.length - 1].id;
         if (lastId > lastIdRef.current) lastIdRef.current = lastId;
       }
-      setMessages((prev) => mergeMessages(prev, mapped));
+      setMessages((prev) => reconcileMessagesSnapshot(prev, mapped, knownMaxId));
       if (mapped.some((m) => !m.mine && !m.readAt)) markReadSafe(uuid);
     } catch {
       // Разовая сетевая ошибка poll'а не должна показывать баннер — повтор через интервал.
