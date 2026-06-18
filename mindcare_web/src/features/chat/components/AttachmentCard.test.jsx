@@ -204,6 +204,119 @@ test('download click stops propagation to parent', () => {
   expect(parentSpy).not.toHaveBeenCalled();
 });
 
+// ── image preview (Stage 32i) ─────────────────────────────────────────────────
+
+const svgAtt = {
+  uuid: 'att-svg',
+  originalFilename: 'icon.svg',
+  mimeType: 'image/svg+xml',
+  fileSize: 1024,
+  isImage: false,
+  createdAt: '2024-01-01T10:00:00.000Z',
+};
+
+describe('image preview button visibility', () => {
+  test('image attachment shows preview button', () => {
+    render(<AttachmentCard attachment={imageAtt} onDownload={jest.fn()} />);
+    expect(screen.getByTestId('preview-btn')).toBeInTheDocument();
+  });
+
+  test('non-image (PDF) attachment does not show preview button', () => {
+    render(<AttachmentCard attachment={docAtt} onDownload={jest.fn()} />);
+    expect(screen.queryByTestId('preview-btn')).not.toBeInTheDocument();
+  });
+
+  test('SVG (mimeType image/svg+xml, isImage=false) does not show preview button', () => {
+    render(<AttachmentCard attachment={svgAtt} onDownload={jest.fn()} />);
+    expect(screen.queryByTestId('preview-btn')).not.toBeInTheDocument();
+  });
+
+  test('image without onDownload does not show preview button', () => {
+    render(<AttachmentCard attachment={imageAtt} />);
+    expect(screen.queryByTestId('preview-btn')).not.toBeInTheDocument();
+  });
+
+  test('preview button has type=button', () => {
+    render(<AttachmentCard attachment={imageAtt} onDownload={jest.fn()} />);
+    expect(screen.getByTestId('preview-btn')).toHaveAttribute('type', 'button');
+  });
+});
+
+describe('image preview interaction', () => {
+  beforeEach(() => {
+    global.URL.createObjectURL = jest.fn(() => 'blob:preview-url');
+    global.URL.revokeObjectURL = jest.fn();
+  });
+
+  test('preview click calls onDownload, not saveBlobToDisk', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['img'], { type: 'image/jpeg' }), filename: 'фото.jpg' });
+    render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    await waitFor(() => expect(onDownload).toHaveBeenCalledWith(imageAtt));
+    expect(saveBlobToDisk).not.toHaveBeenCalled();
+  });
+
+  test('preview click opens lightbox dialog', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['img']), filename: 'фото.jpg' });
+    render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('creates object URL after successful fetch', async () => {
+    const blob = new Blob(['img'], { type: 'image/jpeg' });
+    const onDownload = jest.fn().mockResolvedValue({ blob, filename: 'фото.jpg' });
+    render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledWith(blob));
+  });
+
+  test('shows error when fetch fails', async () => {
+    const onDownload = jest.fn().mockRejectedValue(new Error('Network error'));
+    render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    expect(await screen.findByText('Не удалось загрузить изображение.')).toBeInTheDocument();
+  });
+
+  test('preview click stops propagation to parent', () => {
+    const parentSpy = jest.fn();
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(), filename: null });
+    render(
+      <div role="presentation" onClick={parentSpy}>
+        <AttachmentCard attachment={imageAtt} onDownload={onDownload} />
+      </div>,
+    );
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    expect(parentSpy).not.toHaveBeenCalled();
+  });
+
+  test('download button still works when preview is not open', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(), filename: 'фото.jpg' });
+    render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByRole('button', { name: /Скачать фото\.jpg/ }));
+    await waitFor(() => expect(saveBlobToDisk).toHaveBeenCalled());
+  });
+
+  test('revokes object URL when lightbox is closed', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['img']), filename: 'фото.jpg' });
+    render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByTestId('lightbox-close'));
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-url'));
+  });
+
+  test('revokes object URL on unmount while lightbox is open', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['img']), filename: 'фото.jpg' });
+    const { unmount } = render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    // Wait for the blob fetch to complete and URL to be created before unmounting.
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-url');
+  });
+});
+
 // ── saveBlobToDisk integration — AbortError handling (Stage 32d-hotfix-b) ─────
 
 describe('save dialog cancel handling', () => {

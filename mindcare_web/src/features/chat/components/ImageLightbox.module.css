@@ -1,0 +1,85 @@
+/* ============================================================
+   ImageLightbox — полноэкранный просмотр изображений (Stage 32i).
+   position: fixed, z-index 9999 — поверх всего, включая чат и nav.
+   ============================================================ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeBtn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+  z-index: 1;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.closeBtn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Контейнер изображения — не реагирует на клик (stopPropagation). */
+.content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: calc(100vw - 80px);
+  max-height: calc(100vh - 80px);
+}
+
+.image {
+  max-width: 100%;
+  max-height: calc(100vh - 80px);
+  border-radius: 8px;
+  object-fit: contain;
+  display: block;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.status {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  text-align: center;
+  padding: 16px;
+}
+
+@media (max-width: 900px) {
+  .closeBtn {
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .content {
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 60px);
+  }
+
+  .image {
+    max-height: calc(100vh - 60px);
+    border-radius: 4px;
+  }
+}

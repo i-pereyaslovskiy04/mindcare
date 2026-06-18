@@ -72,6 +72,43 @@
   color: #ffb3b3;
 }
 
+.previewBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  padding: 0;
+}
+
+.previewBtn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.previewBtn:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 1px;
+}
+
+.cardOutgoing .previewBtn {
+  color: var(--milk);
+}
+
+.cardOutgoing .previewBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cardOutgoing .previewBtn:focus-visible {
+  outline-color: var(--milk);
+}
+
 .downloadBtn {
   flex-shrink: 0;
   display: flex;
