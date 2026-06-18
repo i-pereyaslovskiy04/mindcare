@@ -474,6 +474,36 @@ class TestDownload:
         )
         assert r.status_code == 404
 
+    @pytest.mark.parametrize("data,filename,mime_type", [
+        (
+            b"PK fake xlsx bytes",
+            "spreadsheet.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+        (
+            b"PK fake pptx bytes",
+            "presentation.pptx",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ),
+    ])
+    def test_office_mime_download_headers(self, client, att_dir, data, filename, mime_type):
+        """Office-файлы отдаются с Content-Disposition: attachment (не inline)."""
+        p      = _pair(client)
+        c_uuid = _create_conversation(client, p)
+        r_up = _upload_student(client, p["s_token"], c_uuid, data, filename, mime_type)
+        assert r_up.status_code == 201
+        att_uuid = r_up.json()["uuid"]
+        _send_student(client, p["s_token"], c_uuid, "см. документ", [att_uuid])
+        r = client.get(
+            f"/api/chat/student/conversations/{c_uuid}/attachments/{att_uuid}/download",
+            headers=_auth(p["s_token"]),
+        )
+        assert r.status_code == 200
+        cd = r.headers.get("content-disposition", "")
+        assert "attachment" in cd.lower(), f"Content-Disposition должен содержать 'attachment', получен: {cd!r}"
+        assert r.headers.get("x-content-type-options") == "nosniff"
+        assert r.headers.get("cache-control") == "private, no-store"
+
 
 # ─── 4. Regression: существующая функциональность не сломана ─────────────────
 

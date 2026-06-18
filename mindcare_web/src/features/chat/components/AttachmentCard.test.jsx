@@ -1,10 +1,17 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import AttachmentCard, { formatFileSize } from './AttachmentCard';
+import { saveBlobToDisk } from '../../../api/client';
 
-// Мок browser download API (jsdom не поддерживает createObjectURL/revokeObjectURL).
-beforeAll(() => {
-  global.URL.createObjectURL = jest.fn(() => 'blob:test-url');
-  global.URL.revokeObjectURL = jest.fn();
+// Мокируем saveBlobToDisk (тестируется отдельно в client.test.js).
+jest.mock('../../../api/client', () => ({
+  saveBlobToDisk: jest.fn(),
+}));
+
+beforeEach(() => {
+  // Реализация по умолчанию: вызывает fetchFn, чтобы onDownload тоже вызывался.
+  // Устанавливается в beforeEach (не в afterEach) — jest.restoreAllMocks/clearAllMocks
+  // может сбрасывать реализации standalone jest.fn() в некоторых версиях jest.
+  saveBlobToDisk.mockImplementation(async (fn) => { await fn(); });
 });
 
 afterEach(() => {
@@ -37,19 +44,20 @@ describe('formatFileSize', () => {
   });
 });
 
-// ── download trigger (через компонент) ───────────────────────────────────────
+// ── download trigger ──────────────────────────────────────────────────────────
 
-test('download trigger: createObjectURL called with blob, revokeObjectURL called after', async () => {
+test('download trigger: saveBlobToDisk called with fetchFn and display filename', async () => {
   const blob = new Blob(['pdf'], { type: 'application/pdf' });
   const onDownload = jest.fn().mockResolvedValue({ blob, filename: 'отчёт.pdf' });
-  const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
   render(<AttachmentCard attachment={docAtt} onDownload={onDownload} />);
   fireEvent.click(screen.getByRole('button', { name: /Скачать/ }));
 
-  await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledWith(blob));
-  await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalled());
-  clickSpy.mockRestore();
+  await waitFor(() => expect(saveBlobToDisk).toHaveBeenCalled());
+  expect(saveBlobToDisk).toHaveBeenCalledWith(
+    expect.any(Function),
+    docAtt.originalFilename,
+  );
 });
 
 // ── AttachmentCard ────────────────────────────────────────────────────────────
@@ -90,13 +98,11 @@ test('download button has accessible aria-label', () => {
 test('clicking download calls onDownload with the attachment', async () => {
   const blob = new Blob(['pdf'], { type: 'application/pdf' });
   const onDownload = jest.fn().mockResolvedValue({ blob, filename: 'отчёт.pdf' });
-  const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
   render(<AttachmentCard attachment={docAtt} onDownload={onDownload} />);
   fireEvent.click(screen.getByRole('button', { name: /Скачать/ }));
 
   await waitFor(() => expect(onDownload).toHaveBeenCalledWith(docAtt));
-  clickSpy.mockRestore();
 });
 
 test('button is disabled and download not called when disabled=true', () => {
@@ -165,9 +171,60 @@ test('attachment with missing fields does not crash', () => {
   expect(screen.getByText('Файл')).toBeInTheDocument();
 });
 
-// Stage 32d-hotfix: outgoing variant — filename и кнопка скачивания доступны.
 test('outgoing prop: renders filename and download button in outgoing context', () => {
   render(<AttachmentCard attachment={docAtt} onDownload={jest.fn()} outgoing />);
   expect(screen.getByText('отчёт.pdf')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Скачать отчёт\.pdf/ })).toBeInTheDocument();
+});
+
+// ── download safety (Stage 32d-hotfix-b) ─────────────────────────────────────
+
+test('download button has type=button (prevents form submit)', () => {
+  render(<AttachmentCard attachment={docAtt} onDownload={jest.fn()} />);
+  expect(screen.getByRole('button', { name: /Скачать/ })).toHaveAttribute('type', 'button');
+});
+
+test('download click calls preventDefault', () => {
+  const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(), filename: null });
+  render(<AttachmentCard attachment={docAtt} onDownload={onDownload} />);
+  const result = fireEvent.click(screen.getByRole('button', { name: /Скачать/ }));
+  // fireEvent returns false when preventDefault was called
+  expect(result).toBe(false);
+});
+
+test('download click stops propagation to parent', () => {
+  const parentSpy = jest.fn();
+  const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(), filename: null });
+  render(
+    <div role="presentation" onClick={parentSpy}>
+      <AttachmentCard attachment={docAtt} onDownload={onDownload} />
+    </div>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Скачать/ }));
+  expect(parentSpy).not.toHaveBeenCalled();
+});
+
+// ── saveBlobToDisk integration — AbortError handling (Stage 32d-hotfix-b) ─────
+
+describe('save dialog cancel handling', () => {
+  test('AbortError from saveBlobToDisk does not show error message', async () => {
+    saveBlobToDisk.mockRejectedValueOnce(new DOMException('Cancelled by user', 'AbortError'));
+
+    render(<AttachmentCard attachment={docAtt} onDownload={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Скачать/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Скачать/ })).not.toBeDisabled(),
+    );
+    expect(screen.queryByText('Не удалось скачать файл.')).not.toBeInTheDocument();
+  });
+
+  test('non-AbortError shows error message', async () => {
+    saveBlobToDisk.mockRejectedValueOnce(new Error('Write failed'));
+
+    render(<AttachmentCard attachment={docAtt} onDownload={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Скачать/ }));
+
+    expect(await screen.findByText('Не удалось скачать файл.')).toBeInTheDocument();
+  });
 });

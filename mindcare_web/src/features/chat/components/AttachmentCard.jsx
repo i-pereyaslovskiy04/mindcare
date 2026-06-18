@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { saveBlobToDisk } from '../../../api/client';
 import Icon from '../../../components/Icon/Icon';
 import styles from './AttachmentCard.module.css';
 
@@ -8,21 +9,6 @@ export function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/**
- * Инициирует браузерное скачивание Blob-файла.
- * Создаёт временный <a>, кликает и немедленно отзывает object URL.
- */
-export function triggerBlobDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 /**
@@ -42,16 +28,29 @@ export default function AttachmentCard({ attachment, onDownload, disabled = fals
   const displaySize = formatFileSize(attachment.fileSize);
   const isDisabled = disabled || !onDownload || downloading;
 
-  const handleDownload = async () => {
+  const handleDownload = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (isDisabled) return;
+
     setDownloading(true);
     setError(null);
+
+    // saveBlobToDisk вызывается без предшествующих await — user activation
+    // window сохраняется для showSaveFilePicker (Chromium primary path).
     try {
-      const { blob, filename } = await onDownload(attachment);
-      const name = filename || displayName;
-      triggerBlobDownload(blob, name);
-    } catch {
-      setError('Не удалось скачать файл.');
+      await saveBlobToDisk(
+        async () => {
+          const { blob } = await onDownload(attachment);
+          return blob;
+        },
+        displayName,
+      );
+    } catch (err) {
+      // AbortError = пользователь отменил save-диалог; не ошибка.
+      if (err?.name !== 'AbortError') {
+        setError('Не удалось скачать файл.');
+      }
     } finally {
       setDownloading(false);
     }
