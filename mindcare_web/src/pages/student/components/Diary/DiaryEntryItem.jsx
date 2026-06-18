@@ -20,27 +20,34 @@ function getMoodColor(v) {
   return 'var(--success)';
 }
 
-export default function DiaryEntryItem({ entry }) {
-  const { date, mood, emotions, note } = entry;
+function getEmotionLabel(key, catalog) {
+  const found = catalog.find((e) => e.key === key);
+  return found ? found.label : key;
+}
+
+export default function DiaryEntryItem({ entry, emotionCatalog = [] }) {
+  const { entry_date, mood_score, emotions, entry_text } = entry;
 
   return (
     <div className={styles.item}>
       <div className={styles.top}>
-        <span className={styles.date}>{formatDate(date)}</span>
-        <span className={styles.moodBadge} style={{ color: getMoodColor(mood) }}>
-          {mood}/10 · {MOOD_WORDS[mood]}
+        <span className={styles.date}>{formatDate(entry_date)}</span>
+        <span className={styles.moodBadge} style={{ color: getMoodColor(mood_score) }}>
+          {mood_score}/10 · {MOOD_WORDS[mood_score]}
         </span>
       </div>
 
-      {emotions.length > 0 && (
+      {emotions && emotions.length > 0 && (
         <div className={styles.emotionRow}>
-          {emotions.map((em) => (
-            <span key={em} className={styles.emotionTag}>{em}</span>
+          {emotions.map((key) => (
+            <span key={key} className={styles.emotionTag}>
+              {getEmotionLabel(key, emotionCatalog)}
+            </span>
           ))}
         </div>
       )}
 
-      {note && <p className={styles.note}>{note}</p>}
+      {entry_text && <p className={styles.note}>{entry_text}</p>}
     </div>
   );
 }

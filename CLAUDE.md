@@ -19,9 +19,10 @@
 - Все данные пользователей хранятся на серверах в РФ
 - Согласие на обработку ПДн фиксируется в `consent_records` при регистрации
 - Перед каждым тестом и записью на консультацию проверяется актуальность согласия
-- Заметки сессий (`session_notes`) и сообщения чата (`chat_messages.content`) шифруются
+- Заметки сессий (`session_notes`), сообщения чата (`chat_messages.content`) и данные
+  дневника (`diary_entries.mood_score_enc / entry_text_enc / emotions_enc`) шифруются
   на уровне приложения: Fernet, `enc:v1:` prefix, `app/core/encryption.py`;
-  не сохранять и не логировать plaintext `content`
+  не сохранять и не логировать plaintext content
 - IP-адреса анонимизируются через 90 дней (`anonymize_old_ips()` в БД)
 
 **Монорепо с двумя проектами:**
@@ -172,8 +173,8 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **488 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
+Всего: **534 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Frontend после Stage Diary Frontend Integration: **36 suites / 395 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -207,6 +208,7 @@ Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 
 | `tests/integration/test_chat_attachment_models.py` | constraints chat_attachments (Stage 32b) — 20 |
 | `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
 | `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
+| `tests/integration/test_diary_api.py` | Diary API: CRUD сегодняшней записи, история, summary, encrypted-at-rest, student-only 403 — 46 |
 
 ---
 
@@ -243,7 +245,7 @@ mindcare_api/
 │   │   ├── session.py       — engine, SessionLocal
 │   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
 │   │   ├── seed.py          — идемпотентный seed
-│   │   └── models/          — ORM-модели (12 модулей, 49 таблиц; chat.py — Stage 28b/32b)
+│   │   └── models/          — ORM-модели (13 модулей, 51 таблица; chat.py — Stage 28b/32b; diary.py — Diary)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
@@ -287,6 +289,9 @@ mindcare_api/
 │   │   ├── service.py       — бизнес-логика
 │   │   └── storage.py       — _article_to_dict, _sync_categories, _sync_tags
 │   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
+│   ├── diary/               — /api/diary/* Дневник студента: одна запись в день,
+│   │                          mood_score_enc/entry_text_enc/emotions_enc encrypted-at-rest,
+│   │                          справочник эмоций diary_emotions (сидирован); только student
 │   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
 │   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
 │   │                          system_publisher (idempotency event_key); attachments:
@@ -394,13 +399,25 @@ mindcare_api/
 ❌ Не хранить физический файл чата в PostgreSQL (даже как bytea/blob)
 ❌ Не писать, что реализованы MIME magic bytes (`python-magic`), antivirus/ClamAV,
    Office/TXT preview, thumbnails, PDF.js, S3/MinIO или at-rest encryption физических файлов
+✅ Diary content (mood_score, entry_text, selected emotions) хранится encrypted-at-rest
+   через enc:v1: в diary_entries.mood_score_enc / entry_text_enc / emotions_enc
+✅ Diary API (GET /api/diary/emotions, GET/PUT /api/diary/today, GET /api/diary/entries,
+   GET /api/diary/summary) только для role=student — остальные роли получают 403
+✅ Справочник эмоций diary_emotions хранится в БД (не hardcoded на фронте);
+   фронт получает [{key, label, sort_order}] через GET /api/diary/emotions
+✅ date policy MVP: backend использует date.today() без timezone; сервер должен быть Moscow UTC+3
+❌ Не логировать entry_text, decrypted mood_score, selected emotions из дневника
+❌ Не давать psychologist/supervisor/admin доступ к diary content без compliance-этапа
+❌ Не смешивать diary с session_notes — разные таблицы, разные маршруты, разная цель
+❌ Не хранить selected emotions пользователя как FK в отдельной связующей таблице —
+   только encrypted JSON в diary_entries.emotions_enc
 ```
 
 ---
 
 ### База данных: схема
 
-49 таблиц в 12 модулях. Схема управляется через Alembic.
+51 таблица в 13 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -420,7 +437,8 @@ mindcare_api/
 | `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
 | `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) |
 | `f7e9c2a4b8d1` | add_chat_message_edited_at: chat_messages.edited_at (Stage 31z) |
-| `a9b3e1f7c2d4` | add_chat_attachments: chat_attachments table + FK (Stage 32b) — **head** |
+| `a9b3e1f7c2d4` | add_chat_attachments: chat_attachments table + FK (Stage 32b) |
+| `b2e4d7f1a9c3` | add_diary_tables: diary_emotions (catalog), diary_entries (partial UNIQUE active per student+date) — **head** |
 
 **Ключевые таблицы:**
 
@@ -441,6 +459,8 @@ mindcare_api/
 | `categories`, `article_categories`, `test_categories` | Типы материалов/категории. В MVP плоские: `parent_id` не используется в Admin CRUD |
 | `tags`, `article_tags`, `news_tags`, `test_tags` | Темы/теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
 | `auth_log`, `audit_log`, `data_change_log` | Аудит. В prod могут быть партиционированы по месяцам |
+| `diary_emotions` | Справочник эмоций дневника: 10 записей, seed при старте; key, label, sort_order, is_active |
+| `diary_entries` | Дневник студента: одна активная запись в день (partial UNIQUE по student_id + entry_date WHERE NOT deleted); mood_score_enc, entry_text_enc, emotions_enc — Fernet encrypted; только student |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
 > **Партиционирование audit-таблиц:** `auth_log`/`audit_log`/`data_change_log`
@@ -475,6 +495,8 @@ mindcare_web/src/
 │   ├── news.api.js     — normalizeNewsItem() экспортируется для переиспользования
 │   ├── articles.api.js — /api/articles/* + /api/admin/articles/* + categories
 │   ├── materials.api.js — реэкспорт getArticles/getArticleById из articles.api.js
+│   ├── diary.api.js    — /api/diary/* (getDiaryEmotions, getTodayDiaryEntry, saveTodayDiaryEntry,
+│   │                     getDiaryEntries, getDiarySummary)
 │   └── appointments.api.js
 ├── features/           — бизнес-логика по доменам
 │   ├── auth/           — AuthContext, LoginForm, RegisterForm, forgot-password
@@ -765,6 +787,11 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/chat/student/conversations/{uuid}/attachments/{att_uuid}/download` | Student | ✅ |
 | POST | `/api/chat/conversations/{uuid}/attachments` | Psychologist | ✅ |
 | GET | `/api/chat/conversations/{uuid}/attachments/{att_uuid}/download` | Psychologist | ✅ |
+| GET | `/api/diary/emotions` | Student | ✅ |
+| GET | `/api/diary/today` | Student | ✅ |
+| PUT | `/api/diary/today` | Student | ✅ |
+| GET | `/api/diary/entries` | Student | ✅ |
+| GET | `/api/diary/summary` | Student | ✅ |
 
 ## Соглашения по коду
 
@@ -928,9 +955,12 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
-**Student diary/tasks/calendar — accepted demo/mock (НЕ баг):**
-- `/student/diary`, `/student/tasks`, `/student/calendar` работают на hardcoded
-  mock-данных — это осознанная демо-витрина до отдельных этапов
+**Student tasks/calendar — accepted demo/mock (НЕ баг):**
+- `/student/tasks` и `/student/calendar` работают на hardcoded mock-данных —
+  это осознанная демо-витрина до отдельных этапов
+- **`/student/diary` подключён к real API** (Stage Diary Frontend Integration):
+  одна запись в день, mood score 1–10, текст, эмоции из справочника, история записей,
+  summary-график на StudentHome; backend encrypted-at-rest; мок-данные удалены
 - `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
   единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read

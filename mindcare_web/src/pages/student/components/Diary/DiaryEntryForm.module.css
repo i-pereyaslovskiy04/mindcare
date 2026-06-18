@@ -126,3 +126,22 @@
   background: var(--success);
   transform: none;
 }
+
+.moodHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+}
+
+.saveError {
+  font-size: 13px;
+  color: var(--error);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--error);
+}

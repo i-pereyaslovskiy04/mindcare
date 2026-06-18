@@ -67,3 +67,40 @@
     position: static;
   }
 }
+
+.loadingMsg {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 40px 0;
+  text-align: center;
+}
+
+.errorBlock {
+  padding: 40px 0;
+  text-align: center;
+}
+
+.errorMsg {
+  font-size: 14px;
+  color: var(--error);
+  margin-bottom: 12px;
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--coffee);
+  transition: background 0.15s;
+}
+
+.retryBtn:hover {
+  background: var(--cream);
+}

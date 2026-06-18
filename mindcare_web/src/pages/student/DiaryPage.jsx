@@ -1,39 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MoodSelector from './components/Diary/MoodSelector';
 import DiaryEntryForm from './components/Diary/DiaryEntryForm';
 import DiaryHistoryList from './components/Diary/DiaryHistoryList';
+import * as diaryApi from '../../api/diary.api';
 import styles from './DiaryPage.module.css';
-
-const MOCK_ENTRIES = [
-  {
-    id: 1,
-    date: '2026-05-03',
-    mood: 7,
-    emotions: ['спокойно', 'сосредоточенно'],
-    note: 'Сегодня удалось поработать в тишине. Чувствую прогресс.',
-  },
-  {
-    id: 2,
-    date: '2026-05-02',
-    mood: 5,
-    emotions: ['тревожно', 'устало'],
-    note: 'Было много задач, не успевала. Ощущение усталости к вечеру.',
-  },
-  {
-    id: 3,
-    date: '2026-04-30',
-    mood: 8,
-    emotions: ['радостно', 'легко'],
-    note: 'Встреча с подругой подняла настроение. День прошёл хорошо.',
-  },
-  {
-    id: 4,
-    date: '2026-04-29',
-    mood: 4,
-    emotions: ['грустно'],
-    note: '',
-  },
-];
 
 function formatTodayLabel() {
   return new Date().toLocaleDateString('ru-RU', {
@@ -44,18 +14,73 @@ function formatTodayLabel() {
 }
 
 export default function DiaryPage() {
-  const [mood, setMood] = useState(6);
-  const [entries, setEntries] = useState(MOCK_ENTRIES);
+  const [emotions, setEmotions] = useState([]);
+  const [entries, setEntries] = useState([]);
 
-  function handleSave({ note, emotions }) {
-    const newEntry = {
-      id: Date.now(),
-      date: new Date().toISOString().slice(0, 10),
-      mood,
-      emotions,
-      note,
-    };
-    setEntries((prev) => [newEntry, ...prev]);
+  // Controlled form state — synced from today API on initial load and after save
+  const [mood, setMood] = useState(null);
+  const [text, setText] = useState('');
+  const [selectedEmotions, setSelectedEmotions] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+
+  async function loadAll() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [emotionsData, todayData, entriesData] = await Promise.all([
+        diaryApi.getDiaryEmotions(),
+        diaryApi.getTodayDiaryEntry(),
+        diaryApi.getDiaryEntries({ limit: 10, offset: 0 }),
+      ]);
+      setEmotions(emotionsData ?? []);
+      setMood(todayData.mood_score);
+      setText(todayData.entry_text ?? '');
+      setSelectedEmotions(todayData.emotions ?? []);
+      setEntries(entriesData.items ?? []);
+    } catch (err) {
+      setLoadError(err.message || 'Не удалось загрузить дневник.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleEmotionToggle(key) {
+    setSelectedEmotions((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const saved = await diaryApi.saveTodayDiaryEntry({
+        mood_score: mood,
+        entry_text: text,
+        emotions: selectedEmotions,
+      });
+      setMood(saved.mood_score);
+      setText(saved.entry_text ?? '');
+      setSelectedEmotions(saved.emotions ?? []);
+      const entriesData = await diaryApi.getDiaryEntries({ limit: 10, offset: 0 });
+      setEntries(entriesData.items ?? []);
+      setShowSaved(true);
+      setTimeout(() => setShowSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err.message || 'Не удалось сохранить запись.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -69,15 +94,37 @@ export default function DiaryPage() {
         и работать с ними вместе с психологом.
       </p>
 
-      <div className={styles.layout}>
-        <div className={styles.formCol}>
-          <MoodSelector value={mood} onChange={setMood} />
-          <DiaryEntryForm onSave={handleSave} />
+      {loading ? (
+        <p className={styles.loadingMsg}>Загружается…</p>
+      ) : loadError ? (
+        <div className={styles.errorBlock}>
+          <p className={styles.errorMsg}>{loadError}</p>
+          <button type="button" className={styles.retryBtn} onClick={loadAll}>
+            Повторить
+          </button>
         </div>
-        <div className={styles.historyCol}>
-          <DiaryHistoryList entries={entries} />
+      ) : (
+        <div className={styles.layout}>
+          <div className={styles.formCol}>
+            <MoodSelector value={mood} onChange={setMood} />
+            <DiaryEntryForm
+              emotions={emotions}
+              text={text}
+              onTextChange={setText}
+              selectedEmotions={selectedEmotions}
+              onEmotionToggle={handleEmotionToggle}
+              moodSelected={mood !== null}
+              saving={saving}
+              showSaved={showSaved}
+              saveError={saveError}
+              onSave={handleSave}
+            />
+          </div>
+          <div className={styles.historyCol}>
+            <DiaryHistoryList entries={entries} emotionCatalog={emotions} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

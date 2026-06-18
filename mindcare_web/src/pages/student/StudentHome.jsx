@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
+import { getDiarySummary } from '../../api/diary.api';
 import MoodChart from './components/MoodChart/MoodChart';
 import StatCard from './components/StatCard/StatCard';
 import Icon from '../../components/Icon/Icon';
@@ -9,21 +10,6 @@ import styles from './StudentHome.module.css';
 const MOOD_WORDS = [
   '', 'Очень тяжело', 'Тяжело', 'Грустно', 'Так себе',
   'Нейтрально', 'Спокойно', 'Хорошо', 'Светло', 'Радостно', 'Прекрасно',
-];
-
-const CHART_DATA_14D = [
-  { l: 'Пн', v: 5 }, { l: 'Вт', v: 4 }, { l: 'Ср', v: 6 }, { l: 'Чт', v: 5 },
-  { l: 'Пт', v: 7 }, { l: 'Сб', v: 8 }, { l: 'Вс', v: 6 }, { l: 'Пн', v: 7 },
-  { l: 'Вт', v: 5 }, { l: 'Ср', v: 6 }, { l: 'Чт', v: 7 }, { l: 'Пт', v: 8 },
-  { l: 'Сб', v: 7 },
-];
-const CHART_DATA_MONTH = [
-  { l: 'Нед 1', v: 5 }, { l: 'Нед 2', v: 6 }, { l: 'Нед 3', v: 7 }, { l: 'Нед 4', v: 6 },
-];
-const CHART_DATA_YEAR = [
-  { l: 'Янв', v: 4 }, { l: 'Фев', v: 5 }, { l: 'Мар', v: 6 }, { l: 'Апр', v: 7 },
-  { l: 'Май', v: 6 }, { l: 'Июн', v: 7 }, { l: 'Июл', v: 8 }, { l: 'Авг', v: 7 },
-  { l: 'Сен', v: 6 }, { l: 'Окт', v: 5 }, { l: 'Ноя', v: 6 }, { l: 'Дек', v: 7 },
 ];
 
 const MOOD_PERIODS = [
@@ -57,13 +43,26 @@ export default function StudentHome() {
   const navigate = useNavigate();
   const [moodValue, setMoodValue] = useState(7);
   const [activePeriod, setActivePeriod] = useState('14d');
-
-  const chartData = activePeriod === '14d'
-    ? [...CHART_DATA_14D, { l: 'Сегодня', v: moodValue }]
-    : activePeriod === 'month'
-      ? CHART_DATA_MONTH
-      : CHART_DATA_YEAR;
+  const [chartData, setChartData] = useState([]);
+  const [entriesCount, setEntriesCount] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const todayLabel = formatTodayLabel();
+
+  useEffect(() => {
+    setSummaryLoading(true);
+    getDiarySummary(activePeriod)
+      .then((data) => {
+        setChartData(
+          (data.points || []).map((p) => ({ l: p.label, v: p.mood_score }))
+        );
+        setEntriesCount(data.entries_count ?? null);
+      })
+      .catch(() => {
+        setChartData([]);
+        setEntriesCount(null);
+      })
+      .finally(() => setSummaryLoading(false));
+  }, [activePeriod]);
 
   return (
     <div className={styles.page}>
@@ -79,7 +78,7 @@ export default function StudentHome() {
       {/* ---- mood + session row ---- */}
       <div className={`${styles.grid} ${styles.g21}`} style={{ marginBottom: 18 }}>
 
-        {/* dark mood card */}
+        {/* dark mood card — visual preview only, navigate to diary to save */}
         <div className={styles.moodCard}>
           <div className={styles.moodCardTop}>
             <div>
@@ -153,7 +152,12 @@ export default function StudentHome() {
       {/* ---- stat tiles ---- */}
       <div className={`${styles.grid} ${styles.g3}`} style={{ marginBottom: 24 }}>
         <StatCard label="Тревожность" value="3.2" unit="/10" trend="↓ 18% за неделю" />
-        <StatCard label="Записей в дневнике" value="12" unit="за месяц" trend="↑ постоянство растёт" />
+        <StatCard
+          label="Записей в дневнике"
+          value={entriesCount !== null ? String(entriesCount) : '—'}
+          unit="за период"
+          trend="↑ постоянство растёт"
+        />
         <StatCard label="Сон" value="7.4" unit="часа" trend="↓ 0.6ч от нормы" trendDown />
       </div>
 
@@ -176,7 +180,7 @@ export default function StudentHome() {
               ))}
             </div>
           </div>
-          <MoodChart data={chartData} height={160} />
+          <MoodChart data={summaryLoading ? [] : chartData} height={160} />
         </div>
 
         <div className={styles.card}>

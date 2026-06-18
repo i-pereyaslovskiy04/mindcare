@@ -50,7 +50,7 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **488 passed**.
+Текущий ожидаемый статус: **534 passed**.
 
 ### Alembic
 
@@ -252,13 +252,13 @@ backend обязан отклонять (роль не меняется). `conse
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
 | **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | backend full suite: 488 passed; chat attachments covered by chat_attachment_models (20), chat_attachment_api (37), chat_attachment_edit (18) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | backend full suite: 534 passed; diary covered by test_diary_api (46); chat attachments: chat_attachment_models (20), chat_attachment_api (37), chat_attachment_edit (18) |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **488 passed** (`.\test.ps1`).
+Итого backend: **534 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **33 suites / 369 tests** (после Stage 32i/32j Image/PDF Preview Lightbox) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **36 suites / 395 tests** (после Stage Diary Frontend Integration) —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —
@@ -459,3 +459,49 @@ npm run build
   placeholder «Сообщение удалено» не появляется ни у A, ни у B;
 - закрытая/архивная беседа → кебаб-меню действий не отображается;
 - mobile/узкий viewport → bubble + кебаб-меню не разваливают layout (нет overflow/обрезки).
+
+---
+
+## 13. Student Diary checklist
+
+Применять при любых изменениях `/student/diary`, `app/diary/` или `diary_entries`/`diary_emotions`.
+
+**Backend (automated — `tests/integration/test_diary_api.py`):**
+
+- Alembic migration `b2e4d7f1a9c3` применена — `diary_emotions` и `diary_entries` существуют;
+- `GET /api/diary/emotions` возвращает список `{key, label, sort_order}` (10 записей из seed);
+- `GET /api/diary/today` — 200 для student; если записи нет — пустой объект или null;
+- `PUT /api/diary/today` — создаёт или обновляет запись; идемпотентно;
+- `GET /api/diary/entries` — пагинация, формат `{items, total, limit, offset}`;
+- `GET /api/diary/summary` — поддерживает `period=14d`, `month`, `year`;
+- Все `/api/diary/*` — **403 для psychologist, supervisor, admin** (student-only);
+- `diary_entries.mood_score_enc`, `entry_text_enc`, `emotions_enc` — хранятся с prefix `enc:v1:`;
+- Decrypt-on-read — возвращает plaintext; encrypt-on-write — принимает plaintext;
+- Partial unique index: не более одной активной записи на `student_id + entry_date`.
+
+**Security rules (НЕ нарушать):**
+
+- entry_text, mood_score, selected emotions — **не логировать** (ни в stdout, ни в audit);
+- diary content — **только student** — 403 для всех остальных ролей;
+- не смешивать с `session_notes` и `chat_messages`;
+- selected emotions — только encrypted JSON в `emotions_enc`, не FK-таблица.
+
+**Frontend (automated):**
+
+- `DiaryPage.smoke.test.jsx` (11 тестов): API calls on mount, emotion chips из справочника,
+  null mood state, save, history, fallback для unknown emotion key, error states, disabled button;
+- `StudentHome.smoke.test.jsx` (7 тестов): summary API период 14d/month/year, empty state;
+- `MoodChart.test.jsx` (8 тестов): empty data, all-null, mixed, single point, null in middle.
+
+**Manual smoke (/student/diary — обязателен перед demo):**
+
+- Открыть /student/diary → форма загружается, эмоции показаны (не hardcoded);
+- Slider начинается без значения → кнопка «Сохранить» задизейблена;
+- Двинуть slider → кнопка активируется;
+- Выбрать эмоции, написать текст, нажать «Сохранить» → «✓ Сохранено» появляется;
+- История обновляется — новая запись видна внизу;
+- Обновить страницу → сегодняшняя запись подгружается в форму;
+- Открыть StudentHome → график показывает реальные данные (не мок);
+- Переключить период (14 дней / Месяц / Год) → график перерисовывается;
+- API error → форма показывает сообщение об ошибке + кнопку «Повторить»;
+- Ошибка сохранения → inline ошибка, текст не теряется.

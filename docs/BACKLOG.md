@@ -337,6 +337,31 @@
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать
 
+**✅ Student Diary MVP** — дневник студента реализован backend + frontend:
+  - ✅ **Backend foundation**: Alembic миграция `b2e4d7f1a9c3` — таблицы `diary_emotions`
+    (справочник, 10 записей, seed при старте) и `diary_entries` (partial UNIQUE active
+    per student + date); ORM-модель `app/db/models/diary.py`; модуль `app/diary/`
+    (schemas, storage, service, routes)
+  - ✅ **API**: `GET /api/diary/emotions`, `GET /api/diary/today`, `PUT /api/diary/today`,
+    `GET /api/diary/entries`, `GET /api/diary/summary?period=14d|month|year` — только student,
+    403 для psychologist/supervisor/admin
+  - ✅ **Encryption-at-rest**: `mood_score_enc`, `entry_text_enc`, `emotions_enc` —
+    Fernet (`enc:v1:`), тот же `DATA_ENCRYPTION_KEY`, что для session_notes и chat
+  - ✅ **Frontend integration**: DiaryPage подключён к real API, MOCK_ENTRIES удалён;
+    emotions из справочника (не hardcoded); StudentHome chart через `getDiarySummary`;
+    MoodChart обрабатывает null gaps и empty state; история записей из API
+  - ✅ **Тесты**: `tests/integration/test_diary_api.py` (46 backend); DiaryPage.smoke.test.jsx (11),
+    StudentHome.smoke.test.jsx (7), MoodChart.test.jsx (8 frontend)
+  - ✅ **Security**: entry_text, mood_score и selected emotions не логируются; plaintext не в logs/audit
+  - **Pending / будущие этапы:**
+    - Доступ психолога к дневнику студента — требует отдельной policy/consent/visibility stage
+    - Редактирование и удаление старых записей (не сегодняшней) — по запросу
+    - Timezone-aware date policy: MVP использует server-side `date.today()`; при многозональном
+      деплое нужен user-timezone header и aware approach
+    - Admin UI для управления справочником эмоций (`diary_emotions` — catalog)
+    - Advanced analytics: тренды, корреляции, сравнения по периодам
+    - Export дневника (если понадобится пользователю или психологу со student-consent)
+
 ---
 
 ## 🟡 Важные (влияют на качество)

@@ -10,15 +10,48 @@ function yScale(v, h) {
 }
 
 export default function MoodChart({ data, height = 160 }) {
+  if (!data || data.length === 0) {
+    return (
+      <div className={styles.emptyState}>
+        Пока нет записей для построения графика.
+      </div>
+    );
+  }
+
   const h = height;
-  const xStep = (W - PAD.l - PAD.r) / (data.length - 1);
-  const points = data.map((d, i) => [PAD.l + i * xStep, yScale(d.v, h)]);
+  const xStep = data.length > 1
+    ? (W - PAD.l - PAD.r) / (data.length - 1)
+    : (W - PAD.l - PAD.r) / 2;
 
-  const linePath = points
-    .map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`))
-    .join(' ');
+  const coords = data.map((d, i) => ({
+    x: PAD.l + i * xStep,
+    y: d.v != null ? yScale(d.v, h) : null,
+    l: d.l,
+  }));
 
-  const areaPath = `${linePath} L${points[points.length - 1][0]},${h - PAD.b} L${points[0][0]},${h - PAD.b} Z`;
+  // Segmented line path — skips null points
+  let linePath = '';
+  let inSegment = false;
+  for (const c of coords) {
+    if (c.y == null) {
+      inSegment = false;
+      continue;
+    }
+    linePath += inSegment ? ` L${c.x},${c.y}` : `M${c.x},${c.y}`;
+    inSegment = true;
+  }
+
+  const hasData = linePath.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className={styles.emptyState}>
+        Пока нет записей для построения графика.
+      </div>
+    );
+  }
+
+  const dotPoints = coords.filter((c) => c.y != null);
 
   return (
     <div className={styles.wrap} style={{ height }}>
@@ -41,7 +74,6 @@ export default function MoodChart({ data, height = 160 }) {
           />
         ))}
 
-        <path d={areaPath} fill="url(#moodAreaFill)" />
         <path
           d={linePath}
           stroke="#8B6F47"
@@ -51,10 +83,10 @@ export default function MoodChart({ data, height = 160 }) {
           strokeLinejoin="round"
         />
 
-        {points.map((p, i) => (
+        {dotPoints.map((c, i) => (
           <circle
             key={i}
-            cx={p[0]} cy={p[1]}
+            cx={c.x} cy={c.y}
             r="3.5"
             fill="#FAF7F2"
             stroke="#4A3728"

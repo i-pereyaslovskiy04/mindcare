@@ -140,6 +140,24 @@ Encryption-at-rest защищает от утечки БД; политика д�
 - Retention policy для chat messages остаётся открытым продуктовым и
   compliance-вопросом
 
+### Шифрование и доступ к дневнику студента (`diary_entries`)
+- Дневник студента содержит чувствительные психологические self-report данные:
+  mood score (самооценка настроения 1–10), произвольный текст, выбранные эмоции
+- `diary_entries.mood_score_enc`, `entry_text_enc`, `emotions_enc` хранятся
+  encrypted-at-rest через Fernet (`enc:v1:`), тот же `DATA_ENCRYPTION_KEY`
+  (используется также для `session_notes` и `chat_messages`)
+- Справочник эмоций (`diary_emotions`) — открытые метаданные (key/label), не ПДн
+- Доступ к дневнику — **только student** (роль самого субъекта данных);
+  psychologist, supervisor, admin получают 403 на всех diary-эндпоинтах
+- Plaintext mood score, entry_text, selected emotions **не пишутся в application logs и audit**;
+  аудит diary-операций — только идентификаторы (student_id, date, признак наличия записи)
+- Доступ психолога к дневнику студента требует отдельного compliance-решения, consent
+  субъекта и visibility policy — **не реализовывать без отдельного этапа**
+- Export дневника (CSV/PDF) — потенциальный риск утечки; при реализации требует
+  student-consent на каждый export и аудит
+- MVP date policy: backend использует `date.today()` без timezone; при многозональном
+  деплое нужен user-timezone header
+
 ### Аудит auth-событий (`auth_log`)
 Логируются через `log_auth_event` из `app/auth/audit.py`:
 
@@ -224,5 +242,6 @@ UUID цели закодирован в строке события (време�
 | Заметки сессий | `session_notes` | Специальные категории |
 | Переписка student ↔ psychologist | `chat_messages` | Специальные категории |
 | Вложения чата (metadata + файл на FS) | `chat_attachments` + `CHAT_FILE_STORAGE_DIR` | Специальные категории |
+| Дневник студента (mood, текст, эмоции) | `diary_entries` | Специальные категории |
 | Записи на консультации | `appointments` | Базовые ПДн |
 | IP-адреса | `auth_log` | Анонимизируются через 90 дней |
