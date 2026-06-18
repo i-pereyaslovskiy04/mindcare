@@ -325,6 +325,49 @@ test('P6. meta (time) still visible for message with attachment', () => {
   expect(screen.getByText('11:30')).toBeInTheDocument();
 });
 
+// ── Attachment layout: files before text (Stage 32d-hotfix-b) ────────────────
+
+test('R1. message with text + attachments renders attachments before text in DOM', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: 'подпись', mine: false, senderId: 7,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(<MessageList messages={[msg]} contact={contact} onDownloadAttachment={jest.fn()} />);
+
+  const attachmentEl = screen.getByText('файл.pdf');
+  const textEl = screen.getByText('подпись');
+  // bit 4 = DOCUMENT_POSITION_FOLLOWING: textEl follows attachmentEl in DOM
+  expect(attachmentEl.compareDocumentPosition(textEl) & 4).toBeTruthy();
+});
+
+test('R2. divider is rendered when message has both attachments and text', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: 'подпись', mine: false, senderId: 7,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(<MessageList messages={[msg]} contact={contact} onDownloadAttachment={jest.fn()} />);
+  expect(screen.getByTestId('attachment-text-divider')).toBeInTheDocument();
+});
+
+test('R3. attachment-only message has no divider', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: null, mine: false, senderId: 7,
+    time: '10:00', createdAt: A, attachments: [docAtt],
+  };
+  render(<MessageList messages={[msg]} contact={contact} onDownloadAttachment={jest.fn()} />);
+  expect(screen.queryByTestId('attachment-text-divider')).not.toBeInTheDocument();
+});
+
+test('R4. text-only message is unaffected (no divider, text still visible)', () => {
+  const msg = {
+    id: 1, uuid: 'u1', text: 'просто текст', mine: false, senderId: 7,
+    time: '10:00', createdAt: A,
+  };
+  render(<MessageList messages={[msg]} contact={contact} />);
+  expect(screen.queryByTestId('attachment-text-divider')).not.toBeInTheDocument();
+  expect(screen.getByText('просто текст')).toBeInTheDocument();
+});
+
 // Stage 31z-hotfix: kebab-меню остаётся sibling рядом с bubble (внутри
 // .bubbleRow), а не внутри самого bubble — bubble остаётся чисто
 // presentational и не содержит интерактивных элементов.

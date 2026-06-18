@@ -34,9 +34,11 @@ export default function MessageBubble({
     >
       {hasAttachments ? (
         // contentBlock берёт всю ширину строки, вытесняя meta в отдельную строку.
+        // Вложения рендерятся первыми; текст под ними воспринимается как подпись/caption.
         <div className={styles.contentBlock}>
-          {text && <div className={styles.text}><LinkifiedText text={text} /></div>}
           <AttachmentList attachments={attachments} onDownloadAttachment={onDownloadAttachment} outgoing={isOutgoing} />
+          {text && <div className={styles.attachmentTextDivider} data-testid="attachment-text-divider" />}
+          {text && <div className={styles.text}><LinkifiedText text={text} /></div>}
         </div>
       ) : (
         <div className={styles.text}>

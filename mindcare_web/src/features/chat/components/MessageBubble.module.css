@@ -85,3 +85,12 @@
   letter-spacing: -1px;
   white-space: nowrap;
 }
+
+/* Разделитель между вложениями и текстом-подписью.
+   currentColor работает в обоих вариантах: тёмный outgoing (milk) и светлый incoming. */
+.attachmentTextDivider {
+  height: 1px;
+  background: currentColor;
+  opacity: 0.15;
+  margin: 6px 0 5px;
+}
