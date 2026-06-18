@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { saveBlobToDisk } from '../../../api/client';
 import Icon from '../../../components/Icon/Icon';
-import ImageLightbox from './ImageLightbox';
+import AttachmentPreviewLightbox from './AttachmentPreviewLightbox';
 import styles from './AttachmentCard.module.css';
 
 /** Форматирует байты в читаемый размер файла. */
@@ -13,7 +13,8 @@ export function formatFileSize(bytes) {
 }
 
 // SVG намеренно исключён: может содержать скрипты.
-const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+// application/pdf добавлен в Stage 32j.
+const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
 /**
  * Компактная карточка вложения внутри сообщения (Stage 32d/32i).
@@ -39,9 +40,9 @@ export default function AttachmentCard({ attachment, onDownload, disabled = fals
   const displaySize = formatFileSize(attachment.fileSize);
   const isDisabled = disabled || !onDownload || downloading;
 
-  // Изображение можно просмотреть только при явно разрешённом MIME (без SVG).
+  // Preview доступен для явно разрешённых MIME (image/jpeg|png|webp + application/pdf).
+  // SVG исключён. isImage не проверяем — PDF имеет isImage=false.
   const isPreviewable = Boolean(
-    attachment.isImage &&
     attachment.mimeType &&
     PREVIEW_MIME_TYPES.includes(attachment.mimeType) &&
     onDownload,
@@ -96,7 +97,7 @@ export default function AttachmentCard({ attachment, onDownload, disabled = fals
       const url = URL.createObjectURL(blob);
       setPreviewObjectUrl(url);
     } catch {
-      setPreviewError('Не удалось загрузить изображение.');
+      setPreviewError('Не удалось загрузить файл.');
     } finally {
       setPreviewLoading(false);
     }
@@ -147,7 +148,7 @@ export default function AttachmentCard({ attachment, onDownload, disabled = fals
       </button>
 
       {previewOpen && (
-        <ImageLightbox
+        <AttachmentPreviewLightbox
           attachment={attachment}
           objectUrl={previewObjectUrl}
           loading={previewLoading}

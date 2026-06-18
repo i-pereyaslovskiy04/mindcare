@@ -1,21 +1,26 @@
 import { useEffect } from 'react';
 import Icon from '../../../components/Icon/Icon';
-import styles from './ImageLightbox.module.css';
+import styles from './AttachmentPreviewLightbox.module.css';
 
 /**
- * Лайтбокс для просмотра изображений из вложений чата (Stage 32i).
- * Открывается поверх чата с затемнённым overlay.
- * Изображение передаётся как objectUrl (blob:), созданный вызывающей стороной.
+ * Лайтбокс для просмотра вложений чата: изображения и PDF (Stage 32i/32j).
+ * Blob-URL создаётся вызывающей стороной (AttachmentCard) через authenticated
+ * download handler — public static URLs не используются.
+ *
+ * variant определяется автоматически по attachment.mimeType:
+ *   image/jpeg | image/png | image/webp  → <img>
+ *   application/pdf                      → <iframe>
  *
  * Props:
- *   attachment  — { originalFilename, ... }
- *   objectUrl   — blob: URL для <img>, создан вызывающей стороной
- *   loading     — показывать spinner/loading text
+ *   attachment  — { originalFilename, mimeType, ... }
+ *   objectUrl   — blob: URL, создан вызывающей стороной
+ *   loading     — показывать loading state
  *   error       — строка ошибки или null
  *   onClose     — вызвать при закрытии
  */
-export default function ImageLightbox({ attachment, objectUrl, loading, error, onClose }) {
-  const displayName = attachment?.originalFilename || 'Изображение';
+export default function AttachmentPreviewLightbox({ attachment, objectUrl, loading, error, onClose }) {
+  const displayName = attachment?.originalFilename || 'Файл';
+  const isPdf = attachment?.mimeType === 'application/pdf';
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -30,7 +35,7 @@ export default function ImageLightbox({ attachment, objectUrl, loading, error, o
       className={styles.overlay}
       role="dialog"
       aria-modal="true"
-      aria-label={`Просмотр изображения: ${displayName}`}
+      aria-label={`Просмотр: ${displayName}`}
       onClick={onClose}
       data-testid="lightbox-overlay"
     >
@@ -44,7 +49,7 @@ export default function ImageLightbox({ attachment, objectUrl, loading, error, o
         <Icon name="x" size={20} aria-hidden="true" />
       </button>
       <div
-        className={styles.content}
+        className={`${styles.content} ${isPdf ? styles.contentPdf : ''}`}
         onClick={(e) => e.stopPropagation()}
         data-testid="lightbox-content"
       >
@@ -58,7 +63,15 @@ export default function ImageLightbox({ attachment, objectUrl, loading, error, o
             {error}
           </div>
         )}
-        {objectUrl && !loading && !error && (
+        {objectUrl && !loading && !error && isPdf && (
+          <iframe
+            src={objectUrl}
+            title={displayName}
+            className={styles.pdfFrame}
+            data-testid="lightbox-pdf"
+          />
+        )}
+        {objectUrl && !loading && !error && !isPdf && (
           <img
             src={objectUrl}
             alt={displayName}

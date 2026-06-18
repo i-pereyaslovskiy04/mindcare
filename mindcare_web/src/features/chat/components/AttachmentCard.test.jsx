@@ -215,14 +215,32 @@ const svgAtt = {
   createdAt: '2024-01-01T10:00:00.000Z',
 };
 
-describe('image preview button visibility', () => {
+// DOCX — не previewable (Word не в списке PREVIEW_MIME_TYPES).
+const docxAtt = {
+  uuid: 'att-docx',
+  originalFilename: 'отчёт.docx',
+  mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  fileSize: 204800,
+  isImage: false,
+  createdAt: '2024-01-01T10:00:00.000Z',
+};
+
+// pdfAtt переиспользует docAtt (mimeType: application/pdf).
+const pdfAtt = docAtt;
+
+describe('preview button visibility', () => {
   test('image attachment shows preview button', () => {
     render(<AttachmentCard attachment={imageAtt} onDownload={jest.fn()} />);
     expect(screen.getByTestId('preview-btn')).toBeInTheDocument();
   });
 
-  test('non-image (PDF) attachment does not show preview button', () => {
-    render(<AttachmentCard attachment={docAtt} onDownload={jest.fn()} />);
+  test('PDF attachment shows preview button', () => {
+    render(<AttachmentCard attachment={pdfAtt} onDownload={jest.fn()} />);
+    expect(screen.getByTestId('preview-btn')).toBeInTheDocument();
+  });
+
+  test('DOCX attachment does not show preview button', () => {
+    render(<AttachmentCard attachment={docxAtt} onDownload={jest.fn()} />);
     expect(screen.queryByTestId('preview-btn')).not.toBeInTheDocument();
   });
 
@@ -233,6 +251,11 @@ describe('image preview button visibility', () => {
 
   test('image without onDownload does not show preview button', () => {
     render(<AttachmentCard attachment={imageAtt} />);
+    expect(screen.queryByTestId('preview-btn')).not.toBeInTheDocument();
+  });
+
+  test('PDF without onDownload does not show preview button', () => {
+    render(<AttachmentCard attachment={pdfAtt} />);
     expect(screen.queryByTestId('preview-btn')).not.toBeInTheDocument();
   });
 
@@ -275,7 +298,7 @@ describe('image preview interaction', () => {
     const onDownload = jest.fn().mockRejectedValue(new Error('Network error'));
     render(<AttachmentCard attachment={imageAtt} onDownload={onDownload} />);
     fireEvent.click(screen.getByTestId('preview-btn'));
-    expect(await screen.findByText('Не удалось загрузить изображение.')).toBeInTheDocument();
+    expect(await screen.findByText('Не удалось загрузить файл.')).toBeInTheDocument();
   });
 
   test('preview click stops propagation to parent', () => {
@@ -314,6 +337,60 @@ describe('image preview interaction', () => {
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
     unmount();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-url');
+  });
+});
+
+// ── PDF preview (Stage 32j) ───────────────────────────────────────────────────
+
+describe('PDF preview interaction', () => {
+  beforeEach(() => {
+    global.URL.createObjectURL = jest.fn(() => 'blob:pdf-url');
+    global.URL.revokeObjectURL = jest.fn();
+  });
+
+  test('PDF preview click calls onDownload, not saveBlobToDisk', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['%PDF'], { type: 'application/pdf' }), filename: 'отчёт.pdf' });
+    render(<AttachmentCard attachment={pdfAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    await waitFor(() => expect(onDownload).toHaveBeenCalledWith(pdfAtt));
+    expect(saveBlobToDisk).not.toHaveBeenCalled();
+  });
+
+  test('PDF preview click opens lightbox dialog', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['%PDF']), filename: 'отчёт.pdf' });
+    render(<AttachmentCard attachment={pdfAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('PDF lightbox renders iframe after successful fetch', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['%PDF']), filename: 'отчёт.pdf' });
+    render(<AttachmentCard attachment={pdfAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    expect(await screen.findByTestId('lightbox-pdf')).toBeInTheDocument();
+    expect(screen.queryByTestId('lightbox-image')).not.toBeInTheDocument();
+  });
+
+  test('PDF iframe receives object URL', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(['%PDF']), filename: 'отчёт.pdf' });
+    render(<AttachmentCard attachment={pdfAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    const frame = await screen.findByTestId('lightbox-pdf');
+    expect(frame).toHaveAttribute('src', 'blob:pdf-url');
+  });
+
+  test('PDF shows error when fetch fails', async () => {
+    const onDownload = jest.fn().mockRejectedValue(new Error('Network error'));
+    render(<AttachmentCard attachment={pdfAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByTestId('preview-btn'));
+    expect(await screen.findByText('Не удалось загрузить файл.')).toBeInTheDocument();
+  });
+
+  test('PDF download button still works independently', async () => {
+    const onDownload = jest.fn().mockResolvedValue({ blob: new Blob(), filename: 'отчёт.pdf' });
+    render(<AttachmentCard attachment={pdfAtt} onDownload={onDownload} />);
+    fireEvent.click(screen.getByRole('button', { name: /Скачать отчёт\.pdf/ }));
+    await waitFor(() => expect(saveBlobToDisk).toHaveBeenCalled());
   });
 });
 
