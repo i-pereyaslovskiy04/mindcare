@@ -27,7 +27,7 @@ test('renders list with filenames', () => {
 
 test('returns null when attachments is empty', () => {
   const { container } = render(<EditableAttachmentList attachments={[]} />);
-  expect(container.firstChild).toBeNull();
+  expect(container).toBeEmptyDOMElement();
 });
 
 test('returns null when all attachments are in removedUuids', () => {
@@ -37,7 +37,7 @@ test('returns null when all attachments are in removedUuids', () => {
       removedUuids={['att-1']}
     />,
   );
-  expect(container.firstChild).toBeNull();
+  expect(container).toBeEmptyDOMElement();
 });
 
 // ── remove button ─────────────────────────────────────────────────────────────

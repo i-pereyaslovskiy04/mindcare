@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import Icon from '../../../components/Icon/Icon';
 import SelectedAttachmentList from './SelectedAttachmentList';
 import EditableAttachmentList from './EditableAttachmentList';
@@ -6,6 +6,7 @@ import styles from './ChatWindow.module.css';
 
 const MAX_LENGTH = 10000; // лимит backend-валидации ChatMessageCreate/Edit
 const FALLBACK_LINE_HEIGHT = 18;
+const EMPTY_ARRAY = [];
 
 function px(value) {
   const n = parseFloat(value);
@@ -72,9 +73,12 @@ export default function MessageInput({
   const isEditing = Boolean(editing);
 
   // Stage 32g: вложения и список убираемых UUID из текущего editing state.
-  const editingAtts = editing?.attachments || [];
-  const editingRemovedUuids = editing?.removedUuids || [];
-  const remainingEditAtts = editingAtts.filter((a) => !editingRemovedUuids.includes(a.uuid));
+  const editingAtts = editing?.attachments || EMPTY_ARRAY;
+  const editingRemovedUuids = editing?.removedUuids || EMPTY_ARRAY;
+  const remainingEditAtts = useMemo(
+    () => editingAtts.filter((a) => !editingRemovedUuids.includes(a.uuid)),
+    [editingAtts, editingRemovedUuids],
+  );
 
   // Подставить текст при входе в edit-mode, очистить при выходе.
   useEffect(() => {
