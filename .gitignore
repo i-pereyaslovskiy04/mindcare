@@ -48,7 +48,7 @@ local_*/
 mindcare_api/media/uploads/
 
 # --- Private chat attachment storage (runtime, не коммитить) ---
-mindcare_api/storage/
+/mindcare_api/storage/
 
 # --- Claude Code local session data ---
 .claude/
