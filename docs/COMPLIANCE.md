@@ -132,8 +132,11 @@ Encryption-at-rest защищает от утечки БД; политика д�
   **Pending compliance/security:** MIME magic bytes validation (`python-magic` не реализована);
   antivirus/ClamAV scanning; at-rest encryption физических файлов в FS (MVP хранит
   файлы unencrypted на диске — только metadata encrypted через Fernet не применяется к FS);
-  S3/MinIO с server-side encryption; retention policy для attachment files;
-  physical file cleanup для soft-deleted записей (скрипт существует, не запускается автоматически)
+  S3/MinIO с server-side encryption; retention policy для attachment files.
+  Orphan cleanup helper `scripts/cleanup_orphan_attachments.py` существует для записей
+  `message_id IS NULL` и работает в dry-run/`--apply` режиме, но не заменяет полноценную
+  retention policy. Физическое удаление файлов soft-deleted attachments по retention-политике,
+  cleanup CLI tests и cron/systemd timer остаются pending / production-hardening.
 - Retention policy для chat messages остаётся открытым продуктовым и
   compliance-вопросом
 

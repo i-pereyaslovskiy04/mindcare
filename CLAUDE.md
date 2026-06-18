@@ -385,6 +385,10 @@ mindcare_api/
    svg, html/htm, js, exe/bat/cmd/com/msi, sh/ps1, php/jar, vbs/scr заблокированы;
    архивы пока не добавлять как реализованные
 ✅ Аудит для upload/download событий — content файла в audit не пишется
+✅ Для orphan-вложений чата есть helper `scripts/cleanup_orphan_attachments.py`:
+   dry-run по умолчанию, `--apply` для выполнения, scope — только `message_id IS NULL`
+❌ Не писать, что реализован полный cleanup/retention attachments: physical cleanup
+   файлов soft-deleted вложений по retention-политике, CLI tests и cron/systemd timer pending
 ❌ Не отдавать chat attachments через /static/* или StaticFiles — private storage
 ❌ Не давать admin/supervisor доступ к chat attachments без отдельного compliance-этапа
 ❌ Не хранить физический файл чата в PostgreSQL (даже как bytea/blob)
@@ -973,10 +977,10 @@ Conventional Commits:
   физический файл не удаляется сразу.
   **Pending:** thumbnails; Office/TXT preview; PDF.js integration при необходимости;
   upload progress %; retry queue; MIME magic bytes; antivirus; at-rest encryption физических файлов;
-  добавление файлов в edit-mode; cleanup/retention вложений чата (безопасный backend
-  maintenance script с dry-run по умолчанию и явным `--apply` для старых orphan-вложений
-  и физических файлов soft-deleted вложений после retention-периода; cron/systemd timer —
-  отдельный будущий этап после ручной проверки).
+  добавление файлов в edit-mode. Для orphan-вложений (`message_id IS NULL`) уже есть
+  helper `scripts/cleanup_orphan_attachments.py` с dry-run по умолчанию и явным `--apply`.
+  **Pending cleanup/retention:** физическое удаление файлов soft-deleted вложений после
+  retention-периода, тесты cleanup CLI и cron/systemd timer после ручной проверки.
   Компоненты attachment UI (feature-specific, не global shared UI):
   `AttachmentCard`, `AttachmentList`, `SelectedAttachmentList` (pre-send picker),
   `EditableAttachmentList` (edit-mode), `DragDropOverlay`, `AttachmentPreviewLightbox` —

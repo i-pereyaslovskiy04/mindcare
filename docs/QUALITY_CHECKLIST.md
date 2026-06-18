@@ -352,11 +352,11 @@ npm run build
 - edit remove one attachment — 200, оставшиеся attachments в ответе;
 - edit cannot save empty (текст пустой + все вложения удалены) — 400;
 - download soft-deleted attachment — 404;
-- cleanup/retention вложений чата сейчас pending: production-hardening script должен
-  иметь dry-run по умолчанию и явный `--apply`;
-- будущий cleanup должен покрыть старые orphan attachments и физические файлы
-  soft-deleted attachments после retention-периода; cron/systemd timer подключать
-  только отдельным этапом после ручной проверки.
+- orphan cleanup helper `scripts/cleanup_orphan_attachments.py` существует для записей
+  `message_id IS NULL`: перед использованием проверить dry-run;
+- `--apply` запускать только после ручной проверки кандидатов;
+- full retention для физических файлов soft-deleted attachments — pending;
+- scheduler/autostart через cron/systemd timer не подключён.
 
 **Attachments checklist (frontend — manual smoke):**
 

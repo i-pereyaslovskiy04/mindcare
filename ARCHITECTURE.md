@@ -108,8 +108,11 @@ flow через `showSaveFilePicker`, fallback — anchor download, Office-фа�
 `URL.createObjectURL(blob)` и очищает `URL.revokeObjectURL`; image/pdf modes закрываются через X,
 overlay или Esc, клик по контенту не закрывает lightbox, URL страницы не меняется и чат остаётся
 открытым. Office/TXT/SVG/unknown MIME — download-only; prop-drilling через `ChatWindow/useChatCore`
-не добавлялся. Pending: thumbnails; Office/TXT preview; PDF.js integration при необходимости;
-upload progress; MIME magic bytes; antivirus; at-rest file encryption; добавление файлов в edit-mode.
+не добавлялся. Для orphan-вложений (`message_id IS NULL`) есть helper
+`scripts/cleanup_orphan_attachments.py` с dry-run по умолчанию и явным `--apply`.
+Pending: thumbnails; Office/TXT preview; PDF.js integration при необходимости; upload progress;
+retry queue; MIME magic bytes; antivirus; at-rest file encryption; добавление файлов в edit-mode;
+full retention для физических файлов soft-deleted attachments, cleanup CLI tests и cron/systemd timer.
 
 **Message actions / bubble (Stage 31y–31z-hotfix):** свои сообщения в активной беседе —
 меню «…» (`MessageActionsMenu`) с «Редактировать»/«Удалить» вместо отдельной кнопки-карандаша;

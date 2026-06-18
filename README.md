@@ -527,10 +527,10 @@ authenticated backend download path: frontend получает `blob`, созд�
 Office/TXT/SVG/unknown MIME остаются download-only. System conversation — upload запрещён.
 Pending: thumbnails; Office/TXT preview; PDF.js integration при необходимости; upload progress;
 retry queue; MIME magic bytes; antivirus; at-rest file encryption; добавление
-файлов в edit-mode; cleanup/retention вложений чата как future production-hardening:
-безопасный backend maintenance script с dry-run по умолчанию и явным `--apply` для
-старых orphan-вложений и физических файлов soft-deleted вложений после retention-периода.
-Автозапуск через cron/systemd timer — отдельный будущий этап после ручной проверки.
+файлов в edit-mode. Для orphan-вложений (`message_id IS NULL`) уже есть helper
+`scripts/cleanup_orphan_attachments.py` с dry-run по умолчанию и явным `--apply`.
+Full cleanup/retention остаётся production-hardening: физическое удаление файлов
+soft-deleted вложений после retention-периода, CLI tests и cron/systemd timer pending.
 
 *Future / postponed:* **group chat** (отдельный этап после стабилизации, обязателен
 READ-ONLY design audit — см. `docs/BACKLOG.md`); preview последнего сообщения в списке;
