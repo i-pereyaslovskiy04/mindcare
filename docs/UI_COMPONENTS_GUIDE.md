@@ -270,6 +270,23 @@ Popover сам выбирает направление (вниз/вверх) и 
 
 ---
 
+## Chat / Messenger UI (feature-specific)
+
+| Компонент | Путь | Назначение |
+|---|---|---|
+| `MessageBubble` | `src/features/chat/components/MessageBubble.jsx` | Визуальное облачко сообщения (текст + meta: время/«изменено»/✓✓). Variants: `incoming`/`outgoing`/`system`. |
+| `MessageActionsMenu` | `src/features/chat/components/` | Кебаб-меню «…» для своего сообщения — «Редактировать»/«Удалить». |
+| `DeleteMessageDialog` | `src/features/chat/components/` | Confirm-диалог перед удалением сообщения, построен на shared `Modal`/`Button`. |
+
+**Governance:** эти компоненты — feature-specific Messenger-логика, **не** глобальные
+shared UI controls из таблицы выше. Не переносить `MessageBubble` в `src/components/UI`,
+пока не появится второй независимый потребитель за пределами чата. `MessageActionsMenu`
+переиспользует существующие shared-примитивы (не дублирует Button/Modal). Перед
+добавлением нового chat-контрола — проверить `src/features/chat/components/` и
+`src/components/UI`.
+
+---
+
 ## Общее правило
 
 Перед созданием нового контрола:

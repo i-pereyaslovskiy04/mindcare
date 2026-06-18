@@ -1,7 +1,7 @@
 # ФЗ-152 Compliance Checklist
 
 Статус выполнения требований ФЗ-152 «О персональных данных» для платформы MindCare.
-Последнее обновление: 2026-06-15.
+Последнее обновление: 2026-06-16.
 
 ---
 
@@ -104,10 +104,39 @@ Encryption-at-rest защищает от утечки БД; политика д�
   (приблизительный статус, порог 10 минут); не раскрывает содержимое и не пишет
   «был N минут назад» / last-seen-метку
 - Staff break-glass access требует отдельного compliance/security этапа
+- **Удаление сообщения** (Stage 31y/31y-hotfix): только soft delete — физического
+  удаления строки `chat_messages` нет, шифротекст и техническая запись остаются
+  для audit/security; участникам удалённое сообщение не показывается (без
+  placeholder-текста в UI); правило **«Право на удаление данных»** ниже (нет
+  полного erasure-механизма по запросу субъекта) применимо и к chat-сообщениям
 - **Group chat — postponed**: до реализации требуется отдельный design audit,
   включая access policy и encryption policy для групповых сообщений
-- **Attachments/files — postponed**: загрузка вложений в чат не реализована; до
-  внедрения потребуется отдельная оценка хранения/шифрования/антивируса/ПДн
+- **Attachments/files — реализованы (Stage 32b–32j + hotfixes)**: upload/download/preview вложений в
+  engagement chat. Реализованные меры безопасности: original filename не используется
+  как filesystem path (storage_key на основе UUID); path traversal guard в storage;
+  скачивание только через auth endpoint с проверкой membership; MIME allowlist +
+  extension blocklist; размер ограничен; audit событий upload/download (без content файла).
+  MVP file policy: разрешены jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx;
+  svg/html/htm/js, executable/script extensions (`exe`, `bat`, `cmd`, `com`, `msi`, `sh`,
+  `ps1`, `php`, `jar`, `vbs`, `scr`) заблокированы; архивы (`zip`, `rar`, `7z` и т.п.)
+  пока не разрешены. Chromium download использует safe save flow через `showSaveFilePicker`,
+  fallback — anchor download; Office attachments скачиваются без top-level navigation на `blob:` URL.
+  Preview разрешён только для `image/jpeg`, `image/png`, `image/webp`, `application/pdf` и
+  использует тот же authenticated backend download path, что и скачивание: после successful fetch
+  frontend создаёт временный `URL.createObjectURL(blob)` и очищает его через `URL.revokeObjectURL`.
+  Public static serving, прямые `<img src="/api/...">`/`<iframe src="/api/...">` на backend endpoint
+  и токены в query string не используются. Office/TXT/SVG/unknown MIME остаются download-only.
+  Closed/archive чат: upload запрещён (409), download разрешён участникам.
+  System conversation: upload запрещён, download не предусмотрен.
+  Admin/supervisor: нет доступа к chat attachments (403).
+  **Pending compliance/security:** MIME magic bytes validation (`python-magic` не реализована);
+  antivirus/ClamAV scanning; at-rest encryption физических файлов в FS (MVP хранит
+  файлы unencrypted на диске — только metadata encrypted через Fernet не применяется к FS);
+  S3/MinIO с server-side encryption; retention policy для attachment files.
+  Orphan cleanup helper `scripts/cleanup_orphan_attachments.py` существует для записей
+  `message_id IS NULL` и работает в dry-run/`--apply` режиме, но не заменяет полноценную
+  retention policy. Физическое удаление файлов soft-deleted attachments по retention-политике,
+  cleanup CLI tests и cron/systemd timer остаются pending / production-hardening.
 - Retention policy для chat messages остаётся открытым продуктовым и
   compliance-вопросом
 
@@ -194,5 +223,6 @@ UUID цели закодирован в строке события (време�
 | Результаты тестов | `test_results` | Специальные категории |
 | Заметки сессий | `session_notes` | Специальные категории |
 | Переписка student ↔ psychologist | `chat_messages` | Специальные категории |
+| Вложения чата (metadata + файл на FS) | `chat_attachments` + `CHAT_FILE_STORAGE_DIR` | Специальные категории |
 | Записи на консультации | `appointments` | Базовые ПДн |
 | IP-адреса | `auth_log` | Анонимизируются через 90 дней |

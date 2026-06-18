@@ -4,6 +4,7 @@ import Button from '../../components/UI/Button/Button';
 import ButtonLink from '../../components/UI/Button/ButtonLink';
 import { getInitials } from '../../shared/lib/utils';
 import { useMyStudents } from '../../features/psychologist/hooks/useMyStudents';
+import { getPsychologistStudentChatPath } from '../../features/psychologist/chatLinks';
 import styles from './PsychologistStudentsPage.module.css';
 
 function formatDate(iso) {
@@ -111,7 +112,10 @@ export default function PsychologistStudentsPage() {
           {items.length > 0 && (
             <>
               <div className={styles.grid}>
-                {items.map(student => (
+                {items.map(student => {
+                  const chatPath = getPsychologistStudentChatPath(student);
+
+                  return (
                   <div key={student.engagement_id} className={styles.card}>
                     <div className={styles.cardTop}>
                       <div className={styles.avatar}>
@@ -128,17 +132,29 @@ export default function PsychologistStudentsPage() {
                     </div>
 
                     <div className={styles.cardActions}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled
-                        title="Чат будет доступен в следующих версиях"
-                      >
-                        <Icon name="chat" size={13} />
-                        <span>Чат</span>
-                        <span className={styles.soonTag}>скоро</span>
-                      </Button>
+                      {chatPath ? (
+                        <ButtonLink
+                          to={chatPath}
+                          variant="ghost"
+                          size="sm"
+                          title="Открыть чат со студентом"
+                        >
+                          <Icon name="chat" size={13} />
+                          <span>Чат со студентом</span>
+                        </ButtonLink>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled
+                          title="Чат будет доступен в следующих версиях"
+                        >
+                          <Icon name="chat" size={13} />
+                          <span>Чат</span>
+                          <span className={styles.soonTag}>скоро</span>
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
@@ -160,7 +176,8 @@ export default function PsychologistStudentsPage() {
                       </ButtonLink>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {totalPages > 1 && (

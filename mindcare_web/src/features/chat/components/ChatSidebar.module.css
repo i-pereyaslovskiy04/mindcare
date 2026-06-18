@@ -1,5 +1,11 @@
 /* ---- sidebar panel ---- */
 .sidebar {
+  --chat-system-avatar-bg: var(--sand);
+  --chat-system-avatar-color: var(--coffee);
+  --chat-system-avatar-border: var(--nav-border);
+  --chat-presence-online: var(--success);
+  --chat-presence-offline: var(--text-light);
+
   background: var(--cream);
   border-right: 1px solid var(--nav-border);
   display: flex;
@@ -7,9 +13,16 @@
   overflow: hidden;
 }
 
+/* Высота согласована с .header диалога через общий var --chat-header-height
+   (задаётся на .shell страницы). Горизонтальную линию рисует единый .shell::after,
+   поэтому здесь border-bottom НЕ ставим (Stage 31x-hotfix-2). */
 .header {
-  padding: 18px 20px 16px;
-  border-bottom: 1px solid var(--nav-border);
+  box-sizing: border-box;
+  min-height: var(--chat-header-height, 72px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 20px;
   flex-shrink: 0;
 }
 
@@ -32,6 +45,105 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* ---- sections (Stage 31v): Архив / Сообщения / Системные уведомления ---- */
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+/* тонкий разделитель между секциями, без тяжёлых рамок */
+.section + .section {
+  border-top: 1px solid var(--nav-border);
+}
+
+.archiveSection,
+.messagesSection,
+.systemSection {
+  /* модификаторы-хуки секций; общий вид задаёт .section */
+}
+
+.sectionHeader {
+  padding: 12px 16px 6px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-light);
+  line-height: 1.2;
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- archive section header (collapsible toggle) ---- */
+.archiveRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.archiveChevron {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-light);
+  transition: transform 0.15s, color 0.15s;
+}
+
+.archiveChevronOpen {
+  transform: rotate(90deg);
+}
+
+.archiveTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-light);
+}
+
+.archiveRow:hover .archiveTitle,
+.archiveRow:hover .archiveChevron {
+  color: var(--coffee);
+}
+
+.archiveCount {
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.archiveUnread {
+  margin-left: auto;
+  background: var(--coffee);
+  color: var(--milk);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* archive body: вложенный, приглушённый блок с левой линией (вторичный) */
+.archiveBody {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px 12px;
+  border-left: 2px solid var(--latte);
+  background: rgba(139, 111, 71, 0.04);
 }
 
 /* ---- list item ---- */
@@ -107,22 +219,33 @@
 }
 
 .presenceOnline {
-  background: var(--success);
+  background: var(--chat-presence-online);
 }
 
 .presenceOffline {
-  background: var(--text-light);
+  background: var(--chat-presence-offline);
 }
 
-/* system conversation: закреплена сверху, нейтральный маркер */
-.itemSystem {
-  background: var(--cream);
-}
+/* system conversation использует ТОТ ЖЕ базовый стиль карточки и selected,
+   что обычный диалог. Единственное мягкое отличие — иконка-колокольчик
+   вместо аватара (см. .avatarSystem) и текст «Уведомления MindCare».
+   Отдельного фона/подложки/selected у system-беседы нет (Stage 31u). */
 
 .avatarSystem {
-  background: var(--sand);
-  color: var(--coffee);
-  border: 1px solid var(--nav-border);
+  background: var(--chat-system-avatar-bg);
+  color: var(--chat-system-avatar-color);
+  border: 1px solid var(--chat-system-avatar-border);
+}
+
+/* Архивные (закрытые/read-only) диалоги — чуть приглушены, но selected у них
+   тот же общий .itemActive (Stage 31u). */
+.itemMuted .name {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.itemMuted .avatar {
+  opacity: 0.85;
 }
 
 .info {

@@ -50,7 +50,7 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **282 passed**.
+Текущий ожидаемый статус: **488 passed**.
 
 ### Alembic
 
@@ -252,13 +252,13 @@ backend обязан отклонять (роль не меняется). `conse
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
 | **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 163 теста: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), register_confirm_atomic (8), register_consent_context (1), password_uow_atomic (11), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | backend full suite: 488 passed; chat attachments covered by chat_attachment_models (20), chat_attachment_api (37), chat_attachment_edit (18) |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **282 passed** (`.\test.ps1`).
+Итого backend: **488 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **14 suites / 75 tests** (после Stage 31n-hotfix) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **33 suites / 369 tests** (после Stage 32i/32j Image/PDF Preview Lightbox) —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —
@@ -318,10 +318,90 @@ npm run build
 - при входе в раздел диалог НЕ открывается автоматически (VK-like);
 - **mark-read только после явного клика** по диалогу (не на входе, не на hover);
 - unread: глобальный nav badge (по числу диалогов) + per-dialog badge/dot/bold/фон;
-- read receipts ✓/✓✓ по `read_at`; live refresh — snapshot `limit=50` + `mergeMessages`;
+- read receipts ✓/✓✓ по `read_at`; live refresh — snapshot polling (limit=50) +
+  `reconcileMessagesSnapshot` (`pollNew`): удалённые сообщения исчезают у собеседника
+  после следующего tick (≤ 8 сек), без переоткрытия диалога; `mergeMessages` (add/update)
+  сохранён;
 - linkify только http/https, **без `dangerouslySetInnerHTML`**, `rel="noopener noreferrer"`;
 - approximate presence (`peer_is_online`) — точка online/offline, без last-seen-текста;
-- mobile `≤900px` — list/thread, back-кнопка в шапке открытого чата.
+- mobile `≤900px` — list/thread, back-кнопка в шапке открытого чата;
+- действия со своим сообщением — только через кебаб-меню «…» (`MessageActionsMenu`),
+  не отдельная кнопка-карандаш; недоступны для system-сообщений и в закрытой/архивной беседе;
+- удаление — только после confirm (`DeleteMessageDialog`); soft delete на backend; удалённое
+  сообщение пропадает из ленты **без плейсхолдера** «Сообщение удалено»;
+- `MessageBubble` — meta (время/«изменено»/✓/✓✓) внутри bubble; receipts только у исходящих
+  пользовательских сообщений; system-сообщения — без меню действий, без «изменено», без receipts.
+
+**Attachments checklist (backend — проверить при любых изменениях chat attachments):**
+
+- upload valid PDF/JPEG — 200, metadata в БД, физический файл в `CHAT_FILE_STORAGE_DIR`;
+- upload valid WEBP / Excel / PowerPoint — 200;
+- reject SVG — 400;
+- reject пустой файл — 400;
+- reject заблокированное расширение (.exe/.sh/.vbs/.scr/...) — 400;
+- archives (.zip/.rar/.7z) пока не считать разрешёнными форматами;
+- reject недопустимый MIME — 400;
+- reject слишком большой файл — 413;
+- скачивание участником — 200 с правильным Content-Disposition;
+- скачивание не-участником — 403 или 404;
+- upload в closed engagement — 409;
+- скачивание из closed/archive чата участником — 200 (разрешено);
+- upload в system conversation — запрещён;
+- attachment-only message (без текста) — 200;
+- text+attachment message — 200;
+- edit remove one attachment — 200, оставшиеся attachments в ответе;
+- edit cannot save empty (текст пустой + все вложения удалены) — 400;
+- download soft-deleted attachment — 404;
+- orphan cleanup helper `scripts/cleanup_orphan_attachments.py` существует для записей
+  `message_id IS NULL`: перед использованием проверить dry-run;
+- `--apply` запускать только после ручной проверки кандидатов;
+- full retention для физических файлов soft-deleted attachments — pending;
+- scheduler/autostart через cron/systemd timer не подключён.
+
+**Attachments checklist (frontend — manual smoke):**
+
+- attachment card в incoming bubble — читаемый контраст текста и имени файла;
+- attachment card в outgoing dark bubble — читаемый контраст;
+- attachment-only message видно в ленте;
+- text+attachments message видно в ленте;
+- text+attachments layout: сначала файлы, затем тонкий divider, затем текст как caption, затем meta;
+- attachment-only message отображается без divider;
+- кнопка «Скачать» в карточке работает (download trigger);
+- Office/WebP скачиваются без перехода приложения на `blob:` URL; чат остаётся открытым;
+- Chromium safe-save может сохранять через системный save dialog и не обязан выглядеть как обычная запись в browser downloads list;
+- Firefox/Safari/старые браузеры используют anchor download fallback;
+- preview button показывается только для `image/jpeg`, `image/png`, `image/webp`, `application/pdf`;
+- DOCX/XLSX/PPTX/TXT/SVG/unknown MIME не показывают preview button и остаются download-only;
+- student открывает jpg/png/webp preview;
+- psychologist открывает jpg/png/webp preview;
+- student открывает PDF preview;
+- psychologist открывает PDF preview;
+- preview использует authenticated blob flow (`URL.createObjectURL`), без public static URL и без токенов в URL;
+- object URL очищается через `URL.revokeObjectURL` при cleanup;
+- lightbox закрывается через X, overlay и Esc;
+- click внутри image/PDF content не закрывает lightbox;
+- download image/PDF работает как раньше;
+- URL страницы не меняется, чат остаётся открытым;
+- mobile `≤900px` usable, повторное открытие preview работает;
+- скрепка открывает file picker;
+- выбранный файл появляется в `SelectedAttachmentList`;
+- удаление из `SelectedAttachmentList` убирает файл до отправки;
+- drag & drop в активный чат — файл добавляется;
+- drag & drop отклоняется в system/closed/archive чате;
+- drop >5 файлов — ошибка, существующие файлы сохраняются;
+- drop пустого файла — ошибка;
+- edit сообщения — текст и вложения подтягиваются в composer;
+- edit — крестик у вложения убирает его из `EditableAttachmentList`;
+- edit — нельзя сохранить, если текст пустой и все вложения убраны;
+- скрепка и drag & drop заблокированы в edit-mode;
+- mobile — file picker через скрепку работает.
+
+**Manual smoke result после Stage 32 hotfixes:**
+
+- manual browser smoke attachments выполнен пользователем после Stage 32 hotfixes;
+- проверены student-side и psychologist-side attachment flows: upload/download, attachment cards,
+  picker/drag-drop/edit attachments;
+- критичных проблем не выявлено.
 
 **Тесты (backend — на alembic head + dev PostgreSQL):**
 
@@ -329,11 +409,36 @@ npm run build
 - `tests/integration/test_system_conversation.py` — system conversation backend (17);
 - `tests/integration/test_engagement_system_messages.py` — system messages событий (11);
 - `tests/integration/test_chat_presence.py` — approximate presence (12);
-- `tests/integration/test_chat_models.py` — constraints (6).
+- `tests/integration/test_chat_models.py` — constraints (6);
+- `tests/integration/test_chat_message_edit.py` — edit сообщений (10);
+- `tests/integration/test_chat_message_delete.py` — delete сообщений (10);
+- `tests/integration/test_chat_bootstrap_on_assignment.py` — беседа при назначении (4);
+- `tests/integration/test_chat_lifecycle.py` — lifecycle engagement-беседы (8);
+- `tests/integration/test_chat_attachment_models.py` — constraints attachments (20);
+- `tests/integration/test_chat_attachment_api.py` — upload/download/send/list (37);
+- `tests/integration/test_chat_attachment_edit.py` — edit/remove attachments (18).
 
 **Frontend:**
 
-- `mindcare_web/src/pages/student/Chat/ChatPage.smoke.test.jsx` — render list/thread.
+- `mindcare_web/src/pages/student/Chat/useStudentChat.test.js` — hook-level: loadList, select/load messages, stale guard (быстрое переключение), active-only polling, inactive/archive no polling, send 409 fallback (silent list reload через `getConversation: null`);
+- `mindcare_web/src/pages/psychologist/Chat/usePsychologistChat.test.js` — hook-level: select/load messages, stale guard, active-only polling, inactive/archive no polling, send 409 targeted refresh (`getPsychologistConversation`), delete 409 targeted refresh;
+- `mindcare_web/src/pages/student/Chat/ChatPage.smoke.test.jsx` — render list/thread (student);
+- `mindcare_web/src/pages/psychologist/Chat/PsychologistChatPage.smoke.test.jsx` — то же (psychologist);
+- `mindcare_web/src/features/chat/components/ChatWindow.test.jsx`;
+- `mindcare_web/src/features/chat/components/ChatSidebar.test.jsx`;
+- `mindcare_web/src/features/chat/components/MessageList.test.jsx` — фильтрация deleted, bubble/meta, kebab-меню;
+- `mindcare_web/src/features/chat/components/MessageInput.test.jsx`;
+- `mindcare_web/src/features/chat/lib/LinkifiedText.test.jsx`.
+
+**useChatCore invariants (проверяются hook-level тестами выше):**
+
+- stale guard: `selectedRef` блокирует применение ответов от переключённой беседы;
+- `pollBusyRef` mutex: параллельных poll-запросов нет;
+- active-only polling: `isActive` (engagement_status === 'active') — условие запуска интервала;
+- archive/closed → polling не запускается;
+- student 409 → `getConversation: null` → `loadList({ silent: true })`;
+- psychologist 409 → `getConversation(uuid)` → точечный update `engagement_status`/`last_message_at`;
+- system conversation не обслуживается `useChatCore` (отдельный `useSystemConversation`).
 
 **Manual smoke (обязателен перед demo — машинно не проверяется):**
 
@@ -343,4 +448,14 @@ npm run build
 - mobile drawer: открытие/закрытие (backdrop/✕/Escape/клик по пункту), навигация;
 - mobile topbar `≤600px`: hamburger + breadcrumb + logout видны, bell/mail скрыты;
 - read receipts ✓→✓✓; unread badge гаснет только после явного открытия;
-- linkify: ссылка кликабельна, текст с `<script>` отображается как текст (не исполняется).
+- linkify: ссылка кликабельна, текст с `<script>` отображается как текст (не исполняется);
+- своё короткое сообщение → bubble компактный, meta (время/✓✓) в одну строку с текстом;
+- своё длинное сообщение → текст оборачивается, meta переносится вниз-направо;
+- входящее сообщение → время внутри bubble, без read receipts;
+- system-сообщение → header «MindCare», текст слева, время внутри bubble, без меню действий;
+- редактирование через кебаб-меню → текст и пометка «изменено» обновляются на месте;
+- удаление через кебаб-меню + confirm (пользователь A) → у A сообщение пропадает немедленно;
+  у B сообщение пропадает после следующего polling tick (≤ 8 сек) без переоткрытия диалога;
+  placeholder «Сообщение удалено» не появляется ни у A, ни у B;
+- закрытая/архивная беседа → кебаб-меню действий не отображается;
+- mobile/узкий viewport → bubble + кебаб-меню не разваливают layout (нет overflow/обрезки).

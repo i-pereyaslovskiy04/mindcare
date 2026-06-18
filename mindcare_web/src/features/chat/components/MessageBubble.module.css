@@ -1,0 +1,96 @@
+/* ============================================================
+   MessageBubble — облачко сообщения (Stage 31z): текст + meta
+   (время/edited/read receipts) внутри одного bubble, Telegram-style.
+   ============================================================ */
+
+/* Stage 31z-hotfix: bubble — flex-wrap (row), не column. Короткое сообщение
+   и meta помещаются в одну строку («текст   19:00 ✓✓»), потому что bubble
+   шире своего max-content нет (shrink-to-fit) — margin-left: auto на .meta
+   не создаёт лишнего зазора. Длинный текст занимает всю доступную ширину
+   (flex-shrink сжимает .text до wrap), и meta переносится на отдельную
+   flex-строку снизу справа — это стандартный приём для Telegram-like meta. */
+.bubble {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  padding: 7px 10px 6px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.35;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  color: var(--text-main);
+  word-break: break-word;
+}
+
+.bubbleOutgoing {
+  background: var(--espresso);
+  color: var(--milk);
+  border-color: var(--espresso);
+}
+
+/* system-сообщения (MindCare): тот же фундамент, что incoming, чуть нейтральнее фон */
+.bubbleSystem {
+  background: var(--sand);
+}
+
+/* contentBlock: обёртка для сообщений с вложениями — занимает всю ширину строки,
+   вытесняя .meta на отдельную flex-строку ниже. */
+.contentBlock {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.text {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+/* link inside bubble (frontend linkify) */
+.bubble a {
+  color: inherit;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+/* ---- meta: время / edited / read receipts, внутри bubble снизу справа ---- */
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-top: 2px;
+  padding-left: 8px;
+  font-size: 10.5px;
+  line-height: 1;
+  color: currentColor;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.time {
+  white-space: nowrap;
+}
+
+.editedMark {
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.receipt {
+  font-size: 11px;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+
+/* Разделитель между вложениями и текстом-подписью.
+   currentColor работает в обоих вариантах: тёмный outgoing (milk) и светлый incoming. */
+.attachmentTextDivider {
+  height: 1px;
+  background: currentColor;
+  opacity: 0.15;
+  margin: 6px 0 5px;
+}

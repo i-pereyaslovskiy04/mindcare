@@ -1,18 +1,20 @@
 import Icon from '../../../components/Icon/Icon';
+import { hasPresence } from '../lib/conversationView';
 import styles from './ChatSidebar.module.css';
 
 export default function ChatListItem({ contact, isActive, onClick }) {
   const hasUnread = contact.unread > 0;
-  // presence показываем только у обычных диалогов (у system-беседы его нет).
-  const showPresence = !contact.system && typeof contact.online === 'boolean';
+  const showPresence = hasPresence(contact);
 
   return (
     <button
       type="button"
       className={[
         styles.item,
+        // selected — единый стиль для всех типов (обычный/архивный/system).
         isActive ? styles.itemActive : '',
-        contact.system ? styles.itemSystem : '',
+        // мягкое приглушение только для архивных (read-only), без своего selected.
+        contact.muted ? styles.itemMuted : '',
         hasUnread ? styles.itemUnread : '',
       ].filter(Boolean).join(' ')}
       onClick={onClick}

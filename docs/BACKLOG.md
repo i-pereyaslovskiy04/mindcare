@@ -223,12 +223,52 @@
     hamburger + breadcrumb + logout); удалён описательный подзаголовок под «Сообщения».
     Frontend-only; добавлен `ChatPage.smoke.test.jsx` (render list/thread). Ручной browser
     smoke desktop/tablet/mobile остаётся обязательным перед demo
+  - ✅ Stage 31y: **меню действий со своим сообщением** — кебаб-меню «…»
+    (`MessageActionsMenu`) вместо отдельной кнопки-карандаша, пункты «Редактировать»/
+    «Удалить»; удаление через confirm-диалог (`DeleteMessageDialog`, на shared
+    `Modal`/`Button`); меню недоступно для system-сообщений и в закрытой/архивной
+    беседе. Frontend-only
+  - ✅ Stage 31y-hotfix: **скрытие удалённых сообщений** — удалённые сообщения больше
+    не показываются плейсхолдером в ленте; soft delete в БД/audit сохранён
+    (физического удаления строки нет); runtime-текст «Сообщение удалено» не
+    используется; `MessageList` фильтрует `messages.filter(m => !m.deleted)` до
+    расчёта date-сепараторов/author-header. Frontend-only
+  - ✅ Stage 31z: **`MessageBubble` — выделение визуального компонента** —
+    `MessageItem` (полный компонент сообщения: own/incoming/system, author header,
+    avatar/layout, `canManage`, меню действий) и `MessageBubble` (feature-specific
+    визуальный bubble: текст + linkify + meta) разделены; meta (время/«изменено»/
+    ✓/✓✓) — внутри bubble; system-сообщения рендерятся как bubble от «MindCare».
+    Frontend-only
+  - ✅ Stage 31z-hotfix: **компактная Telegram-style meta** — `.bubble` через
+    `display:flex;flex-wrap:wrap;align-items:flex-end`: короткое сообщение и meta —
+    в одну строку, длинное — meta переносится вниз-направо без JS-измерения ширины;
+    кебаб-меню остаётся соседом bubble, не переносится внутрь него. Hardening:
+    system-сообщения никогда не считаются исходящими (даже при `mine=true` от
+    backend) и никогда не показывают «изменено» (даже при наличии `editedAt`).
+    Frontend-only; обновлены `MessageBubble.module.css`, `MessageList.test.jsx`
+  - ✅ Stage 31ab: **snapshot reconcile при polling** — `reconcileMessagesSnapshot`
+    в `pollNew` (student + psychologist): удалённое сообщение исчезает у собеседника
+    после следующего polling tick (≤ 8 сек) без переоткрытия диалога; без WebSocket/SSE;
+    без placeholder; backend/API/Alembic не менялись; `mergeMessages` (add/update)
+    сохранён. Тесты: `features/chat/lib/messageShape.test.js` (+10 тестов, 150 passed).
+    MVP-ограничение: reconcile покрывает только последние 50 сообщений (snapshot window
+    `limit=50`); история старше этой границы синхронизируется только при переоткрытии диалога.
+  - ✅ Stage 31ad: **useChatCore — общий core hook** — audit (31ad-audit) выявил ~90%
+    дублирования; fix-a: hook-level тесты; fix-b: общие константы + `errText` в
+    `chatHookUtils.js`; fix-c: нормализация 409 у психолога (deleteMessage + helper
+    `refreshConversationAfterConflict`); fix-d: `useChatCore(adapter)` создан
+    (`features/chat/hooks/useChatCore.js`), `useStudentChat` и `usePsychologistChat` —
+    thin wrappers. Public return shape хуков не изменился; page-компоненты не менялись;
+    `useSystemConversation` — отдельный hook, не входит в `useChatCore`; backend/API/
+    Alembic не менялись. 166/166 тестов. Frontend-only.
   - **Ограничения Messenger MVP** (зафиксированы осознанно, не баги):
     - presence приблизительный — не realtime; порог 10 минут; зависит от
       `user_sessions.last_active` и debounce `touch_session` 300с;
     - read-receipt live-обновление только в пределах snapshot `limit=50`;
     - без WebSocket/SSE (polling 8s/30s);
-    - mobile drawer пока без focus-trap / `inert` фона
+    - mobile drawer пока без focus-trap / `inert` фона;
+    - snapshot reconcile при polling ограничен последними 50 сообщениями; история
+      старше snapshot window синхронизируется только при переоткрытии диалога
   - **Group chat — postponed / future:**
     - не входит в текущий Messenger MVP; **не начат и не проектируется** на этом этапе
     - текущий Messenger покрывает только student↔psychologist one-to-one chat и
@@ -240,12 +280,59 @@
       `chat_groups`; `chat_group_members`; roles/moderation; access policy;
       unread/read model; encryption policy; system messages внутри группы;
       privacy/compliance-риски
-  - **Future (chat):** preview последнего сообщения в списке бесед (требует decrypt на
-    список — optional); WebSocket/SSE realtime presence; attachments/files; staff
-    break-glass access; Action Center / колокольчик; system messages для заданий/
-    материалов/анкет/legal announcements; усиление a11y mobile drawer (focus-trap/`inert`);
-    глубокий рефакторинг chat-модуля (split `storage.py`, общий `useChatThread`,
-    shared `MessengerPageShell`) — см. Stage 31a audit
+  - ✅ Stage 32b: **chat_attachments DB foundation** — миграция `a9b3e1f7c2d4`
+    (`chat_attachments`: uuid, conversation_id FK, message_id nullable FK,
+    uploader_id FK, original_filename, mime_type, file_size, storage_key, checksum,
+    is_image, deleted_at); model `app/db/models/chat.py`; constraint-тесты
+    (`test_chat_attachment_models.py`, 20)
+  - ✅ Stage 32c: **backend attachment upload/download** — `POST .../attachments`
+    (pre-upload, allowlist MIME, blocklist extensions, size limit, UUID storage_key,
+    private FS `CHAT_FILE_STORAGE_DIR`); `GET .../download` (permission check,
+    streaming response); send with `attachment_uuids`; `test_chat_attachment_api.py` (37)
+  - ✅ Stage 32c-hotfix: **safe file type policy** — WEBP, Excel (`.xls/.xlsx`) и
+    PowerPoint (`.ppt/.pptx`) разрешены; SVG запрещён; архивы отложены; blocklist
+    расширен `.vbs`/`.scr`
+  - ✅ Stage 32d + 32d-hotfix: **frontend attachment rendering** — `AttachmentCard`/
+    `AttachmentList` в `MessageBubble`; high-contrast outgoing dark-card fix
+  - ✅ Stage 32d-hotfix-b: **safe Office download** — Chromium safe save flow через
+    `showSaveFilePicker`, fallback через anchor download; Office attachments скачиваются
+    без top-level navigation на `blob:` URL; чат остаётся открытым; backend full suite
+    после Office header tests — 488 passed
+  - ✅ Stage 32d-hotfix-b layout: **files-first attachment layout** — в сообщениях с
+    файлами и текстом сначала отображаются файлы, затем divider, затем текст как caption;
+    attachment-only сообщения без divider
+  - ✅ Stage 32e: **composer attachment picker** — скрепка, hidden file input,
+    `SelectedAttachmentList` (pre-send), attachment-only send, text+attachment send,
+    upload error без потери черновика; `SelectedAttachmentList.test.jsx`
+  - ✅ Stage 32f: **drag & drop** — `DragDropOverlay`, counter-based enter/leave,
+    merge с existing selected, empty file/max-files guard; drag disabled in edit-mode;
+    `DragDropOverlay.test.jsx`, `ChatWindow.test.jsx` drag tests
+  - ✅ Stage 32g: **edit/remove individual attachment** — `remove_attachment_uuids`
+    в schema/storage/service/routes; soft delete атомарно с content/edited_at;
+    `EditableAttachmentList` (optimistic UI); `test_chat_attachment_edit.py` (18)
+  - ✅ Stage 32i: **Image Preview / Lightbox** — preview `image/jpeg`, `image/png`,
+    `image/webp` через `AttachmentPreviewLightbox`; authenticated blob flow
+    (`URL.createObjectURL` / `URL.revokeObjectURL`), без public static и без токенов в URL
+  - ✅ Stage 32j: **PDF Preview / Lightbox** — preview `application/pdf` в том же
+    `AttachmentPreviewLightbox` через native browser PDF rendering в iframe с blob URL;
+    Office/TXT/SVG/unknown MIME остаются download-only; frontend full suite —
+    33 suites / 369 passed, backend full suite — 488 passed
+  - **Future (chat):** preview последнего сообщения в списке бесед; WebSocket/SSE
+    realtime presence; inline image thumbnails; Office preview; TXT preview; PDF.js integration
+    при необходимости; upload progress percent; upload retry queue; MIME magic bytes validation (`python-magic`);
+    antivirus/ClamAV scanning; at-rest encryption физических файлов в FS; S3/MinIO
+    storage backend; добавление новых файлов в edit-mode; staff break-glass access;
+    Action Center / колокольчик; system messages для заданий/материалов/анкет/legal
+    announcements; усиление a11y mobile drawer (focus-trap/`inert`);
+    глубокий рефакторинг chat-модуля
+  - **Orphan attachments cleanup helper — существует:** `scripts/cleanup_orphan_attachments.py`
+    работает в dry-run режиме по умолчанию, `--apply` включает выполнение, scope —
+    только orphan-записи `chat_attachments` с `message_id IS NULL`.
+  - **Full attachment cleanup/retention — pending / production-hardening:**
+    физическое удаление файлов soft-deleted вложений по retention-политике,
+    тесты cleanup CLI, manual smoke и опциональный cron/systemd timer после ручной
+    проверки. Не считать реализованными full retention, автоматический cleanup и
+    scheduler.
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать

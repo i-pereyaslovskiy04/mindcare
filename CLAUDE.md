@@ -90,7 +90,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 48 таблиц создаются через `alembic upgrade head`.
+> Все 49 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -172,7 +172,8 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **282 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **488 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -199,6 +200,13 @@ npm run build
 | `tests/integration/test_system_conversation.py` | system conversation backend (Stage 29b) — 17 |
 | `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (Stage 29d) — 11 |
 | `tests/integration/test_chat_presence.py` | approximate online/offline presence (Stage 30c) — 12 |
+| `tests/integration/test_chat_message_edit.py` | редактирование сообщений chat (Stage 31z) — 10 |
+| `tests/integration/test_chat_message_delete.py` | soft delete сообщений chat (Stage 31y) — 10 |
+| `tests/integration/test_chat_bootstrap_on_assignment.py` | создание/восстановление беседы при назначении — 4 |
+| `tests/integration/test_chat_lifecycle.py` | жизненный цикл engagement-беседы (перевод, закрытие) — 8 |
+| `tests/integration/test_chat_attachment_models.py` | constraints chat_attachments (Stage 32b) — 20 |
+| `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
+| `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
 
 ---
 
@@ -235,7 +243,7 @@ mindcare_api/
 │   │   ├── session.py       — engine, SessionLocal
 │   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
 │   │   ├── seed.py          — идемпотентный seed
-│   │   └── models/          — ORM-модели (12 модулей, 48 таблиц; chat.py — Stage 28b)
+│   │   └── models/          — ORM-модели (12 модулей, 49 таблиц; chat.py — Stage 28b/32b)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
@@ -281,17 +289,21 @@ mindcare_api/
 │   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
 │   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
 │   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
-│   │                          system_publisher (idempotency event_key)
+│   │                          system_publisher (idempotency event_key); attachments:
+│   │                          upload/download/preview (private storage, not public static),
+│   │                          send with attachment_uuids, edit remove_attachment_uuids,
+│   │                          soft delete via chat_attachments.deleted_at (Stage 32b–32j)
 │   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
 │   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
 │       ├── _smtp.py         — SMTP транспорт (dev/smtp режимы, внутренний)
 │       └── email_service.py — формирование писем по событиям
 ├── scripts/
-│   ├── create_admin.py            — создание первого админа (+ legal basis record)
-│   ├── ensure_audit_partitions.py — будущие партиции audit-таблиц
-│   ├── backfill_legal_basis.py    — backfill legal basis (--dry-run default)
-│   └── test_smtp.py               — диагностика SMTP
+│   ├── create_admin.py                      — создание первого админа (+ legal basis record)
+│   ├── ensure_audit_partitions.py           — будущие партиции audit-таблиц
+│   ├── backfill_legal_basis.py              — backfill legal basis (--dry-run default)
+│   ├── repair_missing_chat_conversations.py — восстановление бесед для существующих engagements
+│   └── test_smtp.py                         — диагностика SMTP
 └── db/
     └── sql/
         ├── full_schema.sql  — полная схема (001-010 склеены)
@@ -358,13 +370,37 @@ mindcare_api/
 ❌ Не использовать async SQLAlchemy — проект на sync psycopg2
 ❌ Не вызывать alembic.command.upgrade() из FastAPI lifespan — deadlock
 ❌ Не вызывать Base.metadata.create_all() — удалён, схема только через Alembic
+✅ Chat attachments хранятся в private directory (`CHAT_FILE_STORAGE_DIR`),
+   не в PostgreSQL и не в public static
+✅ storage_key формируется на основе UUID — original filename не используется как filesystem path
+✅ Скачивание вложений только через auth backend endpoints (permission check участника)
+✅ Chromium download flow использует `showSaveFilePicker`; fallback — anchor download.
+   Office-файлы должны скачиваться без top-level navigation на `blob:` URL, чат остаётся открытым
+✅ Attachment preview реализован только для `image/jpeg`, `image/png`, `image/webp`,
+   `application/pdf` через authenticated blob flow: backend download endpoint → `blob` →
+   `URL.createObjectURL(blob)` → `AttachmentPreviewLightbox` → cleanup `URL.revokeObjectURL`
+✅ Preview не использует public static, прямые `<img src="/api/...">`/`<iframe src="/api/...">`
+   на backend endpoint и токены в query string
+✅ MVP file policy: разрешены jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx;
+   svg, html/htm, js, exe/bat/cmd/com/msi, sh/ps1, php/jar, vbs/scr заблокированы;
+   архивы пока не добавлять как реализованные
+✅ Аудит для upload/download событий — content файла в audit не пишется
+✅ Для orphan-вложений чата есть helper `scripts/cleanup_orphan_attachments.py`:
+   dry-run по умолчанию, `--apply` для выполнения, scope — только `message_id IS NULL`
+❌ Не писать, что реализован полный cleanup/retention attachments: physical cleanup
+   файлов soft-deleted вложений по retention-политике, CLI tests и cron/systemd timer pending
+❌ Не отдавать chat attachments через /static/* или StaticFiles — private storage
+❌ Не давать admin/supervisor доступ к chat attachments без отдельного compliance-этапа
+❌ Не хранить физический файл чата в PostgreSQL (даже как bytea/blob)
+❌ Не писать, что реализованы MIME magic bytes (`python-magic`), antivirus/ClamAV,
+   Office/TXT preview, thumbnails, PDF.js, S3/MinIO или at-rest encryption физических файлов
 ```
 
 ---
 
 ### База данных: схема
 
-48 таблиц в 12 модулях. Схема управляется через Alembic.
+49 таблиц в 12 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -382,7 +418,9 @@ mindcare_api/
 | `e5a8f3c1d2b6` | add_normalized_email_unique_index: `lower(trim(email))` |
 | `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) |
 | `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
-| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
+| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) |
+| `f7e9c2a4b8d1` | add_chat_message_edited_at: chat_messages.edited_at (Stage 31z) |
+| `a9b3e1f7c2d4` | add_chat_attachments: chat_attachments table + FK (Stage 32b) — **head** |
 
 **Ключевые таблицы:**
 
@@ -396,6 +434,7 @@ mindcare_api/
 | `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
 | `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
+| `chat_attachments` | Вложения чата (Stage 32b): metadata (original_filename, mime_type, file_size, storage_key, checksum, is_image); физический файл — в `CHAT_FILE_STORAGE_DIR` (private FS, не public static); soft delete через `deleted_at`; скачивание только через auth backend endpoint |
 | `appointments` | Записи на консультации |
 | `schedule_rules` | Расписание психологов (не материализованные слоты) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
@@ -722,6 +761,10 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/articles` | Public | ✅ |
 | GET | `/api/articles/{uuid}` | Public | ✅ |
 | GET | `/api/articles/categories` | Public | ✅ |
+| POST | `/api/chat/student/conversations/{uuid}/attachments` | Student | ✅ |
+| GET | `/api/chat/student/conversations/{uuid}/attachments/{att_uuid}/download` | Student | ✅ |
+| POST | `/api/chat/conversations/{uuid}/attachments` | Psychologist | ✅ |
+| GET | `/api/chat/conversations/{uuid}/attachments/{att_uuid}/download` | Psychologist | ✅ |
 
 ## Соглашения по коду
 
@@ -893,6 +936,55 @@ Conventional Commits:
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read
   только по явному клику), глобальный nav badge + per-dialog unread, system-беседа
   последняя в списке, approximate online/offline (`peer_is_online`, порог 10 мин)
+- **Действия со своим сообщением (Stage 31y/31y-hotfix):** меню «…» (`MessageActionsMenu`,
+  не отдельная кнопка-карандаш) — «Редактировать»/«Удалить»; удаление — через confirm-диалог,
+  soft delete на backend; удалённые сообщения скрыты из ленты БЕЗ плейсхолдера «Сообщение
+  удалено» (техническая запись остаётся только для audit/security, участникам не показывается)
+- **MessageBubble (Stage 31z/31z-hotfix):** визуальное облачко сообщения — отдельный
+  feature-specific компонент `src/features/chat/components/MessageBubble` (НЕ глобальный
+  shared UI, не переносить в `src/components/UI` без второго независимого потребителя);
+  meta (время/«изменено»/✓/✓✓) внутри bubble, компактно для коротких сообщений, с переносом
+  вниз-направо для длинных (Telegram-style); system-сообщения всегда как bubble от «MindCare»,
+  без меню действий, без «изменено», без read receipts
+- **Polling reconcile (Stage 31ab):** `reconcileMessagesSnapshot` в `pollNew` (student +
+  psychologist) — удалённое сообщение исчезает у собеседника после следующего polling tick
+  (≤ 8 сек) без переоткрытия диалога; без WebSocket/SSE; без placeholder; `mergeMessages`
+  сохранён (add/update); MVP-ограничение: reconcile только для последних 50 сообщений
+  (история старше snapshot window — при переоткрытии)
+- **Chat hook architecture (Stage 31ad):** `useStudentChat` и `usePsychologistChat` —
+  thin wrappers поверх `useChatCore(adapter)` (`features/chat/hooks/useChatCore.js`);
+  public return shape не изменился; `useSystemConversation` — отдельный hook, не входит
+  в `useChatCore`; backend/API/Alembic/UI-компоненты (`ChatWindow`, `MessageList`,
+  `MessageBubble`) не менялись; 409 Conflict — через optional `getConversation` (student:
+  null → silent list reload; psychologist: `getPsychologistConversation` → точечный refresh)
+- **Attachments Stage 32b–32j + hotfixes:** upload через скрепку / drag&drop; text+attachments;
+  attachment-only message; карточки вложений (`AttachmentCard`/`AttachmentList`);
+  files-first layout: в сообщении с файлами и текстом сначала файлы, затем divider,
+  затем текст как caption и meta внизу; attachment-only — без divider;
+  скачивание через auth backend endpoint (private storage, не public static);
+  Chromium safe save через `showSaveFilePicker`, fallback — anchor download; Office download
+  не должен переводить SPA на `blob:` URL и не должен закрывать чат;
+  preview для `image/jpeg`, `image/png`, `image/webp`, `application/pdf` через
+  `AttachmentPreviewLightbox` (`AttachmentPreviewLightbox.jsx/.module.css/.test.jsx`):
+  `AttachmentCard` локально управляет preview state, использует authenticated download handler,
+  создаёт object URL и очищает его через `URL.revokeObjectURL`; lightbox закрывается через X,
+  overlay, Esc; клик по image/pdf content не закрывает preview; URL страницы не меняется;
+  file policy: jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx разрешены;
+  svg/html/js/executable/script extensions заблокированы; архивы отложены; Office/TXT/SVG/unknown
+  MIME остаются download-only;
+  edit-mode удаление отдельных файлов (`EditableAttachmentList`, `remove_attachment_uuids`);
+  удаление сообщения/вложения — soft delete (`chat_attachments.deleted_at`);
+  физический файл не удаляется сразу.
+  **Pending:** thumbnails; Office/TXT preview; PDF.js integration при необходимости;
+  upload progress %; retry queue; MIME magic bytes; antivirus; at-rest encryption физических файлов;
+  добавление файлов в edit-mode. Для orphan-вложений (`message_id IS NULL`) уже есть
+  helper `scripts/cleanup_orphan_attachments.py` с dry-run по умолчанию и явным `--apply`.
+  **Pending cleanup/retention:** физическое удаление файлов soft-deleted вложений после
+  retention-периода, тесты cleanup CLI и cron/systemd timer после ручной проверки.
+  Компоненты attachment UI (feature-specific, не global shared UI):
+  `AttachmentCard`, `AttachmentList`, `SelectedAttachmentList` (pre-send picker),
+  `EditableAttachmentList` (edit-mode), `DragDropOverlay`, `AttachmentPreviewLightbox` —
+  проверить перед созданием новых
 - Runtime student chat mock (CONTACTS, INITIAL_MESSAGES, MOCK_*) удалён
 - **Mobile (Stage 30d):** Messenger `≤900px` — list/thread (back-кнопка в шапке чата);
   CabinetLayout `>980px` full sidebar / `601–980px` icon-rail / `≤600px` мобильный drawer
@@ -900,11 +992,13 @@ Conventional Commits:
   `.app`=`grid 1fr` (фикс пустого кабинета) и разгруженный topbar (скрыты bell/mail).
   Breakpoints разные по слоям: Messenger=900px, Cabinet=600px (+980 icon-rail) — не «выравнивать»
 - **Ограничения MVP** (не баги): presence приблизительный (порог 10 мин, не realtime);
-  read-receipt live только в snapshot `limit=50`; без WebSocket/SSE; drawer без focus-trap
+  read-receipt live только в snapshot `limit=50`; без WebSocket/SSE; drawer без focus-trap;
+  snapshot reconcile ограничен последними 50 сообщениями (история старше snapshot window
+  синхронизируется только при переоткрытии диалога)
 - **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,
   обязателен READ-ONLY design audit (см. `docs/BACKLOG.md`); учебная группа ≠
   автоматический чат. Не начинать group chat без отдельного этапа
-- Не добавлять WebSocket/SSE, attachments, Action Center/колокольчик или
+- Не добавлять WebSocket/SSE, Action Center/колокольчик или
   staff-доступ к content без отдельного этапа
 - `questions_answers` — это Q&A-модуль (один вопрос → один ответ), НЕ чат;
   не использовать как основу для чата

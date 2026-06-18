@@ -22,8 +22,8 @@ from app.main import app
 from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
 from app.db.models import (
-    ChatConversation, ChatMessage, ConsentRecord, OtpVerification,
-    TherapyEngagement, User,
+    ChatAttachment, ChatConversation, ChatMessage, ConsentRecord,
+    OtpVerification, TherapyEngagement, User,
 )
 
 
@@ -142,6 +142,10 @@ def cleanup_test_records():
                 )
             conv_ids = list(conv_ids)
             if conv_ids:
+                # chat_attachments FK → chat_messages (RESTRICT): удалять до messages.
+                db.query(ChatAttachment).filter(
+                    ChatAttachment.conversation_id.in_(conv_ids)
+                ).delete(synchronize_session=False)
                 db.query(ChatMessage).filter(
                     ChatMessage.conversation_id.in_(conv_ids)
                 ).delete(synchronize_session=False)

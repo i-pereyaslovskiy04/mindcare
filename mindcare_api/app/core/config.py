@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     SMTP_SSL: bool = False
     # --- MEDIA ---
     NEWS_IMAGE_MAX_SIZE_MB: int = 20
+    # --- CHAT FILES ---
+    CHAT_FILE_MAX_SIZE_MB: int = 20
+    CHAT_FILE_MAX_FILES_PER_MESSAGE: int = 5
+    # Относительный путь к private-хранилищу файлов чата (от mindcare_api/).
+    # Не должен пересекаться с media/uploads/ (публичные изображения новостей).
+    # Nginx/StaticFiles НЕ должен обслуживать этот путь напрямую.
+    CHAT_FILE_STORAGE_DIR: str = "storage/private/chat_attachments"
+    # 'local_private' — локальная FS без публичного доступа (MVP).
+    # 's3' — будущий S3/MinIO backend (не реализован).
+    CHAT_FILE_STORAGE_BACKEND: str = "local_private"
     # --- CORS ---
     ALLOWED_ORIGINS: str = "http://localhost:3000"
     # --- ENCRYPTION ---
@@ -38,3 +48,26 @@ class Settings(BaseSettings):
 
 settings = Settings()
 SESSION_EXPIRE_DAYS = settings.SESSION_EXPIRE_DAYS
+
+# Допустимые MIME-типы для chat attachments (Stage 32b).
+# Не настраивается через .env — allowlist должен быть явно утверждён в коде.
+# Upload-валидация (magic bytes check) реализуется в Stage 32c.
+CHAT_FILE_ALLOWED_MIME_TYPES: frozenset[str] = frozenset({
+    # Изображения (SVG запрещён — может содержать скрипты)
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    # Документы — Word
+    "application/pdf",
+    "application/msword",                                                          # .doc
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",    # .docx
+    # Документы — Excel
+    "application/vnd.ms-excel",                                                   # .xls
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          # .xlsx
+    # Документы — PowerPoint
+    "application/vnd.ms-powerpoint",                                              # .ppt
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    # Текст
+    "text/plain",
+    # Архивы — отложены (pending: zip/rar могут содержать исполняемые файлы)
+})

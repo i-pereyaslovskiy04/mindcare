@@ -30,6 +30,10 @@
 }
 
 .shell {
+  /* единая высота обоих header'ов (список + диалог); наследуется в .header
+     обоих CSS-модулей через var (Stage 31x-hotfix-2) */
+  --chat-header-height: 72px;
+  position: relative;
   display: grid;
   grid-template-columns: 280px 1fr;
   border: 1px solid var(--nav-border);
@@ -39,6 +43,22 @@
   min-height: 0;
   background: var(--warm-white);
   box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+}
+
+/* Единая непрерывная линия под header-рядом через обе колонки. Рисуется одним
+   элементом поверх вертикального divider'а (border-right у .sidebar), поэтому
+   стык не рвётся ни на разных DPI, ни на 250% zoom (вместо двух отдельных
+   border-bottom). Клипуется overflow:hidden скруглением shell. */
+.shell::after {
+  content: "";
+  position: absolute;
+  top: var(--chat-header-height);
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--nav-border);
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* пустой/загрузочный правый pane внутри shell */

@@ -93,6 +93,7 @@ from app.db.models.consultations import (  # noqa: F401
 from app.db.models.chat import (  # noqa: F401
     ChatConversation,
     ChatMessage,
+    ChatAttachment,
 )
 
 # ── notifications ─────────────────────────────────────────────────────────────
@@ -132,7 +133,7 @@ __all__ = [
     # consultations
     "TherapyEngagement", "ScheduleRule", "ScheduleException", "Appointment", "SessionNote",
     # chat
-    "ChatConversation", "ChatMessage",
+    "ChatConversation", "ChatMessage", "ChatAttachment",
     # notifications
     "NotificationTemplate", "Notification",
     # audit

@@ -1,0 +1,163 @@
+/* AttachmentCard — компактная карточка вложения внутри bubble (Stage 32d/32d-hotfix). */
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  min-width: 0;
+  max-width: 280px;
+}
+
+/* Outgoing bubble: класс добавляется через prop (не :global — CSS Modules хэширует имя). */
+.cardOutgoing {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.fileIcon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--coffee);
+  opacity: 0.75;
+}
+
+.cardOutgoing .fileIcon {
+  color: var(--milk);
+  opacity: 0.85;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--espresso);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.cardOutgoing .name {
+  color: var(--milk);
+}
+
+.size {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.cardOutgoing .size {
+  color: rgba(237, 228, 211, 0.72);
+}
+
+.error {
+  font-size: 10.5px;
+  color: var(--error);
+  line-height: 1.2;
+}
+
+.cardOutgoing .error {
+  color: #ffb3b3;
+}
+
+.previewBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  padding: 0;
+}
+
+.previewBtn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.previewBtn:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 1px;
+}
+
+.cardOutgoing .previewBtn {
+  color: var(--milk);
+}
+
+.cardOutgoing .previewBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cardOutgoing .previewBtn:focus-visible {
+  outline-color: var(--milk);
+}
+
+.downloadBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  padding: 0;
+}
+
+.downloadBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.downloadBtn:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 1px;
+}
+
+.downloadBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cardOutgoing .downloadBtn {
+  color: var(--milk);
+}
+
+.cardOutgoing .downloadBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cardOutgoing .downloadBtn:focus-visible {
+  outline-color: var(--milk);
+}
+
+.loadingDots {
+  font-size: 14px;
+  line-height: 1;
+}
+
+@media (max-width: 900px) {
+  .card {
+    max-width: 220px;
+  }
+}

@@ -5,6 +5,13 @@
 
 /* ---- window layout ---- */
 .window {
+  --chat-system-avatar-bg: var(--sand);
+  --chat-system-avatar-color: var(--coffee);
+  --chat-system-avatar-border: var(--nav-border);
+  --chat-presence-online: var(--success);
+  --chat-presence-offline: var(--text-light);
+
+  position: relative;  /* нужно для DragDropOverlay (position: absolute; inset: 0) */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -14,12 +21,16 @@
 }
 
 /* ---- header ---- */
+/* Высота согласована с .header списка через общий var --chat-header-height
+   (задаётся на .shell страницы). Горизонтальную линию рисует единый
+   .shell::after, поэтому border-bottom здесь НЕ ставим (Stage 31x-hotfix-2). */
 .header {
+  box-sizing: border-box;
+  min-height: var(--chat-header-height, 72px);
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 16px 22px;
-  border-bottom: 1px solid var(--nav-border);
   flex-shrink: 0;
   background: var(--warm-white);
 }
@@ -96,11 +107,11 @@
 }
 
 .presenceOnline {
-  background: var(--success);
+  background: var(--chat-presence-online);
 }
 
 .presenceOffline {
-  background: var(--text-light);
+  background: var(--chat-presence-offline);
 }
 
 /* ---- messages list ---- */
@@ -154,86 +165,82 @@
   margin-top: 2px;
 }
 
+/* аватар system-сообщений (MindCare): нейтральный, как headerAvatarSystem */
 .msgContent {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.bubble {
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 13.5px;
-  line-height: 1.5;
-  background: var(--warm-white);
-  border: 1px solid var(--nav-border);
-  color: var(--text-main);
-  word-break: break-word;
+/* строка bubble + карандаш: align-items center центрирует карандаш по высоте
+   bubble (а не по всей колонке с author header / meta), Stage 31x-hotfix */
+.bubbleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.bubbleMe {
-  background: var(--espresso);
-  color: var(--milk);
-  border-color: var(--espresso);
+/* у своих сообщений карандаш слева от bubble (к центру переписки) */
+.msgMe .bubbleRow {
+  flex-direction: row-reverse;
 }
 
-.msgTime {
-  font-size: 10.5px;
-  color: var(--text-light);
+/* ---- author header (VK-style подпись отправителя над группой) ---- */
+.authorHeader {
+  font-size: 11.5px;
+  line-height: 1.2;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
-.msgTimeRight {
+/* свои сообщения справа → подпись прижата вправо, как и bubble */
+.authorHeaderMe {
   text-align: right;
 }
 
-/* read receipts (только для исходящих user-сообщений) */
-.receipt {
-  margin-left: 5px;
-  font-size: 11px;
-  color: var(--text-light);
-  letter-spacing: -1px;
+.authorName {
+  font-weight: 600;
+  color: var(--espresso);
 }
 
-/* link inside bubble (frontend linkify) */
-.bubble a,
-.systemBubble a {
-  color: inherit;
-  text-decoration: underline;
-  word-break: break-all;
-}
-
-.bubbleMe a {
-  color: var(--milk);
-}
-
-/* ---- system message (нейтральный, по центру, без аватара/receipts) ---- */
-.msgSystem {
-  align-self: center;
-  max-width: 85%;
-}
-
-.systemBubble {
-  background: var(--sand);
-  border: 1px solid var(--nav-border);
-  border-radius: 12px;
-  padding: 9px 14px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--text-main);
-  text-align: center;
-  word-break: break-word;
-}
-
-.systemTime {
-  margin-top: 4px;
-  font-size: 10px;
+.authorRole {
+  font-weight: 500;
   color: var(--text-light);
 }
 
+/* Визуал самого bubble (текст + meta) перенесён в MessageBubble.module.css
+   (Stage 31z) — здесь остаётся только позиционирование bubble относительно
+   kebab-меню (.bubbleRow) и группы сообщения (.msg/.msgMe/.msgAvatar/...). */
+
+/* kebab-меню действий: только у своих сообщений; на desktop появляется по
+   hover сообщения / focus триггера. Вертикальное центрирование по bubble
+   обеспечивает .bubbleRow (align-items). Сам триггер стилизован в
+   MessageActionsMenu.module.css; здесь — только видимость (hover/focus). */
+.msgActions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.msg:hover .msgActions,
+.msgActions:focus-visible {
+  opacity: 1;
+}
+
+/* touch-устройства без hover: меню действий у своих сообщений видно всегда */
+@media (hover: none) {
+  .msgActions {
+    opacity: 1;
+  }
+}
+
+.msgAvatarSystem,
 .headerAvatarSystem {
-  background: var(--sand);
-  color: var(--coffee);
-  border: 1px solid var(--nav-border);
+  background: var(--chat-system-avatar-bg);
+  color: var(--chat-system-avatar-color);
+  border: 1px solid var(--chat-system-avatar-border);
 }
 
 .threadEmpty {
@@ -263,6 +270,89 @@
   flex-shrink: 0;
 }
 
+/* ---- composer (input + optional edit banner, Stage 31x) ---- */
+.composer {
+  flex-shrink: 0;
+}
+
+/* панель режима редактирования над input */
+.editBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--nav-border);
+  background: var(--sand);
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.editBannerLabel {
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.editCancel {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--coffee);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: inherit;
+}
+
+.editCancel:hover {
+  text-decoration: underline;
+}
+
+/* ---- attach button + hidden file input (Stage 32e) ---- */
+.attachBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+
+.attachBtn:hover:not(:disabled) {
+  background: var(--sand);
+  color: var(--espresso);
+}
+
+.attachBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.attachBtn:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 1px;
+}
+
+.fileInput {
+  display: none;
+}
+
+/* Мягкая ошибка прикрепления (слишком много файлов, пустой файл) */
+.attachError {
+  padding: 4px 18px 2px;
+  font-size: 12px;
+  color: var(--error);
+  background: var(--error-bg);
+  flex-shrink: 0;
+}
+
 /* ---- input row ---- */
 .inputRow {
   display: flex;
@@ -280,11 +370,16 @@
   background: var(--cream);
   border-radius: 12px;
   padding: 10px 14px;
+  min-height: 40px;
+  max-height: 132px;
   font-size: 13.5px;
+  line-height: 1.35;
   color: var(--text-main);
   outline: none;
   font-family: inherit;
   transition: border-color 0.15s, background 0.15s;
+  resize: none;
+  overflow-y: hidden;
 }
 
 .input:focus {
@@ -333,5 +428,21 @@
 @media (max-width: 900px) {
   .backBtn {
     display: inline-flex;
+  }
+
+  /* Compact icon-only send/save button (Stage 31z-hotfix2): текстовая
+     кнопка «Отправить»/«Сохранить» на узком экране была шире, чем нужно,
+     рядом с input. На mobile показываем только иконку самолётика/edit. */
+  .sendBtn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .sendLabel {
+    display: none;
   }
 }

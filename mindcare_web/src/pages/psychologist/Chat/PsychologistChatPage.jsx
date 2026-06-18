@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Button from '../../../components/UI/Button/Button';
 import ChatSidebar from '../../../features/chat/components/ChatSidebar';
 import ChatWindow from '../../../features/chat/components/ChatWindow';
@@ -8,6 +9,7 @@ import {
   SYSTEM_NOTICE,
   formatLastTime,
   initialsOf,
+  splitConversations,
   systemContact,
 } from '../../../features/chat/lib/conversationView';
 import { usePsychologistChat } from './usePsychologistChat';
@@ -16,6 +18,64 @@ import styles from './PsychologistChatPage.module.css';
 const SYSTEM_META_POLL_MS = 30000;
 const SYSTEM_MSG_POLL_MS = 8000;
 
+function sameParamValue(value, queryValue) {
+  return value !== undefined && value !== null && String(value) === queryValue;
+}
+
+function matchesStudentQuery(conv, studentQuery) {
+  const student = conv.student ?? {};
+  const client = conv.client ?? {};
+  const user = conv.user ?? {};
+  const participant = conv.participant ?? {};
+  return (
+    sameParamValue(student.uuid, studentQuery) ||
+    sameParamValue(student.id, studentQuery) ||
+    sameParamValue(conv.student_uuid, studentQuery) ||
+    sameParamValue(conv.student_id, studentQuery) ||
+    sameParamValue(conv.studentUuid, studentQuery) ||
+    sameParamValue(conv.studentId, studentQuery) ||
+    sameParamValue(client.uuid, studentQuery) ||
+    sameParamValue(client.id, studentQuery) ||
+    sameParamValue(conv.client_uuid, studentQuery) ||
+    sameParamValue(conv.client_id, studentQuery) ||
+    sameParamValue(conv.clientUuid, studentQuery) ||
+    sameParamValue(conv.clientId, studentQuery) ||
+    sameParamValue(user.uuid, studentQuery) ||
+    sameParamValue(user.id, studentQuery) ||
+    sameParamValue(conv.user_uuid, studentQuery) ||
+    sameParamValue(conv.user_id, studentQuery) ||
+    sameParamValue(conv.userUuid, studentQuery) ||
+    sameParamValue(conv.userId, studentQuery) ||
+    sameParamValue(participant.uuid, studentQuery) ||
+    sameParamValue(participant.id, studentQuery)
+  );
+}
+
+function isSystemConversation(conv) {
+  return conv?.type === 'system' || conv?.system === true;
+}
+
+export function findConversationFromQuickChatQuery(
+  conversations,
+  { conversationId, studentId },
+) {
+  if (!Array.isArray(conversations)) return null;
+  const userConversations = conversations.filter((conv) => !isSystemConversation(conv));
+
+  if (conversationId) {
+    return userConversations.find((conv) => (
+      sameParamValue(conv.uuid, conversationId) ||
+      sameParamValue(conv.id, conversationId)
+    )) ?? null;
+  }
+
+  if (studentId) {
+    return userConversations.find((conv) => matchesStudentQuery(conv, studentId)) ?? null;
+  }
+
+  return null;
+}
+
 function toContact(conv) {
   const closed = conv.engagement_status !== 'active';
   return {
@@ -23,6 +83,7 @@ function toContact(conv) {
     name: conv.student.full_name,
     initials: initialsOf(conv.student.full_name),
     role: closed ? 'Диалог закрыт' : 'Студент',
+    authorRole: 'пациент',
     lastMsg: closed ? 'Диалог закрыт' : 'Активный диалог',
     time: formatLastTime(conv.last_message_at),
     unread: conv.unread_count,
@@ -31,6 +92,7 @@ function toContact(conv) {
 }
 
 export default function PsychologistChatPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     conversations,
     listLoading,
@@ -47,6 +109,9 @@ export default function PsychologistChatPage() {
     sending,
     sendError,
     send,
+    editMessage,
+    deleteMessage,
+    downloadAttachment,
   } = usePsychologistChat();
 
   const {
@@ -62,6 +127,12 @@ export default function PsychologistChatPage() {
 
   // VK-like: при входе ничего не выбрано и ничего не открыто (нет авто-mark-read).
   const [systemSelected, setSystemSelected] = useState(false);
+  const [quickOpenError, setQuickOpenError] = useState('');
+  const [quickOpenTargetUuid, setQuickOpenTargetUuid] = useState(null);
+
+  const queryConversation = searchParams.get('conversation');
+  const queryStudent = searchParams.get('student');
+  const hasQuickOpenQuery = Boolean(queryConversation || queryStudent);
 
   // Лёгкий poll метаданных системной беседы (unread в списке).
   useEffect(() => {
@@ -81,7 +152,46 @@ export default function PsychologistChatPage() {
     };
   }, [systemSelected, sysOpen, sysPollNew, sysClose]);
 
+  useEffect(() => {
+    if (!hasQuickOpenQuery) return;
+
+    if (listLoading) return;
+
+    const target = findConversationFromQuickChatQuery(conversations, {
+      conversationId: queryConversation,
+      studentId: queryStudent,
+    });
+
+    if (target) {
+      setQuickOpenError('');
+      setSystemSelected(false);
+      setQuickOpenTargetUuid(target.uuid);
+      if (selectedUuid !== target.uuid) selectConversation(target.uuid);
+    } else {
+      setQuickOpenTargetUuid(null);
+      setQuickOpenError('Диалог со студентом не найден.');
+      setSearchParams({}, { replace: true });
+    }
+  }, [
+    conversations,
+    hasQuickOpenQuery,
+    listLoading,
+    queryConversation,
+    queryStudent,
+    selectConversation,
+    selectedUuid,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
+    if (!quickOpenTargetUuid || selectedUuid !== quickOpenTargetUuid) return;
+    setQuickOpenTargetUuid(null);
+    setSearchParams({}, { replace: true });
+  }, [quickOpenTargetUuid, selectedUuid, setSearchParams]);
+
   const handleSelect = (id) => {
+    setQuickOpenError('');
+    setQuickOpenTargetUuid(null);
     if (id === SYSTEM_DIALOG_ID) {
       setSystemSelected(true);
       return;
@@ -116,8 +226,11 @@ export default function PsychologistChatPage() {
       </div>
     );
   } else {
-    // Список: клиентские диалоги первыми, «Системные уведомления» — всегда последними.
-    const contacts = [...conversations.map(toContact), systemContact(sysConv)];
+    // Группировка (Stage 31s): архив (закрытые с историей) — сверху и свёрнут;
+    // активные диалоги — в основном списке; «Системные уведомления» — последними.
+    const { archived, active } = splitConversations(conversations);
+    const archivedContacts = archived.map(toContact);
+    const contacts = [...active.map(toContact), systemContact(sysConv)];
 
     let pane;
     if (systemSelected) {
@@ -149,6 +262,7 @@ export default function PsychologistChatPage() {
       // Ничего не выбрано — нейтральный placeholder (VK-like), без mark-read.
       pane = (
         <div className={styles.paneState}>
+          {quickOpenError && <p className={styles.stateText}>{quickOpenError}</p>}
           <p className={styles.stateTitle}>Выберите диалог, чтобы открыть переписку.</p>
           <p className={styles.stateText}>Непрочитанные диалоги отмечены в списке слева.</p>
         </div>
@@ -172,17 +286,25 @@ export default function PsychologistChatPage() {
           contact={toContact(selected)}
           messages={messages}
           onSend={send}
+          onEdit={editMessage}
+          onDelete={deleteMessage}
           closed={closed}
           sending={sending}
           sendError={sendError}
           onBack={handleBack}
+          onDownloadAttachment={downloadAttachment}
         />
       );
     }
 
     body = (
       <div className={`${styles.shell} ${threadOpen ? styles.threadOpen : ''}`}>
-        <ChatSidebar contacts={contacts} activeId={activeId} onSelect={handleSelect} />
+        <ChatSidebar
+          contacts={contacts}
+          archivedContacts={archivedContacts}
+          activeId={activeId}
+          onSelect={handleSelect}
+        />
         {pane}
       </div>
     );

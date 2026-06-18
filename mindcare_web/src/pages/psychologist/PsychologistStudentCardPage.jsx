@@ -4,6 +4,7 @@ import Badge from '../../components/UI/Badge/Badge';
 import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
+import { getPsychologistStudentChatPath } from '../../features/psychologist/chatLinks';
 import styles from './PsychologistStudentCardPage.module.css';
 
 function formatDate(iso) {
@@ -23,7 +24,6 @@ function getDuration(iso) {
 }
 
 const ACTIONS = [
-  { icon: 'chat',     label: 'Чат',              title: 'Чат будет доступен в следующих версиях' },
   { icon: 'calendar', label: 'Расписание',        title: 'Расписание будет доступно позже' },
   { icon: 'diary',    label: 'Заметки',           title: 'Рабочие заметки будут добавлены позже' },
   { icon: 'articles', label: 'Материалы и тесты', title: 'Назначение материалов появится позже' },
@@ -42,6 +42,7 @@ export default function PsychologistStudentCardPage() {
   const numericId = parseInt(studentId, 10);
   const isValidId = !isNaN(numericId) && numericId > 0;
   const { student, loading, error, refetch } = useStudentCard(isValidId ? numericId : null);
+  const chatPath = getPsychologistStudentChatPath(student, isValidId ? numericId : null);
 
   const is404 = Boolean(
     error && (
@@ -166,8 +167,25 @@ export default function PsychologistStudentCardPage() {
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>Быстрые действия</h3>
             <div className={styles.actionsGrid}>
+              {chatPath && (
+                <Link
+                  to={chatPath}
+                  className={`${styles.actionCard} ${styles.actionLink}`}
+                  title="Открыть чат со студентом"
+                >
+                  <div className={styles.actionIcon}>
+                    <Icon name="chat" size={22} />
+                  </div>
+                  <div className={styles.actionLabel}>Чат со студентом</div>
+                </Link>
+              )}
               {ACTIONS.map(({ icon, label, title }) => (
-                <button key={label} className={styles.actionCard} disabled title={title}>
+                <button
+                  key={label}
+                  className={`${styles.actionCard} ${styles.actionCardDisabled}`}
+                  disabled
+                  title={title}
+                >
                   <div className={styles.actionIcon}>
                     <Icon name={icon} size={22} />
                   </div>
