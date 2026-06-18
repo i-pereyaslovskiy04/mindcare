@@ -172,7 +172,8 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **469 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **488 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Frontend после Stage 32 attachment hotfixes: **32 suites / 325 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -375,10 +376,17 @@ mindcare_api/
    не в PostgreSQL и не в public static
 ✅ storage_key формируется на основе UUID — original filename не используется как filesystem path
 ✅ Скачивание вложений только через auth backend endpoints (permission check участника)
+✅ Chromium download flow использует `showSaveFilePicker`; fallback — anchor download.
+   Office-файлы должны скачиваться без top-level navigation на `blob:` URL, чат остаётся открытым
+✅ MVP file policy: разрешены jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx;
+   svg, html/htm, js, exe/bat/cmd/com/msi, sh/ps1, php/jar, vbs/scr заблокированы;
+   архивы пока не добавлять как реализованные
 ✅ Аудит для upload/download событий — content файла в audit не пишется
 ❌ Не отдавать chat attachments через /static/* или StaticFiles — private storage
 ❌ Не давать admin/supervisor доступ к chat attachments без отдельного compliance-этапа
 ❌ Не хранить физический файл чата в PostgreSQL (даже как bytea/blob)
+❌ Не писать, что реализованы MIME magic bytes (`python-magic`), antivirus/ClamAV,
+   image preview/lightbox, thumbnails, S3/MinIO или at-rest encryption физических файлов
 ```
 
 ---
@@ -942,9 +950,15 @@ Conventional Commits:
   в `useChatCore`; backend/API/Alembic/UI-компоненты (`ChatWindow`, `MessageList`,
   `MessageBubble`) не менялись; 409 Conflict — через optional `getConversation` (student:
   null → silent list reload; psychologist: `getPsychologistConversation` → точечный refresh)
-- **Attachments Stage 32b–32g:** upload через скрепку / drag&drop; text+attachments;
+- **Attachments Stage 32b–32g + hotfixes:** upload через скрепку / drag&drop; text+attachments;
   attachment-only message; карточки вложений (`AttachmentCard`/`AttachmentList`);
+  files-first layout: в сообщении с файлами и текстом сначала файлы, затем divider,
+  затем текст как caption и meta внизу; attachment-only — без divider;
   скачивание через auth backend endpoint (private storage, не public static);
+  Chromium safe save через `showSaveFilePicker`, fallback — anchor download; Office download
+  не должен переводить SPA на `blob:` URL и не должен закрывать чат;
+  file policy: jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx разрешены;
+  svg/html/js/executable/script extensions заблокированы; архивы отложены;
   edit-mode удаление отдельных файлов (`EditableAttachmentList`, `remove_attachment_uuids`);
   удаление сообщения/вложения — soft delete (`chat_attachments.deleted_at`);
   физический файл не удаляется сразу — запускать `scripts/cleanup_orphan_attachments.py --apply`.

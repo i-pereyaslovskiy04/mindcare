@@ -60,7 +60,7 @@ mindcare_api/
     ensure_audit_partitions.py  - CLI: создание будущих партиций audit-таблиц
     backfill_legal_basis.py     - CLI: backfill legal basis records (--dry-run default)
     test_smtp.py                - CLI: диагностика SMTP
-  tests/                 - 469 тестов (unit + integration), запуск: .\test.ps1
+  tests/                 - 488 тестов (unit + integration), запуск: .\test.ps1
 ```
 
 **Auth: атомарность операций (Stage 31m-fix-b2/b3).** Бизнес-операции auth —
@@ -93,13 +93,17 @@ live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts �
 точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat — postponed.
 Diary/tasks/calendar студента остаются accepted demo/mock.
 
-**Attachments (Stage 32b–32g):** файлы в engagement chat; upload через скрепку/drag&drop
+**Attachments (Stage 32b–32g + hotfixes):** файлы в engagement chat; upload через скрепку/drag&drop
 (`DragDropOverlay`); `SelectedAttachmentList` (pre-send); `AttachmentCard`/`AttachmentList`
-(bubble display); `EditableAttachmentList` (edit-mode remove); скачивание через auth backend
-endpoint (private FS `CHAT_FILE_STORAGE_DIR`, не public static); soft delete
+(bubble display); files-first layout в сообщениях с файлами и текстом (файлы, divider, caption-текст,
+meta), attachment-only без divider; `EditableAttachmentList` (edit-mode remove); скачивание через
+auth backend endpoint (private FS `CHAT_FILE_STORAGE_DIR`, не public static); Chromium safe save
+flow через `showSaveFilePicker`, fallback — anchor download, Office-файлы без top-level navigation
+на `blob:` URL; soft delete
 `chat_attachments.deleted_at`; system conversation — upload запрещён; admin/supervisor — нет
-доступа. Pending: image preview/lightbox; upload progress; MIME magic bytes; antivirus;
-at-rest file encryption; добавление файлов в edit-mode.
+доступа. Разрешены jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx; svg/html/js и
+опасные executable/script extensions заблокированы; архивы отложены. Pending: image preview/lightbox;
+upload progress; MIME magic bytes; antivirus; at-rest file encryption; добавление файлов в edit-mode.
 
 **Message actions / bubble (Stage 31y–31z-hotfix):** свои сообщения в активной беседе —
 меню «…» (`MessageActionsMenu`) с «Редактировать»/«Удалить» вместо отдельной кнопки-карандаша;

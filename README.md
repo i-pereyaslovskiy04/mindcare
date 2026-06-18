@@ -109,7 +109,7 @@ mindcare/
 │   │   ├── cleanup_orphan_attachments.py        # Очистка soft-deleted/осиротевших chat_attachments
 │   │   ├── repair_missing_chat_conversations.py # Восстановление бесед для существующих engagements
 │   │   └── test_smtp.py                         # Диагностика SMTP-соединения
-│   ├── tests/                       # 469 тестов: unit + integration (см. «Тестирование»)
+│   ├── tests/                       # 488 тестов: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -353,7 +353,8 @@ lifespan() startup
 
 ## Тестирование
 
-Текущий статус: **469 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
+Текущий статус: **488 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
+Frontend после Stage 32 attachment hotfixes: **32 suites / 325 passed** (`npm test -- --watchAll=false`).
 
 ```bash
 # Backend
@@ -510,10 +511,15 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
 `user_sessions.last_active` и debounce `touch_session` 300с); read-receipt live-обновление —
 только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer пока без focus-trap/`inert`.
 
-**Вложения (Stage 32b–32g):** файлы в student↔psychologist engagement чате; отправка через
+**Вложения (Stage 32b–32g + hotfixes):** файлы в student↔psychologist engagement чате; отправка через
 скрепку + drag & drop; несколько файлов в одном сообщении; attachment-only message;
-карточки вложений в bubble (`AttachmentCard`/`AttachmentList`); скачивание через auth backend
-(private storage, не public static); редактирование сообщения с удалением отдельных файлов
+карточки вложений в bubble (`AttachmentCard`/`AttachmentList`); в сообщениях с файлами и текстом
+сначала показываются файлы, затем тонкий divider и текст как caption; attachment-only сообщения
+без divider. Скачивание идёт через auth backend (private storage, не public static); Chromium
+использует safe save flow через `showSaveFilePicker`, fallback — anchor download, Office-файлы
+скачиваются без top-level navigation на `blob:` URL. Разрешены jpg/jpeg, png, webp, pdf, txt,
+doc/docx, xls/xlsx, ppt/pptx; svg/html/js/executable/script extensions заблокированы; архивы
+пока отложены. Редактирование сообщения поддерживает удаление отдельных файлов
 (`EditableAttachmentList`); system conversation — upload запрещён. Pending: image preview/lightbox;
 upload progress; retry queue; MIME magic bytes; antivirus; at-rest file encryption; добавление
 файлов в edit-mode; периодическая очистка soft-deleted файлов

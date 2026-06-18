@@ -111,11 +111,16 @@ Encryption-at-rest защищает от утечки БД; политика д�
   полного erasure-механизма по запросу субъекта) применимо и к chat-сообщениям
 - **Group chat — postponed**: до реализации требуется отдельный design audit,
   включая access policy и encryption policy для групповых сообщений
-- **Attachments/files — реализованы (Stage 32b–32g)**: upload/download вложений в
+- **Attachments/files — реализованы (Stage 32b–32g + hotfixes)**: upload/download вложений в
   engagement chat. Реализованные меры безопасности: original filename не используется
   как filesystem path (storage_key на основе UUID); path traversal guard в storage;
   скачивание только через auth endpoint с проверкой membership; MIME allowlist +
   extension blocklist; размер ограничен; audit событий upload/download (без content файла).
+  MVP file policy: разрешены jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx;
+  svg/html/htm/js, executable/script extensions (`exe`, `bat`, `cmd`, `com`, `msi`, `sh`,
+  `ps1`, `php`, `jar`, `vbs`, `scr`) заблокированы; архивы (`zip`, `rar`, `7z` и т.п.)
+  пока не разрешены. Chromium download использует safe save flow через `showSaveFilePicker`,
+  fallback — anchor download; Office attachments скачиваются без top-level navigation на `blob:` URL.
   Closed/archive чат: upload запрещён (409), download разрешён участникам.
   System conversation: upload запрещён, download не предусмотрен.
   Admin/supervisor: нет доступа к chat attachments (403).

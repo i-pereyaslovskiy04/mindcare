@@ -50,7 +50,7 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **469 passed**.
+Текущий ожидаемый статус: **488 passed**.
 
 ### Alembic
 
@@ -252,13 +252,13 @@ backend обязан отклонять (роль не меняется). `conse
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
 | **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 350 тестов: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), register_confirm_atomic (8), register_consent_context (1), password_uow_atomic (11), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12), chat_message_edit (10), chat_message_delete (10), chat_bootstrap_on_assignment (4), chat_lifecycle (8), chat_attachment_models (20), chat_attachment_api (37), chat_attachment_edit (18) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | backend full suite: 488 passed; chat attachments covered by chat_attachment_models (20), chat_attachment_api (37), chat_attachment_edit (18) |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **469 passed** (`.\test.ps1`).
+Итого backend: **488 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **32 suites / 299 tests** (после Stage 32g) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **32 suites / 325 tests** (после Stage 32 attachment hotfixes) —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —
@@ -335,8 +335,11 @@ npm run build
 **Attachments checklist (backend — проверить при любых изменениях chat attachments):**
 
 - upload valid PDF/JPEG — 200, metadata в БД, физический файл в `CHAT_FILE_STORAGE_DIR`;
+- upload valid WEBP / Excel / PowerPoint — 200;
+- reject SVG — 400;
 - reject пустой файл — 400;
-- reject заблокированное расширение (.exe/.sh/...) — 400;
+- reject заблокированное расширение (.exe/.sh/.vbs/.scr/...) — 400;
+- archives (.zip/.rar/.7z) пока не считать разрешёнными форматами;
 - reject недопустимый MIME — 400;
 - reject слишком большой файл — 413;
 - скачивание участником — 200 с правильным Content-Disposition;
@@ -358,7 +361,12 @@ npm run build
 - attachment card в outgoing dark bubble — читаемый контраст;
 - attachment-only message видно в ленте;
 - text+attachments message видно в ленте;
+- text+attachments layout: сначала файлы, затем тонкий divider, затем текст как caption, затем meta;
+- attachment-only message отображается без divider;
 - кнопка «Скачать» в карточке работает (download trigger);
+- Office/WebP скачиваются без перехода приложения на `blob:` URL; чат остаётся открытым;
+- Chromium safe-save может сохранять через системный save dialog и не обязан выглядеть как обычная запись в browser downloads list;
+- Firefox/Safari/старые браузеры используют anchor download fallback;
 - скрепка открывает file picker;
 - выбранный файл появляется в `SelectedAttachmentList`;
 - удаление из `SelectedAttachmentList` убирает файл до отправки;
@@ -371,6 +379,13 @@ npm run build
 - edit — нельзя сохранить, если текст пустой и все вложения убраны;
 - скрепка и drag & drop заблокированы в edit-mode;
 - mobile — file picker через скрепку работает.
+
+**Manual smoke result после Stage 32 hotfixes:**
+
+- manual browser smoke attachments выполнен пользователем после Stage 32 hotfixes;
+- проверены student-side и psychologist-side attachment flows: upload/download, attachment cards,
+  picker/drag-drop/edit attachments;
+- критичных проблем не выявлено.
 
 **Тесты (backend — на alembic head + dev PostgreSQL):**
 

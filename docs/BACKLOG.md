@@ -289,8 +289,18 @@
     (pre-upload, allowlist MIME, blocklist extensions, size limit, UUID storage_key,
     private FS `CHAT_FILE_STORAGE_DIR`); `GET .../download` (permission check,
     streaming response); send with `attachment_uuids`; `test_chat_attachment_api.py` (37)
+  - ✅ Stage 32c-hotfix: **safe file type policy** — WEBP, Excel (`.xls/.xlsx`) и
+    PowerPoint (`.ppt/.pptx`) разрешены; SVG запрещён; архивы отложены; blocklist
+    расширен `.vbs`/`.scr`
   - ✅ Stage 32d + 32d-hotfix: **frontend attachment rendering** — `AttachmentCard`/
     `AttachmentList` в `MessageBubble`; high-contrast outgoing dark-card fix
+  - ✅ Stage 32d-hotfix-b: **safe Office download** — Chromium safe save flow через
+    `showSaveFilePicker`, fallback через anchor download; Office attachments скачиваются
+    без top-level navigation на `blob:` URL; чат остаётся открытым; backend full suite
+    после Office header tests — 488 passed
+  - ✅ Stage 32d-hotfix-b layout: **files-first attachment layout** — в сообщениях с
+    файлами и текстом сначала отображаются файлы, затем divider, затем текст как caption;
+    attachment-only сообщения без divider; frontend full suite — 32 suites / 325 passed
   - ✅ Stage 32e: **composer attachment picker** — скрепка, hidden file input,
     `SelectedAttachmentList` (pre-send), attachment-only send, text+attachment send,
     upload error без потери черновика; `SelectedAttachmentList.test.jsx`
