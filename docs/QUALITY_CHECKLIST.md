@@ -258,7 +258,7 @@ backend обязан отклонять (роль не меняется). `conse
 
 Итого backend: **488 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **32 suites / 325 tests** (после Stage 32 attachment hotfixes) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **33 suites / 369 tests** (после Stage 32i/32j Image/PDF Preview Lightbox) —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —
@@ -367,6 +367,19 @@ npm run build
 - Office/WebP скачиваются без перехода приложения на `blob:` URL; чат остаётся открытым;
 - Chromium safe-save может сохранять через системный save dialog и не обязан выглядеть как обычная запись в browser downloads list;
 - Firefox/Safari/старые браузеры используют anchor download fallback;
+- preview button показывается только для `image/jpeg`, `image/png`, `image/webp`, `application/pdf`;
+- DOCX/XLSX/PPTX/TXT/SVG/unknown MIME не показывают preview button и остаются download-only;
+- student открывает jpg/png/webp preview;
+- psychologist открывает jpg/png/webp preview;
+- student открывает PDF preview;
+- psychologist открывает PDF preview;
+- preview использует authenticated blob flow (`URL.createObjectURL`), без public static URL и без токенов в URL;
+- object URL очищается через `URL.revokeObjectURL` при cleanup;
+- lightbox закрывается через X, overlay и Esc;
+- click внутри image/PDF content не закрывает lightbox;
+- download image/PDF работает как раньше;
+- URL страницы не меняется, чат остаётся открытым;
+- mobile `≤900px` usable, повторное открытие preview работает;
 - скрепка открывает file picker;
 - выбранный файл появляется в `SelectedAttachmentList`;
 - удаление из `SelectedAttachmentList` убирает файл до отправки;

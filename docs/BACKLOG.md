@@ -300,7 +300,7 @@
     после Office header tests — 488 passed
   - ✅ Stage 32d-hotfix-b layout: **files-first attachment layout** — в сообщениях с
     файлами и текстом сначала отображаются файлы, затем divider, затем текст как caption;
-    attachment-only сообщения без divider; frontend full suite — 32 suites / 325 passed
+    attachment-only сообщения без divider
   - ✅ Stage 32e: **composer attachment picker** — скрепка, hidden file input,
     `SelectedAttachmentList` (pre-send), attachment-only send, text+attachment send,
     upload error без потери черновика; `SelectedAttachmentList.test.jsx`
@@ -310,9 +310,16 @@
   - ✅ Stage 32g: **edit/remove individual attachment** — `remove_attachment_uuids`
     в schema/storage/service/routes; soft delete атомарно с content/edited_at;
     `EditableAttachmentList` (optimistic UI); `test_chat_attachment_edit.py` (18)
+  - ✅ Stage 32i: **Image Preview / Lightbox** — preview `image/jpeg`, `image/png`,
+    `image/webp` через `AttachmentPreviewLightbox`; authenticated blob flow
+    (`URL.createObjectURL` / `URL.revokeObjectURL`), без public static и без токенов в URL
+  - ✅ Stage 32j: **PDF Preview / Lightbox** — preview `application/pdf` в том же
+    `AttachmentPreviewLightbox` через native browser PDF rendering в iframe с blob URL;
+    Office/TXT/SVG/unknown MIME остаются download-only; frontend full suite —
+    33 suites / 369 passed, backend full suite — 488 passed
   - **Future (chat):** preview последнего сообщения в списке бесед; WebSocket/SSE
-    realtime presence; image preview/lightbox; inline image thumbnails; upload
-    progress percent; upload retry queue; MIME magic bytes validation (`python-magic`);
+    realtime presence; inline image thumbnails; Office preview; TXT preview; PDF.js integration
+    при необходимости; upload progress percent; upload retry queue; MIME magic bytes validation (`python-magic`);
     antivirus/ClamAV scanning; at-rest encryption физических файлов в FS; S3/MinIO
     storage backend; добавление новых файлов в edit-mode; orphan/deleted file cleanup
     schedule (скрипт `scripts/cleanup_orphan_attachments.py --apply` существует, но

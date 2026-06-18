@@ -111,7 +111,7 @@ Encryption-at-rest защищает от утечки БД; политика д�
   полного erasure-механизма по запросу субъекта) применимо и к chat-сообщениям
 - **Group chat — postponed**: до реализации требуется отдельный design audit,
   включая access policy и encryption policy для групповых сообщений
-- **Attachments/files — реализованы (Stage 32b–32g + hotfixes)**: upload/download вложений в
+- **Attachments/files — реализованы (Stage 32b–32j + hotfixes)**: upload/download/preview вложений в
   engagement chat. Реализованные меры безопасности: original filename не используется
   как filesystem path (storage_key на основе UUID); path traversal guard в storage;
   скачивание только через auth endpoint с проверкой membership; MIME allowlist +
@@ -121,6 +121,11 @@ Encryption-at-rest защищает от утечки БД; политика д�
   `ps1`, `php`, `jar`, `vbs`, `scr`) заблокированы; архивы (`zip`, `rar`, `7z` и т.п.)
   пока не разрешены. Chromium download использует safe save flow через `showSaveFilePicker`,
   fallback — anchor download; Office attachments скачиваются без top-level navigation на `blob:` URL.
+  Preview разрешён только для `image/jpeg`, `image/png`, `image/webp`, `application/pdf` и
+  использует тот же authenticated backend download path, что и скачивание: после successful fetch
+  frontend создаёт временный `URL.createObjectURL(blob)` и очищает его через `URL.revokeObjectURL`.
+  Public static serving, прямые `<img src="/api/...">`/`<iframe src="/api/...">` на backend endpoint
+  и токены в query string не используются. Office/TXT/SVG/unknown MIME остаются download-only.
   Closed/archive чат: upload запрещён (409), download разрешён участникам.
   System conversation: upload запрещён, download не предусмотрен.
   Admin/supervisor: нет доступа к chat attachments (403).

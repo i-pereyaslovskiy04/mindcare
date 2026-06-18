@@ -354,7 +354,7 @@ lifespan() startup
 ## Тестирование
 
 Текущий статус: **488 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
-Frontend после Stage 32 attachment hotfixes: **32 suites / 325 passed** (`npm test -- --watchAll=false`).
+Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
 
 ```bash
 # Backend
@@ -511,7 +511,7 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
 `user_sessions.last_active` и debounce `touch_session` 300с); read-receipt live-обновление —
 только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer пока без focus-trap/`inert`.
 
-**Вложения (Stage 32b–32g + hotfixes):** файлы в student↔psychologist engagement чате; отправка через
+**Вложения (Stage 32b–32j + hotfixes):** файлы в student↔psychologist engagement чате; отправка через
 скрепку + drag & drop; несколько файлов в одном сообщении; attachment-only message;
 карточки вложений в bubble (`AttachmentCard`/`AttachmentList`); в сообщениях с файлами и текстом
 сначала показываются файлы, затем тонкий divider и текст как caption; attachment-only сообщения
@@ -520,8 +520,14 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
 скачиваются без top-level navigation на `blob:` URL. Разрешены jpg/jpeg, png, webp, pdf, txt,
 doc/docx, xls/xlsx, ppt/pptx; svg/html/js/executable/script extensions заблокированы; архивы
 пока отложены. Редактирование сообщения поддерживает удаление отдельных файлов
-(`EditableAttachmentList`); system conversation — upload запрещён. Pending: image preview/lightbox;
-upload progress; retry queue; MIME magic bytes; antivirus; at-rest file encryption; добавление
+(`EditableAttachmentList`); image/PDF preview — через `AttachmentPreviewLightbox` для
+`image/jpeg`, `image/png`, `image/webp`, `application/pdf`. Preview использует тот же
+authenticated backend download path: frontend получает `blob`, создаёт временный
+`URL.createObjectURL(blob)` и очищает его через `URL.revokeObjectURL`; public static URL,
+`<img src="/api/...">`, `<iframe src="/api/...">` и токены в URL не используются.
+Office/TXT/SVG/unknown MIME остаются download-only. System conversation — upload запрещён.
+Pending: thumbnails; Office/TXT preview; PDF.js integration при необходимости; upload progress;
+retry queue; MIME magic bytes; antivirus; at-rest file encryption; добавление
 файлов в edit-mode; периодическая очистка soft-deleted файлов
 (`scripts/cleanup_orphan_attachments.py --apply`).
 

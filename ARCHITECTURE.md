@@ -41,9 +41,9 @@ mindcare_api/
                            peer_is_online presence (по user_sessions.last_active, порог 10 мин);
                            доступ к engagement-беседам только участникам (admin/supervisor — 403);
                            system messages публикует только internal publisher (idempotency event_key);
-                           attachments: upload/download (private FS via CHAT_FILE_STORAGE_DIR,
+                           attachments: upload/download/preview (private FS via CHAT_FILE_STORAGE_DIR,
                            не public static), send with attachment_uuids, edit remove_attachment_uuids,
-                           soft delete chat_attachments.deleted_at (Stage 32b–32g)
+                           soft delete chat_attachments.deleted_at (Stage 32b–32j)
     supervisor/          - /api/supervisor/* (supervisor role)
     psychologist/        - /api/psychologist/* (psychologist role)
     db/
@@ -93,7 +93,7 @@ live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts �
 точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat — postponed.
 Diary/tasks/calendar студента остаются accepted demo/mock.
 
-**Attachments (Stage 32b–32g + hotfixes):** файлы в engagement chat; upload через скрепку/drag&drop
+**Attachments (Stage 32b–32j + hotfixes):** файлы в engagement chat; upload через скрепку/drag&drop
 (`DragDropOverlay`); `SelectedAttachmentList` (pre-send); `AttachmentCard`/`AttachmentList`
 (bubble display); files-first layout в сообщениях с файлами и текстом (файлы, divider, caption-текст,
 meta), attachment-only без divider; `EditableAttachmentList` (edit-mode remove); скачивание через
@@ -102,7 +102,13 @@ flow через `showSaveFilePicker`, fallback — anchor download, Office-фа�
 на `blob:` URL; soft delete
 `chat_attachments.deleted_at`; system conversation — upload запрещён; admin/supervisor — нет
 доступа. Разрешены jpg/jpeg, png, webp, pdf, txt, doc/docx, xls/xlsx, ppt/pptx; svg/html/js и
-опасные executable/script extensions заблокированы; архивы отложены. Pending: image preview/lightbox;
+опасные executable/script extensions заблокированы; архивы отложены. `AttachmentPreviewLightbox`
+поддерживает preview для `image/jpeg`, `image/png`, `image/webp`, `application/pdf`: `AttachmentCard`
+держит preview state локально, вызывает authenticated download handler, получает `blob`, создаёт
+`URL.createObjectURL(blob)` и очищает `URL.revokeObjectURL`; image/pdf modes закрываются через X,
+overlay или Esc, клик по контенту не закрывает lightbox, URL страницы не меняется и чат остаётся
+открытым. Office/TXT/SVG/unknown MIME — download-only; prop-drilling через `ChatWindow/useChatCore`
+не добавлялся. Pending: thumbnails; Office/TXT preview; PDF.js integration при необходимости;
 upload progress; MIME magic bytes; antivirus; at-rest file encryption; добавление файлов в edit-mode.
 
 **Message actions / bubble (Stage 31y–31z-hotfix):** свои сообщения в активной беседе —
