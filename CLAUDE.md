@@ -302,8 +302,6 @@ mindcare_api/
 │   ├── create_admin.py                      — создание первого админа (+ legal basis record)
 │   ├── ensure_audit_partitions.py           — будущие партиции audit-таблиц
 │   ├── backfill_legal_basis.py              — backfill legal basis (--dry-run default)
-│   ├── cleanup_orphan_attachments.py        — очистка soft-deleted/осиротевших chat_attachments
-│   │                                          (--dry-run default, --apply, --hours)
 │   ├── repair_missing_chat_conversations.py — восстановление бесед для существующих engagements
 │   └── test_smtp.py                         — диагностика SMTP
 └── db/
@@ -972,10 +970,13 @@ Conventional Commits:
   MIME остаются download-only;
   edit-mode удаление отдельных файлов (`EditableAttachmentList`, `remove_attachment_uuids`);
   удаление сообщения/вложения — soft delete (`chat_attachments.deleted_at`);
-  физический файл не удаляется сразу — запускать `scripts/cleanup_orphan_attachments.py --apply`.
+  физический файл не удаляется сразу.
   **Pending:** thumbnails; Office/TXT preview; PDF.js integration при необходимости;
   upload progress %; retry queue; MIME magic bytes; antivirus; at-rest encryption физических файлов;
-  добавление файлов в edit-mode.
+  добавление файлов в edit-mode; cleanup/retention вложений чата (безопасный backend
+  maintenance script с dry-run по умолчанию и явным `--apply` для старых orphan-вложений
+  и физических файлов soft-deleted вложений после retention-периода; cron/systemd timer —
+  отдельный будущий этап после ручной проверки).
   Компоненты attachment UI (feature-specific, не global shared UI):
   `AttachmentCard`, `AttachmentList`, `SelectedAttachmentList` (pre-send picker),
   `EditableAttachmentList` (edit-mode), `DragDropOverlay`, `AttachmentPreviewLightbox` —

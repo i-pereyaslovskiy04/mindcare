@@ -106,7 +106,6 @@ mindcare/
 │   │   ├── create_admin.py                      # Создание первого администратора (интерактивный CLI)
 │   │   ├── ensure_audit_partitions.py           # Создание будущих партиций audit-таблиц
 │   │   ├── backfill_legal_basis.py              # Backfill legal basis records (--dry-run по умолчанию)
-│   │   ├── cleanup_orphan_attachments.py        # Очистка soft-deleted/осиротевших chat_attachments
 │   │   ├── repair_missing_chat_conversations.py # Восстановление бесед для существующих engagements
 │   │   └── test_smtp.py                         # Диагностика SMTP-соединения
 │   ├── tests/                       # 488 тестов: unit + integration (см. «Тестирование»)
@@ -528,8 +527,10 @@ authenticated backend download path: frontend получает `blob`, созд�
 Office/TXT/SVG/unknown MIME остаются download-only. System conversation — upload запрещён.
 Pending: thumbnails; Office/TXT preview; PDF.js integration при необходимости; upload progress;
 retry queue; MIME magic bytes; antivirus; at-rest file encryption; добавление
-файлов в edit-mode; периодическая очистка soft-deleted файлов
-(`scripts/cleanup_orphan_attachments.py --apply`).
+файлов в edit-mode; cleanup/retention вложений чата как future production-hardening:
+безопасный backend maintenance script с dry-run по умолчанию и явным `--apply` для
+старых orphan-вложений и физических файлов soft-deleted вложений после retention-периода.
+Автозапуск через cron/systemd timer — отдельный будущий этап после ручной проверки.
 
 *Future / postponed:* **group chat** (отдельный этап после стабилизации, обязателен
 READ-ONLY design audit — см. `docs/BACKLOG.md`); preview последнего сообщения в списке;

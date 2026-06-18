@@ -321,11 +321,17 @@
     realtime presence; inline image thumbnails; Office preview; TXT preview; PDF.js integration
     при необходимости; upload progress percent; upload retry queue; MIME magic bytes validation (`python-magic`);
     antivirus/ClamAV scanning; at-rest encryption физических файлов в FS; S3/MinIO
-    storage backend; добавление новых файлов в edit-mode; orphan/deleted file cleanup
-    schedule (скрипт `scripts/cleanup_orphan_attachments.py --apply` существует, но
-    не запускается автоматически); staff break-glass access; Action Center / колокольчик;
-    system messages для заданий/материалов/анкет/legal announcements; усиление a11y
-    mobile drawer (focus-trap/`inert`); глубокий рефакторинг chat-модуля
+    storage backend; добавление новых файлов в edit-mode; staff break-glass access;
+    Action Center / колокольчик; system messages для заданий/материалов/анкет/legal
+    announcements; усиление a11y mobile drawer (focus-trap/`inert`);
+    глубокий рефакторинг chat-модуля
+  - **Cleanup/retention вложений чата — отложено до production-hardening.**
+    Нужен безопасный backend maintenance script с режимами dry-run/apply для:
+    старых orphan-вложений, которые были загружены, но не привязались к сообщению;
+    физических файлов soft-deleted вложений после retention-периода.
+    По умолчанию script должен работать в dry-run режиме и ничего не удалять.
+    Реальное удаление — только через явный `--apply`. Автозапуск через cron/systemd
+    timer не подключать до отдельного будущего этапа и ручной проверки.
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать
