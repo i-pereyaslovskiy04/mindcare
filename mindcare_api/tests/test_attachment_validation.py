@@ -41,11 +41,35 @@ class TestValidateUpload:
     def test_valid_png(self):
         validate_upload(_make_file("img.png", "image/png"), b"x" * 500)
 
+    def test_valid_webp(self):
+        validate_upload(
+            _make_file("study_abroad_scholarships_2024.webp", "image/webp"),
+            b"x" * 500,
+        )
+
     def test_valid_docx(self):
         validate_upload(
             _make_file(
                 "report.docx",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ),
+            b"x" * 200,
+        )
+
+    def test_valid_xlsx(self):
+        validate_upload(
+            _make_file(
+                "data.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            b"x" * 200,
+        )
+
+    def test_valid_pptx(self):
+        validate_upload(
+            _make_file(
+                "slides.pptx",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             ),
             b"x" * 200,
         )
@@ -101,6 +125,8 @@ class TestValidateUpload:
         (".msi",  "setup.msi"),
         (".sh",   "exploit.sh"),
         (".ps1",  "pwshell.ps1"),
+        (".vbs",  "macro.vbs"),
+        (".scr",  "screensaver.scr"),
         (".js",   "attack.js"),
         (".html", "phish.html"),
         (".htm",  "phish.htm"),
@@ -121,6 +147,23 @@ class TestValidateUpload:
                 _make_file(filename="MALWARE.EXE", content_type="application/octet-stream"),
                 b"x",
             )
+
+    def test_svg_rejected_with_image_mime(self):
+        # SVG запрещён даже с корректным image/svg+xml MIME — может содержать скрипты.
+        with pytest.raises(AttachmentValidationError, match="расширени"):
+            validate_upload(_make_file("xss.svg", "image/svg+xml"), b"x")
+
+    def test_double_extension_exe_rejected(self):
+        # Последнее расширение .exe должно блокировать файл.
+        with pytest.raises(AttachmentValidationError, match="расширени"):
+            validate_upload(
+                _make_file("document.pdf.exe", "application/pdf"), b"x"
+            )
+
+    def test_dangerous_extension_with_safe_mime_rejected(self):
+        # .exe с заявленным text/plain — расширение проверяется до MIME.
+        with pytest.raises(AttachmentValidationError, match="расширени"):
+            validate_upload(_make_file("run.exe", "text/plain"), b"x")
 
     # ─── MIME-тип ─────────────────────────────────────────────────────────────
 

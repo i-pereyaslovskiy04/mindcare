@@ -17,7 +17,7 @@ from app.core.config import CHAT_FILE_ALLOWED_MIME_TYPES, settings
 # Исполняемые файлы и скрипты на всех платформах.
 _BLOCKED_EXTENSIONS: frozenset[str] = frozenset({
     ".exe", ".bat", ".cmd", ".com", ".msi",
-    ".sh",  ".ps1",
+    ".sh",  ".ps1", ".vbs", ".scr",
     ".js",  ".html", ".htm", ".svg", ".php", ".jar",
 })
 

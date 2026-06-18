@@ -53,13 +53,21 @@ SESSION_EXPIRE_DAYS = settings.SESSION_EXPIRE_DAYS
 # Не настраивается через .env — allowlist должен быть явно утверждён в коде.
 # Upload-валидация (magic bytes check) реализуется в Stage 32c.
 CHAT_FILE_ALLOWED_MIME_TYPES: frozenset[str] = frozenset({
-    # Изображения
+    # Изображения (SVG запрещён — может содержать скрипты)
     "image/jpeg",
     "image/png",
     "image/webp",
-    # Документы
+    # Документы — Word
     "application/pdf",
     "application/msword",                                                          # .doc
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",    # .docx
+    # Документы — Excel
+    "application/vnd.ms-excel",                                                   # .xls
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          # .xlsx
+    # Документы — PowerPoint
+    "application/vnd.ms-powerpoint",                                              # .ppt
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    # Текст
     "text/plain",
+    # Архивы — отложены (pending: zip/rar могут содержать исполняемые файлы)
 })

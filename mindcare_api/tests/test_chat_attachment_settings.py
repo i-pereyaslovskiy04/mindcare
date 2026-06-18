@@ -1,9 +1,10 @@
 """
-Unit-тесты настроек chat attachments (Stage 32b).
+Unit-тесты настроек chat attachments (Stage 32b, обновлено Stage 32c-hotfix).
 
 Проверяет значения по умолчанию и корректность типов без обращения к БД.
 """
 
+from app.chat.attachment_service import _BLOCKED_EXTENSIONS
 from app.core.config import (
     CHAT_FILE_ALLOWED_MIME_TYPES,
     settings,
@@ -55,8 +56,32 @@ class TestChatFileAllowedMimeTypes:
             in CHAT_FILE_ALLOWED_MIME_TYPES
         )
 
+    def test_xlsx_included(self):
+        assert "application/vnd.ms-excel" in CHAT_FILE_ALLOWED_MIME_TYPES
+        assert (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            in CHAT_FILE_ALLOWED_MIME_TYPES
+        )
+
+    def test_pptx_included(self):
+        assert "application/vnd.ms-powerpoint" in CHAT_FILE_ALLOWED_MIME_TYPES
+        assert (
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            in CHAT_FILE_ALLOWED_MIME_TYPES
+        )
+
     def test_text_plain_included(self):
         assert "text/plain" in CHAT_FILE_ALLOWED_MIME_TYPES
+
+    def test_svg_not_included(self):
+        # SVG может содержать встроенные скрипты — запрещён на уровне политики.
+        assert "image/svg+xml" not in CHAT_FILE_ALLOWED_MIME_TYPES
+
+    def test_archives_not_included(self):
+        # Архивы отложены: содержимое не проверяется (pending: magic bytes).
+        assert "application/zip" not in CHAT_FILE_ALLOWED_MIME_TYPES
+        assert "application/x-zip-compressed" not in CHAT_FILE_ALLOWED_MIME_TYPES
+        assert "application/x-rar-compressed" not in CHAT_FILE_ALLOWED_MIME_TYPES
 
     def test_dangerous_types_not_included(self):
         dangerous = [
@@ -74,3 +99,26 @@ class TestChatFileAllowedMimeTypes:
 
     def test_non_empty(self):
         assert len(CHAT_FILE_ALLOWED_MIME_TYPES) > 0
+
+
+class TestBlockedExtensions:
+    def test_dangerous_executables_blocked(self):
+        for ext in (".exe", ".bat", ".cmd", ".com", ".msi"):
+            assert ext in _BLOCKED_EXTENSIONS, f"{ext} должен быть в blocklist"
+
+    def test_script_extensions_blocked(self):
+        for ext in (".sh", ".ps1", ".vbs", ".scr", ".php", ".js"):
+            assert ext in _BLOCKED_EXTENSIONS, f"{ext} должен быть в blocklist"
+
+    def test_web_script_extensions_blocked(self):
+        for ext in (".html", ".htm", ".svg"):
+            assert ext in _BLOCKED_EXTENSIONS, f"{ext} должен быть в blocklist"
+
+    def test_svg_blocked(self):
+        # SVG в blocklist независимо от MIME (встроенные скрипты).
+        assert ".svg" in _BLOCKED_EXTENSIONS
+
+    def test_vbs_scr_blocked(self):
+        # Windows-специфичные опасные расширения (Stage 32c-hotfix).
+        assert ".vbs" in _BLOCKED_EXTENSIONS
+        assert ".scr" in _BLOCKED_EXTENSIONS
