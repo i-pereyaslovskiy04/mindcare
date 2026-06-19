@@ -11,11 +11,18 @@
 
 .emptyState {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   font-size: 13px;
   color: var(--text-light);
-  padding: 40px 20px;
+  padding: 32px 20px;
   text-align: center;
   min-height: 120px;
+}
+
+.emptyStateSub {
+  font-size: 12px;
+  opacity: 0.7;
 }

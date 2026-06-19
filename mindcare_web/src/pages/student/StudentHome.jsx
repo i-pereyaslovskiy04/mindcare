@@ -53,7 +53,7 @@ export default function StudentHome() {
     getDiarySummary(activePeriod)
       .then((data) => {
         setChartData(
-          (data.points || []).map((p) => ({ l: p.label, v: p.mood_score }))
+          (data.points || []).map((p) => ({ l: p.label, v: p.mood_score, d: p.date }))
         );
         setEntriesCount(data.entries_count ?? null);
       })
@@ -180,7 +180,7 @@ export default function StudentHome() {
               ))}
             </div>
           </div>
-          <MoodChart data={summaryLoading ? [] : chartData} height={160} />
+          <MoodChart data={summaryLoading ? [] : chartData} period={activePeriod} height={160} />
         </div>
 
         <div className={styles.card}>

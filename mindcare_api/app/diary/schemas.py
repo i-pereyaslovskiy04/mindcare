@@ -63,7 +63,7 @@ class PaginatedEntriesResponse(BaseModel):
 class SummaryPoint(BaseModel):
     date:       date
     label:      str
-    mood_score: Optional[int]
+    mood_score: Optional[float]  # float for monthly averages (e.g. 6.5); int values also accepted
 
 
 class DiarySummaryRead(BaseModel):

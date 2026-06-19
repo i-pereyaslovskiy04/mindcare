@@ -1,5 +1,5 @@
 """
-Integration tests for Diary backend (Stage Diary Backend).
+Integration tests for Diary backend (Stage Diary Backend + Chart Hotfix 2).
 
 Покрывает:
   - GET /api/diary/emotions — активный справочник
@@ -16,17 +16,20 @@ Integration tests for Diary backend (Stage Diary Backend).
   - в БД entry_text_enc начинается с enc:v1: (когда текст задан)
   - в БД emotions_enc начинается с enc:v1:
   - plaintext entry_text не лежит в БД
-  - GET /api/diary/summary?period=14d → точки и null для дней без записи
+  - GET /api/diary/summary — fixed calendar period frame, year monthly aggregation
   - summary отклоняет неизвестный period → 422
 
 Требования: dev PostgreSQL на alembic head (b2e4d7f1a9c3), DATA_ENCRYPTION_KEY.
 """
 
+import json as _json
+from datetime import date, timedelta
+
 import bcrypt
 import pytest
 
 from app.auth import storage as auth_storage
-from app.core.encryption import ENCRYPTION_PREFIX
+from app.core.encryption import ENCRYPTION_PREFIX, encrypt_text
 from app.db.session import SessionLocal
 from app.db.models import DiaryEntry, DiaryEmotion
 
@@ -68,6 +71,19 @@ def _create_inactive_emotion(key: str = "test_inactive_emo") -> None:
 def _delete_inactive_emotion(key: str = "test_inactive_emo") -> None:
     with SessionLocal() as db:
         db.query(DiaryEmotion).filter(DiaryEmotion.key == key).delete(synchronize_session=False)
+        db.commit()
+
+
+def _insert_entry_direct(student_id: int, entry_date: date, mood_score: int) -> None:
+    """Insert a historical diary entry directly via SQLAlchemy (bypasses today-only API)."""
+    with SessionLocal() as db:
+        db.add(DiaryEntry(
+            student_id     = student_id,
+            entry_date     = entry_date,
+            mood_score_enc = encrypt_text(str(mood_score)),
+            entry_text_enc = None,
+            emotions_enc   = encrypt_text(_json.dumps([])),
+        ))
         db.commit()
 
 
@@ -350,63 +366,252 @@ class TestAccessControl:
 # ─── 7. Summary ───────────────────────────────────────────────────────────────
 
 class TestSummary:
-    def test_summary_14d_has_14_points(self, client):
+    # ── No entries → full period frame with all null ───────────────────────────
+
+    def test_summary_14d_no_entries_returns_14_null_points(self, client):
         token, _ = _make_user(client, "student")
         r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
         assert r.status_code == 200
         data = r.json()
         assert data["period"] == "14d"
+        assert data["entries_count"] == 0
         assert len(data["points"]) == 14
+        assert all(p["mood_score"] is None for p in data["points"])
 
-    def test_summary_null_for_days_without_entry(self, client):
+    def test_summary_month_no_entries_returns_full_frame_null_points(self, client):
         token, _ = _make_user(client, "student")
-        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        r = client.get("/api/diary/summary?period=month", headers=_auth(token))
+        assert r.status_code == 200
         data = r.json()
-        null_points = [p for p in data["points"] if p["mood_score"] is None]
-        assert len(null_points) > 0
+        assert data["entries_count"] == 0
+        assert len(data["points"]) == date.today().day
+        assert all(p["mood_score"] is None for p in data["points"])
 
-    def test_summary_reflects_created_entry(self, client):
+    def test_summary_year_no_entries_returns_full_frame_null_points(self, client):
         token, _ = _make_user(client, "student")
-        _put_today(client, token, {"mood_score": 7, "emotions": ["calm"]})
-        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        assert r.status_code == 200
         data = r.json()
-        today_str = str(__import__("datetime").date.today())
-        today_point = next((p for p in data["points"] if p["date"] == today_str), None)
-        assert today_point is not None
-        assert today_point["mood_score"] == 7
+        assert data["entries_count"] == 0
+        assert len(data["points"]) == 12
+        assert all(p["mood_score"] is None for p in data["points"])
 
-    def test_summary_entries_count(self, client):
-        token, _ = _make_user(client, "student")
-        _put_today(client, token, {"mood_score": 5, "emotions": []})
-        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
-        data = r.json()
-        assert data["entries_count"] >= 1
-
-    def test_summary_points_have_label(self, client):
-        token, _ = _make_user(client, "student")
-        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
-        data = r.json()
-        valid_labels = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
-        for point in data["points"]:
-            assert point["label"] in valid_labels
+    # ── Unknown period ────────────────────────────────────────────────────────
 
     def test_summary_unknown_period_returns_422(self, client):
         token, _ = _make_user(client, "student")
         r = client.get("/api/diary/summary?period=unknown", headers=_auth(token))
         assert r.status_code == 422
 
-    def test_summary_month_period(self, client):
+    # ── 14d: fixed 14-slot calendar frame ─────────────────────────────────────
+
+    def test_summary_14d_always_14_points(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        assert len(data["points"]) == 14
+
+    def test_summary_14d_start_is_today_minus_13(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        expected_start = (date.today() - timedelta(days=13)).isoformat()
+        assert data["points"][0]["date"] == expected_start
+
+    def test_summary_14d_end_is_today(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        assert data["points"][-1]["date"] == date.today().isoformat()
+
+    def test_summary_14d_today_label_is_segodnya(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        assert data["points"][-1]["label"] == "Сегодня"
+
+    def test_summary_14d_other_labels_are_weekdays(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        valid_labels = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
+        for point in data["points"][:-1]:  # все кроме последнего (today = "Сегодня")
+            assert point["label"] in valid_labels
+
+    def test_summary_14d_null_for_days_without_entry(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        assert all(p["mood_score"] is None for p in data["points"])
+
+    def test_summary_14d_reflects_entry_mood_score(self, client):
+        token, _ = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 7, "emotions": ["calm"]})
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        today_str = date.today().isoformat()
+        today_point = next((p for p in data["points"] if p["date"] == today_str), None)
+        assert today_point is not None
+        assert today_point["mood_score"] == 7
+
+    def test_summary_14d_entries_count(self, client):
+        token, _ = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 5, "emotions": []})
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        data = r.json()
+        assert data["entries_count"] == 1
+
+    # ── month: fixed calendar frame from 1st to today ─────────────────────────
+
+    def test_summary_month_starts_from_first_of_month(self, client):
         token, _ = _make_user(client, "student")
         r = client.get("/api/diary/summary?period=month", headers=_auth(token))
-        assert r.status_code == 200
         data = r.json()
-        assert data["period"] == "month"
-        assert len(data["points"]) >= 1
+        first_of_month = date.today().replace(day=1).isoformat()
+        assert data["points"][0]["date"] == first_of_month
 
-    def test_summary_year_period(self, client):
+    def test_summary_month_ends_today(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=month", headers=_auth(token))
+        data = r.json()
+        assert data["points"][-1]["date"] == date.today().isoformat()
+
+    def test_summary_month_no_future_dates(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=month", headers=_auth(token))
+        data = r.json()
+        today_str = date.today().isoformat()
+        for p in data["points"]:
+            assert p["date"] <= today_str
+
+    def test_summary_month_null_for_days_without_entry(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=month", headers=_auth(token))
+        data = r.json()
+        assert all(p["mood_score"] is None for p in data["points"])
+
+    def test_summary_month_entries_count(self, client):
+        token, _ = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 5, "emotions": []})
+        r = client.get("/api/diary/summary?period=month", headers=_auth(token))
+        data = r.json()
+        assert data["entries_count"] == 1
+
+    # ── year: monthly aggregation from January ─────────────────────────────────
+
+    def test_summary_year_always_12_points(self, client):
         token, _ = _make_user(client, "student")
         r = client.get("/api/diary/summary?period=year", headers=_auth(token))
-        assert r.status_code == 200
         data = r.json()
         assert data["period"] == "year"
-        assert len(data["points"]) >= 1
+        assert len(data["points"]) == 12
+
+    def test_summary_year_starts_from_january(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        data = r.json()
+        jan = date(date.today().year, 1, 1).isoformat()
+        assert data["points"][0]["date"] == jan
+
+    def test_summary_year_ends_at_december(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        data = r.json()
+        dec = date(date.today().year, 12, 1).isoformat()
+        assert data["points"][-1]["date"] == dec
+
+    def test_summary_year_future_months_are_null(self, client):
+        # All 12 months returned; months after current month have null mood_score.
+        token, _ = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 7, "emotions": []})
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        data = r.json()
+        today = date.today()
+        for p in data["points"]:
+            point_date = date.fromisoformat(p["date"])
+            if point_date > today.replace(day=1):
+                assert p["mood_score"] is None, (
+                    f"Future month {p['date']} must have null mood_score"
+                )
+
+    def test_summary_year_entries_count_excludes_future_null_months(self, client):
+        # entries_count reflects only real diary entries, not 12-month frame size.
+        token, _ = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 5, "emotions": []})
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        data = r.json()
+        assert data["entries_count"] == 1  # one real entry, not 12
+
+    def test_summary_year_month_without_entries_is_null(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        data = r.json()
+        # Fresh user → all months null
+        assert all(p["mood_score"] is None for p in data["points"])
+
+    def test_summary_year_average_mood_score_single_entry(self, client):
+        token, _ = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 8, "emotions": []})
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        data = r.json()
+        current_month = date.today().replace(day=1).isoformat()
+        point = next((p for p in data["points"] if p["date"] == current_month), None)
+        assert point is not None
+        assert point["mood_score"] == 8
+
+    def test_summary_year_average_mood_score_float(self, client):
+        # Two entries in same month → float average
+        token, uid = _make_user(client, "student")
+        yesterday = date.today() - timedelta(days=1)
+        if yesterday.month == date.today().month:
+            _insert_entry_direct(uid, yesterday, 7)
+            _put_today(client, token, {"mood_score": 8, "emotions": []})
+            r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+            data = r.json()
+            current_month = date.today().replace(day=1).isoformat()
+            point = next((p for p in data["points"] if p["date"] == current_month), None)
+            assert point is not None
+            assert point["mood_score"] == 7.5  # avg(7, 8)
+        else:
+            pytest.skip("yesterday is in a different month")
+
+    def test_summary_year_gap_month_is_null(self, client):
+        # Entry 2 months ago + today → intermediate month has null
+        token, uid = _make_user(client, "student")
+        today = date.today()
+        if today.month >= 3:
+            two_months_ago = today.replace(day=1, month=today.month - 2)
+            _insert_entry_direct(uid, two_months_ago, 8)
+            _put_today(client, token, {"mood_score": 6, "emotions": []})
+
+            r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+            data = r.json()
+            # Month between two_months_ago and today must have null mood_score
+            gap_month = two_months_ago.replace(month=two_months_ago.month + 1).isoformat()
+            gap_point = next((p for p in data["points"] if p["date"] == gap_month), None)
+            assert gap_point is not None
+            assert gap_point["mood_score"] is None
+        else:
+            pytest.skip("month < 3 — can't create 2-month-ago entry in year window")
+
+    def test_summary_year_month_labels_are_russian(self, client):
+        valid_labels = {"Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                        "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"}
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/summary?period=year", headers=_auth(token))
+        data = r.json()
+        for point in data["points"]:
+            assert point["label"] in valid_labels
+
+    # ── Cross-student isolation ────────────────────────────────────────────────
+
+    def test_summary_cross_student_isolation(self, client):
+        token1, _ = _make_user(client, "student")
+        token2, _ = _make_user(client, "student")
+        _put_today(client, token2, {"mood_score": 9, "emotions": []})
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token1))
+        data = r.json()
+        # student1 sees no entries (full frame with all null)
+        assert data["entries_count"] == 0
+        assert len(data["points"]) == 14
+        assert all(p["mood_score"] is None for p in data["points"])

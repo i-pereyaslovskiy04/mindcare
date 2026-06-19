@@ -173,8 +173,8 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **534 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend после Stage Diary Frontend Integration: **36 suites / 395 passed** (`npm test -- --watchAll=false`).
+Всего: **554 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Frontend после Stage Diary MoodChart UX Polish 2: **36 suites / 408 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -208,7 +208,7 @@ Frontend после Stage Diary Frontend Integration: **36 suites / 395 passed**
 | `tests/integration/test_chat_attachment_models.py` | constraints chat_attachments (Stage 32b) — 20 |
 | `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
 | `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
-| `tests/integration/test_diary_api.py` | Diary API: CRUD сегодняшней записи, история, summary, encrypted-at-rest, student-only 403 — 46 |
+| `tests/integration/test_diary_api.py` | Diary API: CRUD сегодняшней записи, история, summary (fixed calendar frame 14d/month/year, year monthly aggregation Jan→current month, null gaps, cross-student isolation), encrypted-at-rest, student-only 403 — 65 |
 
 ---
 
@@ -406,6 +406,17 @@ mindcare_api/
 ✅ Справочник эмоций diary_emotions хранится в БД (не hardcoded на фронте);
    фронт получает [{key, label, sort_order}] через GET /api/diary/emotions
 ✅ date policy MVP: backend использует date.today() без timezone; сервер должен быть Moscow UTC+3
+✅ summary contract: fixed calendar period frame — нет clamp по первой записи;
+   period=14d — последние 14 дней (today-13…today), всегда 14 daily points;
+   period=month — с 1-го числа текущего месяца до today, quantity=today.day;
+   period=year — monthly aggregated, всегда 12 points (Jan–Dec текущего года);
+     будущие месяцы (> current month) включены с mood_score=null;
+     entries_count = реальные записи (future null-slots не считаются);
+   day/month без записи → mood_score=null; нет записей → полный фрейм с all null;
+   empty state определяется на фронте по тому, что все v===null;
+   year avg = round(avg, 1) → float;
+   MoodChart x-axis: 14d=все 14 labels в DD.MM; month=каждый 5-й день + last в DD.MM;
+   year=все 12 месяцев по имени; sparse hint (1-2 точки) = compact SVG text overlay
 ❌ Не логировать entry_text, decrypted mood_score, selected emotions из дневника
 ❌ Не давать psychologist/supervisor/admin доступ к diary content без compliance-этапа
 ❌ Не смешивать diary с session_notes — разные таблицы, разные маршруты, разная цель
