@@ -1,0 +1,73 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card {
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  padding: 18px;
+  background: var(--warm-white);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.num {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--coffee);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 100px 100px;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.input,
+.inputNum,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-main);
+  background: var(--warm-white);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus,
+.inputNum:focus,
+.textarea:focus { border-color: var(--coffee); }
+
+.inputNum { text-align: center; }
+.textarea { resize: vertical; }
+
+@media (max-width: 600px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+}

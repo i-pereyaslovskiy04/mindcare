@@ -1,0 +1,141 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.page {
+  animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  max-width: 700px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 0;
+  margin-bottom: 16px;
+  transition: color 0.15s;
+}
+
+.back:hover { color: var(--coffee); }
+
+.labelTag {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--coffee);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--espresso);
+  margin-bottom: 4px;
+}
+
+.date {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-bottom: 24px;
+}
+
+.muted { color: var(--text-muted); font-size: 14px; }
+.error { color: var(--danger, #c0563f); font-size: 14px; }
+
+/* ---- score card ---- */
+.scoreCard,
+.scaleCard {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+  margin-bottom: 16px;
+}
+
+.scoreHead,
+.scaleHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.scoreLabel,
+.scaleName {
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.scoreValue,
+.scaleScore {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--espresso);
+}
+
+.scoreMax {
+  font-size: 18px;
+  color: var(--text-light);
+}
+
+.pbar {
+  height: 8px;
+  background: var(--milk);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pbarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--coffee), var(--latte));
+  border-radius: 4px;
+}
+
+.scaleTag {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--coffee);
+  background: var(--milk);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.recommend {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 14px 0 0;
+}
+
+.hSection {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin: 28px 0 14px;
+}
+
+.actions {
+  margin-top: 24px;
+}
+
+@media (max-width: 600px) {
+  .pageTitle { font-size: 28px; }
+}

@@ -1,0 +1,146 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.qCard {
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  padding: 18px 18px 16px;
+  background: var(--warm-white);
+}
+
+.qHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.qNum {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--coffee);
+}
+
+.qHeadActions {
+  display: flex;
+  gap: 4px;
+}
+
+.rotUp { transform: rotate(90deg); }
+.rotDown { transform: rotate(90deg); }
+
+.qText,
+.input,
+.scoreInput,
+.scaleInput {
+  width: 100%;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-main);
+  background: var(--warm-white);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.qText { resize: vertical; margin-bottom: 12px; }
+.qText:focus,
+.input:focus,
+.scoreInput:focus,
+.scaleInput:focus { border-color: var(--coffee); }
+
+.qRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.qFlags {
+  margin-bottom: 12px;
+}
+
+/* ── options ── */
+.options {
+  border-top: 1px dashed var(--nav-border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.optionsHead {
+  display: grid;
+  grid-template-columns: 1fr 90px 34px;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+.scoreLabel { text-align: center; }
+
+.optionRow {
+  display: grid;
+  grid-template-columns: 1fr 90px 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.scoreInput { text-align: center; }
+
+.addOption {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--coffee);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.addOption:hover { text-decoration: underline; }
+
+/* ── scale ── */
+.scaleRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  border-top: 1px dashed var(--nav-border);
+  padding-top: 12px;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--text-light);
+  font-style: italic;
+  margin: 8px 0 0;
+}
+
+@media (max-width: 600px) {
+  .qRow,
+  .scaleRow { grid-template-columns: 1fr; }
+}

@@ -166,6 +166,21 @@
   margin: 12px 0 14px;
 }
 
+/* ---- states / extra ---- */
+.error { color: var(--danger, #c0563f); font-size: 14px; }
+
+.empty {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.allResultsRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 22px;
+}
+
 /* ---- responsive ---- */
 @media (max-width: 860px) {
   .g2 { grid-template-columns: 1fr; }

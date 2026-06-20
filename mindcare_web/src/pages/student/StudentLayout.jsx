@@ -9,7 +9,7 @@ function buildNavSections(messagesBadge) {
       items: [
         { key: 'home',      label: 'Главная',            icon: 'home',     to: '/student',           end: true },
         { key: 'diary',     label: 'Дневник состояния',  icon: 'diary',    to: '/student/diary',     end: true },
-        { key: 'tests',     label: 'Тесты',              icon: 'tests',    to: '/student/tests',     end: true },
+        { key: 'tests',     label: 'Тесты',              icon: 'tests',    to: '/student/tests',     end: false },
         { key: 'materials', label: 'Материалы и статьи', icon: 'articles', to: '/student/materials', end: true },
       ],
     },

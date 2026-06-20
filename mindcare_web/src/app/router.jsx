@@ -39,6 +39,8 @@ import TagsPage       from '../features/admin/tags/pages/TagsPage';
 import AdminNewsPage  from '../features/admin/news/pages/NewsPage';
 import AdminArticlesPage   from '../features/admin/articles/pages/ArticlesPage';
 import AdminCategoriesPage from '../features/admin/categories/pages/CategoriesPage';
+import AdminTestsPage      from '../features/admin/tests/pages/AdminTestsPage';
+import TestFormPage        from '../features/admin/tests/pages/TestFormPage';
 import AdminSettingsPage   from '../features/admin/settings/pages/AdminSettingsPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
@@ -46,6 +48,10 @@ import ClientDashboard      from '../pages/client/ClientDashboard';
 import StudentHome          from '../pages/student/StudentHome';
 import DiaryPage            from '../pages/student/DiaryPage';
 import TestsPage            from '../pages/student/Tests/TestsPage';
+import TestCatalogPage      from '../pages/student/Tests/TestCatalogPage';
+import TestTakePage         from '../pages/student/Tests/TestTakePage';
+import ResultsHistoryPage   from '../pages/student/Tests/ResultsHistoryPage';
+import ResultDetailPage     from '../pages/student/Tests/ResultDetailPage';
 import StudentMaterialsPage from '../pages/student/Materials/MaterialsPage';
 import TasksPage            from '../pages/student/Tasks/TasksPage';
 import ChatPage             from '../pages/student/Chat/ChatPage';
@@ -134,7 +140,11 @@ export default function AppRouter() {
       >
         <Route index                element={<StudentHome />} />
         <Route path="diary"         element={<DiaryPage />} />
-        <Route path="tests"         element={<TestsPage />} />
+        <Route path="tests"                    element={<TestsPage />} />
+        <Route path="tests/catalog"            element={<TestCatalogPage />} />
+        <Route path="tests/catalog/:uuid"      element={<TestTakePage />} />
+        <Route path="tests/results"            element={<ResultsHistoryPage />} />
+        <Route path="tests/results/:uuid"      element={<ResultDetailPage />} />
         <Route path="materials"     element={<StudentMaterialsPage />} />
         <Route path="tasks"         element={<TasksPage />} />
         <Route path="chat"          element={<ChatPage />} />
@@ -175,6 +185,9 @@ export default function AppRouter() {
         <Route path="news"       element={<AdminNewsPage />} />
         <Route path="articles"   element={<AdminArticlesPage />} />
         <Route path="categories" element={<AdminCategoriesPage />} />
+        <Route path="tests"        element={<AdminTestsPage />} />
+        <Route path="tests/new"    element={<TestFormPage />} />
+        <Route path="tests/:uuid"  element={<TestFormPage />} />
         <Route path="settings"   element={<AdminSettingsPage />} />
       </Route>
 

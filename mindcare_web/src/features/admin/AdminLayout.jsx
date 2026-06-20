@@ -11,6 +11,7 @@ const CRUMB_LABELS = {
   '/admin/tags':       'Темы',
   '/admin/news':       'Новости',
   '/admin/articles':   'Материалы',
+  '/admin/tests':      'Тесты',
   '/admin/settings':   'Настройки',
 };
 
@@ -106,13 +107,17 @@ export default function AdminLayout() {
             <span className={styles.navLabel}>Материалы</span>
           </NavLink>
 
-          <span className={styles.navItemDisabled}>
+          <NavLink
+            to="/admin/tests"
+            className={({ isActive }) =>
+              `${styles.navItem} ${isActive ? styles.active : ''}`
+            }
+          >
             <span className={styles.navIcon}>
               <Icon name="tests" size={18} />
             </span>
             <span className={styles.navLabel}>Тесты</span>
-            <span className={styles.navItemSoon}>скоро</span>
-          </span>
+          </NavLink>
 
           <div className={styles.navSectionLabel} style={{ marginTop: 14 }}>Аккаунт</div>
 
