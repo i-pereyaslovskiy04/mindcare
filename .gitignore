@@ -46,5 +46,8 @@ local_*/
 # --- Uploaded media files ---
 mindcare_api/media/uploads/
 
+# --- Runtime log files (maintenance scripts) ---
+mindcare_api/logs/
+
 # --- Claude Code local session data ---
 .claude/

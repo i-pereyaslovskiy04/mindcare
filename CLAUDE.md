@@ -90,7 +90,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 48 таблиц создаются через `alembic upgrade head`.
+> Все 49 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -172,7 +172,7 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **282 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **361 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -199,6 +199,7 @@ npm run build
 | `tests/integration/test_system_conversation.py` | system conversation backend (Stage 29b) — 17 |
 | `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (Stage 29d) — 11 |
 | `tests/integration/test_chat_presence.py` | approximate online/offline presence (Stage 30c) — 12 |
+| `tests/integration/test_appointments.py` | appointments system: booking validation, slot computation from MeetingType.duration+buffer, group-session slot blocking, recurring breaks (with effective_from/until period filtering), schedule-out-of-range, pending-cancel soft-delete, confirmed-cancel notify, multiple one-off blockers, group sessions, meeting-type role access, bulk schedule rules, optional meeting_type_id on working windows, break period tests, unified schedule create (rules+breaks one series), auto_extend requires effective_until, series soft-delete/restore (is_active) hides from active list & slots, soft-delete keeps appointments + future-appt warning, extend-by-month, supervisor manual booking (occupies slot, 409 on busy, system msg to psychologist, booking_source/created_by audit), auto_extend maintenance (extend+notify, dry-run), read-only frontend support endpoints for student meeting types, psychologist schedule, supervisor slots, and schedule v3 working-window behavior — 69 |
 
 ---
 
@@ -235,7 +236,7 @@ mindcare_api/
 │   │   ├── session.py       — engine, SessionLocal
 │   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
 │   │   ├── seed.py          — идемпотентный seed
-│   │   └── models/          — ORM-модели (12 модулей, 48 таблиц; chat.py — Stage 28b)
+│   │   └── models/          — ORM-модели (12 модулей, 49 таблиц; chat.py — Stage 28b)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
@@ -291,6 +292,8 @@ mindcare_api/
 │   ├── create_admin.py            — создание первого админа (+ legal basis record)
 │   ├── ensure_audit_partitions.py — будущие партиции audit-таблиц
 │   ├── backfill_legal_basis.py    — backfill legal basis (--dry-run default)
+│   ├── extend_schedules.py        — автопродление расписаний с auto_extend
+│   │                               (maintenance, НЕ из lifespan; --dry-run)
 │   └── test_smtp.py               — диагностика SMTP
 └── db/
     └── sql/
@@ -339,6 +342,21 @@ mindcare_api/
 ✅ Metadata-путь session_notes не должен вызывать decrypt_text
 ✅ Chat content доступен только student/psychologist — участникам therapy_engagement
 ✅ Chat content шифруется при записи и не попадает в logs/audit
+✅ Расписание создаётся серией (POST /api/supervisor/schedules): rules + breaks
+   c общим series_id и периодом. meeting_type_id НЕ задаётся для новых рабочих
+   окон schedule v3; тип встречи выбирается при поиске/создании записи.
+   auto_extend=true требует effective_until (валидация в service → 422)
+✅ Soft-delete/restore расписания — на уровне СЕРИИ через is_active (rules+breaks);
+   существующие Appointment НЕ удаляются и продолжают занимать слоты. Перед
+   деактивацией возвращается счётчик будущих записей в периоде (предупреждение)
+✅ Ручная запись supervisor'ом (POST /api/supervisor/appointments) создаёт обычный
+   Appointment в pending_confirmation; требует активного engagement студент↔психолог;
+   психолог получает system-сообщение (event_key appointment_supervisor_new:{uuid})
+✅ Автопродление расписаний — ТОЛЬКО maintenance (scripts/extend_schedules.py →
+   service.auto_extend_schedules); НЕ из FastAPI lifespan. После продления —
+   system-сообщение создавшему серию supervisor'у (created_by, soft-fail)
+❌ Не запускать auto_extend из FastAPI lifespan; не удалять Appointment при
+   деактивации/удалении расписания
 ✅ Auth бизнес-операции АТОМАРНЫ (Stage 31m-fix-b2/b3): registration confirm,
    password reset confirm, change password — одна SessionLocal() + один commit.
    password+revoke sessions (и consume OTP) — в одной транзакции
@@ -364,7 +382,7 @@ mindcare_api/
 
 ### База данных: схема
 
-48 таблиц в 12 модулях. Схема управляется через Alembic.
+49 таблиц в 12 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -382,7 +400,14 @@ mindcare_api/
 | `e5a8f3c1d2b6` | add_normalized_email_unique_index: `lower(trim(email))` |
 | `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) |
 | `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
-| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) — **head** |
+| `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) |
+| `e1a2b3c4d5f6` | add_appointments_system: meeting_types, group_sessions, group_session_registrations, appointments.meeting_type_id+decline_reason; appointments.status VARCHAR(20→30); partial unique index `ux_gsr_active` (status='registered'); БЕЗ ALTER TYPE и БЕЗ повторного ends_at (он уже в baseline) |
+| `71dfb9c56b13` | add_online_to_appointment_modality: идемпотентный DO $$ (enum только для legacy SQL-bootstrap DBs; в Alembic-chain modality уже VARCHAR(20)) |
+| `9e193b84bba8` | rework_schedule_slot_model: meeting_types +description/+buffer_minutes; schedule_rules +meeting_type_id/+period/+series_id, −slot_duration_minutes/−break_minutes; новая schedule_breaks (recurring breaks); schedule_exceptions enum→varchar + снята уникальность `(psychologist_id, exception_date)`; group_sessions +description; view `v_schedule_active` пересоздан без slot/break |
+| `c9a3f2e1d8b6` | schedule_rule_not_null_break_periods: schedule_rules.meeting_type_id→NOT NULL (FK→RESTRICT); schedule_breaks +effective_from (NOT NULL) +effective_until (nullable) |
+| `b2d4f6a8c1e3` | schedule_auto_extend_created_by: schedule_rules +auto_extend (BOOL NOT NULL default false) +created_by (FK users→SET NULL); только ADD COLUMN/FK, обратимо |
+| `d3e6f9a2b5c8` | appointments_booking_source_created_by: appointments +booking_source (default `student_self`) +created_by (FK users→SET NULL) для аудита студентской и supervisor-created записи |
+| `f1a4c7e0b9d2` | schedule_rule_meeting_type_optional: schedule_rules.meeting_type_id снова nullable; расписание v3 хранит рабочие окна психолога без привязки к типу встречи, а MeetingType выбирается при поиске/создании записи — **head** |
 
 **Ключевые таблицы:**
 
@@ -397,7 +422,10 @@ mindcare_api/
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
 | `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
 | `appointments` | Записи на консультации |
-| `schedule_rules` | Расписание психологов (не материализованные слоты) |
+| `meeting_types` | Типы встреч; владеют `duration_minutes` + `buffer_minutes` (по ним строятся слоты), `description`, форматами, `is_group/is_active/is_bookable` |
+| `schedule_rules` | Рабочие окна психолога (только доступность; `meeting_type_id` опционален/legacy и НЕ ограничивает тип встречи в schedule v3, `period`, `series_id` для серии rules+breaks, `auto_extend`, `created_by`). Длительность/буфер — НЕ здесь, а в `meeting_types`. Soft-delete/restore расписания — через `is_active` на уровне серии (не трогает Appointment) |
+| `schedule_breaks` | Повторяющиеся перерывы по дню недели (например обед 13:00–14:00); вырезают пересекающиеся слоты. Перерыв, созданный вместе с расписанием, разделяет `series_id` и период с правилами |
+| `schedule_exceptions` | Разовые изменения на дату: `day_off` / `unavailable` / `extra_availability`; на одну дату допускается несколько (без уникальности) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
 | `categories`, `article_categories`, `test_categories` | Типы материалов/категории. В MVP плоские: `parent_id` не используется в Admin CRUD |
 | `tags`, `article_tags`, `news_tags`, `test_tags` | Темы/теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |

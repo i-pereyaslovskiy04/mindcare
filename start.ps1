@@ -26,10 +26,11 @@ $apiDir      = Join-Path $root "mindcare_api"
 $webDir      = Join-Path $root "mindcare_web"
 $venvDir     = Join-Path $apiDir ".venv"
 $venvPip     = Join-Path $venvDir "Scripts\pip.exe"
+$venvPython  = Join-Path $venvDir "Scripts\python.exe"
 $venvUvicorn = Join-Path $venvDir "Scripts\uvicorn.exe"
 $venvAlembic = Join-Path $venvDir "Scripts\alembic.exe"
 $nodeModules = Join-Path $webDir  "node_modules"
-$requirements = Join-Path $apiDir "requirements.txt"
+$requirementsDev = Join-Path $apiDir "requirements-dev.txt"
 
 # --- Helpers -----------------------------------------------------------------
 function Log-Section  { param($m) Write-Host ""; Write-Host "--- $m" -ForegroundColor DarkCyan }
@@ -71,11 +72,15 @@ if (-not (Test-Path $venvDir)) {
 }
 
 # --- Step 3: backend deps ----------------------------------------------------
+# requirements-dev.txt pulls in requirements.txt (-r) plus test deps (pytest, httpx).
+# Gate on pytest rather than uvicorn: test.ps1 (Step 5) needs the dev deps, so a venv
+# that only has prod deps must still trigger an install.
 Log-Section "Step 3: backend dependencies"
-if (-not (Test-Path $venvUvicorn)) {
-    Write-Host "  pip install -r requirements.txt (may take a minute)..."
-    & $venvPip install -r $requirements --quiet
-    if ($LASTEXITCODE -ne 0) { Log-Fail "pip install failed. Check $requirements." }
+& $venvPython -m pytest --version *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  pip install -r requirements-dev.txt (may take a minute)..."
+    & $venvPip install -r $requirementsDev --quiet
+    if ($LASTEXITCODE -ne 0) { Log-Fail "pip install failed. Check $requirementsDev." }
     Log-Ok "Backend dependencies installed."
 } else {
     Log-Ok "Backend dependencies already installed."
@@ -148,6 +153,7 @@ $frontendCmd = "& { " +
     "`$host.UI.RawUI.WindowTitle = 'MindCare | Frontend :3000'; " +
     "Set-Location '$webDir'; " +
     "`$env:CI = 'false'; " +
+    "Remove-Item Env:\HOST -ErrorAction SilentlyContinue; " +
     "npm start }"
 
 Start-Process powershell -ArgumentList @("-NoExit", "-Command", $frontendCmd) -WindowStyle Normal
