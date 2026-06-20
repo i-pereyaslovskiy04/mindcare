@@ -265,8 +265,10 @@ else
   ok "Миграции применены → $(.venv/bin/alembic current 2>/dev/null)"
 fi
 
+# Считаем логические таблицы: обычные ('r') + партиционированные родители ('p'),
+# исключая дочерние партиции (relispartition) и служебную alembic_version.
 TABLE_COUNT=$(psql "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}" \
-  -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name NOT LIKE '%\_%\_%' AND table_name != 'alembic_version';" 2>/dev/null || echo "?")
+  -tAc "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relispartition = false AND c.relname != 'alembic_version';" 2>/dev/null | tr -d ' ' || echo "?")
 ok "Таблиц в БД: $TABLE_COUNT (ожидается 49)"
 
 # Seed запускается автоматически при старте приложения — проверим через быстрый запуск
@@ -459,7 +461,9 @@ else
   warn "Логин не проверен (пароль не сохранён в скрипте при повторном запуске)"
 fi
 
-${STARTED_API:+kill $API_PID 2>/dev/null || true}
+if [ "$STARTED_API" = true ]; then
+  kill "$API_PID" 2>/dev/null || true
+fi
 
 # Итоговый вывод
 echo ""
