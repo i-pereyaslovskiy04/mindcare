@@ -22,8 +22,9 @@ from app.main import app
 from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
 from app.db.models import (
-    ChatConversation, ChatMessage, ConsentRecord, OtpVerification,
-    TherapyEngagement, User,
+    Appointment, ChatConversation, ChatMessage, ConsentRecord, GroupSession,
+    GroupSessionRegistration, MeetingType,
+    OtpVerification, TherapyEngagement, UnregisteredStudentCard, User,
 )
 
 
@@ -161,6 +162,50 @@ def cleanup_test_records():
         db.query(OtpVerification).filter(
             OtpVerification.email.like("integ_%@example.com")
         ).delete(synchronize_session=False)
+
+        # Тестовые meeting types и их групповые занятия (префикс integ_).
+        # group_sessions.meeting_type_id — ON DELETE RESTRICT, поэтому
+        # сначала удаляем сессии (и их регистрации), затем сами типы.
+        mt_ids = [
+            row.id
+            for row in db.query(MeetingType.id)
+            .filter(MeetingType.name.like("integ_%"))
+            .all()
+        ]
+        if mt_ids:
+            gs_ids = [
+                row.id
+                for row in db.query(GroupSession.id)
+                .filter(GroupSession.meeting_type_id.in_(mt_ids))
+                .all()
+            ]
+            if gs_ids:
+                db.query(GroupSessionRegistration).filter(
+                    GroupSessionRegistration.group_session_id.in_(gs_ids)
+                ).delete(synchronize_session=False)
+                db.query(GroupSession).filter(
+                    GroupSession.id.in_(gs_ids)
+                ).delete(synchronize_session=False)
+            db.query(MeetingType).filter(
+                MeetingType.id.in_(mt_ids)
+            ).delete(synchronize_session=False)
+
+        # Тестовые карточки незарегистрированных студентов (full_name LIKE 'integ_%').
+        # appointments по карточке (FK RESTRICT) удаляем первыми; обычно их уже
+        # снёс CASCADE при удалении психолога, но подстрахуемся явным удалением.
+        card_ids = [
+            row.id
+            for row in db.query(UnregisteredStudentCard.id)
+            .filter(UnregisteredStudentCard.full_name.like("integ_%"))
+            .all()
+        ]
+        if card_ids:
+            db.query(Appointment).filter(
+                Appointment.unregistered_student_card_id.in_(card_ids)
+            ).delete(synchronize_session=False)
+            db.query(UnregisteredStudentCard).filter(
+                UnregisteredStudentCard.id.in_(card_ids)
+            ).delete(synchronize_session=False)
         db.commit()
 
 

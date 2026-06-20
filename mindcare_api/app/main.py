@@ -128,6 +128,12 @@ from app.psychologist.routes import router as psychologist_router          # noq
 from app.session_notes.routes import router as session_notes_router        # noqa: E402
 from app.chat.routes import router as chat_router                          # noqa: E402
 from app.chat.routes import system_router as chat_system_router            # noqa: E402
+from app.appointments.routes_student import router as appointments_student_router      # noqa: E402
+from app.appointments.routes_student import group_router as group_sessions_student_router  # noqa: E402
+from app.appointments.routes_psychologist import router as appointments_psychologist_router  # noqa: E402
+from app.appointments.routes_psychologist import group_router as group_sessions_psychologist_router  # noqa: E402
+from app.appointments.routes_psychologist import schedule_router as schedule_psychologist_router  # noqa: E402
+from app.appointments.routes_supervisor import router as appointments_supervisor_router  # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
@@ -144,6 +150,12 @@ app.include_router(psychologist_router,       prefix="/api")
 app.include_router(session_notes_router,      prefix="/api")
 app.include_router(chat_router,               prefix="/api")
 app.include_router(chat_system_router,        prefix="/api")
+app.include_router(appointments_student_router,      prefix="/api")
+app.include_router(group_sessions_student_router,    prefix="/api")
+app.include_router(appointments_psychologist_router, prefix="/api")
+app.include_router(group_sessions_psychologist_router, prefix="/api")
+app.include_router(schedule_psychologist_router,     prefix="/api")
+app.include_router(appointments_supervisor_router,   prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────
