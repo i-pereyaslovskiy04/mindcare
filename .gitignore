@@ -64,5 +64,6 @@ mindcare_api/media/uploads/
 .continue/
 .codeium/
 
-# Локальные версионные бэкапы изменяемых файлов (hook .backups/backup_hook.py)
-.backups/
+# Версионные бэкапы изменяемых файлов (hook scripts/backup_hook.py).
+# Сам скрипт трекается в scripts/; gitignored только содержимое бэкапов.
+.backups/files/
