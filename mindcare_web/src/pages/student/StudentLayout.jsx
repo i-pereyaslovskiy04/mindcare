@@ -19,7 +19,8 @@ function buildNavSections(messagesBadge) {
         { key: 'tasks',    label: 'Задания психолога', icon: 'tasks',    to: '/student/tasks',    end: true, badge: '2' },
         { key: 'chat',     label: 'Сообщения',         icon: 'chat',     to: '/student/chat',     end: true,
           badge: messagesBadge > 0 ? String(messagesBadge) : undefined },
-        { key: 'calendar', label: 'Календарь и сессии', icon: 'calendar', to: '/student/calendar', end: true },
+        { key: 'calendar',      label: 'Календарь и сессии',  icon: 'calendar', to: '/student/calendar',      end: true },
+        { key: 'group-sessions', label: 'Групповые занятия', icon: 'users',    to: '/student/group-sessions', end: true },
       ],
     },
     {
@@ -38,7 +39,8 @@ const CRUMB_LABELS = {
   '/student/materials': 'Материалы и статьи',
   '/student/tasks':     'Задания психолога',
   '/student/chat':      'Сообщения',
-  '/student/calendar':  'Календарь и сессии',
+  '/student/calendar':       'Календарь и сессии',
+  '/student/group-sessions': 'Групповые занятия',
   '/student/settings':  'Настройки',
 };
 

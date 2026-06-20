@@ -1,0 +1,118 @@
+.page { display: flex; flex-direction: column; gap: 20px; }
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.labelTag {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  margin-bottom: 4px;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h1);
+  font-weight: 400;
+  color: var(--text-main);
+  line-height: 1.1;
+  margin: 0 0 4px;
+}
+
+.pageTitle em { font-style: italic; color: var(--mocha); }
+
+.pageSub { font-size: var(--fs-sub); color: var(--text-muted); margin: 0; }
+
+/* ── Form layout ─────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 680px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  background: var(--warm-white);
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04);
+}
+
+.sectionLabel {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+}
+
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.fieldWrap { display: flex; flex-direction: column; gap: 6px; }
+
+.formLabel {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+}
+
+.formInput {
+  padding: 8px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: var(--fs-body);
+  color: var(--text-main);
+  background: var(--cream);
+}
+
+.formInput:focus { outline: none; border-color: var(--coffee); }
+
+.hint { font-size: var(--fs-sub); color: var(--text-muted); }
+
+/* ── Slot picker ─────────────────────────────────────── */
+.slotGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.slotBtn {
+  padding: 7px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: var(--warm-white);
+  font-family: inherit;
+  font-size: var(--fs-sub);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.slotBtn:hover { border-color: var(--coffee); }
+
+.slotBtnActive {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+/* ── Feedback messages ───────────────────────────────── */
+.saveErr { font-size: var(--fs-sub); color: var(--error, #c0392b); }
+.okMsg   { font-size: var(--fs-sub); color: var(--success, #2e7d32); }
+
+/* ── Submit action ───────────────────────────────────── */
+.actions { display: flex; justify-content: flex-end; }

@@ -1,4 +1,5 @@
 import { MONTH_NAMES_GENITIVE } from '../utils/calendarUtils';
+import Badge from '../../../../components/UI/Badge/Badge';
 import styles from './SessionHistory.module.css';
 
 function parseDate(dateStr) {
@@ -13,7 +14,7 @@ export default function SessionHistory({ sessions }) {
     <section className={styles.section}>
       <h3 className={styles.heading}>История сессий</h3>
       <ul className={styles.list}>
-        {[...sessions].reverse().map(s => {
+        {sessions.map(s => {
           const { day, month } = parseDate(s.date);
           return (
             <li key={s.id} className={styles.item}>
@@ -28,6 +29,9 @@ export default function SessionHistory({ sessions }) {
                   <span className={styles.psych}>{s.psychologist}</span>
                 )}
               </div>
+              {s.statusLabel && (
+                <Badge tone={s.statusTone || 'neutral'}>{s.statusLabel}</Badge>
+              )}
             </li>
           );
         })}

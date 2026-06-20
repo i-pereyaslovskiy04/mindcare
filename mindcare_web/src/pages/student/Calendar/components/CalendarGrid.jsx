@@ -1,24 +1,22 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { DOW, buildGrid, dateKey } from '../utils/calendarUtils';
-import { MOCK_EVENTS } from '../data/mockEvents';
 import CalendarDayCell from './CalendarDayCell';
 import styles from './CalendarGrid.module.css';
 
 const POPUP_W = 280;
 
-export default function CalendarGrid({ year, month, sessionMap, todayKey, onDaySelect, containerRef }) {
+export default function CalendarGrid({
+  year,
+  month,
+  sessionMap,
+  todayKey,
+  onDaySelect,
+  containerRef,
+  eventsMap = {},
+}) {
   const [selectedKey, setSelectedKey] = useState(null);
 
   const cells = buildGrid(year, month);
-
-  const eventsMap = useMemo(() => {
-    const map = {};
-    MOCK_EVENTS.forEach(e => {
-      if (!map[e.date]) map[e.date] = [];
-      map[e.date].push(e.type);
-    });
-    return map;
-  }, []);
 
   function handleCellClick(cell, e) {
     const key = dateKey(cell.year, cell.month, cell.day);
@@ -61,7 +59,7 @@ export default function CalendarGrid({ year, month, sessionMap, todayKey, onDayS
               isToday={key === todayKey}
               dotStatus={sessionMap[key]?.status || null}
               isSelected={selectedKey === key}
-              events={eventsMap[key] || []}
+              events={(eventsMap[key] || []).map(ev => ev.type)}
               onClick={(e) => handleCellClick(cell, e)}
             />
           );

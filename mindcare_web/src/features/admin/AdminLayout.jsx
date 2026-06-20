@@ -6,12 +6,13 @@ import { getInitials } from '../../shared/lib/utils';
 import styles from './AdminLayout.module.css';
 
 const CRUMB_LABELS = {
-  '/admin/users':      'Пользователи',
-  '/admin/categories': 'Типы материалов',
-  '/admin/tags':       'Темы',
-  '/admin/news':       'Новости',
-  '/admin/articles':   'Материалы',
-  '/admin/settings':   'Настройки',
+  '/admin/users':         'Пользователи',
+  '/admin/categories':    'Типы материалов',
+  '/admin/tags':          'Темы',
+  '/admin/news':          'Новости',
+  '/admin/articles':      'Материалы',
+  '/admin/meeting-types': 'Типы встреч',
+  '/admin/settings':      'Настройки',
 };
 
 export default function AdminLayout() {
@@ -104,6 +105,18 @@ export default function AdminLayout() {
               <Icon name="articles" size={18} />
             </span>
             <span className={styles.navLabel}>Материалы</span>
+          </NavLink>
+
+          <NavLink
+            to="/admin/meeting-types"
+            className={({ isActive }) =>
+              `${styles.navItem} ${isActive ? styles.active : ''}`
+            }
+          >
+            <span className={styles.navIcon}>
+              <Icon name="calendar" size={18} />
+            </span>
+            <span className={styles.navLabel}>Типы встреч</span>
           </NavLink>
 
           <span className={styles.navItemDisabled}>

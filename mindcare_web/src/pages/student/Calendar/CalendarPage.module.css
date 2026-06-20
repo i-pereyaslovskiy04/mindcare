@@ -149,3 +149,27 @@
   font-weight: 600;
 }
 
+.slotHint {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.loadingHint {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
+.bookError {
+  font-size: var(--fs-sub);
+  color: var(--error, #c0392b);
+  padding: 4px 0;
+}
+
+.bookSuccess {
+  font-size: var(--fs-sub);
+  color: var(--success, #2e7d32);
+  padding: 4px 0;
+}
+

@@ -49,20 +49,26 @@ import TestsPage            from '../pages/student/Tests/TestsPage';
 import StudentMaterialsPage from '../pages/student/Materials/MaterialsPage';
 import TasksPage            from '../pages/student/Tasks/TasksPage';
 import ChatPage             from '../pages/student/Chat/ChatPage';
-import CalendarPage         from '../pages/student/Calendar/CalendarPage';
+import CalendarPage              from '../pages/student/Calendar/CalendarPage';
+import StudentGroupSessionsPage  from '../pages/student/GroupSessions/GroupSessionsPage';
 import SettingsPage         from '../pages/student/Settings/SettingsPage';
 
 // ── Psychologist ──────────────────────────────────────────────────────────────
-import PsychologistLayout          from '../pages/psychologist/PsychologistLayout';
-import PsychologistHome            from '../pages/psychologist/PsychologistHome';
-import PsychologistStudentsPage    from '../pages/psychologist/PsychologistStudentsPage';
-import PsychologistStudentCardPage from '../pages/psychologist/PsychologistStudentCardPage';
-import PsychologistChatPage        from '../pages/psychologist/Chat/PsychologistChatPage';
+import PsychologistLayout           from '../pages/psychologist/PsychologistLayout';
+import PsychologistHome             from '../pages/psychologist/PsychologistHome';
+import PsychologistStudentsPage     from '../pages/psychologist/PsychologistStudentsPage';
+import PsychologistStudentCardPage  from '../pages/psychologist/PsychologistStudentCardPage';
+import PsychologistChatPage         from '../pages/psychologist/Chat/PsychologistChatPage';
+import PsychologistAppointmentsPage from '../pages/psychologist/Appointments/AppointmentsPage';
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
 import SupervisorLayout    from '../pages/supervisor/SupervisorLayout';
 import SupervisorHome      from '../pages/supervisor/SupervisorHome';
 import EngagementsPage     from '../pages/supervisor/EngagementsPage';
+import MeetingTypesPage    from '../pages/supervisor/MeetingTypesPage';
+import GroupSessionsPage   from '../pages/supervisor/GroupSessionsPage';
+import SchedulePage        from '../pages/supervisor/SchedulePage';
+import BookingPage         from '../pages/supervisor/BookingPage';
 
 // ── Shared cabinet pages ──────────────────────────────────────────────────────
 import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage';
@@ -138,7 +144,8 @@ export default function AppRouter() {
         <Route path="materials"     element={<StudentMaterialsPage />} />
         <Route path="tasks"         element={<TasksPage />} />
         <Route path="chat"          element={<ChatPage />} />
-        <Route path="calendar"      element={<CalendarPage />} />
+        <Route path="calendar"        element={<CalendarPage />} />
+        <Route path="group-sessions"  element={<StudentGroupSessionsPage />} />
         <Route path="settings"      element={<SettingsPage />} />
       </Route>
 
@@ -150,6 +157,7 @@ export default function AppRouter() {
         <Route index                          element={<PsychologistHome />} />
         <Route path="students"              element={<PsychologistStudentsPage />} />
         <Route path="students/:studentId"   element={<PsychologistStudentCardPage />} />
+        <Route path="appointments"          element={<PsychologistAppointmentsPage />} />
         <Route path="chat"                  element={<PsychologistChatPage />} />
         <Route path="settings"              element={<CabinetSettingsPage />} />
       </Route>
@@ -159,9 +167,13 @@ export default function AppRouter() {
         path="/supervisor"
         element={<RoleRoute roles={['supervisor']}><SupervisorLayout /></RoleRoute>}
       >
-        <Route index                  element={<SupervisorHome />} />
-        <Route path="engagements"     element={<EngagementsPage />} />
-        <Route path="settings"        element={<CabinetSettingsPage />} />
+        <Route index                          element={<SupervisorHome />} />
+        <Route path="engagements"           element={<EngagementsPage />} />
+        <Route path="meeting-types"         element={<MeetingTypesPage />} />
+        <Route path="schedule"              element={<SchedulePage />} />
+        <Route path="booking"               element={<BookingPage />} />
+        <Route path="group-sessions"        element={<GroupSessionsPage />} />
+        <Route path="settings"              element={<CabinetSettingsPage />} />
       </Route>
 
       {/* Admin */}
@@ -175,6 +187,7 @@ export default function AppRouter() {
         <Route path="news"       element={<AdminNewsPage />} />
         <Route path="articles"   element={<AdminArticlesPage />} />
         <Route path="categories" element={<AdminCategoriesPage />} />
+        <Route path="meeting-types" element={<MeetingTypesPage />} />
         <Route path="settings"   element={<AdminSettingsPage />} />
       </Route>
 
