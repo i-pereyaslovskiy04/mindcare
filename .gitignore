@@ -50,5 +50,16 @@ mindcare_api/media/uploads/
 # --- Private chat attachment storage (runtime, не коммитить) ---
 /mindcare_api/storage/
 
-# --- Claude Code local session data ---
+# --- Dev launcher logs (start.sh, runtime) ---
+/logs/
+
+# --- AI tools local settings (не синхронизировать) ---
 .claude/
+.gemini/
+.cursor/
+.copilot/
+.aider/
+.aider.conf.yml
+.aider.model.settings.yml
+.continue/
+.codeium/

@@ -118,10 +118,89 @@ mindcare/
 │       ├── components/              # Переиспользуемые UI-примитивы
 │       ├── pages/                   # Только композиция, никаких fetch
 │       └── styles/                  # CSS-переменные, глобальные стили
+├── deploy.sh                        # Скрипт автоматического развёртывания на Linux
 ├── ARCHITECTURE.md                  # Обзор архитектуры монорепо
 ├── CLAUDE.md                        # Контекст для Claude Code
 └── README.md
 ```
+
+---
+
+## Развёртывание на Linux
+
+Для развёртывания на новом Linux-сервере (Debian / Ubuntu / Raspberry Pi OS) используйте скрипт `deploy.sh`.
+
+### Что делает скрипт
+
+| Шаг | Действие |
+|-----|----------|
+| 1 | Проверяет наличие PostgreSQL, Python 3.11+, Node.js 18+ |
+| 2 | Создаёт `mindcare_api/.env` интерактивно (пароль БД, SMTP, Fernet-ключ) или использует существующий |
+| 3 | Создаёт роль и базу данных в PostgreSQL (идемпотентно) |
+| 4 | Создаёт Python `.venv` и устанавливает зависимости |
+| 5 | Применяет все миграции Alembic до head и запускает seed |
+| 6 | Устанавливает npm-зависимости фронтенда |
+| 7 | Создаёт первого администратора (интерактивно, пропускает если уже есть) |
+| 8 | Создаёт systemd-сервисы с автозапуском при старте системы |
+| 9 | Финальная проверка доступности API и логина администратора |
+
+Скрипт **идемпотентен** — безопасно запускать повторно при обновлении.
+
+### Использование
+
+```bash
+# 1. Клонировать репозиторий
+git clone <repo-url> mindcare
+cd mindcare
+
+# 2. Сделать скрипт исполняемым
+chmod +x deploy.sh
+
+# 3a. Запуск с автоустановкой системных пакетов (PostgreSQL, Node.js через apt)
+./deploy.sh --install-deps
+
+# 3b. Если PostgreSQL, Python 3.11+ и Node.js 18+ уже установлены
+./deploy.sh
+
+# 3c. Без создания systemd-сервисов (запуск вручную)
+./deploy.sh --no-systemd
+```
+
+### После развёртывания
+
+**Запуск через systemd (если не передан `--no-systemd`):**
+
+```bash
+sudo systemctl start mindcare-api mindcare-web
+sudo systemctl status mindcare-api mindcare-web
+
+# Логи
+journalctl -u mindcare-api -f
+journalctl -u mindcare-web -f
+```
+
+**Запуск вручную:**
+
+```bash
+# Backend
+cd mindcare_api
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Frontend (другой терминал)
+cd mindcare_web
+npm start
+```
+
+**Создание будущих партиций audit-таблиц** (рекомендуется раз в год):
+
+```bash
+cd mindcare_api
+.venv/bin/python scripts/ensure_audit_partitions.py --months-ahead 24
+```
+
+> **Важно:** `DATA_ENCRYPTION_KEY` из `mindcare_api/.env` защищает заметки сессий
+> и переписку чата. Сохраните его отдельно от резервных копий БД.
+> Потеря ключа = невозможность расшифровать данные.
 
 ---
 
