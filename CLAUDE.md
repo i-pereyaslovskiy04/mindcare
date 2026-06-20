@@ -28,6 +28,28 @@
 - `mindcare_api/` — Python FastAPI бэкенд, порт 8000
 - `mindcare_web/` — React 19 фронтенд (CRA), порт 3000
 
+## Правила для всех ИИ: версионные бэкапы изменяемых файлов
+
+**Обязательно для любого ИИ-агента, работающего с проектом.**
+
+Перед изменением любого файла проекта его текущая (до-правочная) версия
+сохраняется в папку бэкапов с версионностью — каждая правка создаёт новую
+версию, старые не перезаписываются.
+
+```
+✅ Папка бэкапов — ВНУТРИ проекта: `.backups/` (НЕ абсолютный путь, НЕ вне проекта)
+✅ Структура: `.backups/files/<относительный путь файла>/<UTC-таймстамп><ext>`
+✅ Бэкап автоматизирован PreToolUse-hook'ом `.backups/backup_hook.py`
+   (matcher Edit|Write|MultiEdit|NotebookEdit в .claude/settings.json);
+   путь к скрипту задаётся через `$CLAUDE_PROJECT_DIR`, без хардкода
+✅ `.backups/` добавлена в .gitignore — бэкапы НЕ коммитятся
+✅ Корень проекта скрипт вычисляет относительно своего расположения
+   (`.backups/` на один уровень ниже корня) — не хардкодить абсолютные пути
+❌ Не выносить папку бэкапов за пределы проекта и не задавать абсолютным путём
+❌ Не отключать hook, не коммитить содержимое `.backups/`
+❌ Сам каталог `.backups/` из бэкапа исключён (без рекурсии)
+```
+
 ## Команды
 
 ### Backend (`mindcare_api/`)
@@ -172,7 +194,7 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **488 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Всего: **525 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
@@ -420,7 +442,8 @@ mindcare_api/
 | `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
 | `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) |
 | `f7e9c2a4b8d1` | add_chat_message_edited_at: chat_messages.edited_at (Stage 31z) |
-| `a9b3e1f7c2d4` | add_chat_attachments: chat_attachments table + FK (Stage 32b) — **head** |
+| `a9b3e1f7c2d4` | add_chat_attachments: chat_attachments table + FK (Stage 32b) |
+| `c1d4e7a2f9b3` | add_test_interpretations: пороги интерпретации тестов (психодиагностика, Этап A) — **head** |
 
 **Ключевые таблицы:**
 

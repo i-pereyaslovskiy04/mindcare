@@ -63,3 +63,6 @@ mindcare_api/media/uploads/
 .aider.model.settings.yml
 .continue/
 .codeium/
+
+# Локальные версионные бэкапы изменяемых файлов (hook .backups/backup_hook.py)
+.backups/

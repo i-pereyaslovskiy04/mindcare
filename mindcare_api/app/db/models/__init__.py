@@ -71,6 +71,7 @@ from app.db.models.content import (  # noqa: F401
 from app.db.models.diagnostics import (  # noqa: F401
     Test,
     TestCategory,
+    TestInterpretation,
     Question,
     Option,
     QuestionMedia,
@@ -128,7 +129,8 @@ __all__ = [
     "Category", "Article", "ArticleCategory", "News", "HelpResource", "QuestionsAnswers",
     "Tag", "ArticleTag", "NewsTag", "TestTag",
     # diagnostics
-    "Test", "TestCategory", "Question", "Option", "QuestionMedia", "OptionMedia",
+    "Test", "TestCategory", "TestInterpretation", "Question", "Option",
+    "QuestionMedia", "OptionMedia",
     "TestResult", "TestResultScale", "StudentAnswer",
     # consultations
     "TherapyEngagement", "ScheduleRule", "ScheduleException", "Appointment", "SessionNote",

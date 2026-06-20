@@ -43,6 +43,9 @@ class Test(Base):
     categories = relationship(
         "TestCategory", back_populates="test", cascade="all, delete-orphan"
     )
+    interpretations = relationship(
+        "TestInterpretation", back_populates="test", cascade="all, delete-orphan"
+    )
 
 
 class TestCategory(Base):
@@ -57,6 +60,33 @@ class TestCategory(Base):
 
     test     = relationship("Test", back_populates="categories")
     category = relationship("Category")
+
+
+class TestInterpretation(Base):
+    """
+    Пороги интерпретации результата (Этап A).
+
+    scale_name = NULL  → интерпретация по итоговому total_score теста.
+    scale_name = '...' → интерпретация по баллу шкалы (test_result_scales.scale_name)
+                         для многошкальных тестов.
+
+    Диапазон [min_score, max_score] включительный. Непересечение диапазонов
+    в рамках одного (test_id, scale_name) валидируется в service-слое.
+    """
+    __tablename__ = "test_interpretations"
+
+    id             = Column(Integer, primary_key=True)
+    test_id        = Column(
+        Integer, ForeignKey("tests.id", ondelete="CASCADE"), nullable=False
+    )
+    scale_name     = Column(String(100))            # NULL = по итоговому баллу теста
+    min_score      = Column(Integer, nullable=False)
+    max_score      = Column(Integer, nullable=False)
+    label          = Column(String(255), nullable=False)
+    recommendation = Column(Text)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+
+    test = relationship("Test", back_populates="interpretations")
 
 
 class Question(Base):
