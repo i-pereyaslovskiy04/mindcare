@@ -9,13 +9,53 @@ import GroupSessionsPanel from './GroupSessionsPanel';
 import ScheduleTab from './ScheduleTab';
 import styles from './AppointmentsPage.module.css';
 
-// Moscow is UTC+3
-function fmtDatetime(iso) {
+// Все даты/время показываем в московском времени через Intl (не ручной +3).
+const _dayDateFmt = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long',
+});
+const _timeFmt = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit',
+});
+
+// «Понедельник, 24 июня»
+function fmtDayDate(iso) {
   if (!iso) return '—';
-  const msk = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
-  return msk.toLocaleString('ru-RU', {
-    day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-  });
+  const s = _dayDateFmt.format(new Date(iso));
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// «10:00»
+function fmtTime(iso) {
+  if (!iso) return '';
+  return _timeFmt.format(new Date(iso));
+}
+
+// «10:00–10:50» (или просто начало, если ends_at нет)
+function fmtTimeRange(starts, ends) {
+  const start = fmtTime(starts);
+  if (!ends) return start;
+  return `${start}–${fmtTime(ends)}`;
+}
+
+// Субъект записи: зарегистрированный студент, карточка незарегистрированного
+// студента, либо ничего. ПДн карточки не логируем.
+function subjectOf(appt) {
+  if (appt.student) {
+    return {
+      name: appt.student.full_name || '—',
+      contact: appt.student.email || '',
+      isCard: false,
+    };
+  }
+  if (appt.unregistered_student_card) {
+    const card = appt.unregistered_student_card;
+    return {
+      name: card.full_name || '—',
+      contact: card.phone || card.email || '',
+      isCard: true,
+    };
+  }
+  return { name: 'Клиент не указан', contact: '', isCard: false };
 }
 
 const STATUS_LABEL = {
@@ -57,6 +97,12 @@ export default function PsychologistAppointmentsPage() {
   const [actionError, setActionError] = useState(null);
 
   const totalPages = Math.max(1, Math.ceil(total / 20));
+
+  // Defensive: backend сортирует по starts_at ASC, но гарантируем порядок и в UI
+  // (только отображение текущей страницы — не трогаем пагинацию).
+  const sortedItems = [...items].sort(
+    (a, b) => new Date(a.starts_at) - new Date(b.starts_at)
+  );
 
   async function handleConfirm(uuid) {
     setConfirming(uuid);
@@ -182,29 +228,38 @@ export default function PsychologistAppointmentsPage() {
       {!loading && !error && items.length > 0 && (
         <>
           <div className={styles.list}>
-            {items.map(appt => (
+            {sortedItems.map(appt => {
+              const subj = subjectOf(appt);
+              const durationMin =
+                appt.duration_minutes || appt.meeting_type_duration_minutes;
+              return (
               <div key={appt.uuid} className={styles.card}>
                 <div className={styles.cardHead}>
                   <div className={styles.cardStudent}>
-                    <span className={styles.studentName}>
-                      {appt.student?.full_name || '—'}
-                    </span>
-                    <span className={styles.studentEmail}>{appt.student?.email || ''}</span>
+                    <span className={styles.studentName}>{subj.name}</span>
+                    {subj.contact && (
+                      <span className={styles.studentEmail}>{subj.contact}</span>
+                    )}
                   </div>
-                  <Badge tone={STATUS_TONE[appt.status] || 'neutral'}>
-                    {STATUS_LABEL[appt.status] || appt.status}
-                  </Badge>
+                  <div className={styles.cardBadges}>
+                    {subj.isCard && <Badge tone="neutral">Карточка</Badge>}
+                    <Badge tone={STATUS_TONE[appt.status] || 'neutral'}>
+                      {STATUS_LABEL[appt.status] || appt.status}
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className={styles.cardMeta}>
                   <span className={styles.metaItem}>
                     <Icon name="calendar" size={13} />
-                    {fmtDatetime(appt.starts_at)}
+                    {fmtDayDate(appt.starts_at)} · {fmtTimeRange(appt.starts_at, appt.ends_at)}
                   </span>
                   <span className={styles.metaItem}>
                     <Icon name="bell" size={13} />
+                    {appt.meeting_type_name || 'Индивидуальная встреча'}
+                    {' · '}
                     {MODALITY_LABEL[appt.modality] || appt.modality}
-                    {appt.duration_minutes ? ` · ${appt.duration_minutes} мин` : ''}
+                    {durationMin ? ` · ${durationMin} мин` : ''}
                   </span>
                 </div>
 
@@ -240,7 +295,8 @@ export default function PsychologistAppointmentsPage() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {totalPages > 1 && (

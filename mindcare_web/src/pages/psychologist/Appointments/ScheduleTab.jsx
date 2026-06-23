@@ -9,10 +9,15 @@ const DAY_LABEL = [
   'Понедельник', 'Вторник', 'Среда', 'Четверг',
   'Пятница', 'Суббота', 'Воскресенье',
 ];
-const DAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+function fmtPeriod(item) {
+  return `Действует: ${item.effective_from}`
+    + (item.effective_until ? ` — ${item.effective_until}` : ' — бессрочно');
+}
 
 /**
- * Read-only расписание психолога: активные рабочие окна + перерывы.
+ * Read-only расписание психолога, сгруппированное по дням недели: для каждого
+ * дня сначала рабочие окна, затем перерывы.
  * Schedule v3: рабочее окно не привязано к типу встречи — показываем только
  * день, время и период действия (тип/длительность здесь не отображаются).
  */
@@ -68,48 +73,50 @@ export default function ScheduleTab() {
     );
   }
 
+  // Группируем рабочие окна и перерывы по дню недели; показываем только дни,
+  // где есть хотя бы одно окно или перерыв. Внутри дня — окна, затем перерывы,
+  // и то и другое отсортировано по времени начала.
+  const byTime = (a, b) => a.start_time.localeCompare(b.start_time);
+  const days = DAY_LABEL.map((label, dow) => ({
+    dow,
+    label,
+    rules: rules.filter(r => r.day_of_week === dow).sort(byTime),
+    breaks: breaks.filter(b => b.day_of_week === dow).sort(byTime),
+  })).filter(d => d.rules.length > 0 || d.breaks.length > 0);
+
   return (
     <div className={styles.list}>
-      {rules.map(r => (
-        <div key={r.id} className={styles.card}>
+      {days.map(day => (
+        <div key={day.dow} className={styles.card}>
           <div className={styles.cardHead}>
             <div className={styles.cardStudent}>
-              <span className={styles.studentName}>{DAY_LABEL[r.day_of_week]}</span>
-              <span className={styles.studentEmail}>Рабочее окно</span>
+              <span className={styles.studentName}>{day.label}</span>
             </div>
-            {r.auto_extend && <Badge tone="neutral">Автопродление</Badge>}
           </div>
 
-          <div className={styles.cardMeta}>
-            <span className={styles.metaItem}>
-              <Icon name="calendar" size={13} />
-              {r.start_time}–{r.end_time}
-            </span>
-            <span className={styles.metaItem}>
-              Действует: {r.effective_from}
-              {r.effective_until ? ` — ${r.effective_until}` : ' — бессрочно'}
-            </span>
-          </div>
+          {day.rules.map(r => (
+            <div key={`r-${r.id}`} className={styles.cardMeta}>
+              <span className={styles.metaItem}>
+                <Icon name="calendar" size={13} />
+                Рабочее время: {r.start_time}–{r.end_time}
+              </span>
+              <span className={styles.metaItem}>{fmtPeriod(r)}</span>
+              {r.auto_extend && <Badge tone="neutral">Автопродление</Badge>}
+            </div>
+          ))}
+
+          {day.breaks.map(b => (
+            <div key={`b-${b.id}`} className={styles.cardMeta}>
+              <span className={styles.metaItem}>
+                <Icon name="bell" size={13} />
+                Перерыв: {b.start_time}–{b.end_time}
+                {b.title ? `, ${b.title}` : ''}
+              </span>
+              <span className={styles.metaItem}>{fmtPeriod(b)}</span>
+            </div>
+          ))}
         </div>
       ))}
-
-      {breaks.length > 0 && (
-        <div className={styles.card}>
-          <div className={styles.cardHead}>
-            <div className={styles.cardStudent}>
-              <span className={styles.studentName}>Перерывы</span>
-            </div>
-          </div>
-          <div className={styles.cardMeta}>
-            {breaks.map(b => (
-              <span key={b.id} className={styles.metaItem}>
-                {DAY_SHORT[b.day_of_week]} {b.start_time}–{b.end_time}
-                {b.title ? ` (${b.title})` : ''}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
