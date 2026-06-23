@@ -16,6 +16,8 @@ from app.supervisor.schemas import (
     PaginatedEngagementsResponse,
     PaginatedPsychologistsResponse,
     PaginatedStudentsResponse,
+    SupervisorStudentCreate,
+    SupervisorStudentCreateResponse,
 )
 
 router = APIRouter(
@@ -39,6 +41,40 @@ def list_students(
     """
     items, total = storage.get_students(search=search, page=page, size=size)
     return {"items": items, "total": total, "page": page, "size": size}
+
+
+@router.post(
+    "/students",
+    response_model=SupervisorStudentCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_student(
+    request:      Request,
+    body:         SupervisorStudentCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Создать полноценный аккаунт студента (admin/supervisor) с временным паролем.
+
+    personal_data_consent — staff подтверждает личное согласие студента на
+    обработку ПДн (получено очно); фиксируется в consent_records (НЕ legal basis).
+    Опциональный psychologist_id создаёт активную связь студент↔психолог.
+    Карточка незарегистрированного студента с тем же email привязывается к аккаунту.
+    """
+    try:
+        return service.create_student(
+            full_name=body.full_name,
+            email=body.email,
+            phone=body.phone,
+            psychologist_id=body.psychologist_id,
+            primary_concern=body.primary_concern,
+            actor_id=current_user["id"],
+            actor_role=current_user["role"],
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except service.SupervisorError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
 # ── Психологи ─────────────────────────────────────────────────────────────────

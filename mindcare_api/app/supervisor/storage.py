@@ -1,21 +1,42 @@
 """
 SQLAlchemy-запросы для модуля супервизора.
-Только чтение (SELECT). Транзакционные операции — в service.py.
+
+Чтение (SELECT) + одна транзакционная операция создания студента
+(create_student): остальные write-операции (assign/transfer/close) — в service.py.
 """
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased
 
+from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.db.models import (
+    AuditLog,
+    Consent,
+    ConsentRecord,
     PsychologistProfile,
     Role,
     TherapyEngagement,
     User,
     UserRole,
 )
+
+
+class StudentCreateError(Exception):
+    """Ошибка создания студента на уровне storage.
+
+    code маппится в HTTP-статус в service.create_student
+    (duplicate_email/psychologist_not_found/not_a_psychologist/
+    psychologist_inactive/consent_policy_missing/student_role_missing).
+    """
+
+    def __init__(self, code: str, message: str):
+        self.code = code
+        self.message = message
+        super().__init__(message)
 
 
 def get_students(
@@ -217,3 +238,207 @@ def get_engagements(
             })
 
         return items, total
+
+
+# ── Создание зарегистрированного студента (admin/supervisor) ───────────────────
+
+def create_student(
+    *,
+    email: str,
+    full_name: str,
+    password_hash: str,
+    phone: Optional[str],
+    psychologist_id: Optional[int],
+    primary_concern: Optional[str],
+    actor_id: int,
+    actor_role: str,
+    ip: Optional[str],
+    user_agent: Optional[str],
+    required_consent_types: list[str],
+) -> dict:
+    """
+    Атомарно создаёт полноценный аккаунт студента (admin/supervisor).
+
+    В ОДНОЙ сессии и ОДНОМ commit:
+      1. проверка уникальности email;
+      2. (если задан psychologist_id) валидация психолога — существует,
+         не удалён, роль psychologist, is_active=True;
+      3. User(role=student, is_active=True) + UserRole(student);
+      4. ConsentRecord на каждую обязательную политику — личное согласие
+         субъекта, получено очно (accepted=True; ip/user_agent — контекст
+         запроса staff, в котором согласие внесено);
+      5. (если задан psychologist_id) active TherapyEngagement;
+      6. AuditLog supervisor_create_student (+ supervisor_assign_psychologist).
+
+    AuditLog обязателен В ЭТОЙ транзакции (ConsentRecord не хранит actor) и НЕ
+    swallow'ится: его сбой откатывает всю запись. Любой сбой шага поднимает
+    исключение до commit → полный rollback (нет студента без согласия/
+    назначения/аудита). ПДн/пароль не логируются.
+
+    Raises StudentCreateError(code). Возвращает dict с данными студента,
+    engagement (или None) и psychologist_name (для post-commit уведомления).
+    """
+    email_norm = normalize_email(email)
+    now = datetime.now(timezone.utc)
+
+    with SessionLocal() as db:
+        # 1. Уникальность email среди не удалённых пользователей.
+        exists = (
+            db.query(User.id)
+            .filter(User.email == email_norm, User.deleted_at.is_(None))
+            .first()
+        )
+        if exists:
+            raise StudentCreateError(
+                "duplicate_email",
+                f"Пользователь с email {email} уже существует",
+            )
+
+        # 2. Валидация психолога (если назначаем) — в той же сессии.
+        psych_name = None
+        if psychologist_id is not None:
+            psy = (
+                db.query(User)
+                .filter(
+                    User.id == psychologist_id, User.deleted_at.is_(None)
+                )
+                .first()
+            )
+            if psy is None:
+                raise StudentCreateError(
+                    "psychologist_not_found",
+                    f"Психолог id={psychologist_id} не найден",
+                )
+            has_role = (
+                db.query(UserRole.user_id)
+                .join(Role, Role.id == UserRole.role_id)
+                .filter(
+                    UserRole.user_id == psychologist_id,
+                    Role.name == "psychologist",
+                )
+                .first()
+            )
+            if not has_role:
+                raise StudentCreateError(
+                    "not_a_psychologist",
+                    f"Пользователь id={psychologist_id} не является психологом",
+                )
+            if not psy.is_active:
+                raise StudentCreateError(
+                    "psychologist_inactive",
+                    f"Психолог id={psychologist_id} неактивен",
+                )
+            psych_name = psy.full_name or psy.email
+
+        # 3. Обязательные consent-политики обязаны существовать (seed data).
+        consent_ids: list[int] = []
+        for policy_type in required_consent_types:
+            consent = (
+                db.query(Consent)
+                .filter(Consent.policy_type == policy_type)
+                .order_by(Consent.version.desc())
+                .first()
+            )
+            if consent is None:
+                raise StudentCreateError(
+                    "consent_policy_missing",
+                    f"Политика '{policy_type}' не найдена в БД",
+                )
+            consent_ids.append(consent.id)
+
+        student_role = (
+            db.query(Role).filter(Role.name == "student").first()
+        )
+        if student_role is None:
+            raise StudentCreateError(
+                "student_role_missing", "Роль 'student' не найдена в БД"
+            )
+
+        # 4. User + роль student.
+        new_user = User(
+            email=email_norm,
+            full_name=full_name.strip(),
+            password_hash=password_hash,
+            phone=(phone.strip() or None) if phone else None,
+            is_active=True,
+        )
+        db.add(new_user)
+        db.flush()  # нужен new_user.id для ролей/consents/engagement
+
+        db.add(UserRole(user_id=new_user.id, role_id=student_role.id))
+
+        # 5. Личное согласие субъекта (получено очно).
+        for cid in consent_ids:
+            db.add(ConsentRecord(
+                user_id=new_user.id,
+                consent_id=cid,
+                accepted=True,
+                ip_address=ip,
+                user_agent=user_agent,
+            ))
+
+        # 6. (опц.) активная связь студент↔психолог.
+        engagement_dict = None
+        engagement_id = None
+        if psychologist_id is not None:
+            engagement = TherapyEngagement(
+                client_id=new_user.id,
+                psychologist_id=psychologist_id,
+                status="active",
+                primary_concern=primary_concern,
+                started_at=now,
+                ended_at=None,
+            )
+            db.add(engagement)
+            db.flush()
+            engagement_id = engagement.id
+            engagement_dict = {
+                "id":              engagement.id,
+                "status":          engagement.status,
+                "primary_concern": engagement.primary_concern,
+                "started_at":      engagement.started_at,
+                "ended_at":        engagement.ended_at,
+                "transfer_reason": engagement.transfer_reason,
+                "client_id":       engagement.client_id,
+                "psychologist_id": engagement.psychologist_id,
+            }
+
+        # 7. Аудит — обязателен в этой же транзакции, без ПДн в описании.
+        db.add(AuditLog(
+            user_id=actor_id,
+            user_role=actor_role,
+            event_type="supervisor_create_student",
+            entity_type="user",
+            entity_id=new_user.id,
+            description=(
+                f"Создан аккаунт студента id={new_user.id} "
+                f"(actor id={actor_id}, роль {actor_role})"
+            ),
+        ))
+        if engagement_id is not None:
+            db.add(AuditLog(
+                user_id=actor_id,
+                user_role=actor_role,
+                event_type="supervisor_assign_psychologist",
+                entity_type="therapy_engagement",
+                entity_id=engagement_id,
+                description=(
+                    f"Психолог id={psychologist_id} назначен студенту "
+                    f"id={new_user.id} при создании аккаунта"
+                ),
+            ))
+
+        db.commit()
+        db.refresh(new_user)
+
+        return {
+            "id":                new_user.id,
+            "uuid":              str(new_user.uuid),
+            "email":             new_user.email,
+            "full_name":         new_user.full_name,
+            "role":              "student",
+            "is_active":         new_user.is_active,
+            "created_at":        new_user.created_at,
+            "engagement":        engagement_dict,
+            "psychologist_name": psych_name,
+        }

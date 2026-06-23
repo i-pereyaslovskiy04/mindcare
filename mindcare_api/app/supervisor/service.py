@@ -3,6 +3,7 @@
 Все транзакционные операции открывают одну сессию и выполняются атомарно.
 """
 
+import logging
 import sys
 from datetime import datetime, timezone
 from typing import Optional
@@ -10,6 +11,22 @@ from typing import Optional
 from app.chat.system_publisher import publish_system_message
 from app.db.session import SessionLocal
 from app.db.models import AuditLog, Role, TherapyEngagement, User, UserRole
+from app.supervisor import storage
+
+log = logging.getLogger(__name__)
+
+# Личное согласие субъекта (как при self-registration). Mirror auth.REQUIRED_CONSENTS.
+_REQUIRED_CONSENT_TYPES = ["privacy_policy", "data_processing"]
+
+# Маппинг кодов ошибок storage.create_student → HTTP-статус.
+_STUDENT_ERROR_STATUS = {
+    "duplicate_email":        409,
+    "psychologist_not_found": 404,
+    "not_a_psychologist":     400,
+    "psychologist_inactive":  422,
+    "consent_policy_missing": 500,
+    "student_role_missing":   500,
+}
 
 
 class SupervisorError(Exception):
@@ -92,6 +109,106 @@ def _log_event(
 
 
 # ── Публичные операции ────────────────────────────────────────────────────────
+
+def create_student(
+    full_name: str,
+    email: str,
+    phone: Optional[str],
+    psychologist_id: Optional[int],
+    primary_concern: Optional[str],
+    actor_id,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    Создать полноценный аккаунт студента (admin/supervisor) с временным паролем.
+
+    Core-запись атомарна (storage.create_student): User + UserRole(student) +
+    ConsentRecord[] + (опц.) активный TherapyEngagement + AuditLog — один commit.
+    Хеш пароля считается ДО транзакции (bcrypt медленный). После commit — soft-fail
+    шаги (привязка карточек, welcome-письмо, system-сообщения), их сбой НЕ
+    откатывает аккаунт. ПДн/пароль не логируются.
+
+    Raises SupervisorError (маппинг кодов storage → HTTP-статус).
+    """
+    # Локальные импорты — переиспользуем существующие механизмы, избегаем циклов.
+    from app.auth.service import _hash
+    from app.users.service import _generate_password
+
+    password = _generate_password()
+    password_hash = _hash(password)
+
+    try:
+        result = storage.create_student(
+            email=email,
+            full_name=full_name,
+            password_hash=password_hash,
+            phone=phone,
+            psychologist_id=psychologist_id,
+            primary_concern=primary_concern,
+            actor_id=int(actor_id),
+            actor_role=actor_role,
+            ip=ip,
+            user_agent=user_agent,
+            required_consent_types=_REQUIRED_CONSENT_TYPES,
+        )
+    except storage.StudentCreateError as exc:
+        raise SupervisorError(
+            exc.message, _STUDENT_ERROR_STATUS.get(exc.code, 400)
+        )
+
+    new_id = int(result["id"])
+    new_email = result["email"]
+
+    # ── Post-commit soft-fail (аккаунт уже зафиксирован) ─────────────────────
+    # Привязка карточек незарегистрированного студента (этап 2): идемпотентна,
+    # привязывает только незанятые карточки с совпавшим normalized_email.
+    linked = 0
+    try:
+        from app.appointments.service import link_unregistered_cards_to_user
+        linked = link_unregistered_cards_to_user(new_id, new_email)
+    except Exception:
+        log.exception(
+            "[create_student] card linking failed for user_id=%s", new_id
+        )
+
+    # Welcome-письмо с временным паролем (soft-fail; ПДн/пароль не логируем).
+    try:
+        from app.services.email_service import send_welcome_student
+        send_welcome_student(
+            to_email=new_email,
+            name=result["full_name"],
+            password=password,
+        )
+    except Exception as exc:
+        log.warning(
+            "[create_student] welcome email failed for user_id=%s: %s",
+            new_id, type(exc).__name__,
+        )
+
+    # System-уведомления в раздел «Сообщения» (soft-fail, content не логируется).
+    publish_system_message(
+        recipient_id=new_id,
+        event_key=f"welcome:user:{new_id}",
+        text="Ваша учётная запись MindCare создана.",
+    )
+    engagement = result.get("engagement")
+    if engagement:
+        psych_name = result.get("psychologist_name")
+        publish_system_message(
+            recipient_id=new_id,
+            event_key=f"engagement_assigned:engagement:{engagement['id']}",
+            text=(
+                f"Вам назначен психолог: {psych_name}." if psych_name
+                else "Вам назначен психолог."
+            ),
+        )
+
+    result["temporary_password"] = password
+    result["linked_cards_count"] = linked
+    return result
+
 
 def assign_psychologist(
     client_id: int,
