@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
-import { getDiarySummary } from '../../api/diary.api';
+import { getDiarySummary, getTodayDiaryEntry } from '../../api/diary.api';
 import MoodChart from './components/MoodChart/MoodChart';
 import StatCard from './components/StatCard/StatCard';
 import Icon from '../../components/Icon/Icon';
@@ -19,10 +19,9 @@ const MOOD_PERIODS = [
 ];
 
 const QUICK_ACTIONS = [
-  { icon: 'diary',    title: 'Записать настроение',        desc: '~2 минуты',           to: '/student/diary' },
-  { icon: 'tests',    title: 'Пройти тест GAD-7',          desc: 'Уровень тревоги · 5 мин', to: '/student/tests' },
-  { icon: 'tasks',    title: 'Задания психолога',           desc: '2 в работе',           to: '/student/tasks', badge: '2' },
-  { icon: 'leaf',     title: '5-минутная практика дыхания', desc: 'Аудио · для тревожности', to: '/student/articles' },
+  { icon: 'diary', title: 'Дневник настроения', desc: 'Записать сегодняшнее состояние', to: '/student/diary'    },
+  { icon: 'chat',  title: 'Написать психологу', desc: 'Открыть переписку',              to: '/student/chat'     },
+  { icon: 'leaf',  title: 'Материалы',          desc: 'Статьи и упражнения',            to: '/student/articles' },
 ];
 
 function formatTodayLabel() {
@@ -40,13 +39,23 @@ function getFirstName(fullName) {
 
 export default function StudentHome() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [moodValue, setMoodValue] = useState(7);
   const [activePeriod, setActivePeriod] = useState('14d');
   const [chartData, setChartData] = useState([]);
   const [entriesCount, setEntriesCount] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  // undefined = loading, null = no entry today or API error, object = entry with mood_score set
+  const [todayEntry, setTodayEntry] = useState(undefined);
   const todayLabel = formatTodayLabel();
+
+  useEffect(() => {
+    getTodayDiaryEntry()
+      .then((data) => {
+        setTodayEntry(data.mood_score !== null ? data : null);
+      })
+      .catch(() => {
+        setTodayEntry(null);
+      });
+  }, []);
 
   useEffect(() => {
     setSummaryLoading(true);
@@ -64,6 +73,9 @@ export default function StudentHome() {
       .finally(() => setSummaryLoading(false));
   }, [activePeriod]);
 
+  const todayLoading = todayEntry === undefined;
+  const hasTodayEntry = todayEntry !== null && todayEntry !== undefined;
+
   return (
     <div className={styles.page}>
       <div className={styles.labelTag}>{todayLabel}</div>
@@ -78,87 +90,74 @@ export default function StudentHome() {
       {/* ---- mood + session row ---- */}
       <div className={`${styles.grid} ${styles.g21}`} style={{ marginBottom: 18 }}>
 
-        {/* dark mood card — visual preview only, navigate to diary to save */}
+        {/* dark mood card — shows real today diary entry from API */}
         <div className={styles.moodCard}>
-          <div className={styles.moodCardTop}>
-            <div>
-              <div className={styles.moodCardTagLabel}>Состояние сегодня</div>
-              <div className={styles.moodCardTitle}>{MOOD_WORDS[moodValue]}</div>
-              <div className={styles.moodCardHint}>
-                Одно прикосновение к шкале — и день уже отмечен.
+          <div className={styles.moodCardTagLabel}>Состояние сегодня</div>
+
+          {todayLoading ? (
+            <div className={styles.moodCardLoading}>Загрузка…</div>
+          ) : hasTodayEntry ? (
+            <>
+              <div className={styles.moodCardTop}>
+                <div className={styles.moodCardTitle}>
+                  {MOOD_WORDS[todayEntry.mood_score]}
+                </div>
+                <div className={styles.moodScore}>
+                  <div className={styles.moodScoreNum}>{todayEntry.mood_score}</div>
+                  <div className={styles.moodScoreLabel}>из 10</div>
+                </div>
               </div>
-            </div>
-            <div className={styles.moodScore}>
-              <div className={styles.moodScoreNum}>{moodValue}</div>
-              <div className={styles.moodScoreLabel}>из 10</div>
-            </div>
-          </div>
-
-          <div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={moodValue}
-              onChange={(e) => setMoodValue(Number(e.target.value))}
-              className={styles.moodSlider}
-            />
-            <div className={styles.moodScaleLabels}>
-              <span>тяжело</span>
-              <span>нейтрально</span>
-              <span>светло</span>
-            </div>
-          </div>
-
-          <div className={styles.moodButtons}>
-            <button
-              className={styles.btnLatte}
-              onClick={() => navigate('/student/diary')}
-            >
-              Записать в дневник
-            </button>
-            <button
-              className={styles.btnGhostDark}
-              onClick={() => navigate('/student/chat')}
-            >
-              Написать психологу
-            </button>
-          </div>
+              <div className={styles.moodButtons}>
+                <Link to="/student/diary" className={styles.btnLatte}>
+                  Дополнить запись
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.moodCardEmpty}>
+                Сегодня состояние ещё не отмечено.
+                Сделайте короткую запись — это займёт меньше минуты.
+              </div>
+              <div className={styles.moodButtons}>
+                <Link to="/student/diary" className={styles.btnLatte}>
+                  Отметить состояние
+                </Link>
+                <Link to="/student/chat" className={styles.btnGhostDark}>
+                  Написать психологу
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* next session card */}
+        {/* session placeholder — appointments backend not yet implemented */}
         <div className={styles.sessionCard}>
           <div className={styles.labelTagMuted}>Ближайшая сессия</div>
-          <div>
-            <div className={styles.sessionDate}>Пятница, 30 апреля</div>
-            <div className={styles.sessionTime}>15:00 · онлайн (видео)</div>
+          <div className={styles.sessionEmpty}>
+            Пока нет данных о предстоящей сессии.
           </div>
-          <div className={styles.psychCard}>
-            <div className={styles.psychAvatar}>МК</div>
-            <div>
-              <div className={styles.psychName}>Мария Ковалёва</div>
-              <div className={styles.psychRole}>Клинический психолог</div>
-            </div>
-          </div>
-          <button
-            className={styles.btnSoft}
-            onClick={() => navigate('/student/calendar')}
-          >
-            <Icon name="video" size={14} /> Подключиться
-          </button>
+          <Link to="/student/chat" className={styles.btnSoft}>
+            Написать психологу
+          </Link>
         </div>
       </div>
 
-      {/* ---- stat tiles ---- */}
-      <div className={`${styles.grid} ${styles.g3}`} style={{ marginBottom: 24 }}>
-        <StatCard label="Тревожность" value="3.2" unit="/10" trend="↓ 18% за неделю" />
+      {/* ---- stat tiles — real diary data only ---- */}
+      <div className={`${styles.grid} ${styles.g2}`} style={{ marginBottom: 24 }}>
         <StatCard
           label="Записей в дневнике"
           value={entriesCount !== null ? String(entriesCount) : '—'}
           unit="за период"
           trend="↑ постоянство растёт"
         />
-        <StatCard label="Сон" value="7.4" unit="часа" trend="↓ 0.6ч от нормы" trendDown />
+        <StatCard
+          label="Запись сегодня"
+          value={todayLoading ? '…' : hasTodayEntry ? 'Есть' : 'Нет'}
+          unit=""
+          trend={hasTodayEntry ? '✓ отмечено сегодня' : 'ещё не заполнено'}
+          trendDown={!hasTodayEntry && !todayLoading}
+        />
       </div>
 
       {/* ---- mood chart + quick actions ---- */}
@@ -199,10 +198,7 @@ export default function StudentHome() {
                   <div className={styles.liTitle}>{item.title}</div>
                   <div className={styles.liDesc}>{item.desc}</div>
                 </div>
-                {item.badge
-                  ? <span className={styles.liBadge}>{item.badge}</span>
-                  : <span className={styles.liArrow}><Icon name="arrow-right" size={16} /></span>
-                }
+                <span className={styles.liArrow}><Icon name="arrow-right" size={16} /></span>
               </Link>
             ))}
           </div>

@@ -64,6 +64,7 @@
 }
 
 .g21 { grid-template-columns: 2fr 1fr; }
+.g2  { grid-template-columns: repeat(2, 1fr); }
 .g3  { grid-template-columns: repeat(3, 1fr); }
 
 /* ---- card ---- */
@@ -110,12 +111,17 @@
   line-height: 1.1;
 }
 
-.moodCardHint {
-  font-size: 13px;
+.moodCardLoading {
+  font-size: 14px;
   color: var(--fog);
-  margin-top: 8px;
   font-weight: 300;
-  max-width: 380px;
+}
+
+.moodCardEmpty {
+  font-size: 14px;
+  color: var(--fog);
+  font-weight: 300;
+  line-height: 1.6;
 }
 
 .moodScore {
@@ -140,60 +146,13 @@
   font-weight: 600;
 }
 
-/* ---- mood slider ---- */
-.moodSlider {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
-  outline: none;
-  cursor: pointer;
-  display: block;
-}
-
-.moodSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--warm-white);
-  border: 2.5px solid var(--espresso);
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(74, 55, 40, 0.25);
-  transition: transform 0.12s;
-}
-
-.moodSlider::-webkit-slider-thumb:hover {
-  transform: scale(1.12);
-}
-
-.moodSlider::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--warm-white);
-  border: 2.5px solid var(--espresso);
-  cursor: pointer;
-}
-
-.moodScaleLabels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--fog);
-  margin-top: 8px;
-  font-weight: 300;
-}
-
 .moodButtons {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-/* ---- next session card ---- */
+/* ---- session card ---- */
 .sessionCard {
   composes: card;
   display: flex;
@@ -201,56 +160,14 @@
   gap: 14px;
 }
 
-.sessionDate {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 26px;
-  color: var(--espresso);
-  font-weight: 500;
-  line-height: 1.1;
-}
-
-.sessionTime {
+.sessionEmpty {
   font-size: 14px;
   color: var(--text-muted);
-  margin-top: 4px;
+  line-height: 1.6;
+  flex: 1;
 }
 
-.psychCard {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--cream);
-  border-radius: 10px;
-  margin-top: auto;
-}
-
-.psychAvatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--latte), var(--coffee));
-  color: var(--milk);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.psychName {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--espresso);
-}
-
-.psychRole {
-  font-size: 11px;
-  color: var(--text-light);
-}
-
-/* ---- buttons ---- */
+/* ---- buttons (also used as Link elements) ---- */
 .btnLatte {
   display: inline-flex;
   align-items: center;
@@ -265,6 +182,7 @@
   letter-spacing: 0.02em;
   background: var(--latte);
   color: var(--espresso);
+  text-decoration: none;
   transition: background 0.15s;
 }
 
@@ -286,6 +204,7 @@
   background: transparent;
   color: var(--milk);
   border: 1px solid rgba(201, 185, 154, 0.4);
+  text-decoration: none;
   transition: background 0.15s;
 }
 
@@ -309,6 +228,7 @@
   color: var(--espresso);
   border: 1px solid var(--nav-border);
   width: 100%;
+  text-decoration: none;
   transition: background 0.15s;
 }
 
@@ -370,6 +290,7 @@
   background: var(--warm-white);
   cursor: pointer;
   margin-bottom: 10px;
+  text-decoration: none;
   transition: background 0.15s, transform 0.15s, border-color 0.15s;
 }
 
@@ -428,6 +349,7 @@
 /* ---- responsive ---- */
 @media (max-width: 980px) {
   .g21 { grid-template-columns: 1fr; }
+  .g2  { grid-template-columns: 1fr; }
   .g3  { grid-template-columns: repeat(2, 1fr); }
 }
 

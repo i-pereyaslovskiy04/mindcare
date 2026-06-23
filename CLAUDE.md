@@ -174,7 +174,7 @@ npm run build
 ### Текущее покрытие
 
 Всего: **554 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend после Stage Diary MoodChart UX Polish 2: **36 suites / 408 passed** (`npm test -- --watchAll=false`).
+Frontend после Stage Diary UX 2a: **37 suites / 423 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -209,6 +209,8 @@ Frontend после Stage Diary MoodChart UX Polish 2: **36 suites / 408 passed*
 | `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
 | `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
 | `tests/integration/test_diary_api.py` | Diary API: CRUD сегодняшней записи, история, summary (fixed calendar frame 14d/month/year, year monthly aggregation Jan→current month, null gaps, cross-student isolation), encrypted-at-rest, student-only 403 — 65 |
+| `src/pages/student/StudentHome.smoke.test.jsx` | StudentHome: getDiarySummary/getTodayDiaryEntry, period chips, stat cards реальные, fake metrics убраны, mood slider убран, hardcoded session убран, GAD-7 убран — 20 |
+| `src/pages/student/components/Diary/DiaryEntryItem.test.jsx` | DiaryEntryItem: date format TZ safety (local constructor), mood score/word, emotion key→label, unknown key fallback, entry text — 5 |
 
 ---
 

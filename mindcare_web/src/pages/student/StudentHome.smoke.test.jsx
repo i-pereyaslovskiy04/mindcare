@@ -60,11 +60,17 @@ const MOCK_SUMMARY_YEAR = {
   ],
 };
 
+const MOCK_TODAY_NO_ENTRY   = { entry_date: '2026-06-23', mood_score: null, entry_text: '', emotions: [] };
+const MOCK_TODAY_WITH_ENTRY = { entry_date: '2026-06-23', mood_score: 7,    entry_text: 'Хорошо', emotions: ['calm'] };
+
 beforeEach(() => {
   jest.clearAllMocks();
   AuthContext.useAuth.mockReturnValue({ user: { name: 'Тест Тестов' } });
   diaryApi.getDiarySummary.mockResolvedValue(MOCK_SUMMARY_14D);
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
 });
+
+// ─── existing diary summary / chart tests ────────────────────────────────────
 
 test('requests summary period=14d by default on mount', async () => {
   render(<StudentHome />);
@@ -80,7 +86,6 @@ test('renders chart section heading', async () => {
 
 test('renders Записей в дневнике stat card after summary loads', async () => {
   render(<StudentHome />);
-  // API called and label rendered — entries_count flows through the prop
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('14d'));
   expect(screen.getByText('Записей в дневнике')).toBeInTheDocument();
 });
@@ -176,4 +181,74 @@ test('shows empty state when all period points have null mood_score (no data)', 
   diaryApi.getDiarySummary.mockResolvedValue(allNullSummary);
   render(<StudentHome />);
   expect(await screen.findByText(/пока нет записей/i)).toBeInTheDocument();
+});
+
+// ─── new: today entry state ───────────────────────────────────────────────────
+
+test('shows empty CTA when no today diary entry', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText(/Сегодня состояние ещё не отмечено/i)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Отметить состояние/i })).toHaveAttribute('href', '/student/diary');
+});
+
+test('shows today mood score and word when entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  // mood_score=7 → "Хорошо"; score number "7" appears; "Дополнить запись" CTA
+  expect(await screen.findByText('Хорошо')).toBeInTheDocument();
+  expect(screen.getByText('7')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Дополнить запись/i })).toHaveAttribute('href', '/student/diary');
+});
+
+test('Запись сегодня stat card shows Нет when no entry', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText('Запись сегодня')).toBeInTheDocument();
+  // value transitions from '…' to 'Нет' after getTodayDiaryEntry resolves
+  expect(await screen.findByText('Нет')).toBeInTheDocument();
+});
+
+test('Запись сегодня stat card shows Есть when entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText('Запись сегодня')).toBeInTheDocument();
+  expect(await screen.findByText('Есть')).toBeInTheDocument();
+});
+
+// ─── new: removed fake/mock content ──────────────────────────────────────────
+
+test('does not render hardcoded anxiety metric (Тревожность 3.2)', () => {
+  render(<StudentHome />);
+  expect(screen.queryByText('Тревожность')).not.toBeInTheDocument();
+  expect(screen.queryByText('3.2')).not.toBeInTheDocument();
+});
+
+test('does not render hardcoded sleep metric (Сон 7.4)', () => {
+  render(<StudentHome />);
+  expect(screen.queryByText('Сон')).not.toBeInTheDocument();
+  expect(screen.queryByText('7.4')).not.toBeInTheDocument();
+});
+
+test('does not render hardcoded session with Мария Ковалёва or April 30', () => {
+  render(<StudentHome />);
+  expect(screen.queryByText('Мария Ковалёва')).not.toBeInTheDocument();
+  expect(screen.queryByText(/30 апреля/i)).not.toBeInTheDocument();
+});
+
+test('does not render GAD-7 quick action', () => {
+  render(<StudentHome />);
+  expect(screen.queryByText(/GAD-7/i)).not.toBeInTheDocument();
+});
+
+test('does not render mood slider input range on home page', () => {
+  render(<StudentHome />);
+  expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+});
+
+test('getTodayDiaryEntry is called on mount', async () => {
+  render(<StudentHome />);
+  await waitFor(() =>
+    expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1)
+  );
 });

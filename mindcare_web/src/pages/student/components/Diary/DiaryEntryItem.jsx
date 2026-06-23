@@ -6,7 +6,9 @@ const MOOD_WORDS = [
 ];
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('ru-RU', {
+  // Use local Date constructor (not ISO string) to avoid UTC→local timezone shift
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('ru-RU', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
