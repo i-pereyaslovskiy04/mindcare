@@ -1,7 +1,14 @@
 import DiaryEntryItem from './DiaryEntryItem';
 import styles from './DiaryHistoryList.module.css';
 
-export default function DiaryHistoryList({ entries, emotionCatalog = [] }) {
+export default function DiaryHistoryList({
+  entries,
+  emotionCatalog = [],
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  loadMoreError = null,
+}) {
   return (
     <div className={styles.panel}>
       <h2 className={styles.title}>История записей</h2>
@@ -13,6 +20,19 @@ export default function DiaryHistoryList({ entries, emotionCatalog = [] }) {
             <DiaryEntryItem key={entry.uuid} entry={entry} emotionCatalog={emotionCatalog} />
           ))}
         </div>
+      )}
+      {loadMoreError && (
+        <p className={styles.loadMoreError}>{loadMoreError}</p>
+      )}
+      {hasMore && (
+        <button
+          type="button"
+          className={styles.loadMoreBtn}
+          onClick={onLoadMore}
+          disabled={loadingMore}
+        >
+          {loadingMore ? 'Загружаем…' : 'Загрузить ещё'}
+        </button>
       )}
     </div>
   );

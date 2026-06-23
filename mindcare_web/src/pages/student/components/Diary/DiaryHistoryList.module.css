@@ -48,3 +48,37 @@
   padding: 32px 0;
   line-height: 1.6;
 }
+
+.loadMoreBtn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--coffee);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.loadMoreBtn:hover:not(:disabled) {
+  background: var(--cream);
+  border-color: var(--latte);
+}
+
+.loadMoreBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.loadMoreError {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #b94040;
+  text-align: center;
+  line-height: 1.5;
+}

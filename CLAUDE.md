@@ -174,7 +174,7 @@ npm run build
 ### Текущее покрытие
 
 Всего: **554 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend после Stage Diary UX 2c: **40 suites / 469 passed** (`npm test -- --watchAll=false`).
+Frontend после Stage Diary History 1: **40 suites / 483 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -211,6 +211,9 @@ Frontend после Stage Diary UX 2c: **40 suites / 469 passed** (`npm test -- 
 | `tests/integration/test_diary_api.py` | Diary API: CRUD сегодняшней записи, история, summary (fixed calendar frame 14d/month/year, year monthly aggregation Jan→current month, null gaps, cross-student isolation), encrypted-at-rest, student-only 403 — 65 |
 | `src/pages/student/StudentHome.smoke.test.jsx` | StudentHome: getDiarySummary 14d, getTodayDiaryEntry, obs block + Открыть дневник, stat cards реальные, MoodChart/period chips убраны, fake metrics убраны, mood slider убран, hardcoded session убран, GAD-7 убран — 22 |
 | `src/pages/student/components/Diary/DiaryEntryItem.test.jsx` | DiaryEntryItem: date format TZ safety (local constructor), mood score/word, emotion key→label, unknown key fallback, entry text — 5 |
+| `src/pages/student/components/Diary/DiaryHistoryList.test.jsx` | DiaryHistoryList: empty state, populated, emotion catalog, load more button (show/hide/click/loading/disabled/error) — 13 |
+| `src/pages/student/DiaryPage.test.jsx` | DiaryPage: loading/error/retry, form+history after load, isExistingEntry/moodSelected props, save flow, pagination (hasMore, loadMore appends, after-save reset, loadMore error, disabled during load) — 20 |
+| `src/pages/student/DiaryPage.smoke.test.jsx` | DiaryPage integration smoke: API calls on mount, emotion chips, today states, save flow, error states, submit button, "Загрузить ещё" visibility — 14 |
 
 ---
 

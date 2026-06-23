@@ -39,9 +39,20 @@ jest.mock('./components/Diary/DiaryEntryForm', () => ({
 }));
 jest.mock('./components/Diary/DiaryHistoryList', () => ({
   __esModule: true,
-  default: ({ entries }) => (
+  default: ({ entries, hasMore, loadingMore, onLoadMore, loadMoreError }) => (
     <div data-testid="history-list">
       <span data-testid="entry-count">{entries.length}</span>
+      {hasMore && (
+        <button
+          data-testid="load-more-btn"
+          type="button"
+          onClick={onLoadMore}
+          disabled={loadingMore}
+        >
+          {loadingMore ? 'Загружаем…' : 'Загрузить ещё'}
+        </button>
+      )}
+      {loadMoreError && <span data-testid="load-more-error">{loadMoreError}</span>}
     </div>
   ),
 }));
@@ -187,4 +198,73 @@ test('pageSub does not contain "каждый день"', () => {
 test('pageSub contains "в удобном ритме"', () => {
   render(<DiaryPage />);
   expect(screen.getByText(/в удобном ритме/i)).toBeInTheDocument();
+});
+
+// ─── pagination / load more ───────────────────────────────────────────────────
+
+const MOCK_ENTRY_ITEM = { uuid: 'e1', entry_date: '2026-06-23', mood_score: 7, entry_text: '', emotions: [] };
+
+test('passes hasMore=true when total > items loaded', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({ items: [MOCK_ENTRY_ITEM], total: 5, limit: 10, offset: 0 });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+  expect(screen.getByTestId('load-more-btn')).toBeInTheDocument();
+});
+
+test('passes hasMore=false when total <= items loaded', async () => {
+  // default MOCK_ENTRIES: items=[], total=0 → hasMore false
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+  expect(screen.queryByTestId('load-more-btn')).not.toBeInTheDocument();
+});
+
+test('handleLoadMore appends new entries to the list', async () => {
+  const page1 = { items: [{ uuid: 'p1', entry_date: '2026-06-23', mood_score: 7, entry_text: '', emotions: [] }], total: 2, limit: 10, offset: 0 };
+  const page2 = { items: [{ uuid: 'p2', entry_date: '2026-06-22', mood_score: 5, entry_text: '', emotions: [] }], total: 2, limit: 10, offset: 10 };
+  diaryApi.getDiaryEntries.mockResolvedValueOnce(page1).mockResolvedValueOnce(page2);
+
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+  expect(screen.getByTestId('entry-count')).toHaveTextContent('1');
+
+  fireEvent.click(screen.getByTestId('load-more-btn'));
+
+  await waitFor(() => expect(screen.getByTestId('entry-count')).toHaveTextContent('2'));
+});
+
+test('after save, getDiaryEntries is called with offset=0', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_WITH_ENTRY);
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  fireEvent.click(screen.getByTestId('save-btn'));
+
+  await waitFor(() => expect(diaryApi.getDiaryEntries).toHaveBeenCalledTimes(2));
+  expect(diaryApi.getDiaryEntries).toHaveBeenNthCalledWith(2, { limit: 10, offset: 0 });
+});
+
+test('load more error is shown when getDiaryEntries fails on load more', async () => {
+  const page1 = { items: [MOCK_ENTRY_ITEM], total: 5, limit: 10, offset: 0 };
+  diaryApi.getDiaryEntries.mockResolvedValueOnce(page1).mockRejectedValueOnce(new Error('network'));
+
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  fireEvent.click(screen.getByTestId('load-more-btn'));
+
+  expect(await screen.findByTestId('load-more-error')).toBeInTheDocument();
+});
+
+test('load more button is disabled while loading more', async () => {
+  const page1 = { items: [MOCK_ENTRY_ITEM], total: 5, limit: 10, offset: 0 };
+  diaryApi.getDiaryEntries
+    .mockResolvedValueOnce(page1)
+    .mockReturnValueOnce(new Promise(() => {})); // never resolves
+
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  fireEvent.click(screen.getByTestId('load-more-btn'));
+
+  await waitFor(() => expect(screen.getByTestId('load-more-btn')).toBeDisabled());
 });

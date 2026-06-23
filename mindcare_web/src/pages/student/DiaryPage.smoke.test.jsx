@@ -199,3 +199,21 @@ test('submit button enables after slider is moved', async () => {
     expect(screen.getByRole('button', { name: /сохранить отметку/i })).not.toBeDisabled()
   );
 });
+
+// ─── load more visibility ─────────────────────────────────────────────────────
+
+test('"Загрузить ещё" not shown when all entries fit in first page', async () => {
+  // default mock: { items: [1 entry], total: 1 } → hasMore = false
+  render(<DiaryPage />);
+  await waitFor(() => expect(diaryApi.getDiaryEntries).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole('button', { name: /загрузить ещё/i })).not.toBeInTheDocument();
+});
+
+test('"Загрузить ещё" shown when total > items in first page', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({
+    ...MOCK_ENTRIES_RESP,
+    total: 5,   // 1 item loaded, 5 total → hasMore = true
+  });
+  render(<DiaryPage />);
+  expect(await screen.findByRole('button', { name: /загрузить ещё/i })).toBeInTheDocument();
+});

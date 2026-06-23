@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import DiaryHistoryList from './DiaryHistoryList';
 
 const CATALOG = [{ key: 'calm', label: 'Спокойно', sort_order: 1 }];
@@ -63,4 +63,54 @@ test('renders entry text when provided', () => {
 test('renders emotion label via catalog', () => {
   render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
   expect(screen.getByText('Спокойно')).toBeInTheDocument();
+});
+
+// ─── load more ────────────────────────────────────────────────────────────────
+
+test('does not show "Загрузить ещё" button when hasMore=false (default)', () => {
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
+  expect(screen.queryByRole('button', { name: /загрузить ещё/i })).not.toBeInTheDocument();
+});
+
+test('shows "Загрузить ещё" button when hasMore=true', () => {
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} hasMore onLoadMore={jest.fn()} />);
+  expect(screen.getByRole('button', { name: /загрузить ещё/i })).toBeInTheDocument();
+});
+
+test('"Загрузить ещё" button calls onLoadMore on click', () => {
+  const mockLoadMore = jest.fn();
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} hasMore onLoadMore={mockLoadMore} />);
+  fireEvent.click(screen.getByRole('button', { name: /загрузить ещё/i }));
+  expect(mockLoadMore).toHaveBeenCalledTimes(1);
+});
+
+test('button shows "Загружаем…" and is disabled when loadingMore=true', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      hasMore
+      loadingMore
+      onLoadMore={jest.fn()}
+    />
+  );
+  const btn = screen.getByRole('button', { name: /загружаем/i });
+  expect(btn).toBeInTheDocument();
+  expect(btn).toBeDisabled();
+});
+
+test('shows load more error message when loadMoreError is set', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      loadMoreError="Не удалось загрузить записи. Попробуйте ещё раз."
+    />
+  );
+  expect(screen.getByText(/не удалось загрузить записи/i)).toBeInTheDocument();
+});
+
+test('error message is not shown when loadMoreError is null', () => {
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
+  expect(screen.queryByText(/не удалось загрузить записи/i)).not.toBeInTheDocument();
 });
