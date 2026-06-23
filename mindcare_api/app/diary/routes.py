@@ -19,7 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.auth.deps import require_role
 from app.diary import service
 from app.diary.schemas import (
+    DiaryEntryListItem,
     DiaryEntryRead,
+    DiaryEntryUpdate,
     DiaryEntryWrite,
     DiarySummaryRead,
     EmotionRead,
@@ -69,6 +71,35 @@ def get_entries(
         student_id=current_user["id"], limit=limit, offset=offset,
     )
     return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+@router.patch("/entries/{entry_uuid}", response_model=DiaryEntryListItem)
+def patch_entry(
+    entry_uuid:   str,
+    body:         DiaryEntryUpdate,
+    current_user: dict = Depends(require_role("student")),
+):
+    try:
+        return service.update_entry(
+            student_id=current_user["id"],
+            entry_uuid=entry_uuid,
+            data=body.model_dump(exclude_none=True),
+        )
+    except service.EntryNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Запись не найдена")
+    except service.InvalidEmotionKey as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+
+@router.delete("/entries/{entry_uuid}", status_code=204)
+def delete_entry_route(
+    entry_uuid:   str,
+    current_user: dict = Depends(require_role("student")),
+):
+    try:
+        service.delete_entry(student_id=current_user["id"], entry_uuid=entry_uuid)
+    except service.EntryNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Запись не найдена")
 
 
 @router.get("/summary", response_model=DiarySummaryRead)

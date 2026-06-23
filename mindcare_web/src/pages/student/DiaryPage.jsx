@@ -91,6 +91,31 @@ export default function DiaryPage() {
     }
   }
 
+  function handleEntryUpdate(updatedEntry) {
+    setEntries((prev) =>
+      prev.map((e) => (e.uuid === updatedEntry.uuid ? updatedEntry : e))
+    );
+    const todayISO = new Date().toISOString().split('T')[0];
+    if (updatedEntry.entry_date === todayISO) {
+      setMood(updatedEntry.mood_score);
+      setText(updatedEntry.entry_text ?? '');
+      setSelectedEmotions(updatedEntry.emotions ?? []);
+      setIsExistingEntry(true);
+    }
+  }
+
+  function handleEntryDelete(uuid) {
+    const todayISO = new Date().toISOString().split('T')[0];
+    const deleted = entries.find((e) => e.uuid === uuid);
+    setEntries((prev) => prev.filter((e) => e.uuid !== uuid));
+    if (deleted?.entry_date === todayISO) {
+      setMood(null);
+      setText('');
+      setSelectedEmotions([]);
+      setIsExistingEntry(false);
+    }
+  }
+
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
@@ -165,6 +190,8 @@ export default function DiaryPage() {
               loadingMore={entriesLoadingMore}
               onLoadMore={handleLoadMore}
               loadMoreError={entriesLoadMoreError}
+              onEntryUpdate={handleEntryUpdate}
+              onEntryDelete={handleEntryDelete}
             />
           </div>
         </div>

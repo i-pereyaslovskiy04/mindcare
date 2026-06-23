@@ -36,6 +36,33 @@ class DiaryEntryWrite(BaseModel):
         return result
 
 
+class DiaryEntryUpdate(BaseModel):
+    """Partial update — only provided fields are changed."""
+    mood_score: Optional[int]       = None
+    entry_text: Optional[str]       = None
+    emotions:   Optional[List[str]] = None
+
+    @field_validator("mood_score")
+    @classmethod
+    def validate_mood_score(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (1 <= v <= 10):
+            raise ValueError("mood_score должен быть от 1 до 10")
+        return v
+
+    @field_validator("emotions")
+    @classmethod
+    def deduplicate_emotions(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        seen: set = set()
+        result: List[str] = []
+        for key in v:
+            if key not in seen:
+                seen.add(key)
+                result.append(key)
+        return result
+
+
 class DiaryEntryRead(BaseModel):
     entry_date: date
     mood_score: Optional[int]

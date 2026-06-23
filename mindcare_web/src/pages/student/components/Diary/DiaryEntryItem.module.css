@@ -62,3 +62,228 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ── Read mode: action buttons ──────────────────────────────────────────────── */
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 2px;
+}
+
+.actionBtn {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+
+.actionBtn:hover {
+  background: rgba(139, 111, 71, 0.1);
+  color: var(--coffee);
+}
+
+/* ── Edit mode ──────────────────────────────────────────────────────────────── */
+
+.editHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.editLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--coffee);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editMoodRow {
+  margin-bottom: 10px;
+}
+
+.editFieldLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.editMoodSlider {
+  width: 100%;
+  accent-color: var(--coffee);
+  cursor: pointer;
+}
+
+.editMoodSlider:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editEmotionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.editEmotionChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.editEmotionChip:hover:not(:disabled) {
+  background: rgba(139, 111, 71, 0.08);
+  border-color: var(--latte);
+}
+
+.editEmotionChipActive {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(139, 111, 71, 0.15);
+  border: 1px solid var(--latte);
+  color: var(--coffee);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.editEmotionChip:disabled,
+.editEmotionChipActive:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editTextarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--espresso);
+  background: var(--warm-white);
+  resize: vertical;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.editTextarea:disabled {
+  opacity: 0.6;
+}
+
+.editError {
+  font-size: 12px;
+  color: var(--error);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+}
+
+.saveBtn {
+  flex: 1;
+  padding: 7px 12px;
+  background: var(--coffee);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  padding: 7px 12px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: var(--cream);
+}
+
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Delete confirm mode ─────────────────────────────────────────────────────── */
+
+.deleteConfirmText {
+  font-size: 13px;
+  color: var(--espresso);
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+
+.deleteError {
+  font-size: 12px;
+  color: var(--error);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.deleteBtnConfirm {
+  flex: 1;
+  padding: 7px 12px;
+  background: #b94040;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.deleteBtnConfirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

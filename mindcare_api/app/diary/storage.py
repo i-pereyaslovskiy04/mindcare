@@ -135,6 +135,56 @@ def get_entries(student_id: int, limit: int, offset: int) -> tuple[list[dict], i
         return [_entry_to_dict(e) for e in entries], total
 
 
+# ─── Edit / Delete ────────────────────────────────────────────────────────────
+
+def update_entry_by_uuid(student_id: int, entry_uuid: str, data: dict) -> Optional[dict]:
+    """Partial update of diary entry. Returns updated dict or None if not found."""
+    with SessionLocal() as db:
+        entry = (
+            db.query(DiaryEntry)
+            .filter(
+                DiaryEntry.uuid == entry_uuid,
+                DiaryEntry.student_id == student_id,
+                DiaryEntry.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not entry:
+            return None
+
+        if "mood_score" in data:
+            entry.mood_score_enc = encrypt_text(str(data["mood_score"]))
+        if "entry_text" in data:
+            t = data["entry_text"]
+            entry.entry_text_enc = encrypt_text(t) if t else None
+        if "emotions" in data:
+            entry.emotions_enc = encrypt_text(json.dumps(data["emotions"]))
+
+        entry.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(entry)
+        return _entry_to_dict(entry)
+
+
+def soft_delete_entry_by_uuid(student_id: int, entry_uuid: str) -> bool:
+    """Soft-delete diary entry. Returns True if deleted, False if not found/already deleted."""
+    with SessionLocal() as db:
+        entry = (
+            db.query(DiaryEntry)
+            .filter(
+                DiaryEntry.uuid == entry_uuid,
+                DiaryEntry.student_id == student_id,
+                DiaryEntry.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not entry:
+            return False
+        entry.deleted_at = datetime.now(timezone.utc)
+        db.commit()
+        return True
+
+
 # ─── Summary ──────────────────────────────────────────────────────────────────
 
 def get_entries_in_range(student_id: int, start: date, end: date) -> list[dict]:

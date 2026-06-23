@@ -43,6 +43,10 @@ class InvalidPeriod(Exception):
     pass
 
 
+class EntryNotFound(Exception):
+    pass
+
+
 def get_emotions() -> list[dict]:
     return storage.get_active_emotions()
 
@@ -68,6 +72,22 @@ def upsert_today(student_id: int, data: DiaryEntryWrite) -> dict:
 
 def get_entries(student_id: int, limit: int, offset: int) -> tuple[list[dict], int]:
     return storage.get_entries(student_id, limit, offset)
+
+
+def update_entry(student_id: int, entry_uuid: str, data: dict) -> dict:
+    """Partial update. data keys: mood_score, entry_text, emotions (any subset)."""
+    if "emotions" in data:
+        _validate_emotion_keys(data["emotions"])
+    result = storage.update_entry_by_uuid(student_id, entry_uuid, data)
+    if result is None:
+        raise EntryNotFound()
+    return result
+
+
+def delete_entry(student_id: int, entry_uuid: str) -> None:
+    deleted = storage.soft_delete_entry_by_uuid(student_id, entry_uuid)
+    if not deleted:
+        raise EntryNotFound()
 
 
 def get_summary(student_id: int, period: str) -> dict:

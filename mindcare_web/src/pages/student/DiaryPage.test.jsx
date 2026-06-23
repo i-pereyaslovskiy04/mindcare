@@ -39,22 +39,30 @@ jest.mock('./components/Diary/DiaryEntryForm', () => ({
 }));
 jest.mock('./components/Diary/DiaryHistoryList', () => ({
   __esModule: true,
-  default: ({ entries, hasMore, loadingMore, onLoadMore, loadMoreError }) => (
-    <div data-testid="history-list">
-      <span data-testid="entry-count">{entries.length}</span>
-      {hasMore && (
-        <button
-          data-testid="load-more-btn"
-          type="button"
-          onClick={onLoadMore}
-          disabled={loadingMore}
-        >
-          {loadingMore ? 'Загружаем…' : 'Загрузить ещё'}
-        </button>
-      )}
-      {loadMoreError && <span data-testid="load-more-error">{loadMoreError}</span>}
-    </div>
-  ),
+  default: ({ entries, hasMore, loadingMore, onLoadMore, loadMoreError, onEntryUpdate, onEntryDelete }) => {
+    const today = new Date().toISOString().split('T')[0];
+    return (
+      <div data-testid="history-list">
+        <span data-testid="entry-count">{entries.length}</span>
+        <span data-testid="first-entry-mood">{entries[0]?.mood_score ?? ''}</span>
+        {hasMore && (
+          <button
+            data-testid="load-more-btn"
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Загружаем…' : 'Загрузить ещё'}
+          </button>
+        )}
+        {loadMoreError && <span data-testid="load-more-error">{loadMoreError}</span>}
+        <button data-testid="trig-update" type="button" onClick={() => onEntryUpdate?.({ uuid: 'p1', entry_date: '2026-06-21', mood_score: 9, entry_text: 'edited', emotions: [] })}>tU</button>
+        <button data-testid="trig-update-today" type="button" onClick={() => onEntryUpdate?.({ uuid: 'p-today', entry_date: today, mood_score: 9, entry_text: 'today edited', emotions: [] })}>tUT</button>
+        <button data-testid="trig-delete" type="button" onClick={() => onEntryDelete?.('p1')}>tD</button>
+        <button data-testid="trig-delete-today" type="button" onClick={() => onEntryDelete?.('p-today')}>tDT</button>
+      </div>
+    );
+  },
 }));
 
 const MOCK_NO_ENTRY   = { entry_date: '2026-06-23', mood_score: null,  entry_text: '',     emotions: [] };
@@ -267,4 +275,83 @@ test('load more button is disabled while loading more', async () => {
   fireEvent.click(screen.getByTestId('load-more-btn'));
 
   await waitFor(() => expect(screen.getByTestId('load-more-btn')).toBeDisabled());
+});
+
+// ─── handleEntryUpdate / handleEntryDelete ────────────────────────────────────
+
+const TODAY = new Date().toISOString().split('T')[0];
+
+test('handleEntryUpdate replaces entry in list', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({
+    items: [{ uuid: 'p1', entry_date: '2026-06-21', mood_score: 7, entry_text: '', emotions: [] }],
+    total: 1, limit: 10, offset: 0,
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  expect(screen.getByTestId('first-entry-mood')).toHaveTextContent('7');
+  fireEvent.click(screen.getByTestId('trig-update'));
+  expect(screen.getByTestId('first-entry-mood')).toHaveTextContent('9');
+});
+
+test('handleEntryDelete removes entry from list', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({
+    items: [{ uuid: 'p1', entry_date: '2026-06-21', mood_score: 7, entry_text: '', emotions: [] }],
+    total: 1, limit: 10, offset: 0,
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  expect(screen.getByTestId('entry-count')).toHaveTextContent('1');
+  fireEvent.click(screen.getByTestId('trig-delete'));
+  expect(screen.getByTestId('entry-count')).toHaveTextContent('0');
+});
+
+test('handleEntryDelete of today entry resets today form state', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({
+    items: [{ uuid: 'p-today', entry_date: TODAY, mood_score: 7, entry_text: '', emotions: [] }],
+    total: 1, limit: 10, offset: 0,
+  });
+  diaryApi.getTodayDiaryEntry.mockResolvedValue({
+    entry_date: TODAY, mood_score: 7, entry_text: '', emotions: [],
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  expect(screen.getByTestId('is-existing')).toHaveTextContent('true');
+  fireEvent.click(screen.getByTestId('trig-delete-today'));
+  expect(screen.getByTestId('is-existing')).toHaveTextContent('false');
+});
+
+test('handleEntryUpdate of today entry syncs main form mood and isExisting', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({
+    items: [{ uuid: 'p-today', entry_date: TODAY, mood_score: 5, entry_text: '', emotions: [] }],
+    total: 1, limit: 10, offset: 0,
+  });
+  diaryApi.getTodayDiaryEntry.mockResolvedValue({
+    entry_date: TODAY, mood_score: 5, entry_text: '', emotions: [],
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  fireEvent.click(screen.getByTestId('trig-update-today'));
+
+  expect(screen.getByTestId('is-existing')).toHaveTextContent('true');
+  expect(screen.getByTestId('mood-selected')).toHaveTextContent('true');
+});
+
+test('handleEntryDelete of non-today entry does not reset today form', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({
+    items: [{ uuid: 'p1', entry_date: '2026-06-21', mood_score: 7, entry_text: '', emotions: [] }],
+    total: 1, limit: 10, offset: 0,
+  });
+  diaryApi.getTodayDiaryEntry.mockResolvedValue({
+    entry_date: TODAY, mood_score: 8, entry_text: '', emotions: [],
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  expect(screen.getByTestId('is-existing')).toHaveTextContent('true');
+  fireEvent.click(screen.getByTestId('trig-delete'));
+  expect(screen.getByTestId('is-existing')).toHaveTextContent('true');
 });

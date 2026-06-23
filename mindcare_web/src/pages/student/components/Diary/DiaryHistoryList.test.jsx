@@ -1,5 +1,14 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import * as diaryApi from '../../../../api/diary.api';
 import DiaryHistoryList from './DiaryHistoryList';
+
+jest.mock('../../../../api/diary.api');
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  diaryApi.updateDiaryEntry.mockResolvedValue({});
+  diaryApi.deleteDiaryEntry.mockResolvedValue(undefined);
+});
 
 const CATALOG = [{ key: 'calm', label: 'Спокойно', sort_order: 1 }];
 
@@ -63,6 +72,27 @@ test('renders entry text when provided', () => {
 test('renders emotion label via catalog', () => {
   render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
   expect(screen.getByText('Спокойно')).toBeInTheDocument();
+});
+
+// ─── onEntryUpdate / onEntryDelete prop pass-through ─────────────────────────
+
+test('entry items show action buttons when onEntryUpdate and onEntryDelete provided', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      onEntryUpdate={jest.fn()}
+      onEntryDelete={jest.fn()}
+    />
+  );
+  expect(screen.getAllByRole('button', { name: /редактировать запись/i }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole('button', { name: /удалить запись/i }).length).toBeGreaterThan(0);
+});
+
+test('no action buttons on items when onEntryUpdate and onEntryDelete not provided', () => {
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
+  expect(screen.queryByRole('button', { name: /редактировать запись/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /удалить запись/i })).not.toBeInTheDocument();
 });
 
 // ─── load more ────────────────────────────────────────────────────────────────

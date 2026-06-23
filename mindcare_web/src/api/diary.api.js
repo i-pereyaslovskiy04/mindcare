@@ -19,3 +19,14 @@ export const getDiaryEntries = ({ limit = 10, offset = 0 } = {}) => {
 
 export const getDiarySummary = (period) =>
   apiFetch(`/api/diary/summary?period=${encodeURIComponent(period)}`);
+
+export const updateDiaryEntry = (entryUuid, payload) =>
+  apiFetch(`/api/diary/entries/${encodeURIComponent(entryUuid)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+export const deleteDiaryEntry = (entryUuid) =>
+  apiFetch(`/api/diary/entries/${encodeURIComponent(entryUuid)}`, {
+    method: 'DELETE',
+  });

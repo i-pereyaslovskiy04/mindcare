@@ -615,3 +615,234 @@ class TestSummary:
         assert data["entries_count"] == 0
         assert len(data["points"]) == 14
         assert all(p["mood_score"] is None for p in data["points"])
+
+
+# ─── Helpers for edit/delete tests ───────────────────────────────────────────
+
+def _insert_entry_and_get_uuid(
+    student_id: int,
+    entry_date: date,
+    mood_score: int,
+    entry_text: str = "",
+    emotions: list | None = None,
+) -> str:
+    """Insert a diary entry and return its UUID string."""
+    if emotions is None:
+        emotions = []
+    with SessionLocal() as db:
+        entry = DiaryEntry(
+            student_id     = student_id,
+            entry_date     = entry_date,
+            mood_score_enc = encrypt_text(str(mood_score)),
+            entry_text_enc = encrypt_text(entry_text) if entry_text else None,
+            emotions_enc   = encrypt_text(_json.dumps(emotions)),
+        )
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+        return str(entry.uuid)
+
+
+def _get_uuid_from_entries(client, token: str) -> str:
+    """Get UUID of the first entry from GET /api/diary/entries."""
+    r = client.get("/api/diary/entries", headers=_auth(token))
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert items, "No entries found"
+    return items[0]["uuid"]
+
+
+def _patch_entry(client, token: str, entry_uuid: str, payload: dict):
+    return client.patch(
+        f"/api/diary/entries/{entry_uuid}",
+        headers=_auth(token),
+        json=payload,
+    )
+
+
+def _delete_entry(client, token: str, entry_uuid: str):
+    return client.delete(
+        f"/api/diary/entries/{entry_uuid}",
+        headers=_auth(token),
+    )
+
+
+# ─── 8. Edit entry (PATCH) ────────────────────────────────────────────────────
+
+class TestEditEntry:
+    def test_student_can_patch_own_past_entry(self, client):
+        token, uid = _make_user(client, "student")
+        yesterday = date.today() - timedelta(days=1)
+        entry_uuid = _insert_entry_and_get_uuid(uid, yesterday, 5)
+        r = _patch_entry(client, token, entry_uuid, {"mood_score": 8})
+        assert r.status_code == 200
+        assert r.json()["mood_score"] == 8
+
+    def test_patch_updates_entry_text(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        r = _patch_entry(client, token, entry_uuid, {"entry_text": "новый текст"})
+        assert r.status_code == 200
+        assert r.json()["entry_text"] == "новый текст"
+
+    def test_patch_updates_emotions(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        r = _patch_entry(client, token, entry_uuid, {"emotions": ["calm", "focused"]})
+        assert r.status_code == 200
+        assert set(r.json()["emotions"]) == {"calm", "focused"}
+
+    def test_patch_supports_empty_text(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5, "старый текст")
+        r = _patch_entry(client, token, entry_uuid, {"entry_text": ""})
+        assert r.status_code == 200
+        assert r.json()["entry_text"] == ""
+
+    def test_patch_supports_empty_emotions(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5, "", ["calm"])
+        r = _patch_entry(client, token, entry_uuid, {"emotions": []})
+        assert r.status_code == 200
+        assert r.json()["emotions"] == []
+
+    def test_patch_partial_does_not_wipe_other_fields(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(
+            uid, date.today() - timedelta(days=1), 5, "сохранить текст", ["calm"]
+        )
+        r = _patch_entry(client, token, entry_uuid, {"mood_score": 9})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["mood_score"] == 9
+        assert data["entry_text"] == "сохранить текст"
+        assert "calm" in data["emotions"]
+
+    def test_patch_can_update_today_entry_by_uuid(self, client):
+        token, uid = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 5, "emotions": []})
+        entry_uuid = _get_uuid_from_entries(client, token)
+        r = _patch_entry(client, token, entry_uuid, {"mood_score": 8})
+        assert r.status_code == 200
+        assert r.json()["mood_score"] == 8
+
+    def test_patch_invalid_mood_score_returns_422(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        r = _patch_entry(client, token, entry_uuid, {"mood_score": 0})
+        assert r.status_code == 422
+
+    def test_patch_invalid_emotion_key_returns_422(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        r = _patch_entry(client, token, entry_uuid, {"emotions": ["nonexistent_xyz"]})
+        assert r.status_code == 422
+
+    def test_patch_other_student_entry_returns_404(self, client):
+        token1, uid1 = _make_user(client, "student")
+        token2, _ = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid1, date.today() - timedelta(days=1), 5)
+        r = _patch_entry(client, token2, entry_uuid, {"mood_score": 8})
+        assert r.status_code == 404
+
+    def test_patch_deleted_entry_returns_404(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        _delete_entry(client, token, entry_uuid)
+        r = _patch_entry(client, token, entry_uuid, {"mood_score": 8})
+        assert r.status_code == 404
+
+    @pytest.mark.parametrize("role", ["psychologist", "admin", "supervisor"])
+    def test_non_student_gets_403_on_patch(self, client, role):
+        token, _ = _make_user(client, role)
+        r = _patch_entry(client, token, "any-uuid", {"mood_score": 5})
+        assert r.status_code == 403
+
+    def test_encryption_preserved_after_patch(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        _patch_entry(client, token, entry_uuid, {"mood_score": 8, "entry_text": "шифрованный", "emotions": ["calm"]})
+        with SessionLocal() as db:
+            entry = db.query(DiaryEntry).filter(DiaryEntry.uuid == entry_uuid).first()
+            assert entry is not None
+            assert entry.mood_score_enc.startswith(ENCRYPTION_PREFIX)
+            assert entry.entry_text_enc is not None
+            assert entry.entry_text_enc.startswith(ENCRYPTION_PREFIX)
+            assert entry.emotions_enc.startswith(ENCRYPTION_PREFIX)
+
+
+# ─── 9. Delete entry (DELETE) ─────────────────────────────────────────────────
+
+class TestDeleteEntry:
+    def test_student_can_delete_own_entry(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        r = _delete_entry(client, token, entry_uuid)
+        assert r.status_code == 204
+
+    def test_deleted_entry_disappears_from_entries_list(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        _delete_entry(client, token, entry_uuid)
+        r = client.get("/api/diary/entries", headers=_auth(token))
+        uuids = [e["uuid"] for e in r.json()["items"]]
+        assert entry_uuid not in uuids
+
+    def test_deleted_today_entry_disappears_from_today(self, client):
+        token, uid = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 7, "emotions": []})
+        entry_uuid = _get_uuid_from_entries(client, token)
+        _delete_entry(client, token, entry_uuid)
+        r = client.get("/api/diary/today", headers=_auth(token))
+        assert r.status_code == 200
+        assert r.json()["mood_score"] is None
+
+    def test_deleted_entry_excluded_from_summary(self, client):
+        token, uid = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 7, "emotions": []})
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        assert r.json()["entries_count"] == 1
+
+        entry_uuid = _get_uuid_from_entries(client, token)
+        _delete_entry(client, token, entry_uuid)
+
+        r = client.get("/api/diary/summary?period=14d", headers=_auth(token))
+        assert r.json()["entries_count"] == 0
+
+    def test_repeated_delete_returns_404(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        _delete_entry(client, token, entry_uuid)
+        r = _delete_entry(client, token, entry_uuid)
+        assert r.status_code == 404
+
+    def test_delete_other_student_entry_returns_404(self, client):
+        token1, uid1 = _make_user(client, "student")
+        token2, _ = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid1, date.today() - timedelta(days=1), 5)
+        r = _delete_entry(client, token2, entry_uuid)
+        assert r.status_code == 404
+
+    @pytest.mark.parametrize("role", ["psychologist", "admin", "supervisor"])
+    def test_non_student_gets_403_on_delete(self, client, role):
+        token, _ = _make_user(client, role)
+        r = _delete_entry(client, token, "any-uuid")
+        assert r.status_code == 403
+
+    def test_soft_delete_sets_deleted_at(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        _delete_entry(client, token, entry_uuid)
+        with SessionLocal() as db:
+            entry = db.query(DiaryEntry).filter(DiaryEntry.uuid == entry_uuid).first()
+            assert entry is not None
+            assert entry.deleted_at is not None
+
+    def test_after_soft_delete_can_create_new_entry_same_date(self, client):
+        token, uid = _make_user(client, "student")
+        _put_today(client, token, {"mood_score": 5, "emotions": []})
+        entry_uuid = _get_uuid_from_entries(client, token)
+        _delete_entry(client, token, entry_uuid)
+        r = _put_today(client, token, {"mood_score": 8, "emotions": ["calm"]})
+        assert r.status_code == 200
+        assert r.json()["mood_score"] == 8

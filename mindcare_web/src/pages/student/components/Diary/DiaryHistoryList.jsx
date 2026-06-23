@@ -8,6 +8,8 @@ export default function DiaryHistoryList({
   loadingMore = false,
   onLoadMore,
   loadMoreError = null,
+  onEntryUpdate,
+  onEntryDelete,
 }) {
   return (
     <div className={styles.panel}>
@@ -17,7 +19,13 @@ export default function DiaryHistoryList({
       ) : (
         <div className={styles.list}>
           {entries.map((entry) => (
-            <DiaryEntryItem key={entry.uuid} entry={entry} emotionCatalog={emotionCatalog} />
+            <DiaryEntryItem
+              key={entry.uuid}
+              entry={entry}
+              emotionCatalog={emotionCatalog}
+              onUpdate={onEntryUpdate}
+              onDelete={onEntryDelete}
+            />
           ))}
         </div>
       )}
