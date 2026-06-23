@@ -283,7 +283,8 @@ mindcare_api/
 │   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
 │   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
 │   │                          system_publisher (idempotency event_key)
-│   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
+│   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог,
+│   │                          создание аккаунта студента: POST /students)
 │   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
 │       ├── _smtp.py         — SMTP транспорт (dev/smtp режимы, внутренний)
@@ -316,7 +317,19 @@ mindcare_api/
 ✅ Soft delete — deleted_at, не физическое удаление
 ✅ Внешний API использует users.uuid (UUID), не users.id (INT)
 ✅ Схема БД — только через Alembic (alembic upgrade head перед стартом)
-✅ consent_records — ТОЛЬКО личное согласие субъекта (студент сам принимает политику)
+✅ consent_records — ТОЛЬКО личное согласие субъекта (НЕ «согласие за пользователя»):
+   студент сам принимает политику при self-registration, ЛИБО staff фиксирует личное
+   согласие студента, полученное ОЧНО, при создании аккаунта через
+   POST /api/supervisor/students (как у карточки незарег. студента) — это не legal basis
+✅ admin/supervisor создаёт ПОЛНОЦЕННЫЙ аккаунт студента через
+   POST /api/supervisor/students (temp password, как POST /api/admin/users). Основание
+   ПДн — consent_records (личное согласие, получено очно; staff подтверждает
+   personal_data_consent), НЕ user_legal_basis_records. Core-запись атомарна:
+   User+UserRole(student)+ConsentRecord[]+опц. active TherapyEngagement+AuditLog в одном
+   commit; AuditLog обязателен (consent_records не хранит actor); psychologist_id создаёт
+   active engagement в ТОЙ ЖЕ транзакции (не отдельным вызовом assign_psychologist);
+   карточка незарег. студента с тем же email привязывается (этап 2). Это НЕ admin
+   role-dropdown (там student по-прежнему НЕ selectable). Пароль/ПДн не логировать
 ✅ Для admin-created psychologist/supervisor/admin — user_legal_basis_records
    (документированное основание организации; чекбокс в UI формулируется как
    «Подтверждаю наличие документированного основания для создания учётной
@@ -441,7 +454,7 @@ mindcare_api/
 
 | Роль | Кто | Как создаётся |
 |------|-----|---------------|
-| `student` | Студент/клиент | Публичная регистрация с OTP |
+| `student` | Студент/клиент | Публичная регистрация с OTP, либо admin/supervisor через `POST /api/supervisor/students` (очное согласие, consent_records) |
 | `psychologist` | Психолог | Только через `POST /api/admin/users` |
 | `admin` | Администратор | Только через `POST /api/admin/users` или `scripts/create_admin.py` |
 | `supervisor` | Супервизор | Только через `POST /api/admin/users` |
