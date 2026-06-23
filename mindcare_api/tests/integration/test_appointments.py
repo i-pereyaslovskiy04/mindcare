@@ -354,6 +354,36 @@ class TestIndividualAppointments:
         assert r_cancel.status_code == 200
         assert r_cancel.json()["status"] == "cancelled"
 
+    def test_07b_appointment_response_has_meeting_type_name(self, client):
+        """Appointment response отдаёт meeting_type_name и duration."""
+        tok_p, pid, mt_id = _setup_schedule(client)
+        tok_s, _ = _student_for(client, pid)
+
+        with SessionLocal() as db:
+            mt_name = db.query(MeetingType).filter(
+                MeetingType.id == mt_id
+            ).first().name
+
+        payload = {
+            "starts_at": _future_slot(31).isoformat(),
+            "modality": "in_person",
+            "meeting_type_id": mt_id,
+        }
+        r = client.post(
+            "/api/appointments", json=payload, headers=_auth(tok_s)
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["meeting_type_name"] == mt_name
+        assert r.json()["meeting_type_duration_minutes"] == 50
+
+        # И в списке психолога имя типа также присутствует.
+        r_list = client.get(
+            "/api/psychologist/appointments", headers=_auth(tok_p)
+        )
+        assert r_list.status_code == 200, r_list.text
+        names = [i["meeting_type_name"] for i in r_list.json()["items"]]
+        assert mt_name in names
+
     def test_08b_cannot_cancel_on_appointment_day(self, client):
         """Нельзя отменить запись в день записи (UTC+3)."""
         tok, sid, _ = _make_user(client, "student")

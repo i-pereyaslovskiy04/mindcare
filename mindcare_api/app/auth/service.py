@@ -98,6 +98,19 @@ def register_confirm(
     except ValueError as e:
         raise AuthError(str(e), 400)
 
+    # Привязка карточек незарегистрированного студента к новому аккаунту (этап 2).
+    # Только ПОСЛЕ подтверждения владения email (этот шаг и есть подтверждение).
+    # Вне core-транзакции и soft-fail: регистрация уже зафиксирована, сбой
+    # привязки её не откатывает. ПДн (email) не логируем — только user_id.
+    try:
+        from app.appointments.service import link_unregistered_cards_to_user
+        link_unregistered_cards_to_user(user["id"], user["email"])
+    except Exception:
+        log.exception(
+            "[register_confirm] card linking failed for user_id=%s",
+            user["id"],
+        )
+
     # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
     # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
     # не должен ломать регистрацию.

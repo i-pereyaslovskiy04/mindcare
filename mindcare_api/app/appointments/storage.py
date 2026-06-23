@@ -11,6 +11,7 @@ import hashlib
 import sqlalchemy as sa
 from sqlalchemy import or_
 
+from app.core.normalization import normalize_email
 from app.db.models import (
     Appointment,
     GroupSession,
@@ -54,6 +55,10 @@ def _appointment_to_dict(appt: Appointment, db) -> dict:
         .first()
         if appt.unregistered_student_card_id else None
     )
+    mt = (
+        db.query(MeetingType).filter(MeetingType.id == appt.meeting_type_id).first()
+        if appt.meeting_type_id else None
+    )
     return {
         "uuid":                str(appt.uuid),
         "client_id":           appt.client_id,
@@ -61,6 +66,8 @@ def _appointment_to_dict(appt: Appointment, db) -> dict:
         "psychologist_id":     appt.psychologist_id,
         "engagement_id":       appt.engagement_id,
         "meeting_type_id":     appt.meeting_type_id,
+        "meeting_type_name":   mt.name if mt else None,
+        "meeting_type_duration_minutes": mt.duration_minutes if mt else None,
         "starts_at":           appt.starts_at,
         "ends_at":             appt.ends_at,
         "duration_minutes":    appt.duration_minutes,
@@ -555,9 +562,23 @@ def get_student_appointments(
     db,
     status_filter: Optional[str] = None,
 ) -> tuple[list[dict], int]:
+    """Записи студента: прямые (client_id) + по привязанным карточкам.
+
+    После привязки карточки (linked_user_id) студент видит и свои старые
+    card-appointments. Unlinked-карточки и карточки, привязанные к другому
+    пользователю, в выборку не попадают.
+    """
+    cid = int(client_id)
+    linked_card_ids = (
+        db.query(UnregisteredStudentCard.id)
+        .filter(UnregisteredStudentCard.linked_user_id == cid)
+    )
     q = db.query(Appointment).filter(
-        Appointment.client_id == client_id,
         Appointment.deleted_at.is_(None),
+        or_(
+            Appointment.client_id == cid,
+            Appointment.unregistered_student_card_id.in_(linked_card_ids),
+        ),
     )
     if status_filter:
         q = q.filter(Appointment.status == status_filter)
@@ -1387,6 +1408,41 @@ def archive_unregistered_student_card(
         db.flush()
         db.refresh(card)
     return _card_to_dict(card)
+
+
+def link_unregistered_cards_to_user(user_id: int, email: str, db) -> int:
+    """Привязать все UNLINKED карточки с этим email к пользователю.
+
+    Этап 2: вызывается после подтверждения владения email (регистрация confirm).
+    Правила:
+      - сравнение по normalized_email (канонический lower/trim);
+      - привязываются только карточки с linked_user_id IS NULL — карточка, уже
+        привязанная к другому пользователю, НЕ перепривязывается;
+      - несколько unlinked карточек с одним email привязываются все (email
+        подтверждён владельцем; карточки не объединяются и не удаляются);
+      - archived-карточки тоже привязываются: архивность запрещает новую ручную
+        запись, но не должна мешать исторической связке уже созданных
+        appointments.
+
+    Возвращает количество привязанных карточек. ПДн не логируются.
+    """
+    if not email:
+        return 0
+    normalized = normalize_email(email)
+    cards = (
+        db.query(UnregisteredStudentCard)
+        .filter(
+            UnregisteredStudentCard.normalized_email == normalized,
+            UnregisteredStudentCard.linked_user_id.is_(None),
+        )
+        .all()
+    )
+    now = datetime.now(MOSCOW_TZ)
+    for card in cards:
+        card.linked_user_id = int(user_id)
+        card.updated_at = now
+    db.flush()
+    return len(cards)
 
 
 def list_unregistered_student_cards(

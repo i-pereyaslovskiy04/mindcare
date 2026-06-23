@@ -446,6 +446,52 @@ def archive_unregistered_student_card(card_id: int) -> dict:
     return result
 
 
+def link_unregistered_cards_to_user(user_id, email: str) -> int:
+    """Привязать карточки незарегистрированного студента к аккаунту (этап 2).
+
+    Вызывается из auth-сервиса ПОСЛЕ подтверждения владения email (registration
+    confirm). Идемпотентна: привязывает только ещё не привязанные карточки с
+    совпавшим normalized_email; повторный вызов ничего не делает. Карточка,
+    привязанная к другому пользователю, не перепривязывается. ПДн не логируются.
+
+    Возвращает число привязанных карточек.
+    """
+    with SessionLocal() as db:
+        linked = storage.link_unregistered_cards_to_user(
+            int(user_id), email, db
+        )
+        db.commit()
+    return linked
+
+
+def _student_owns_appointment(appt, user_id: int, db) -> bool:
+    """True, если запись принадлежит студенту: напрямую (client_id) или через
+    привязанную к нему карточку (card.linked_user_id == user_id)."""
+    if appt.client_id is not None:
+        return appt.client_id == user_id
+    if appt.unregistered_student_card_id is not None:
+        card = storage.get_unregistered_student_card(
+            appt.unregistered_student_card_id, db
+        )
+        return card is not None and card.linked_user_id == user_id
+    return False
+
+
+def _appt_student_recipient(appt, db) -> Optional[int]:
+    """Кому из студентов отправлять уведомление по записи: client_id, либо
+    linked_user_id привязанной карточки. None — если карточка ещё не привязана
+    (уведомление студенту не отправляется)."""
+    if appt.client_id is not None:
+        return appt.client_id
+    if appt.unregistered_student_card_id is not None:
+        card = storage.get_unregistered_student_card(
+            appt.unregistered_student_card_id, db
+        )
+        if card is not None:
+            return card.linked_user_id
+    return None
+
+
 # ── Student list ──────────────────────────────────────────────────────────────
 
 def list_student_appointments(
@@ -478,7 +524,11 @@ def student_cancel(
         appt = storage.get_appointment_by_uuid(uuid, db)
         if appt is None:
             raise AppointmentError("Запись не найдена", status_code=404)
-        if appt.client_id != int(student_user["id"]):
+        # Доступ: прямой студент (client_id) ИЛИ владелец привязанной карточки.
+        # Unlinked/чужая card-запись → 403.
+        if not _student_owns_appointment(
+            appt, int(student_user["id"]), db
+        ):
             raise AppointmentError("Нет доступа", status_code=403)
         if appt.status not in ("pending_confirmation", "confirmed"):
             raise AppointmentError(
@@ -584,15 +634,17 @@ def psychologist_confirm(uuid: str, psychologist_user: dict) -> dict:
                 f"Нельзя подтвердить статус {appt.status}",
                 status_code=422,
             )
+        # Получатель уведомления: прямой студент или привязанный к карточке user
+        # (захватываем ДО commit, пока appt в сессии).
+        recipient_id = _appt_student_recipient(appt, db)
         result = storage.confirm_appointment(appt, db)
-        client_id = result["client_id"]
         db.commit()
 
-    # Карточка незарегистрированного студента не имеет user → некому слать
-    # уведомление (recipient_id отсутствует). Подтверждение при этом проходит.
-    if client_id is not None:
+    # Уведомление студенту: есть либо у прямой записи, либо у привязанной
+    # карточки. Unlinked card-запись (recipient_id is None) — не шлём, не падаем.
+    if recipient_id is not None:
         _notify_confirmed(
-            client_id=client_id,
+            client_id=recipient_id,
             appt_uuid=uuid,
             starts_at=result["starts_at"],
             psychologist_user=psychologist_user,
@@ -640,15 +692,17 @@ def psychologist_decline(
                 f"Нельзя отклонить статус {appt.status}",
                 status_code=422,
             )
+        # Получатель уведомления: прямой студент или привязанный к карточке user
+        # (захватываем ДО commit, пока appt в сессии).
+        recipient_id = _appt_student_recipient(appt, db)
         result = storage.decline_appointment(appt, reason, db)
-        client_id = result["client_id"]
         db.commit()
 
-    # Карточка незарегистрированного студента не имеет user → уведомление не
-    # отправляется (recipient_id отсутствует). Отклонение при этом проходит.
-    if client_id is not None:
+    # Уведомление студенту: есть либо у прямой записи, либо у привязанной
+    # карточки. Unlinked card-запись (recipient_id is None) — не шлём, не падаем.
+    if recipient_id is not None:
         _notify_declined(
-            client_id=client_id,
+            client_id=recipient_id,
             appt_uuid=uuid,
             starts_at=result["starts_at"],
             reason=reason,

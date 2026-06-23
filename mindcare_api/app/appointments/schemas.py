@@ -69,6 +69,8 @@ class AppointmentRead(BaseModel):
     psychologist_id: int
     engagement_id: Optional[int] = None
     meeting_type_id: Optional[int] = None
+    meeting_type_name: Optional[str] = None
+    meeting_type_duration_minutes: Optional[int] = None
     starts_at: datetime
     ends_at: Optional[datetime] = None
     duration_minutes: int

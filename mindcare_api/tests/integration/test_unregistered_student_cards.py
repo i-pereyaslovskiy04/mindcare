@@ -30,6 +30,8 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import bcrypt
 
+from app.auth import otp_service
+from app.auth import service as auth_service
 from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
 from app.db.models import (
@@ -38,6 +40,7 @@ from app.db.models import (
     MeetingType,
     ScheduleRule,
     TherapyEngagement,
+    UnregisteredStudentCard,
 )
 
 PASSWORD = "SecurePass42!"
@@ -528,3 +531,284 @@ class TestCardAppointmentLifecycle:
             headers=_auth(tok_s),
         )
         assert r.status_code == 403
+
+
+# ─── Stage 2: linking card to account after confirmed registration ────────────
+
+def _unique_email(prefix: str = "integ_link") -> str:
+    return f"{prefix}_{_uuid.uuid4().hex[:10]}@example.com"
+
+
+def _register_and_confirm(client, email: str, name: str = "Integ Linked"):
+    """Seed OTP, confirm registration (links cards), log in.
+
+    Returns (session_token, user_id). Uses the service entry point directly so
+    the post-commit card-linking runs exactly as in production confirm flow.
+    """
+    pw_hash = bcrypt.hashpw(PASSWORD.encode(), bcrypt.gensalt()).decode()
+    code = otp_service.create_or_update_otp(email, name, pw_hash)
+    user = auth_service.register_confirm(
+        email=email, code=code, ip="127.0.0.1", user_agent="pytest"
+    )
+    r = client.post(
+        "/api/auth/login", json={"email": email, "password": PASSWORD}
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["session_token"], int(user["id"])
+
+
+def _card_linked_user_id(card_id: int):
+    """Return linked_user_id of a card (read inside a session)."""
+    with SessionLocal() as db:
+        c = (
+            db.query(UnregisteredStudentCard)
+            .filter(UnregisteredStudentCard.id == card_id)
+            .first()
+        )
+        return c.linked_user_id if c else "MISSING"
+
+
+def _has_system_message(recipient_id: int, event_key: str) -> bool:
+    with SessionLocal() as db:
+        conv = (
+            db.query(ChatConversation)
+            .filter(
+                ChatConversation.type == "system",
+                ChatConversation.recipient_id == recipient_id,
+            )
+            .first()
+        )
+        if conv is None:
+            return False
+        msg = (
+            db.query(ChatMessage)
+            .filter(
+                ChatMessage.conversation_id == conv.id,
+                ChatMessage.event_key == event_key,
+            )
+            .first()
+        )
+        return msg is not None
+
+
+class TestCardAccountLinking:
+
+    def test_confirm_links_card_by_email(self, client):
+        """Подтверждение регистрации с email карточки проставляет linked_user_id."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        email = _unique_email("integ_link_basic")
+        card_id = _create_card(client, tok_sv, email=email).json()["id"]
+
+        _, uid = _register_and_confirm(client, email)
+        assert _card_linked_user_id(card_id) == uid
+
+    def test_link_normalizes_email(self, client):
+        """Карточка TEST@EXAMPLE.COM и user test@example.com связываются."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        suffix = _uuid.uuid4().hex[:10]
+        upper = f"INTEG_LINK_NORM_{suffix}@EXAMPLE.COM"
+        card_id = _create_card(client, tok_sv, email=upper).json()["id"]
+
+        _, uid = _register_and_confirm(client, upper.lower())
+        assert _card_linked_user_id(card_id) == uid
+
+    def test_card_not_linked_before_confirmation(self, client):
+        """Карточка НЕ связывается до подтверждения email; связывается после."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        email = _unique_email("integ_link_pre")
+        card_id = _create_card(client, tok_sv, email=email).json()["id"]
+
+        # init only (seed OTP), no confirm yet → card stays unlinked
+        pw_hash = bcrypt.hashpw(PASSWORD.encode(), bcrypt.gensalt()).decode()
+        code = otp_service.create_or_update_otp(email, "Integ", pw_hash)
+        assert _card_linked_user_id(card_id) is None
+
+        # confirm → now linked
+        auth_service.register_confirm(
+            email=email, code=code, ip="127.0.0.1", user_agent="pytest"
+        )
+        assert _card_linked_user_id(card_id) is not None
+
+    def test_card_not_linked_by_phone(self, client):
+        """Карточка НЕ связывается по телефону (только по подтверждённому email)."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        card_email = _unique_email("integ_link_cardmail")
+        card_id = _create_card(
+            client, tok_sv, email=card_email, phone="+79991234567"
+        ).json()["id"]
+
+        # Register a DIFFERENT email — registration has no phone anyway.
+        _register_and_confirm(client, _unique_email("integ_link_other"))
+        assert _card_linked_user_id(card_id) is None
+
+    def test_already_linked_card_not_relinked(self, client):
+        """Карточка, привязанная к другому user, НЕ перепривязывается."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, owner_id = _register_and_confirm(
+            client, _unique_email("integ_link_owner")
+        )
+        email = _unique_email("integ_link_shared")
+        card_id = _create_card(client, tok_sv, email=email).json()["id"]
+
+        # Manually link the card to the existing owner.
+        with SessionLocal() as db:
+            c = (
+                db.query(UnregisteredStudentCard)
+                .filter(UnregisteredStudentCard.id == card_id)
+                .first()
+            )
+            c.linked_user_id = owner_id
+            db.commit()
+
+        # A new user registers with the card's email — must NOT steal the link.
+        _, new_id = _register_and_confirm(client, email)
+        assert new_id != owner_id
+        assert _card_linked_user_id(card_id) == owner_id
+
+    def test_multiple_unlinked_cards_same_email_all_linked(self, client):
+        """Несколько unlinked карточек с одним email связываются с новым user."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        email = _unique_email("integ_link_multi")
+        c1 = _create_card(client, tok_sv, email=email).json()["id"]
+        c2 = _create_card(client, tok_sv, email=email).json()["id"]
+
+        _, uid = _register_and_confirm(client, email)
+        assert _card_linked_user_id(c1) == uid
+        assert _card_linked_user_id(c2) == uid
+
+
+class TestLinkedCardAppointments:
+
+    def _book_card_appt(self, client, email, hours=40):
+        """Walk-in scenario: supervisor books a card appointment before the
+        student registers. Returns (psych_token, pid, card_id, appt_uuid)."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        tok_p, pid, mt_id = _setup_schedule(client)
+        card_id = _create_card(client, tok_sv, email=email).json()["id"]
+        r = _book_card(
+            client, tok_sv, pid=pid, mt_id=mt_id, card_id=card_id,
+            slot=_future_slot(hours),
+        )
+        assert r.status_code == 201, r.text
+        return tok_p, pid, card_id, r.json()["uuid"]
+
+    def test_my_shows_linked_card_appointment(self, client):
+        """После привязки студент видит card-appointment в /api/appointments/my."""
+        email = _unique_email("integ_link_my")
+        _, _, card_id, appt_uuid = self._book_card_appt(client, email)
+        tok_s, _ = _register_and_confirm(client, email)
+
+        r = client.get("/api/appointments/my", headers=_auth(tok_s))
+        assert r.status_code == 200, r.text
+        item = next(
+            (i for i in r.json()["items"] if i["uuid"] == appt_uuid), None
+        )
+        assert item is not None
+        assert item["client_id"] is None
+        assert item["unregistered_student_card_id"] == card_id
+        assert item["unregistered_student_card"]["full_name"]
+
+    def test_my_excludes_unlinked_card_appointment(self, client):
+        """/my не показывает unlinked card-appointment."""
+        email = _unique_email("integ_link_unlinked")
+        _, _, _, appt_uuid = self._book_card_appt(client, email)
+        # Different user registers; the card (email) stays unlinked.
+        tok_other, _ = _register_and_confirm(
+            client, _unique_email("integ_link_nobody")
+        )
+        r = client.get("/api/appointments/my", headers=_auth(tok_other))
+        uuids = [i["uuid"] for i in r.json()["items"]]
+        assert appt_uuid not in uuids
+
+    def test_my_excludes_card_linked_to_other_user(self, client):
+        """/my не показывает card-appointment, привязанный к другому user."""
+        email = _unique_email("integ_link_owned")
+        _, _, _, appt_uuid = self._book_card_appt(client, email)
+        _register_and_confirm(client, email)  # links card to this owner
+        tok_other, _ = _register_and_confirm(
+            client, _unique_email("integ_link_stranger")
+        )
+        r = client.get("/api/appointments/my", headers=_auth(tok_other))
+        uuids = [i["uuid"] for i in r.json()["items"]]
+        assert appt_uuid not in uuids
+
+    def test_linked_student_can_cancel_card_appointment(self, client):
+        """Привязанный студент может отменить linked card-appointment (до дня)."""
+        email = _unique_email("integ_link_cancel")
+        _, _, _, appt_uuid = self._book_card_appt(client, email, hours=24 * 5)
+        tok_s, _ = _register_and_confirm(client, email)
+
+        r = client.patch(
+            f"/api/appointments/{appt_uuid}/cancel",
+            json={"reason": "не смогу"},
+            headers=_auth(tok_s),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "cancelled"
+
+    def test_other_user_cannot_cancel_linked_card_appointment(self, client):
+        """Чужой user не может отменить card-appointment, привязанный к другому → 403."""
+        email = _unique_email("integ_link_cancel_other")
+        _, _, _, appt_uuid = self._book_card_appt(client, email, hours=24 * 5)
+        _register_and_confirm(client, email)  # links to owner
+        tok_other, _ = _register_and_confirm(
+            client, _unique_email("integ_link_intruder")
+        )
+        r = client.patch(
+            f"/api/appointments/{appt_uuid}/cancel",
+            json={},
+            headers=_auth(tok_other),
+        )
+        assert r.status_code == 403
+
+    def test_confirmed_linked_card_cancellation_notifies_psychologist(self, client):
+        """Отмена подтверждённой linked card-записи уведомляет психолога."""
+        email = _unique_email("integ_link_confcancel")
+        tok_p, pid, _, appt_uuid = self._book_card_appt(
+            client, email, hours=24 * 5
+        )
+        tok_s, _ = _register_and_confirm(client, email)
+
+        r_conf = client.patch(
+            f"/api/psychologist/appointments/{appt_uuid}/confirm",
+            headers=_auth(tok_p),
+        )
+        assert r_conf.status_code == 200, r_conf.text
+
+        r_cancel = client.patch(
+            f"/api/appointments/{appt_uuid}/cancel",
+            json={"reason": "передумал"},
+            headers=_auth(tok_s),
+        )
+        assert r_cancel.status_code == 200, r_cancel.text
+        assert r_cancel.json()["status"] == "cancelled"
+        assert _has_system_message(
+            pid, f"appointment_cancelled:{appt_uuid}"
+        )
+
+    def test_psychologist_confirm_notifies_linked_user(self, client):
+        """После привязки confirm card-записи шлёт system message linked user."""
+        email = _unique_email("integ_link_confnotify")
+        tok_p, _, _, appt_uuid = self._book_card_appt(client, email)
+        _, uid = _register_and_confirm(client, email)
+
+        r = client.patch(
+            f"/api/psychologist/appointments/{appt_uuid}/confirm",
+            headers=_auth(tok_p),
+        )
+        assert r.status_code == 200, r.text
+        assert _has_system_message(uid, f"appointment_confirmed:{appt_uuid}")
+
+    def test_psychologist_decline_notifies_linked_user(self, client):
+        """После привязки decline card-записи шлёт system message linked user."""
+        email = _unique_email("integ_link_decnotify")
+        tok_p, _, _, appt_uuid = self._book_card_appt(client, email)
+        _, uid = _register_and_confirm(client, email)
+
+        r = client.patch(
+            f"/api/psychologist/appointments/{appt_uuid}/decline",
+            json={"reason": "не подходит"},
+            headers=_auth(tok_p),
+        )
+        assert r.status_code == 200, r.text
+        assert _has_system_message(uid, f"appointment_declined:{appt_uuid}")
