@@ -12,7 +12,6 @@ jest.mock('react-router-dom', () => ({
   ),
 }), { virtual: true });
 
-// Fixed 14-slot frame: 3 entries, rest null
 const MOCK_SUMMARY_14D = {
   period: '14d',
   entries_count: 3,
@@ -42,83 +41,105 @@ beforeEach(() => {
   ]);
 });
 
-// ─── diary summary / stat cards ──────────────────────────────────────────────
+// ─── panel headings ───────────────────────────────────────────────────────────
 
-test('requests summary period=14d by default on mount', async () => {
+test('wellbeing panel heading Моё состояние is visible', async () => {
   render(<StudentHome />);
-  await waitFor(() =>
-    expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('14d')
-  );
+  expect(await screen.findByText('Моё состояние')).toBeInTheDocument();
 });
 
-test('renders Записей в дневнике stat card after summary loads', async () => {
+test('support panel heading Поддержка is visible', async () => {
   render(<StudentHome />);
-  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('14d'));
-  expect(screen.getByText('Записей в дневнике')).toBeInTheDocument();
+  expect(await screen.findByText('Поддержка')).toBeInTheDocument();
 });
 
-// ─── MoodChart and period chips removed ──────────────────────────────────────
-
-test('MoodChart is not rendered on StudentHome', async () => {
-  render(<StudentHome />);
-  // "Динамика настроения" was the chart section heading — should not appear
-  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
-  expect(screen.queryByText('Динамика настроения')).not.toBeInTheDocument();
-});
-
-test('period chip buttons are not shown on StudentHome', async () => {
+test('old heading Связь и действия is not rendered', async () => {
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
-  expect(screen.queryByRole('button', { name: 'Месяц' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Год' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Связь и действия')).not.toBeInTheDocument();
 });
 
-// ─── today entry state ────────────────────────────────────────────────────────
+test('old heading Быстрые действия is not rendered', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Быстрые действия')).not.toBeInTheDocument();
+});
 
-test('shows empty CTA when no today diary entry', async () => {
+// ─── today section (left panel) ───────────────────────────────────────────────
+
+test('today section label Состояние сегодня is visible', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByText('Состояние сегодня')).toBeInTheDocument();
+});
+
+test('shows empty state when no today diary entry', async () => {
   diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
   render(<StudentHome />);
   expect(await screen.findByText(/Сегодня состояние ещё не отмечено/i)).toBeInTheDocument();
-  // mood card CTA is a plain-text link (no icon) — getByText finds it uniquely vs the quick-action link
-  expect(screen.getByText('Отметить состояние', { selector: 'a' })).toHaveAttribute('href', '/student/diary');
+  // CTA in left panel; all "Отметить состояние" links must go to /student/diary
+  const links = screen.getAllByRole('link', { name: /Отметить состояние/i });
+  expect(links.length).toBeGreaterThanOrEqual(1);
+  links.forEach((link) => expect(link).toHaveAttribute('href', '/student/diary'));
 });
 
 test('shows today mood score and word when entry exists', async () => {
   diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
   render(<StudentHome />);
-  // mood_score=7 → "Хорошо"; score number "7" appears; "Дополнить запись" CTA
   expect(await screen.findByText('Хорошо')).toBeInTheDocument();
   expect(screen.getByText('7')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /Дополнить запись/i })).toHaveAttribute('href', '/student/diary');
 });
 
-test('Запись сегодня stat card shows Нет when no entry', async () => {
-  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
-  render(<StudentHome />);
-  expect(await screen.findByText('Запись сегодня')).toBeInTheDocument();
-  // value transitions from '…' to 'Нет' after getTodayDiaryEntry resolves
-  expect(await screen.findByText('Нет')).toBeInTheDocument();
-});
-
-test('Запись сегодня stat card shows Есть when entry exists', async () => {
-  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
-  render(<StudentHome />);
-  expect(await screen.findByText('Запись сегодня')).toBeInTheDocument();
-  expect(await screen.findByText('Есть')).toBeInTheDocument();
-});
-
 test('getTodayDiaryEntry is called on mount', async () => {
   render(<StudentHome />);
-  await waitFor(() =>
-    expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1)
-  );
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
 });
 
-// ─── self-observation block ───────────────────────────────────────────────────
+// ─── support panel: psychologist section ─────────────────────────────────────
 
-test('self-observation section heading is always visible', async () => {
+test('support panel Психолог section label is visible', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByText('Психолог')).toBeInTheDocument();
+});
+
+test('Написать психологу link appears exactly once and leads to /student/chat', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  const links = screen.getAllByRole('link', { name: /Написать психологу/i });
+  expect(links).toHaveLength(1);
+  expect(links[0]).toHaveAttribute('href', '/student/chat');
+});
+
+// ─── support panel: materials section ────────────────────────────────────────
+
+test('support panel Материалы section label is visible', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByText('Материалы')).toBeInTheDocument();
+});
+
+test('Открыть материалы link leads to /student/materials', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByRole('link', { name: /Открыть материалы/i })).toHaveAttribute('href', '/student/materials');
+});
+
+test('right panel does not contain Отметить состояние as quick action to /student/diary only in support', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  // All "Отметить состояние" links (if any remain from left panel) must go to diary, not chat
+  const links = screen.queryAllByRole('link', { name: /Отметить состояние/i });
+  links.forEach((link) => expect(link).toHaveAttribute('href', '/student/diary'));
+});
+
+// ─── self-observation section ─────────────────────────────────────────────────
+
+test('self-observation label Самонаблюдение · 14 дней is visible', async () => {
   render(<StudentHome />);
   expect(await screen.findByText('Самонаблюдение · 14 дней')).toBeInTheDocument();
+});
+
+test('getDiarySummary is called with 14d on mount', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('14d'));
 });
 
 test('self-observation shows first-entry prompt when 0 entries in 14d', async () => {
@@ -136,7 +157,6 @@ test('self-observation shows first-entry prompt when 0 entries in 14d', async ()
 });
 
 test('self-observation shows sparse-data hint when 1–3 entries in 14d', async () => {
-  // Default mock has entries_count: 3 → "Пока мало данных..."
   render(<StudentHome />);
   expect(await screen.findByText(/Пока мало данных для тренда/)).toBeInTheDocument();
 });
@@ -155,19 +175,42 @@ test('self-observation shows first-changes hint when 4+ entries in 14d', async (
   expect(await screen.findByText(/Можно смотреть первые изменения/)).toBeInTheDocument();
 });
 
-test('self-observation Открыть дневник link leads to /student/diary', async () => {
+test('Открыть дневник link leads to /student/diary', async () => {
   render(<StudentHome />);
-  // obs block always shows "Открыть дневник" once summary loads
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
   const links = await screen.findAllByRole('link', { name: /Открыть дневник/i });
   expect(links.length).toBeGreaterThan(0);
-  expect(links[links.length - 1]).toHaveAttribute('href', '/student/diary');
+  links.forEach((link) => expect(link).toHaveAttribute('href', '/student/diary'));
+});
+
+// ─── mini stats ───────────────────────────────────────────────────────────────
+
+test('mini stat Записей за 14 дней is visible after summary loads', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByText('Записей за 14 дней')).toBeInTheDocument();
+});
+
+test('mini stat Запись сегодня is visible', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByText('Запись сегодня')).toBeInTheDocument();
+});
+
+test('mini stat shows Нет for Запись сегодня when no entry', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText('Нет')).toBeInTheDocument();
+});
+
+test('mini stat shows Есть for Запись сегодня when entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText('Есть')).toBeInTheDocument();
 });
 
 // ─── emotion display ──────────────────────────────────────────────────────────
 
-test('shows emotion labels in mood card when today entry has emotions', async () => {
-  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY); // emotions: ['calm']
+test('shows emotion labels when today entry has emotions', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
   diaryApi.getDiaryEmotions.mockResolvedValue([
     { key: 'calm', label: 'Спокойно', sort_order: 1 },
   ]);
@@ -175,21 +218,19 @@ test('shows emotion labels in mood card when today entry has emotions', async ()
   expect(await screen.findByText('Спокойно')).toBeInTheDocument();
 });
 
-// ─── quick actions and routing ────────────────────────────────────────────────
+// ─── removed charts and period chips ─────────────────────────────────────────
 
-test('Материалы quick action links to /student/materials', async () => {
+test('MoodChart is not rendered', async () => {
   render(<StudentHome />);
-  const link = await screen.findByRole('link', { name: /Материалы/i });
-  expect(link).toHaveAttribute('href', '/student/materials');
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Динамика настроения')).not.toBeInTheDocument();
 });
 
-test('shows Открыть дневник links when today entry exists', async () => {
-  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+test('period chip buttons are not shown', async () => {
   render(<StudentHome />);
-  // Both mood card and obs block show "Открыть дневник" when entry exists
-  const links = await screen.findAllByRole('link', { name: /Открыть дневник/i });
-  expect(links.length).toBeGreaterThanOrEqual(1);
-  links.forEach((link) => expect(link).toHaveAttribute('href', '/student/diary'));
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole('button', { name: 'Месяц' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Год' })).not.toBeInTheDocument();
 });
 
 // ─── removed fake/mock content ───────────────────────────────────────────────
@@ -217,7 +258,7 @@ test('does not render GAD-7 quick action', () => {
   expect(screen.queryByText(/GAD-7/i)).not.toBeInTheDocument();
 });
 
-test('does not render mood slider input range on home page', () => {
+test('does not render mood slider on home page', () => {
   render(<StudentHome />);
   expect(screen.queryByRole('slider')).not.toBeInTheDocument();
 });

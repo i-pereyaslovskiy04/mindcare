@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getDiarySummary, getTodayDiaryEntry, getDiaryEmotions } from '../../api/diary.api';
-import StatCard from './components/StatCard/StatCard';
-import Icon from '../../components/Icon/Icon';
 import styles from './StudentHome.module.css';
 
 const MOOD_WORDS = [
@@ -11,11 +9,6 @@ const MOOD_WORDS = [
   'Нейтрально', 'Спокойно', 'Хорошо', 'Светло', 'Радостно', 'Прекрасно',
 ];
 
-const QUICK_ACTIONS = [
-  { icon: 'diary', title: 'Отметить состояние', desc: 'Записать сегодняшнее состояние', to: '/student/diary'     },
-  { icon: 'chat',  title: 'Написать психологу', desc: 'Открыть переписку',              to: '/student/chat'      },
-  { icon: 'leaf',  title: 'Материалы',          desc: 'Статьи и упражнения',            to: '/student/materials' },
-];
 
 function formatTodayLabel() {
   return new Date().toLocaleDateString('ru-RU', {
@@ -46,9 +39,7 @@ function getInsightText(count) {
 
 export default function StudentHome() {
   const { user } = useAuth();
-  // null = not yet loaded; { entriesCount, avgMood, realPointsCount } = loaded
   const [obs14d, setObs14d] = useState(null);
-  // undefined = loading, null = no entry or API error, object = entry with mood_score set
   const [todayEntry, setTodayEntry] = useState(undefined);
   const [emotionCatalog, setEmotionCatalog] = useState([]);
   const todayLabel = formatTodayLabel();
@@ -98,73 +89,68 @@ export default function StudentHome() {
         Можно сделать короткую отметку о состоянии или перейти к материалам.
       </p>
 
-      {/* ---- main row: left = mood+obs, right = session+actions ---- */}
-      <div className={`${styles.grid} ${styles.g21}`} style={{ marginBottom: 24 }}>
+      <div className={styles.homeDashboard}>
 
-        {/* LEFT: dark mood card + self-observation summary */}
-        <div className={styles.leftCol}>
+        {/* ── LEFT: wellbeing panel ── */}
+        <div className={styles.wellbeingPanel}>
+          <h2 className={styles.panelTitle}>Моё состояние</h2>
 
-          {/* dark mood card — shows real today diary entry */}
-          <div className={styles.moodCard}>
-            <div className={styles.moodCardTagLabel}>Состояние сегодня</div>
+          {/* section: today */}
+          <div className={styles.panelSection}>
+            <div className={styles.sectionLabel}>Состояние сегодня</div>
 
             {todayLoading ? (
-              <div className={styles.moodCardLoading}>Загрузка…</div>
+              <div className={styles.stateLoading}>Загрузка…</div>
             ) : hasTodayEntry ? (
               <>
-                <div className={styles.moodCardTop}>
-                  <div className={styles.moodCardTitle}>
-                    {MOOD_WORDS[todayEntry.mood_score]}
+                <div className={styles.moodRow}>
+                  <div className={styles.moodScoreBlock}>
+                    <span className={styles.moodScoreNum}>{todayEntry.mood_score}</span>
+                    <span className={styles.moodScoreOf}>/10</span>
                   </div>
-                  <div className={styles.moodScore}>
-                    <div className={styles.moodScoreNum}>{todayEntry.mood_score}</div>
-                    <div className={styles.moodScoreLabel}>из 10</div>
-                  </div>
+                  <div className={styles.moodWord}>{MOOD_WORDS[todayEntry.mood_score]}</div>
                 </div>
                 {todayEntry.emotions && todayEntry.emotions.length > 0 && (
-                  <div className={styles.moodEmotions}>
+                  <div className={styles.emotionChips}>
                     {todayEntry.emotions.map((key) => {
                       const found = emotionCatalog.find((e) => e.key === key);
                       return (
-                        <span key={key} className={styles.moodEmotionTag}>
+                        <span key={key} className={styles.emotionChip}>
                           {found ? found.label : key}
                         </span>
                       );
                     })}
                   </div>
                 )}
-                <div className={styles.moodButtons}>
-                  <Link to="/student/diary" className={styles.btnLatte}>
+                <div className={styles.sectionActions}>
+                  <Link to="/student/diary" className={styles.btnPrimary}>
                     Дополнить запись
                   </Link>
-                  <Link to="/student/diary" className={styles.btnGhostDark}>
+                  <Link to="/student/diary" className={styles.btnGhost}>
                     Открыть дневник
                   </Link>
                 </div>
               </>
             ) : (
               <>
-                <div className={styles.moodCardEmpty}>
+                <div className={styles.stateEmpty}>
                   Сегодня состояние ещё не отмечено.
                   Короткая отметка занимает меньше минуты.
                 </div>
-                <div className={styles.moodButtons}>
-                  <Link to="/student/diary" className={styles.btnLatte}>
+                <div className={styles.sectionActions}>
+                  <Link to="/student/diary" className={styles.btnPrimary}>
                     Отметить состояние
-                  </Link>
-                  <Link to="/student/chat" className={styles.btnGhostDark}>
-                    Написать психологу
                   </Link>
                 </div>
               </>
             )}
           </div>
 
-          {/* self-observation summary — always fixed to 14-day window */}
-          <div className={styles.card}>
-            <div className={styles.labelTagMuted}>Самонаблюдение · 14 дней</div>
+          {/* section: self-observation */}
+          <div className={styles.panelSection}>
+            <div className={styles.sectionLabel}>Самонаблюдение · 14 дней</div>
             {obs14d === null ? (
-              <div className={styles.obsLoading}>Загрузка…</div>
+              <div className={styles.stateLoading}>Загрузка…</div>
             ) : (
               <>
                 <div className={styles.obsMeta}>
@@ -176,68 +162,62 @@ export default function StudentHome() {
                   )}
                 </div>
                 <div className={styles.obsInsight}>{getInsightText(obs14d.entriesCount)}</div>
-                <Link to="/student/diary" className={styles.obsAction}>
+                <Link to="/student/diary" className={styles.obsLink}>
                   Открыть дневник
                 </Link>
               </>
             )}
           </div>
-        </div>
 
-        {/* RIGHT: session placeholder + quick actions */}
-        <div className={styles.rightCol}>
-
-          {/* session placeholder — appointments backend not yet implemented */}
-          <div className={styles.sessionCard}>
-            <div className={styles.labelTagMuted}>Ближайшая сессия</div>
-            <div className={styles.sessionEmpty}>
-              Пока нет данных о предстоящей сессии.
+          {/* mini stats row */}
+          <div className={styles.miniStatsRow}>
+            <div className={styles.miniStat}>
+              <div className={styles.miniStatValue}>
+                {obs14d !== null ? obs14d.entriesCount : '—'}
+              </div>
+              <div className={styles.miniStatLabel}>Записей за 14 дней</div>
             </div>
-            <Link to="/student/chat" className={styles.btnSoft}>
-              Написать психологу
-            </Link>
-          </div>
-
-          {/* quick actions */}
-          <div className={styles.card}>
-            <h2 className={styles.sectionTitle}>Быстрые действия</h2>
-            <div>
-              {QUICK_ACTIONS.map((item) => (
-                <Link
-                  key={item.icon}
-                  to={item.to}
-                  className={styles.liRow}
-                >
-                  <div className={styles.liIcon}>
-                    <Icon name={item.icon} size={18} />
-                  </div>
-                  <div>
-                    <div className={styles.liTitle}>{item.title}</div>
-                    <div className={styles.liDesc}>{item.desc}</div>
-                  </div>
-                  <span className={styles.liArrow}><Icon name="arrow-right" size={16} /></span>
-                </Link>
-              ))}
+            <div className={styles.miniStat}>
+              <div className={styles.miniStatValue}>
+                {todayLoading ? '…' : hasTodayEntry ? 'Есть' : 'Нет'}
+              </div>
+              <div className={styles.miniStatLabel}>Запись сегодня</div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ---- stat tiles — real diary data only ---- */}
-      <div className={`${styles.grid} ${styles.g2}`} style={{ marginBottom: 24 }}>
-        <StatCard
-          label="Записей в дневнике"
-          value={obs14d !== null ? String(obs14d.entriesCount) : '—'}
-          unit="за 14 дней"
-          trend="↑ постоянство растёт"
-        />
-        <StatCard
-          label="Запись сегодня"
-          value={todayLoading ? '…' : hasTodayEntry ? 'Есть' : 'Нет'}
-          unit=""
-          trend={hasTodayEntry ? '✓ отмечено сегодня' : 'ещё не заполнено'}
-          trendDown={!hasTodayEntry && !todayLoading}
-        />
+        {/* ── RIGHT: support panel ── */}
+        <div className={styles.supportPanel}>
+          <h2 className={styles.panelTitle}>Поддержка</h2>
+
+          {/* section: psychologist */}
+          <div className={styles.panelSection}>
+            <div className={styles.sectionLabel}>Психолог</div>
+            <div className={styles.supportText}>
+              Предстоящая сессия пока не назначена.
+              Можно написать психологу в чат.
+            </div>
+            <div className={styles.sectionActions}>
+              <Link to="/student/chat" className={styles.btnSoft}>
+                Написать психологу
+              </Link>
+            </div>
+          </div>
+
+          {/* section: materials */}
+          <div className={styles.panelSection}>
+            <div className={styles.sectionLabel}>Материалы</div>
+            <div className={styles.supportText}>
+              Статьи и упражнения для самостоятельной работы.
+            </div>
+            <div className={styles.sectionActions}>
+              <Link to="/student/materials" className={styles.btnGhost}>
+                Открыть материалы
+              </Link>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
