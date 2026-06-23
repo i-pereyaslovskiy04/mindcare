@@ -6,26 +6,32 @@
   box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
 }
 
-.title {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 24px;
-  font-weight: 500;
-  color: var(--espresso);
-  margin-bottom: 18px;
-}
-
 .field {
   margin-bottom: 18px;
 }
 
+.fieldLabelRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
 .fieldLabel {
-  display: block;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-light);
-  margin-bottom: 8px;
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--text-light);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .textarea {
@@ -93,6 +99,41 @@
   border-color: var(--mocha);
 }
 
+/* ---- collapsible details section ---- */
+.detailsSection {
+  margin-bottom: 18px;
+}
+
+.detailsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--coffee);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+}
+
+.detailsToggle:hover {
+  color: var(--espresso);
+}
+
+.detailsToggle:disabled {
+  color: var(--text-light);
+  cursor: default;
+}
+
+.detailsContent {
+  margin-top: 10px;
+}
+
+/* ---- save button ---- */
 .btnSave {
   display: block;
   width: 100%;

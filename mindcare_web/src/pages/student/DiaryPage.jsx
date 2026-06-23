@@ -21,6 +21,7 @@ export default function DiaryPage() {
   const [mood, setMood] = useState(null);
   const [text, setText] = useState('');
   const [selectedEmotions, setSelectedEmotions] = useState([]);
+  const [isExistingEntry, setIsExistingEntry] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,6 +42,7 @@ export default function DiaryPage() {
       setMood(todayData.mood_score);
       setText(todayData.entry_text ?? '');
       setSelectedEmotions(todayData.emotions ?? []);
+      setIsExistingEntry(todayData.mood_score !== null);
       setEntries(entriesData.items ?? []);
     } catch (err) {
       setLoadError(err.message || 'Не удалось загрузить дневник.');
@@ -72,6 +74,7 @@ export default function DiaryPage() {
       setMood(saved.mood_score);
       setText(saved.entry_text ?? '');
       setSelectedEmotions(saved.emotions ?? []);
+      setIsExistingEntry(true);
       const entriesData = await diaryApi.getDiaryEntries({ limit: 10, offset: 0 });
       setEntries(entriesData.items ?? []);
       setShowSaved(true);
@@ -87,11 +90,10 @@ export default function DiaryPage() {
     <div className={styles.page}>
       <div className={styles.labelTag}>{formatTodayLabel()}</div>
       <h1 className={styles.pageTitle}>
-        Дневник <em>состояния</em>
+        Дневник <em>самочувствия</em>
       </h1>
       <p className={styles.pageSub}>
-        Фиксируйте настроение каждый день — это помогает замечать паттерны
-        и работать с ними вместе с психологом.
+        Отмечайте состояние в удобном ритме. Даже короткие записи помогают замечать изменения и готовиться к разговору с психологом.
       </p>
 
       {loading ? (
@@ -114,6 +116,7 @@ export default function DiaryPage() {
               selectedEmotions={selectedEmotions}
               onEmotionToggle={handleEmotionToggle}
               moodSelected={mood !== null}
+              isExistingEntry={isExistingEntry}
               saving={saving}
               showSaved={showSaved}
               saveError={saveError}

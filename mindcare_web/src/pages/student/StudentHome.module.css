@@ -67,6 +67,19 @@
 .g2  { grid-template-columns: repeat(2, 1fr); }
 .g3  { grid-template-columns: repeat(3, 1fr); }
 
+/* ---- column wrappers (flex-col stacking inside grid cells) ---- */
+.leftCol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rightCol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 /* ---- card ---- */
 .card {
   background: var(--warm-white);
@@ -150,6 +163,56 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* ---- self-observation block ---- */
+.obsMeta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 6px;
+}
+
+.obsCount {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--espresso);
+}
+
+.obsAvg {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.obsInsight {
+  font-size: 13px;
+  color: var(--text-light);
+  line-height: 1.55;
+}
+
+.obsLoading {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-top: 8px;
+}
+
+/* ---- emotion chips inside dark mood card ---- */
+.moodEmotions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.moodEmotionTag {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: rgba(201, 185, 154, 0.18);
+  color: var(--latte);
+  font-weight: 500;
 }
 
 /* ---- session card ---- */
@@ -236,47 +299,20 @@
   background: var(--sand);
 }
 
-/* ---- chart header ---- */
-.chartHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
+/* ---- self-observation action link ---- */
+.obsAction {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--coffee);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
 }
 
-.periodChips {
-  display: flex;
-  gap: 6px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: var(--cream);
-  border: 1px solid var(--nav-border);
-  font-size: 11px;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.chip:hover {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-
-.chipActive {
-  composes: chip;
-  background: var(--espresso);
-  color: var(--milk);
-  border-color: var(--espresso);
+.obsAction:hover {
+  color: var(--espresso);
 }
 
 /* ---- quick-actions list rows ---- */
@@ -351,6 +387,8 @@
   .g21 { grid-template-columns: 1fr; }
   .g2  { grid-template-columns: 1fr; }
   .g3  { grid-template-columns: repeat(2, 1fr); }
+  .leftCol  { gap: 14px; }
+  .rightCol { gap: 14px; }
 }
 
 @media (max-width: 600px) {
