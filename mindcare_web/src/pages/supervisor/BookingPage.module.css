@@ -61,6 +61,20 @@
 
 .fieldWrap { display: flex; flex-direction: column; gap: 6px; }
 
+/* ── Client-type switch + selected client ────────────────── */
+.modeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selectedClient {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .formLabel {
   font-size: var(--fs-tag);
   font-weight: 600;

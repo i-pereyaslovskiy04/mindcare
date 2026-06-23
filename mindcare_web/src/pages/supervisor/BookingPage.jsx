@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Button from '../../components/UI/Button/Button';
 import Select from '../../components/UI/Select/Select';
 import DateInput from '../../components/UI/DateInput/DateInput';
+import FilterChip from '../../components/UI/FilterChip/FilterChip';
+import Badge from '../../components/UI/Badge/Badge';
 import {
   getMeetingTypes,
   getSupervisorPsychologists,
@@ -9,6 +11,8 @@ import {
   supervisorBookAppointment,
 } from '../../api/appointments.api';
 import { getSupervisorEngagements } from '../../api/supervisor.api';
+import UnregisteredCardPicker from './booking/UnregisteredCardPicker';
+import { buildBookingPayload } from './booking/buildBookingPayload';
 import styles from './BookingPage.module.css';
 
 // Moscow is UTC+3
@@ -23,7 +27,6 @@ const MODALITY_OPTIONS = [
 ];
 
 const EMPTY_FORM = {
-  student_id:      '',
   meeting_type_id: '',
   modality:        'in_person',
   date:            '',
@@ -39,10 +42,16 @@ export default function BookingPage() {
   const [engLoading, setEngLoading]   = useState(false);
   const [engError, setEngError]       = useState(null);
 
+  // Субъект записи: ровно один из двух типов.
+  const [clientMode, setClientMode]         = useState('registered'); // 'registered' | 'unregistered'
+  const [subject, setSubject]               = useState(null);          // { kind, id, label }
+  const [cardJustCreated, setCardJustCreated] = useState(false);
+
   const [form, setForm]                   = useState(EMPTY_FORM);
   const [slots, setSlots]                 = useState([]);
   const [slotsLoading, setSlotsLoading]   = useState(false);
   const [selectedSlot, setSelectedSlot]   = useState(null);
+  const [slotsReloadKey, setSlotsReloadKey] = useState(0);
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState(null);
   const [done, setDone]                   = useState(false);
@@ -94,12 +103,16 @@ export default function BookingPage() {
     }
   }, []);
 
+  // Reset everything below the psychologist when it changes.
   useEffect(() => {
     setForm(EMPTY_FORM);
     setSlots([]);
     setSelectedSlot(null);
     setError(null);
     setDone(false);
+    setClientMode('registered');
+    setSubject(null);
+    setCardJustCreated(false);
     loadEngagements(psychId);
   }, [psychId, loadEngagements]);
 
@@ -143,12 +156,39 @@ export default function BookingPage() {
     });
     setSelectedSlot(null);
     setSlots([]);
+    setDone(false);
   }
 
-  // Load free slots when psychologist + type + format + date are all set
+  function selectMode(mode) {
+    if (mode === clientMode) return;
+    setClientMode(mode);
+    setSubject(null);
+    setCardJustCreated(false);
+    setSelectedSlot(null);
+    setError(null);
+    setDone(false);
+  }
+
+  function handleStudentSelect(v) {
+    const opt = studentOptions.find(o => o.value === v);
+    setSubject(v ? { kind: 'student', id: Number(v), label: opt?.label || `Студент #${v}` } : null);
+    setCardJustCreated(false);
+    setSelectedSlot(null);
+    setDone(false);
+  }
+
+  function handleCardSelect(card, { justCreated } = {}) {
+    setSubject({ kind: 'card', id: card.id, label: card.full_name });
+    setCardJustCreated(!!justCreated);
+    setSelectedSlot(null);
+    setDone(false);
+  }
+
+  // Load free slots when psychologist + subject + type + format + date are all set.
   const { meeting_type_id: mtId, modality, date } = form;
+  const hasSubject = !!subject;
   useEffect(() => {
-    if (!psychId || !mtId || !modality || !date) {
+    if (!psychId || !hasSubject || !mtId || !modality || !date) {
       setSlots([]);
       return undefined;
     }
@@ -165,27 +205,31 @@ export default function BookingPage() {
       .catch(() => { if (!cancelled) setSlots([]); })
       .finally(() => { if (!cancelled) setSlotsLoading(false); });
     return () => { cancelled = true; };
-  }, [psychId, mtId, modality, date]);
+  }, [psychId, hasSubject, mtId, modality, date, slotsReloadKey]);
 
   async function handleBook() {
-    if (!form.student_id)      { setError('Выберите студента'); return; }
+    if (!subject)              { setError('Выберите клиента'); return; }
     if (!form.meeting_type_id) { setError('Выберите тип встречи'); return; }
     if (!selectedSlot)         { setError('Выберите свободный слот'); return; }
+    const payload = buildBookingPayload({
+      subject,
+      psychId,
+      meetingTypeId: form.meeting_type_id,
+      modality:      form.modality,
+      slot:          selectedSlot,
+      topic:         form.topic,
+    });
+    if (!payload) { setError('Не удалось сформировать запись'); return; }
     setSaving(true);
     setError(null);
     try {
-      await supervisorBookAppointment({
-        student_id:      Number(form.student_id),
-        psychologist_id: Number(psychId),
-        meeting_type_id: Number(form.meeting_type_id),
-        starts_at:       selectedSlot.starts_at,
-        modality:        form.modality,
-        topic:           form.topic || null,
-      });
+      await supervisorBookAppointment(payload);
       setDone(true);
+      // Оставляем психолога, клиента, тип и дату — чтобы быстро записать ещё одну
+      // встречу. Сбрасываем тему и слот; перезагружаем слоты, чтобы занятый исчез.
+      setForm(f => ({ ...f, topic: '' }));
       setSelectedSlot(null);
-      setSlots([]);
-      setForm(f => ({ ...f, date: '', student_id: '', topic: '' }));
+      setSlotsReloadKey(k => k + 1);
     } catch (e) {
       setError(e.message || 'Ошибка записи');
     } finally {
@@ -193,16 +237,16 @@ export default function BookingPage() {
     }
   }
 
-  const canSubmit = !!form.student_id && !!form.meeting_type_id && !!selectedSlot && !saving;
+  const canSubmit = !!subject && !!form.meeting_type_id && !!selectedSlot && !saving;
 
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
           <div className={styles.labelTag}>Супервизор</div>
-          <h1 className={styles.pageTitle}>Запись <em>студентов</em></h1>
+          <h1 className={styles.pageTitle}>Запись <em>на консультацию</em></h1>
           <p className={styles.pageSub}>
-            Ручная запись назначенного студента к психологу. Запись создаётся в статусе
+            Ручная запись студента к психологу. Запись создаётся в статусе
             «ожидает подтверждения», психолог получит уведомление.
           </p>
         </div>
@@ -224,47 +268,83 @@ export default function BookingPage() {
           </div>
         </div>
 
-        {/* Step 2: Student — filtered by selected psychologist */}
+        {/* Step 2: Client — registered student or unregistered card */}
         {psychId && (
           <div className={styles.section}>
-            <div className={styles.sectionLabel}>Шаг 2. Студент</div>
-            {engLoading && (
-              <span className={styles.hint}>Загрузка студентов…</span>
+            <div className={styles.sectionLabel}>Шаг 2. Клиент</div>
+
+            <div className={styles.modeRow}>
+              <FilterChip
+                active={clientMode === 'registered'}
+                onClick={() => selectMode('registered')}
+              >
+                Зарегистрированный студент
+              </FilterChip>
+              <FilterChip
+                active={clientMode === 'unregistered'}
+                onClick={() => selectMode('unregistered')}
+              >
+                Незарегистрированный / пришёл лично
+              </FilterChip>
+            </div>
+
+            {clientMode === 'registered' && (
+              <>
+                {engLoading && (
+                  <span className={styles.hint}>Загрузка студентов…</span>
+                )}
+                {!engLoading && engError && (
+                  <div className={styles.fieldWrap}>
+                    <span className={styles.saveErr}>{engError}</span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => loadEngagements(psychId)}
+                    >
+                      Повторить
+                    </Button>
+                  </div>
+                )}
+                {!engLoading && !engError && studentOptions.length === 0 && (
+                  <span className={styles.hint}>
+                    У этого психолога нет активных назначений студентов.
+                    Используйте карточку незарегистрированного студента.
+                  </span>
+                )}
+                {!engLoading && !engError && studentOptions.length > 0 && (
+                  <div className={styles.fieldWrap}>
+                    <Select
+                      label="Студент"
+                      placeholder="Выберите студента"
+                      value={subject?.kind === 'student' ? String(subject.id) : ''}
+                      options={studentOptions}
+                      onChange={handleStudentSelect}
+                    />
+                  </div>
+                )}
+              </>
             )}
-            {!engLoading && engError && (
-              <div className={styles.fieldWrap}>
-                <span className={styles.saveErr}>{engError}</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => loadEngagements(psychId)}
-                >
-                  Повторить
-                </Button>
-              </div>
+
+            {clientMode === 'unregistered' && (
+              <UnregisteredCardPicker
+                selectedCardId={subject?.kind === 'card' ? subject.id : null}
+                onSelect={handleCardSelect}
+              />
             )}
-            {!engLoading && !engError && studentOptions.length === 0 && (
-              <span className={styles.hint}>
-                У этого психолога нет активных назначений студентов.
-              </span>
-            )}
-            {!engLoading && !engError && studentOptions.length > 0 && (
-              <div className={styles.fieldWrap}>
-                <Select
-                  label="Студент"
-                  placeholder="Выберите студента"
-                  value={form.student_id}
-                  options={studentOptions}
-                  onChange={v => setForm(f => ({ ...f, student_id: v }))}
-                />
+
+            {subject && (
+              <div className={styles.selectedClient}>
+                <span className={styles.hint}>Выбран клиент:</span>
+                <Badge tone="neutral">{subject.label}</Badge>
+                {cardJustCreated && <Badge tone="success">Карточка создана</Badge>}
               </div>
             )}
           </div>
         )}
 
         {/* Step 3: Meeting type + format */}
-        {psychId && form.student_id && (
+        {psychId && subject && (
           <div className={styles.section}>
             <div className={styles.sectionLabel}>Шаг 3. Тип встречи и формат</div>
             <div className={styles.row}>
@@ -285,6 +365,7 @@ export default function BookingPage() {
                   onChange={v => {
                     setForm(f => ({ ...f, modality: v }));
                     setSelectedSlot(null);
+                    setDone(false);
                   }}
                 />
               </div>
@@ -293,7 +374,7 @@ export default function BookingPage() {
         )}
 
         {/* Step 4: Date */}
-        {psychId && form.student_id && form.meeting_type_id && (
+        {psychId && subject && form.meeting_type_id && (
           <div className={styles.section}>
             <div className={styles.sectionLabel}>Шаг 4. Дата</div>
             <div className={styles.fieldWrap}>
@@ -303,6 +384,7 @@ export default function BookingPage() {
                 onChange={v => {
                   setForm(f => ({ ...f, date: v }));
                   setSelectedSlot(null);
+                  setDone(false);
                 }}
               />
             </div>
@@ -310,7 +392,7 @@ export default function BookingPage() {
         )}
 
         {/* Step 5: Free slots */}
-        {psychId && form.student_id && form.meeting_type_id && form.date && (
+        {psychId && subject && form.meeting_type_id && form.date && (
           <div className={styles.section}>
             <div className={styles.sectionLabel}>Шаг 5. Свободные слоты</div>
             {slotsLoading && (
@@ -331,11 +413,12 @@ export default function BookingPage() {
                       className={active
                         ? `${styles.slotBtn} ${styles.slotBtnActive}`
                         : styles.slotBtn}
-                      onClick={() =>
+                      onClick={() => {
+                        setDone(false);
                         setSelectedSlot(prev =>
                           prev?.starts_at === slot.starts_at ? null : slot
-                        )
-                      }
+                        );
+                      }}
                     >
                       {mskTime(slot.starts_at)}
                     </button>
@@ -346,8 +429,8 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* Topic — optional, shown once a student is selected */}
-        {psychId && form.student_id && (
+        {/* Topic — optional, shown once a client is selected */}
+        {psychId && subject && (
           <div className={styles.section}>
             <div className={styles.sectionLabel}>Тема (необязательно)</div>
             <div className={styles.fieldWrap}>
@@ -365,12 +448,12 @@ export default function BookingPage() {
 
         {done && (
           <div className={styles.okMsg}>
-            Студент записан. Психолог уведомлён.
+            Запись создана и ожидает подтверждения психолога.
           </div>
         )}
         {error && <div className={styles.saveErr}>{error}</div>}
 
-        {psychId && form.student_id && (
+        {psychId && subject && (
           <div className={styles.actions}>
             <Button
               type="button"
@@ -378,7 +461,7 @@ export default function BookingPage() {
               disabled={!canSubmit}
               onClick={handleBook}
             >
-              {saving ? 'Записываем…' : 'Записать студента'}
+              {saving ? 'Записываем…' : 'Записать на консультацию'}
             </Button>
           </div>
         )}
