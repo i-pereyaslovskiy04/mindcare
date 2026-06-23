@@ -227,6 +227,9 @@ class UnregisteredStudentCard(Base):
         Index("ix_unreg_cards_normalized_email", "normalized_email"),
         Index("ix_unreg_cards_archived_at", "archived_at"),
         Index("ix_unreg_cards_created_by", "created_by"),
+        # Привязка карточки к аккаунту (этап 2): индекс под фильтр
+        # linked_user_id в /api/appointments/my и при отмене linked card appt.
+        Index("ix_unreg_cards_linked_user_id", "linked_user_id"),
     )
 
     id                    = Column(Integer, primary_key=True)
