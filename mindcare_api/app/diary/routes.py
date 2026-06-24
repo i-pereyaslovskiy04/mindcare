@@ -13,6 +13,7 @@ Endpoints:
 """
 
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -75,14 +76,14 @@ def get_entries(
 
 @router.patch("/entries/{entry_uuid}", response_model=DiaryEntryListItem)
 def patch_entry(
-    entry_uuid:   str,
+    entry_uuid:   UUID,
     body:         DiaryEntryUpdate,
     current_user: dict = Depends(require_role("student")),
 ):
     try:
         return service.update_entry(
             student_id=current_user["id"],
-            entry_uuid=entry_uuid,
+            entry_uuid=str(entry_uuid),
             data=body.model_dump(exclude_none=True),
         )
     except service.EntryNotFound:
@@ -93,11 +94,11 @@ def patch_entry(
 
 @router.delete("/entries/{entry_uuid}", status_code=204)
 def delete_entry_route(
-    entry_uuid:   str,
+    entry_uuid:   UUID,
     current_user: dict = Depends(require_role("student")),
 ):
     try:
-        service.delete_entry(student_id=current_user["id"], entry_uuid=entry_uuid)
+        service.delete_entry(student_id=current_user["id"], entry_uuid=str(entry_uuid))
     except service.EntryNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Запись не найдена")
 

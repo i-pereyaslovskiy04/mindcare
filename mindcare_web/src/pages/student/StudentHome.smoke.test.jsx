@@ -127,6 +127,18 @@ test('psychologistCard does not show fake date or full name', async () => {
   expect(screen.queryByText(/30 апреля/i)).not.toBeInTheDocument();
 });
 
+test('psychologistCard does not show old "Предстоящая сессия пока не назначена" text', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText(/Предстоящая сессия пока не назначена/i)).not.toBeInTheDocument();
+});
+
+test('psychologistCard shows honest placeholder for session info', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  expect(screen.getByText(/Информация о встречах появится здесь позже/i)).toBeInTheDocument();
+});
+
 // ─── wellbeingCard ────────────────────────────────────────────────────────────
 
 test('wellbeingCard shows "Самочувствие" heading', async () => {

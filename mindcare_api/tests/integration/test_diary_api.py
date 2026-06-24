@@ -770,6 +770,16 @@ class TestEditEntry:
             assert entry.entry_text_enc.startswith(ENCRYPTION_PREFIX)
             assert entry.emotions_enc.startswith(ENCRYPTION_PREFIX)
 
+    def test_patch_malformed_uuid_returns_422(self, client):
+        token, _ = _make_user(client, "student")
+        r = _patch_entry(client, token, "notauuid", {"mood_score": 5})
+        assert r.status_code == 422
+
+    def test_patch_malformed_uuid_with_special_chars_returns_422(self, client):
+        token, _ = _make_user(client, "student")
+        r = _patch_entry(client, token, "not-a-valid-uuid-12345!", {"mood_score": 5})
+        assert r.status_code == 422
+
 
 # ─── 9. Delete entry (DELETE) ─────────────────────────────────────────────────
 
@@ -846,3 +856,48 @@ class TestDeleteEntry:
         r = _put_today(client, token, {"mood_score": 8, "emotions": ["calm"]})
         assert r.status_code == 200
         assert r.json()["mood_score"] == 8
+
+    def test_delete_malformed_uuid_returns_422(self, client):
+        token, _ = _make_user(client, "student")
+        r = _delete_entry(client, token, "notauuid")
+        assert r.status_code == 422
+
+
+# ─── 10. Empty PATCH (no-op) ─────────────────────────────────────────────────
+
+class TestEmptyPatch:
+    def test_patch_empty_body_returns_200(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        r = _patch_entry(client, token, entry_uuid, {})
+        assert r.status_code == 200
+
+    def test_patch_empty_body_does_not_change_content(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(
+            uid, date.today() - timedelta(days=1), 5, "original text", ["calm"]
+        )
+        r = _patch_entry(client, token, entry_uuid, {})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["mood_score"] == 5
+        assert data["entry_text"] == "original text"
+        assert "calm" in data["emotions"]
+
+    def test_patch_empty_body_does_not_update_updated_at(self, client):
+        token, uid = _make_user(client, "student")
+        entry_uuid = _insert_entry_and_get_uuid(uid, date.today() - timedelta(days=1), 5)
+        # Get initial updated_at from entries list
+        r1 = client.get("/api/diary/entries", headers=_auth(token))
+        initial_updated_at = next(
+            e for e in r1.json()["items"] if e["uuid"] == entry_uuid
+        )["updated_at"]
+        # Empty patch must not touch updated_at
+        r2 = _patch_entry(client, token, entry_uuid, {})
+        assert r2.json()["updated_at"] == initial_updated_at
+
+    def test_patch_empty_body_on_missing_entry_returns_404(self, client):
+        import uuid as _uuid_mod
+        token, _ = _make_user(client, "student")
+        r = _patch_entry(client, token, str(_uuid_mod.uuid4()), {})
+        assert r.status_code == 404

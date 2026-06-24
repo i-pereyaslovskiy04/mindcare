@@ -7,6 +7,13 @@ import styles from './DiaryPage.module.css';
 
 const HISTORY_LIMIT = 10;
 
+function formatLocalDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function formatTodayLabel() {
   return new Date().toLocaleDateString('ru-RU', {
     weekday: 'long',
@@ -95,8 +102,8 @@ export default function DiaryPage() {
     setEntries((prev) =>
       prev.map((e) => (e.uuid === updatedEntry.uuid ? updatedEntry : e))
     );
-    const todayISO = new Date().toISOString().split('T')[0];
-    if (updatedEntry.entry_date === todayISO) {
+    const todayLocal = formatLocalDate(new Date());
+    if (updatedEntry.entry_date === todayLocal) {
       setMood(updatedEntry.mood_score);
       setText(updatedEntry.entry_text ?? '');
       setSelectedEmotions(updatedEntry.emotions ?? []);
@@ -104,15 +111,27 @@ export default function DiaryPage() {
     }
   }
 
-  function handleEntryDelete(uuid) {
-    const todayISO = new Date().toISOString().split('T')[0];
+  async function handleEntryDelete(uuid) {
+    const todayLocal = formatLocalDate(new Date());
     const deleted = entries.find((e) => e.uuid === uuid);
     setEntries((prev) => prev.filter((e) => e.uuid !== uuid));
-    if (deleted?.entry_date === todayISO) {
+    if (deleted?.entry_date === todayLocal) {
       setMood(null);
       setText('');
       setSelectedEmotions([]);
       setIsExistingEntry(false);
+    }
+    // Reload page 1 to fix entriesOffset after delete so load-more stays consistent.
+    try {
+      const entriesData = await diaryApi.getDiaryEntries({ limit: HISTORY_LIMIT, offset: 0 });
+      const items = entriesData.items ?? [];
+      const total = entriesData.total ?? 0;
+      setEntries(items);
+      setEntriesOffset(HISTORY_LIMIT);
+      setEntriesHasMore(items.length < total);
+      setEntriesLoadMoreError(null);
+    } catch {
+      // Non-critical: list already updated optimistically above.
     }
   }
 

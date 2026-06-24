@@ -140,7 +140,7 @@ export default function StudentHome() {
         <div className={styles.actionCard}>
           <div className={styles.cardTitle}>Психолог</div>
           <p className={styles.cardText}>
-            Предстоящая сессия пока не назначена. Можно написать специалисту в чат.
+            Связаться с психологом можно в чате. Информация о встречах появится здесь позже.
           </p>
           <Link to="/student/chat" className={styles.cardAction}>
             Написать психологу

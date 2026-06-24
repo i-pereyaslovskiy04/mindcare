@@ -138,7 +138,8 @@ def get_entries(student_id: int, limit: int, offset: int) -> tuple[list[dict], i
 # ─── Edit / Delete ────────────────────────────────────────────────────────────
 
 def update_entry_by_uuid(student_id: int, entry_uuid: str, data: dict) -> Optional[dict]:
-    """Partial update of diary entry. Returns updated dict or None if not found."""
+    """Partial update of diary entry. Returns updated dict or None if not found.
+    Empty data → no-op: returns current entry without touching updated_at."""
     with SessionLocal() as db:
         entry = (
             db.query(DiaryEntry)
@@ -151,6 +152,9 @@ def update_entry_by_uuid(student_id: int, entry_uuid: str, data: dict) -> Option
         )
         if not entry:
             return None
+
+        if not data:
+            return _entry_to_dict(entry)
 
         if "mood_score" in data:
             entry.mood_score_enc = encrypt_text(str(data["mood_score"]))
