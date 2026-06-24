@@ -8,6 +8,16 @@ export function getSupervisorStudents({ page = 1, size = 20, search } = {}) {
   return apiFetch(`/api/supervisor/students?${params}`);
 }
 
+// Создание полноценного аккаунта студента (admin/supervisor). Возвращает
+// { uuid, email, full_name, role, is_active, created_at, temporary_password,
+//   engagement, linked_cards_count }. ПДн/пароль не логировать.
+export function createSupervisorStudent(payload) {
+  return apiFetch('/api/supervisor/students', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Psychologists ─────────────────────────────────────────────────────────────
 
 export function getSupervisorPsychologists({ page = 1, size = 100, search } = {}) {

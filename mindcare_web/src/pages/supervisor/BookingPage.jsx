@@ -12,7 +12,9 @@ import {
 } from '../../api/appointments.api';
 import { getSupervisorEngagements } from '../../api/supervisor.api';
 import UnregisteredCardPicker from './booking/UnregisteredCardPicker';
+import NewStudentModal from './booking/NewStudentModal';
 import { buildBookingPayload } from './booking/buildBookingPayload';
+import { resolveCreatedStudentSubject } from './booking/resolveStudentSubject';
 import styles from './BookingPage.module.css';
 
 // Moscow is UTC+3
@@ -42,10 +44,12 @@ export default function BookingPage() {
   const [engLoading, setEngLoading]   = useState(false);
   const [engError, setEngError]       = useState(null);
 
-  // Субъект записи: ровно один из двух типов.
-  const [clientMode, setClientMode]         = useState('registered'); // 'registered' | 'unregistered'
+  // Субъект записи: ровно один из типов.
+  const [clientMode, setClientMode]         = useState('registered'); // 'registered' | 'unregistered' | 'new_account'
   const [subject, setSubject]               = useState(null);          // { kind, id, label }
   const [cardJustCreated, setCardJustCreated] = useState(false);
+  const [accountJustCreated, setAccountJustCreated] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
 
   const [form, setForm]                   = useState(EMPTY_FORM);
   const [slots, setSlots]                 = useState([]);
@@ -73,7 +77,7 @@ export default function BookingPage() {
 
   // Load all active engagements page-by-page (backend caps size at 100).
   const loadEngagements = useCallback(async (pid) => {
-    if (!pid) { setEngagements([]); setEngError(null); return; }
+    if (!pid) { setEngagements([]); setEngError(null); return []; }
     setEngLoading(true);
     setEngError(null);
     try {
@@ -95,9 +99,11 @@ export default function BookingPage() {
         page += 1;
       }
       setEngagements(all);
+      return all;
     } catch (e) {
       setEngagements([]);
       setEngError(e.message || 'Не удалось загрузить назначения студентов');
+      return [];
     } finally {
       setEngLoading(false);
     }
@@ -113,6 +119,8 @@ export default function BookingPage() {
     setClientMode('registered');
     setSubject(null);
     setCardJustCreated(false);
+    setAccountJustCreated(false);
+    setAccountModalOpen(false);
     loadEngagements(psychId);
   }, [psychId, loadEngagements]);
 
@@ -164,6 +172,7 @@ export default function BookingPage() {
     setClientMode(mode);
     setSubject(null);
     setCardJustCreated(false);
+    setAccountJustCreated(false);
     setSelectedSlot(null);
     setError(null);
     setDone(false);
@@ -173,6 +182,7 @@ export default function BookingPage() {
     const opt = studentOptions.find(o => o.value === v);
     setSubject(v ? { kind: 'student', id: Number(v), label: opt?.label || `Студент #${v}` } : null);
     setCardJustCreated(false);
+    setAccountJustCreated(false);
     setSelectedSlot(null);
     setDone(false);
   }
@@ -180,6 +190,26 @@ export default function BookingPage() {
   function handleCardSelect(card, { justCreated } = {}) {
     setSubject({ kind: 'card', id: card.id, label: card.full_name });
     setCardJustCreated(!!justCreated);
+    setAccountJustCreated(false);
+    setSelectedSlot(null);
+    setDone(false);
+  }
+
+  // Новый аккаунт студента создан в модалке: рефетчим engagements (там появилась
+  // active-связь с выбранным психологом), находим студента по uuid и выбираем его
+  // субъектом записи через INT student_id. ПДн/пароль не логируются.
+  async function handleAccountCreated(created) {
+    setAccountModalOpen(false);
+    const all = await loadEngagements(psychId);
+    const subj = resolveCreatedStudentSubject(created, all, psychId);
+    if (subj) {
+      setSubject(subj);
+      setCardJustCreated(false);
+      setAccountJustCreated(true);
+    } else {
+      // Подстраховка: список ещё не обновился — даём выбрать из обычного списка.
+      setClientMode('registered');
+    }
     setSelectedSlot(null);
     setDone(false);
   }
@@ -286,6 +316,12 @@ export default function BookingPage() {
               >
                 Незарегистрированный / пришёл лично
               </FilterChip>
+              <FilterChip
+                active={clientMode === 'new_account'}
+                onClick={() => selectMode('new_account')}
+              >
+                Новый аккаунт
+              </FilterChip>
             </div>
 
             {clientMode === 'registered' && (
@@ -333,11 +369,32 @@ export default function BookingPage() {
               />
             )}
 
+            {clientMode === 'new_account' && !subject && (
+              <div className={styles.fieldWrap}>
+                <span className={styles.hint}>
+                  Создать полноценный аккаунт студента (логин и временный пароль).
+                  Студент будет назначен выбранному психологу и сразу доступен
+                  для записи.
+                </span>
+                <div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setAccountModalOpen(true)}
+                  >
+                    Создать аккаунт студента
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {subject && (
               <div className={styles.selectedClient}>
                 <span className={styles.hint}>Выбран клиент:</span>
                 <Badge tone="neutral">{subject.label}</Badge>
                 {cardJustCreated && <Badge tone="success">Карточка создана</Badge>}
+                {accountJustCreated && <Badge tone="success">Аккаунт создан</Badge>}
               </div>
             )}
           </div>
@@ -466,6 +523,13 @@ export default function BookingPage() {
           </div>
         )}
       </div>
+
+      <NewStudentModal
+        open={accountModalOpen}
+        psychologistId={psychId ? Number(psychId) : null}
+        onClose={() => setAccountModalOpen(false)}
+        onCreated={handleAccountCreated}
+      />
     </div>
   );
 }

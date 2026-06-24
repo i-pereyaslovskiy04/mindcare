@@ -43,6 +43,21 @@ describe('buildBookingPayload', () => {
     expect(out).not.toHaveProperty('student_id');
   });
 
+  test('newly created student (supervisor /students flow) → student_id only', () => {
+    // resolveCreatedStudentSubject отдаёт { kind:'student', id:<int> }; запись
+    // обрабатывает его точно так же, как обычного зарегистрированного студента.
+    const out = buildBookingPayload({
+      subject: { kind: 'student', id: 777, label: 'Новый Н.' },
+      psychId: '5',
+      meetingTypeId: '3',
+      modality: 'online',
+      slot: SLOT,
+      topic: '',
+    });
+    expect(out.student_id).toBe(777);
+    expect(out).not.toHaveProperty('unregistered_student_card_id');
+  });
+
   test('never sends both subject identifiers at once', () => {
     const student = buildBookingPayload({
       subject: { kind: 'student', id: 1 },
