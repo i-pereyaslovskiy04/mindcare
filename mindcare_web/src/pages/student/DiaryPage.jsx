@@ -48,23 +48,32 @@ function getLatestPoint(realPoints) {
   return realPoints[realPoints.length - 1];
 }
 
-function getRangeLabel(realPoints) {
-  if (!realPoints.length) return '—';
-  const scores = realPoints.map((p) => p.mood_score);
-  const min = Math.min(...scores);
-  const max = Math.max(...scores);
-  if (min === max) return formatScore(min);
-  return `${formatScore(min)} – ${formatScore(max)}`;
+function getAverageScore(realPoints) {
+  if (!realPoints.length) return null;
+  const sum = realPoints.reduce((acc, p) => acc + p.mood_score, 0);
+  const avg = sum / realPoints.length;
+  return Math.round(avg * 10) / 10;
+}
+
+function formatAverage(avg) {
+  if (avg === null) return '—';
+  const val = Number.isInteger(avg) ? String(avg) : avg.toFixed(1);
+  return `${val}/10`;
 }
 
 function getRecentMarks(realPoints, activePeriod, limit = 5) {
-  return realPoints.slice(-limit).map((p) => ({
-    key: p.date,
-    label:
-      activePeriod === 'year'
-        ? `${p.label} · ${formatScore(p.mood_score)}`
-        : `${formatShortDate(p.date)} · ${formatScore(p.mood_score)}`,
-  }));
+  return realPoints.slice(-limit).map((p) => {
+    const isYear = activePeriod === 'year';
+    const displayDate = isYear ? p.label : formatShortDate(p.date);
+    const scoreStr = formatScore(p.mood_score);
+    return {
+      key: p.date,
+      chipLabel: `${displayDate} · ${scoreStr}`,
+      accessibleLabel: `Показать отметку за ${displayDate}`,
+      detailTitle: displayDate,
+      detailScoreLabel: isYear ? `Средняя отметка: ${scoreStr}` : `Отметка: ${scoreStr}`,
+    };
+  });
 }
 
 function getObservationHint(entriesCount) {
@@ -82,7 +91,6 @@ export default function DiaryPage() {
   const [entries, setEntries] = useState([]);
   const [entriesTotal, setEntriesTotal] = useState(0);
 
-  // Controlled form state — synced from today API on initial load and after save
   const [mood, setMood] = useState(null);
   const [text, setText] = useState('');
   const [selectedEmotions, setSelectedEmotions] = useState([]);
@@ -94,11 +102,12 @@ export default function DiaryPage() {
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
 
-  // Observation / summary state — independent from main load
   const [activePeriod, setActivePeriod] = useState('14d');
   const [summaryData, setSummaryData] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState(null);
+
+  const [activeMarkKey, setActiveMarkKey] = useState(null);
 
   async function loadSummary(period) {
     setSummaryLoading(true);
@@ -150,7 +159,12 @@ export default function DiaryPage() {
 
   function handlePeriodChange(period) {
     setActivePeriod(period);
+    setActiveMarkKey(null);
     loadSummary(period);
+  }
+
+  function handleMarkChipClick(key) {
+    setActiveMarkKey((prev) => (prev === key ? null : key));
   }
 
   function handleEmotionToggle(key) {
@@ -183,7 +197,6 @@ export default function DiaryPage() {
       setSelectedEmotions([]);
       setIsExistingEntry(false);
     }
-    // Reload preview to reflect correct data after delete.
     try {
       const entriesData = await diaryApi.getDiaryEntries({ limit: HISTORY_PREVIEW_LIMIT, offset: 0 });
       const items = entriesData.items ?? [];
@@ -226,7 +239,12 @@ export default function DiaryPage() {
 
   const realPoints = getRealSummaryPoints(summaryData);
   const latestPoint = getLatestPoint(realPoints);
+  const avgScore = getAverageScore(realPoints);
+  const avgLabel = activePeriod === 'year' ? 'Среднее по месяцам' : 'Средняя отметка';
   const recentMarks = getRecentMarks(realPoints, activePeriod);
+  const activeMarkData = activeMarkKey != null
+    ? (recentMarks.find((m) => m.key === activeMarkKey) ?? null)
+    : null;
 
   const historyFooterLink = entriesTotal > 0
     ? <Link to="/student/diary/history">Смотреть всю историю</Link>
@@ -317,31 +335,71 @@ export default function DiaryPage() {
                     </div>
                     <div className={styles.summaryTile}>
                       <span className={styles.summaryValue}>
-                        {latestPoint
-                          ? activePeriod === 'year'
-                            ? `${latestPoint.label} · ${formatScore(latestPoint.mood_score)}`
-                            : `${formatScore(latestPoint.mood_score)} · ${formatShortDate(latestPoint.date)}`
-                          : '—'}
+                        {latestPoint ? formatScore(latestPoint.mood_score) : '—'}
                       </span>
                       <span className={styles.summaryLabel}>
                         {activePeriod === 'year' ? 'Последний период' : 'Последняя отметка'}
                       </span>
+                      {latestPoint && (
+                        <span className={styles.summaryMeta}>
+                          {activePeriod === 'year'
+                            ? latestPoint.label
+                            : formatShortDate(latestPoint.date)}
+                        </span>
+                      )}
                     </div>
                     <div className={styles.summaryTile}>
                       <span className={styles.summaryValue}>
-                        {getRangeLabel(realPoints)}
+                        {formatAverage(avgScore)}
                       </span>
-                      <span className={styles.summaryLabel}>Диапазон</span>
+                      <span className={styles.summaryLabel}>{avgLabel}</span>
                     </div>
                   </div>
                   {recentMarks.length > 0 && (
                     <div className={styles.recentMarks}>
                       <p className={styles.recentMarksTitle}>Последние отметки</p>
                       <div className={styles.markChips}>
-                        {recentMarks.map(({ key, label }) => (
-                          <span key={key} className={styles.markChip}>{label}</span>
+                        {recentMarks.map(({ key, chipLabel, accessibleLabel }) => (
+                          <button
+                            key={key}
+                            type="button"
+                            className={
+                              activeMarkKey === key
+                                ? `${styles.markChip} ${styles.markChipActive}`
+                                : styles.markChip
+                            }
+                            aria-expanded={activeMarkKey === key}
+                            aria-label={accessibleLabel}
+                            onClick={() => handleMarkChipClick(key)}
+                          >
+                            {chipLabel}
+                          </button>
                         ))}
                       </div>
+                      {activeMarkData && (
+                        <div
+                          className={styles.markDetail}
+                          role="region"
+                          aria-label="Детали отметки"
+                        >
+                          <div className={styles.markDetailContent}>
+                            <span className={styles.markDetailTitle}>
+                              {activeMarkData.detailTitle}
+                            </span>
+                            <span className={styles.markDetailScore}>
+                              {activeMarkData.detailScoreLabel}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.markDetailClose}
+                            aria-label="Закрыть детали отметки"
+                            onClick={() => setActiveMarkKey(null)}
+                          >
+                            Закрыть
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                   <p className={styles.observationHint}>

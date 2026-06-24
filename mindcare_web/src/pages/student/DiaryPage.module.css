@@ -164,6 +164,8 @@
   border-color: var(--espresso);
 }
 
+/* ── Summary tiles ────────────────────────────────────────────────────────── */
+
 .summaryGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -183,14 +185,14 @@
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .summaryValue {
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--espresso);
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -201,6 +203,15 @@
   color: var(--text-muted);
   line-height: 1.3;
 }
+
+.summaryMeta {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.2;
+  opacity: 0.8;
+}
+
+/* ── Recent marks ─────────────────────────────────────────────────────────── */
 
 .recentMarks {
   margin-bottom: 12px;
@@ -233,7 +244,90 @@
   border: 1px solid var(--nav-border);
   color: var(--espresso);
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
+
+.markChip:hover {
+  background: var(--cream);
+  border-color: var(--coffee);
+}
+
+.markChip:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
+.markChipActive {
+  background: var(--coffee);
+  color: var(--warm-white);
+  border-color: var(--coffee);
+}
+
+.markChipActive:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+}
+
+/* ── Mark detail panel ────────────────────────────────────────────────────── */
+
+.markDetail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--cream, #faf7f2);
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+}
+
+.markDetailContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.markDetailTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--espresso);
+}
+
+.markDetailScore {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.markDetailClose {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--coffee);
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.markDetailClose:hover {
+  background: var(--cream);
+}
+
+.markDetailClose:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
+/* ── Observation states ───────────────────────────────────────────────────── */
 
 .observationHint {
   font-size: 12px;

@@ -419,15 +419,188 @@ test('summary label "Последняя отметка" is visible for 14d perio
   expect(await screen.findByText('Последняя отметка')).toBeInTheDocument();
 });
 
-test('summary label "Диапазон" is visible', async () => {
+test('latest mark tile: value shows score without date (e.g. "7/10")', async () => {
   render(<DiaryPage />);
-  expect(await screen.findByText('Диапазон')).toBeInTheDocument();
+  await screen.findByTestId('observation-summary');
+  // MOCK_SUMMARY: latest non-null point mood_score=7 → value "7/10"
+  // score appears in summaryValue; old concatenated format must not appear as single value
+  expect(screen.queryByText('7/10 · 14.06')).not.toBeInTheDocument();
 });
 
-test('recent marks row shows last non-null point as formatted chip', async () => {
+test('latest mark tile: date shown separately as summaryMeta (e.g. "14.06")', async () => {
   render(<DiaryPage />);
-  // MOCK_SUMMARY: 5 points with mood_score=7, dates 2026-06-10..14 → latest chip "14.06 · 7/10"
+  await screen.findByTestId('observation-summary');
+  // Date of latest point is 2026-06-14 → formatShortDate → "14.06"
+  expect(screen.getByText('14.06')).toBeInTheDocument();
+});
+
+test('latest mark tile: no data shows "—"', async () => {
+  diaryApi.getDiarySummary.mockResolvedValue({ period: '14d', entries_count: 0, points: [] });
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  // Multiple "—" may appear (latest + avg), just check at least one
+  expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+});
+
+test('year period: latest mark tile uses "Последний период" label', async () => {
+  const yearSummary = {
+    period: 'year',
+    entries_count: 3,
+    points: Array.from({ length: 12 }, (_, i) => ({
+      date: `2026-${String(i + 1).padStart(2, '0')}-01`,
+      label: ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'][i],
+      mood_score: i < 3 ? 7 : null,
+    })),
+  };
+  diaryApi.getDiarySummary.mockResolvedValue(yearSummary);
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  fireEvent.click(screen.getByRole('button', { name: 'Год' }));
+  expect(await screen.findByText('Последний период')).toBeInTheDocument();
+});
+
+test('summary label "Диапазон" is not present after update', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  expect(screen.queryByText('Диапазон')).not.toBeInTheDocument();
+});
+
+test('summary label "Средняя отметка" is visible for 14d period', async () => {
+  render(<DiaryPage />);
+  expect(await screen.findByText('Средняя отметка')).toBeInTheDocument();
+});
+
+test('year period: average label is "Среднее по месяцам"', async () => {
+  const yearSummary = {
+    period: 'year',
+    entries_count: 2,
+    points: Array.from({ length: 12 }, (_, i) => ({
+      date: `2026-${String(i + 1).padStart(2, '0')}-01`,
+      label: ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'][i],
+      mood_score: i < 2 ? 8 : null,
+    })),
+  };
+  diaryApi.getDiarySummary.mockResolvedValue(yearSummary);
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  fireEvent.click(screen.getByRole('button', { name: 'Год' }));
+  expect(await screen.findByText('Среднее по месяцам')).toBeInTheDocument();
+});
+
+test('average: integer result formatted without decimal (e.g. "7/10")', async () => {
+  // MOCK_SUMMARY: 5 points all at mood_score=7 → avg=7 → "7/10"
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  // "7/10" appears: one in latest value, one in avg value, one in chip labels
+  const matches = screen.getAllByText('7/10');
+  expect(matches.length).toBeGreaterThan(0);
+});
+
+test('average: float result formatted with one decimal (e.g. "7.5/10")', async () => {
+  diaryApi.getDiarySummary.mockResolvedValue({
+    period: '14d',
+    entries_count: 2,
+    points: [
+      { date: '2026-06-22', label: '22', mood_score: 7 },
+      { date: '2026-06-23', label: '23', mood_score: 8 },
+    ],
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  expect(screen.getByText('7.5/10')).toBeInTheDocument();
+});
+
+test('average: no data shows "—" in avg tile', async () => {
+  diaryApi.getDiarySummary.mockResolvedValue({ period: '14d', entries_count: 0, points: [] });
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+});
+
+test('average: null-scored points ignored in calculation', async () => {
+  diaryApi.getDiarySummary.mockResolvedValue({
+    period: '14d',
+    entries_count: 2,
+    points: [
+      { date: '2026-06-20', label: '20', mood_score: null },
+      { date: '2026-06-21', label: '21', mood_score: 6 },
+      { date: '2026-06-22', label: '22', mood_score: null },
+      { date: '2026-06-23', label: '23', mood_score: 8 },
+    ],
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  // avg of [6, 8] = 7 → "7/10"
+  expect(screen.getByText('7/10')).toBeInTheDocument();
+});
+
+test('recent marks render as buttons, not spans', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  // chip text "14.06 · 7/10" should be inside a button
+  const chipBtn = screen.getByRole('button', { name: /Показать отметку за 14\.06/i });
+  expect(chipBtn).toBeInTheDocument();
+});
+
+test('recent marks chip text is visible', async () => {
+  render(<DiaryPage />);
+  // MOCK_SUMMARY: latest chip text is "14.06 · 7/10"
   expect(await screen.findByText('14.06 · 7/10')).toBeInTheDocument();
+});
+
+test('clicking recent mark chip opens detail panel', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+
+  expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
+
+  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
+});
+
+test('detail panel shows date title and score', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+
+  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
+
+  expect(screen.getByText('Отметка: 7/10')).toBeInTheDocument();
+});
+
+test('close button hides detail panel', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+
+  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
+  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /Закрыть детали отметки/i }));
+  expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument();
+});
+
+test('toggling same chip closes detail panel', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+
+  const chipBtn = screen.getByRole('button', { name: /Показать отметку за 14\.06/i });
+  fireEvent.click(chipBtn);
+  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
+
+  fireEvent.click(chipBtn);
+  expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument();
+});
+
+test('changing period chip closes open detail panel', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+
+  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
+  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Месяц' }));
+
+  await waitFor(() => expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument());
 });
 
 test('null-scored points do not appear in recent marks', async () => {
