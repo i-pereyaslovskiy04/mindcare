@@ -10,10 +10,12 @@ export default function DiaryHistoryList({
   loadMoreError = null,
   onEntryUpdate,
   onEntryDelete,
+  footerLink,
+  hideTitle = false,
 }) {
   return (
     <div className={styles.panel}>
-      <h2 className={styles.title}>История записей</h2>
+      {!hideTitle && <h2 className={styles.title}>История записей</h2>}
       {entries.length === 0 ? (
         <p className={styles.empty}>Здесь появятся ваши записи.</p>
       ) : (
@@ -41,6 +43,9 @@ export default function DiaryHistoryList({
         >
           {loadingMore ? 'Загружаем…' : 'Загрузить ещё'}
         </button>
+      )}
+      {footerLink != null && (
+        <div className={styles.footerLink}>{footerLink}</div>
       )}
     </div>
   );

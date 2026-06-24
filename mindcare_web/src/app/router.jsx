@@ -45,6 +45,7 @@ import AdminSettingsPage   from '../features/admin/settings/pages/AdminSettingsP
 import ClientDashboard      from '../pages/client/ClientDashboard';
 import StudentHome          from '../pages/student/StudentHome';
 import DiaryPage            from '../pages/student/DiaryPage';
+import DiaryHistoryPage    from '../pages/student/DiaryHistoryPage';
 import TestsPage            from '../pages/student/Tests/TestsPage';
 import StudentMaterialsPage from '../pages/student/Materials/MaterialsPage';
 import TasksPage            from '../pages/student/Tasks/TasksPage';
@@ -134,6 +135,7 @@ export default function AppRouter() {
       >
         <Route index                element={<StudentHome />} />
         <Route path="diary"         element={<DiaryPage />} />
+        <Route path="diary/history" element={<DiaryHistoryPage />} />
         <Route path="tests"         element={<TestsPage />} />
         <Route path="materials"     element={<StudentMaterialsPage />} />
         <Route path="tasks"         element={<TasksPage />} />

@@ -3,6 +3,9 @@ import * as diaryApi from '../../api/diary.api';
 import DiaryPage from './DiaryPage';
 
 jest.mock('../../api/diary.api');
+jest.mock('react-router-dom', () => ({
+  Link: ({ to, children }) => <a href={to}>{children}</a>,
+}), { virtual: true });
 
 const MOCK_EMOTIONS = [
   { key: 'calm',   label: 'Спокойно', sort_order: 1 },
@@ -46,7 +49,7 @@ const MOCK_ENTRIES_RESP = {
     },
   ],
   total: 1,
-  limit: 10,
+  limit: 4,
   offset: 0,
 };
 
@@ -151,7 +154,7 @@ test('unknown emotion key in history shows the key itself without crashing', asy
       },
     ],
     total: 1,
-    limit: 10,
+    limit: 4,
     offset: 0,
   });
   render(<DiaryPage />);
@@ -210,22 +213,33 @@ test('submit button remains enabled after slider is moved to a different value',
   );
 });
 
-// ─── load more visibility ─────────────────────────────────────────────────────
+// ─── history preview footer link ──────────────────────────────────────────────
 
-test('"Загрузить ещё" not shown when all entries fit in first page', async () => {
-  // default mock: { items: [1 entry], total: 1 } → hasMore = false
+test('"Смотреть всю историю" link is shown when there are entries', async () => {
+  // default: MOCK_ENTRIES_RESP has total: 1
   render(<DiaryPage />);
-  await waitFor(() => expect(diaryApi.getDiaryEntries).toHaveBeenCalledTimes(1));
-  expect(screen.queryByRole('button', { name: /загрузить ещё/i })).not.toBeInTheDocument();
+  expect(await screen.findByText('Вчера был хороший день')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Смотреть всю историю/i })).toBeInTheDocument();
 });
 
-test('"Загрузить ещё" shown when total > items in first page', async () => {
+test('"Смотреть всю историю" link is not shown when total is 0', async () => {
+  diaryApi.getDiaryEntries.mockResolvedValue({ items: [], total: 0, limit: 4, offset: 0 });
+  render(<DiaryPage />);
+  await screen.findByText('Что вы чувствуете?');
+  await waitFor(() => expect(diaryApi.getDiaryEntries).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole('link', { name: /Смотреть всю историю/i })).not.toBeInTheDocument();
+});
+
+test('"Загрузить ещё" button is not shown on main diary page', async () => {
   diaryApi.getDiaryEntries.mockResolvedValue({
-    ...MOCK_ENTRIES_RESP,
-    total: 5,   // 1 item loaded, 5 total → hasMore = true
+    items: [MOCK_ENTRIES_RESP.items[0]],
+    total: 10,
+    limit: 4,
+    offset: 0,
   });
   render(<DiaryPage />);
-  expect(await screen.findByRole('button', { name: /загрузить ещё/i })).toBeInTheDocument();
+  await screen.findByText('Вчера был хороший день');
+  expect(screen.queryByRole('button', { name: /загрузить ещё/i })).not.toBeInTheDocument();
 });
 
 // ─── observation block ────────────────────────────────────────────────────────

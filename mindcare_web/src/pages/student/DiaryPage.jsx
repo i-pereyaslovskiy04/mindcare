@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import MoodSelector from './components/Diary/MoodSelector';
 import DiaryEntryForm from './components/Diary/DiaryEntryForm';
 import DiaryHistoryList from './components/Diary/DiaryHistoryList';
 import * as diaryApi from '../../api/diary.api';
 import styles from './DiaryPage.module.css';
 
-const HISTORY_LIMIT = 10;
+const HISTORY_PREVIEW_LIMIT = 4;
 
 const PERIOD_LABELS = {
   '14d': '14 дней',
@@ -79,10 +80,7 @@ function getObservationHint(entriesCount) {
 export default function DiaryPage() {
   const [emotions, setEmotions] = useState([]);
   const [entries, setEntries] = useState([]);
-  const [entriesOffset, setEntriesOffset] = useState(HISTORY_LIMIT);
-  const [entriesHasMore, setEntriesHasMore] = useState(false);
-  const [entriesLoadingMore, setEntriesLoadingMore] = useState(false);
-  const [entriesLoadMoreError, setEntriesLoadMoreError] = useState(null);
+  const [entriesTotal, setEntriesTotal] = useState(0);
 
   // Controlled form state — synced from today API on initial load and after save
   const [mood, setMood] = useState(null);
@@ -122,7 +120,7 @@ export default function DiaryPage() {
       const [emotionsData, todayData, entriesData] = await Promise.all([
         diaryApi.getDiaryEmotions(),
         diaryApi.getTodayDiaryEntry(),
-        diaryApi.getDiaryEntries({ limit: HISTORY_LIMIT, offset: 0 }),
+        diaryApi.getDiaryEntries({ limit: HISTORY_PREVIEW_LIMIT, offset: 0 }),
       ]);
       setEmotions(emotionsData ?? []);
       setMood(todayData.mood_score ?? 5);
@@ -132,9 +130,7 @@ export default function DiaryPage() {
       const items = entriesData.items ?? [];
       const total = entriesData.total ?? 0;
       setEntries(items);
-      setEntriesOffset(HISTORY_LIMIT);
-      setEntriesHasMore(items.length < total);
-      setEntriesLoadMoreError(null);
+      setEntriesTotal(total);
     } catch (err) {
       setLoadError(err.message || 'Не удалось загрузить дневник.');
     } finally {
@@ -163,24 +159,6 @@ export default function DiaryPage() {
     );
   }
 
-  async function handleLoadMore() {
-    if (entriesLoadingMore) return;
-    setEntriesLoadingMore(true);
-    setEntriesLoadMoreError(null);
-    try {
-      const data = await diaryApi.getDiaryEntries({ limit: HISTORY_LIMIT, offset: entriesOffset });
-      const newItems = data.items ?? [];
-      const total = data.total ?? 0;
-      setEntries((prev) => [...prev, ...newItems]);
-      setEntriesHasMore(entriesOffset + newItems.length < total);
-      setEntriesOffset(entriesOffset + HISTORY_LIMIT);
-    } catch {
-      setEntriesLoadMoreError('Не удалось загрузить записи. Попробуйте ещё раз.');
-    } finally {
-      setEntriesLoadingMore(false);
-    }
-  }
-
   function handleEntryUpdate(updatedEntry) {
     setEntries((prev) =>
       prev.map((e) => (e.uuid === updatedEntry.uuid ? updatedEntry : e))
@@ -205,15 +183,13 @@ export default function DiaryPage() {
       setSelectedEmotions([]);
       setIsExistingEntry(false);
     }
-    // Reload page 1 to fix entriesOffset after delete so load-more stays consistent.
+    // Reload preview to reflect correct data after delete.
     try {
-      const entriesData = await diaryApi.getDiaryEntries({ limit: HISTORY_LIMIT, offset: 0 });
+      const entriesData = await diaryApi.getDiaryEntries({ limit: HISTORY_PREVIEW_LIMIT, offset: 0 });
       const items = entriesData.items ?? [];
       const total = entriesData.total ?? 0;
       setEntries(items);
-      setEntriesOffset(HISTORY_LIMIT);
-      setEntriesHasMore(items.length < total);
-      setEntriesLoadMoreError(null);
+      setEntriesTotal(total);
     } catch {
       // Non-critical: list already updated optimistically above.
     }
@@ -233,13 +209,11 @@ export default function DiaryPage() {
       setText(saved.entry_text ?? '');
       setSelectedEmotions(saved.emotions ?? []);
       setIsExistingEntry(true);
-      const entriesData = await diaryApi.getDiaryEntries({ limit: HISTORY_LIMIT, offset: 0 });
+      const entriesData = await diaryApi.getDiaryEntries({ limit: HISTORY_PREVIEW_LIMIT, offset: 0 });
       const items = entriesData.items ?? [];
       const total = entriesData.total ?? 0;
       setEntries(items);
-      setEntriesOffset(HISTORY_LIMIT);
-      setEntriesHasMore(items.length < total);
-      setEntriesLoadMoreError(null);
+      setEntriesTotal(total);
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
       loadSummary(activePeriod);
@@ -253,6 +227,10 @@ export default function DiaryPage() {
   const realPoints = getRealSummaryPoints(summaryData);
   const latestPoint = getLatestPoint(realPoints);
   const recentMarks = getRecentMarks(realPoints, activePeriod);
+
+  const historyFooterLink = entriesTotal > 0
+    ? <Link to="/student/diary/history">Смотреть всю историю</Link>
+    : undefined;
 
   return (
     <div className={styles.page}>
@@ -378,12 +356,9 @@ export default function DiaryPage() {
             <DiaryHistoryList
               entries={entries}
               emotionCatalog={emotions}
-              hasMore={entriesHasMore}
-              loadingMore={entriesLoadingMore}
-              onLoadMore={handleLoadMore}
-              loadMoreError={entriesLoadMoreError}
               onEntryUpdate={handleEntryUpdate}
               onEntryDelete={handleEntryDelete}
+              footerLink={historyFooterLink}
             />
           </div>
         </div>

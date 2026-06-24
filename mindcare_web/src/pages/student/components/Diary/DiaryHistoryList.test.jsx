@@ -144,3 +144,31 @@ test('error message is not shown when loadMoreError is null', () => {
   render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
   expect(screen.queryByText(/не удалось загрузить записи/i)).not.toBeInTheDocument();
 });
+
+// ─── footerLink / hideTitle ───────────────────────────────────────────────────
+
+test('renders footerLink node when provided', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      footerLink={<span>Смотреть всю историю</span>}
+    />
+  );
+  expect(screen.getByText('Смотреть всю историю')).toBeInTheDocument();
+});
+
+test('does not render footerLink slot when footerLink is not provided', () => {
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
+  expect(screen.queryByText('Смотреть всю историю')).not.toBeInTheDocument();
+});
+
+test('hides section title when hideTitle=true', () => {
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} hideTitle />);
+  expect(screen.queryByText('История записей')).not.toBeInTheDocument();
+});
+
+test('shows section title by default (hideTitle=false)', () => {
+  render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
+  expect(screen.getByText('История записей')).toBeInTheDocument();
+});
