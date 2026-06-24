@@ -234,21 +234,25 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
               {onUpdate && (
                 <button
                   type="button"
-                  className={styles.actionBtn}
+                  className={styles.iconButton}
                   onClick={openEdit}
                   aria-label="Редактировать запись"
                 >
-                  Изменить
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M9 2l3 3-8 8H1V10L9 2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                  </svg>
                 </button>
               )}
               {onDelete && (
                 <button
                   type="button"
-                  className={styles.actionBtn}
+                  className={`${styles.iconButton} ${styles.iconButtonDanger}`}
                   onClick={openDeleteConfirm}
                   aria-label="Удалить запись"
                 >
-                  Удалить
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M1 3.5h12M5 3.5V2h4v1.5M2.5 3.5l1 8h5l1-8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </button>
               )}
             </div>

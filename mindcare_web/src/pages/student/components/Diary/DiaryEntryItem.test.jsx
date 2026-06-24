@@ -68,11 +68,11 @@ test('renders entry text', () => {
 
 test('no action buttons when onUpdate and onDelete not provided', () => {
   render(<DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} />);
-  expect(screen.queryByRole('button', { name: /изменить/i })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /удалить/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /редактировать запись/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /удалить запись/i })).not.toBeInTheDocument();
 });
 
-test('shows Изменить and Удалить buttons when both callbacks provided', () => {
+test('shows edit and delete icon buttons when both callbacks provided', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
@@ -80,10 +80,24 @@ test('shows Изменить and Удалить buttons when both callbacks prov
   expect(screen.getByRole('button', { name: /удалить запись/i })).toBeInTheDocument();
 });
 
-test('shows only Изменить when only onUpdate provided', () => {
+test('shows only edit icon when only onUpdate provided', () => {
   render(<DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} />);
   expect(screen.getByRole('button', { name: /редактировать запись/i })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /удалить запись/i })).not.toBeInTheDocument();
+});
+
+test('read mode does not render text "Изменить" when callbacks provided', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  expect(screen.queryByText('Изменить')).not.toBeInTheDocument();
+});
+
+test('read mode does not render text "Удалить" when callbacks provided', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  expect(screen.queryByText('Удалить')).not.toBeInTheDocument();
 });
 
 // ─── edit mode ────────────────────────────────────────────────────────────────
