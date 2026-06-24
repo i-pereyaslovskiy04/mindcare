@@ -169,8 +169,75 @@
   border-color: var(--espresso);
 }
 
-.chartWrap {
-  margin: 0 -4px;
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 480px) {
+  .summaryGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.summaryTile {
+  background: var(--cream, #faf7f2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.summaryValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--espresso);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summaryLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.recentMarks {
+  margin-bottom: 12px;
+}
+
+.recentMarksTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.markChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.markChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  background: var(--cream, #faf7f2);
+  border: 1px solid var(--nav-border);
+  color: var(--espresso);
+  white-space: nowrap;
 }
 
 .observationHint {

@@ -3,12 +3,6 @@ import * as diaryApi from '../../api/diary.api';
 import DiaryPage from './DiaryPage';
 
 jest.mock('../../api/diary.api');
-jest.mock('./components/MoodChart/MoodChart', () => ({
-  __esModule: true,
-  default: ({ data, period }) => (
-    <div data-testid="mood-chart" data-period={period} data-points={data?.length ?? 0} />
-  ),
-}));
 jest.mock('./components/Diary/MoodSelector', () => ({
   __esModule: true,
   default: ({ value, onChange }) => (
@@ -466,32 +460,38 @@ test('clicking "Год" chip calls getDiarySummary with "year"', async () => {
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('year'));
 });
 
-test('MoodChart is rendered inside observation block', async () => {
-  render(<DiaryPage />);
-  expect(await screen.findByTestId('mood-chart')).toBeInTheDocument();
-});
-
-test('MoodChart receives mapped points from summary', async () => {
-  render(<DiaryPage />);
-  const chart = await screen.findByTestId('mood-chart');
-  expect(chart).toHaveAttribute('data-points', String(MOCK_SUMMARY.points.length));
-});
-
-test('MoodChart receives active period', async () => {
-  render(<DiaryPage />);
-  const chart = await screen.findByTestId('mood-chart');
-  expect(chart).toHaveAttribute('data-period', '14d');
-});
-
-test('MoodChart period updates when chip is clicked', async () => {
+test('MoodChart SVG is not rendered in observation block', async () => {
   render(<DiaryPage />);
   await screen.findByText('Самонаблюдение');
+  expect(screen.queryByTestId('mood-chart')).not.toBeInTheDocument();
+});
 
-  fireEvent.click(screen.getByRole('button', { name: 'Год' }));
+test('summary label "Отметок" is visible after load', async () => {
+  render(<DiaryPage />);
+  expect(await screen.findByText('Отметок')).toBeInTheDocument();
+});
 
-  await waitFor(() =>
-    expect(screen.getByTestId('mood-chart')).toHaveAttribute('data-period', 'year')
-  );
+test('summary label "Последняя отметка" is visible for 14d period', async () => {
+  render(<DiaryPage />);
+  expect(await screen.findByText('Последняя отметка')).toBeInTheDocument();
+});
+
+test('summary label "Диапазон" is visible', async () => {
+  render(<DiaryPage />);
+  expect(await screen.findByText('Диапазон')).toBeInTheDocument();
+});
+
+test('recent marks row shows last non-null point as formatted chip', async () => {
+  render(<DiaryPage />);
+  // MOCK_SUMMARY: 5 points with mood_score=7, dates 2026-06-10..14 → latest chip "14.06 · 7/10"
+  expect(await screen.findByText('14.06 · 7/10')).toBeInTheDocument();
+});
+
+test('null-scored points do not appear in recent marks', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('observation-summary');
+  // MOCK_SUMMARY: points from index 5+ have mood_score=null → date "2026-06-15" should not show
+  expect(screen.queryByText(/15\.06/)).not.toBeInTheDocument();
 });
 
 test('observation block shows loading state while summary is loading', async () => {
@@ -522,8 +522,8 @@ test('summary error retry button calls getDiarySummary again', async () => {
 test('save triggers getDiarySummary reload for active period', async () => {
   diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_WITH_ENTRY);
   render(<DiaryPage />);
-  // findByTestId('mood-chart') guarantees both layout and summary are loaded
-  await screen.findByTestId('mood-chart');
+  // findByTestId('observation-summary') guarantees both layout and summary are loaded
+  await screen.findByTestId('observation-summary');
 
   fireEvent.click(screen.getByTestId('save-btn'));
 
@@ -533,7 +533,7 @@ test('save triggers getDiarySummary reload for active period', async () => {
 
 test('edit entry triggers getDiarySummary reload', async () => {
   render(<DiaryPage />);
-  await screen.findByTestId('mood-chart');
+  await screen.findByTestId('observation-summary');
 
   fireEvent.click(screen.getByTestId('trig-update'));
 
@@ -548,7 +548,7 @@ test('delete entry triggers getDiarySummary reload', async () => {
     })
     .mockResolvedValueOnce({ items: [], total: 0, limit: 10, offset: 0 });
   render(<DiaryPage />);
-  await screen.findByTestId('mood-chart');
+  await screen.findByTestId('observation-summary');
 
   fireEvent.click(screen.getByTestId('trig-delete'));
 
@@ -558,7 +558,7 @@ test('delete entry triggers getDiarySummary reload', async () => {
 test('hint shows 0-entry text when entries_count is 0', async () => {
   diaryApi.getDiarySummary.mockResolvedValue({ period: '14d', entries_count: 0, points: [] });
   render(<DiaryPage />);
-  expect(await screen.findByText(/Пока нет данных для графика/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Пока нет данных для самонаблюдения/i)).toBeInTheDocument();
 });
 
 test('hint shows 1-entry text when entries_count is 1', async () => {
@@ -576,10 +576,10 @@ test('hint shows 2-3-entry text when entries_count is 3', async () => {
     points: [{ date: '2026-06-23', label: 'Вт', mood_score: 7 }],
   });
   render(<DiaryPage />);
-  expect(await screen.findByText(/Пока мало данных для тренда/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Пока данных немного/i)).toBeInTheDocument();
 });
 
 test('hint shows 4+-entry text when entries_count >= 4', async () => {
   render(<DiaryPage />); // MOCK_SUMMARY has entries_count: 5
-  expect(await screen.findByText(/Можно смотреть первые изменения/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Можно посмотреть/i)).toBeInTheDocument();
 });

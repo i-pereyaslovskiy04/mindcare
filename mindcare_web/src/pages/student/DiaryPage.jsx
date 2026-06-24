@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import MoodChart from './components/MoodChart/MoodChart';
 import MoodSelector from './components/Diary/MoodSelector';
 import DiaryEntryForm from './components/Diary/DiaryEntryForm';
 import DiaryHistoryList from './components/Diary/DiaryHistoryList';
@@ -29,11 +28,52 @@ function formatTodayLabel() {
   });
 }
 
+function getRealSummaryPoints(summary) {
+  return (summary?.points ?? []).filter((p) => p.mood_score !== null);
+}
+
+function formatShortDate(isoDate) {
+  const parts = isoDate.split('-');
+  return `${parts[2]}.${parts[1]}`;
+}
+
+function formatScore(value) {
+  if (value === null || value === undefined) return '—';
+  return `${value}/10`;
+}
+
+function getLatestPoint(realPoints) {
+  if (!realPoints.length) return null;
+  return realPoints[realPoints.length - 1];
+}
+
+function getRangeLabel(realPoints) {
+  if (!realPoints.length) return '—';
+  const scores = realPoints.map((p) => p.mood_score);
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  if (min === max) return formatScore(min);
+  return `${formatScore(min)} – ${formatScore(max)}`;
+}
+
+function getRecentMarks(realPoints, activePeriod, limit = 5) {
+  return realPoints.slice(-limit).map((p) => ({
+    key: p.date,
+    label:
+      activePeriod === 'year'
+        ? `${p.label} · ${formatScore(p.mood_score)}`
+        : `${formatShortDate(p.date)} · ${formatScore(p.mood_score)}`,
+  }));
+}
+
 function getObservationHint(entriesCount) {
-  if (entriesCount === 0) return 'Пока нет данных для графика. Добавьте несколько отметок, чтобы увидеть динамику.';
-  if (entriesCount === 1) return 'Есть первая отметка. Для динамики нужно больше записей.';
-  if (entriesCount <= 3) return 'Пока мало данных для тренда, но эти записи уже можно обсудить с психологом.';
-  return 'Можно смотреть первые изменения за выбранный период.';
+  if (entriesCount === 0)
+    return 'Пока нет данных для самонаблюдения. После нескольких отметок здесь появится краткая сводка.';
+  if (entriesCount === 1)
+    return 'Есть первая отметка. Когда записей станет больше, здесь появится краткая сводка за период.';
+  if (entriesCount <= 3)
+    return 'Пока данных немного. Эти записи уже можно использовать как основу для разговора с психологом.';
+  return 'Можно посмотреть, какие отметки были в выбранный период.';
 }
 
 export default function DiaryPage() {
@@ -210,11 +250,9 @@ export default function DiaryPage() {
     }
   }
 
-  const chartData = (summaryData?.points ?? []).map((p) => ({
-    l: p.label,
-    v: p.mood_score,
-    d: p.date,
-  }));
+  const realPoints = getRealSummaryPoints(summaryData);
+  const latestPoint = getLatestPoint(realPoints);
+  const recentMarks = getRecentMarks(realPoints, activePeriod);
 
   return (
     <div className={styles.page}>
@@ -259,7 +297,7 @@ export default function DiaryPage() {
                 <span className={styles.observationTitle}>Самонаблюдение</span>
               </div>
               <p className={styles.observationSub}>
-                Записи помогают заметить изменения в самочувствии и обсудить их с психологом.
+                Записи помогают вспомнить самочувствие за период и обсудить это с психологом.
               </p>
               <div className={styles.periodChips}>
                 {['14d', 'month', 'year'].map((p) => (
@@ -291,14 +329,47 @@ export default function DiaryPage() {
                   </button>
                 </div>
               ) : (
-                <>
-                  <div className={styles.chartWrap}>
-                    <MoodChart data={chartData} period={activePeriod} />
+                <div data-testid="observation-summary">
+                  <div className={styles.summaryGrid}>
+                    <div className={styles.summaryTile}>
+                      <span className={styles.summaryValue}>
+                        {summaryData?.entries_count ?? 0}
+                      </span>
+                      <span className={styles.summaryLabel}>Отметок</span>
+                    </div>
+                    <div className={styles.summaryTile}>
+                      <span className={styles.summaryValue}>
+                        {latestPoint
+                          ? activePeriod === 'year'
+                            ? `${latestPoint.label} · ${formatScore(latestPoint.mood_score)}`
+                            : `${formatScore(latestPoint.mood_score)} · ${formatShortDate(latestPoint.date)}`
+                          : '—'}
+                      </span>
+                      <span className={styles.summaryLabel}>
+                        {activePeriod === 'year' ? 'Последний период' : 'Последняя отметка'}
+                      </span>
+                    </div>
+                    <div className={styles.summaryTile}>
+                      <span className={styles.summaryValue}>
+                        {getRangeLabel(realPoints)}
+                      </span>
+                      <span className={styles.summaryLabel}>Диапазон</span>
+                    </div>
                   </div>
+                  {recentMarks.length > 0 && (
+                    <div className={styles.recentMarks}>
+                      <p className={styles.recentMarksTitle}>Последние отметки</p>
+                      <div className={styles.markChips}>
+                        {recentMarks.map(({ key, label }) => (
+                          <span key={key} className={styles.markChip}>{label}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <p className={styles.observationHint}>
                     {getObservationHint(summaryData?.entries_count ?? 0)}
                   </p>
-                </>
+                </div>
               )}
             </div>
           </div>
