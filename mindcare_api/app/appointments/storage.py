@@ -619,7 +619,7 @@ def get_psychologist_appointments(
         q = q.filter(Appointment.starts_at <= dt_to)
     total = q.count()
     rows = (
-        q.order_by(Appointment.starts_at.asc())
+        q.order_by(Appointment.created_at.desc(), Appointment.id.desc())
         .offset((page - 1) * size)
         .limit(size)
         .all()

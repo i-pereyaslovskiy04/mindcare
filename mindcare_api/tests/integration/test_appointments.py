@@ -424,6 +424,67 @@ class TestIndividualAppointments:
         assert r.status_code == 422
         assert "до дня" in r.json()["detail"].lower()
 
+    def test_09_psychologist_list_sorted_newest_first(self, client):
+        """Список психолога: созданные позже записи идут первыми (created_at DESC).
+
+        created_at задаётся явно через SessionLocal, чтобы тест был
+        детерминированным независимо от скорости выполнения HTTP-запросов.
+        """
+        tok_p, pid, mt_id = _setup_schedule(client)
+        tok_s1, _ = _student_for(client, pid)
+        tok_s2, _ = _student_for(client, pid)
+
+        r_a = client.post(
+            "/api/appointments",
+            json={
+                "starts_at": _future_slot(30).isoformat(),
+                "modality": "in_person",
+                "meeting_type_id": mt_id,
+            },
+            headers=_auth(tok_s1),
+        )
+        assert r_a.status_code == 201, r_a.text
+        uuid_a = r_a.json()["uuid"]
+
+        r_b = client.post(
+            "/api/appointments",
+            json={
+                "starts_at": _future_slot(55).isoformat(),
+                "modality": "in_person",
+                "meeting_type_id": mt_id,
+            },
+            headers=_auth(tok_s2),
+        )
+        assert r_b.status_code == 201, r_b.text
+        uuid_b = r_b.json()["uuid"]
+
+        # Явно задаём created_at: A старее, B новее — независимо от скорости теста.
+        with SessionLocal() as db:
+            db.query(Appointment).filter(Appointment.uuid == uuid_a).update(
+                {"created_at": datetime(2024, 1, 1, tzinfo=timezone.utc)}
+            )
+            db.query(Appointment).filter(Appointment.uuid == uuid_b).update(
+                {"created_at": datetime(2024, 1, 2, tzinfo=timezone.utc)}
+            )
+            db.commit()
+
+        r_list = client.get(
+            "/api/psychologist/appointments", headers=_auth(tok_p)
+        )
+        assert r_list.status_code == 200, r_list.text
+        data = r_list.json()
+        assert data["total"] >= 2
+        assert "page" in data
+        assert "size" in data
+
+        uuids = [i["uuid"] for i in data["items"]]
+        # B (2024-01-02) должна стоять раньше A (2024-01-01)
+        assert uuid_b in uuids, "Запись B должна быть в ответе"
+        assert uuid_a in uuids, "Запись A должна быть в ответе"
+        assert uuids.index(uuid_b) < uuids.index(uuid_a), (
+            "Новая запись (B) должна идти перед старой (A)"
+        )
+
 
 # ─── Slot computation (MeetingType-driven) ────────────────────────────────────
 

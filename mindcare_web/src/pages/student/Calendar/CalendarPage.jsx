@@ -64,7 +64,7 @@ function toSession(appt) {
     uuid:        appt.uuid,
     date,
     time,
-    title:       'Сессия с психологом',
+    title:       appt.meeting_type_name || 'Индивидуальная встреча',
     psychologist: appt.psychologist?.full_name || '',
     type:        appt.modality === 'in_person' ? 'audio' : 'video',
     status:      isPast ? 'past' : 'upcoming',

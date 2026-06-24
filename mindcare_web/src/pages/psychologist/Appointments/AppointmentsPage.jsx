@@ -98,12 +98,6 @@ export default function PsychologistAppointmentsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / 20));
 
-  // Defensive: backend сортирует по starts_at ASC, но гарантируем порядок и в UI
-  // (только отображение текущей страницы — не трогаем пагинацию).
-  const sortedItems = [...items].sort(
-    (a, b) => new Date(a.starts_at) - new Date(b.starts_at)
-  );
-
   async function handleConfirm(uuid) {
     setConfirming(uuid);
     setActionError(null);
@@ -228,7 +222,7 @@ export default function PsychologistAppointmentsPage() {
       {!loading && !error && items.length > 0 && (
         <>
           <div className={styles.list}>
-            {sortedItems.map(appt => {
+            {items.map(appt => {
               const subj = subjectOf(appt);
               const durationMin =
                 appt.duration_minutes || appt.meeting_type_duration_minutes;

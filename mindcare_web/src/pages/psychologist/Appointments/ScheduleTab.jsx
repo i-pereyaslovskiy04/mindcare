@@ -77,11 +77,26 @@ export default function ScheduleTab() {
   // где есть хотя бы одно окно или перерыв. Внутри дня — окна, затем перерывы,
   // и то и другое отсортировано по времени начала.
   const byTime = (a, b) => a.start_time.localeCompare(b.start_time);
+
+  const seenRules = new Set();
+  const dedupedRules = rules.filter(r => {
+    const key = [r.day_of_week, r.start_time, r.end_time,
+                 r.effective_from, r.effective_until, r.auto_extend, r.is_active].join('|');
+    return seenRules.has(key) ? false : (seenRules.add(key), true);
+  });
+
+  const seenBreaks = new Set();
+  const dedupedBreaks = breaks.filter(b => {
+    const key = [b.day_of_week, b.start_time, b.end_time,
+                 b.effective_from, b.effective_until, b.title ?? ''].join('|');
+    return seenBreaks.has(key) ? false : (seenBreaks.add(key), true);
+  });
+
   const days = DAY_LABEL.map((label, dow) => ({
     dow,
     label,
-    rules: rules.filter(r => r.day_of_week === dow).sort(byTime),
-    breaks: breaks.filter(b => b.day_of_week === dow).sort(byTime),
+    rules: dedupedRules.filter(r => r.day_of_week === dow).sort(byTime),
+    breaks: dedupedBreaks.filter(b => b.day_of_week === dow).sort(byTime),
   })).filter(d => d.rules.length > 0 || d.breaks.length > 0);
 
   return (
