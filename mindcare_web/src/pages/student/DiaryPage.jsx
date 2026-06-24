@@ -328,15 +328,15 @@ export default function DiaryPage() {
                 <div data-testid="observation-summary">
                   <div className={styles.summaryGrid}>
                     <div className={styles.summaryTile}>
-                      <span className={styles.summaryValue}>
+                      <strong className={styles.summaryValue}>
                         {summaryData?.entries_count ?? 0}
-                      </span>
+                      </strong>
                       <span className={styles.summaryLabel}>Отметок</span>
                     </div>
                     <div className={styles.summaryTile}>
-                      <span className={styles.summaryValue}>
+                      <strong className={styles.summaryValue}>
                         {latestPoint ? formatScore(latestPoint.mood_score) : '—'}
-                      </span>
+                      </strong>
                       <span className={styles.summaryLabel}>
                         {activePeriod === 'year' ? 'Последний период' : 'Последняя отметка'}
                       </span>
@@ -349,9 +349,9 @@ export default function DiaryPage() {
                       )}
                     </div>
                     <div className={styles.summaryTile}>
-                      <span className={styles.summaryValue}>
+                      <strong className={styles.summaryValue}>
                         {formatAverage(avgScore)}
-                      </span>
+                      </strong>
                       <span className={styles.summaryLabel}>{avgLabel}</span>
                     </div>
                   </div>
