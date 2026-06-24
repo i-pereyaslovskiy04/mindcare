@@ -3,6 +3,7 @@ import Modal from '../../../components/Modal/Modal';
 import Button from '../../../components/UI/Button/Button';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
 import { createSupervisorStudent } from '../../../api/supervisor.api';
+import { formatPhoneInput, PHONE_PLACEHOLDER } from '../../../features/admin/users/phone';
 import styles from './NewStudentModal.module.css';
 
 const CONSENT_LABEL =
@@ -130,10 +131,9 @@ export default function NewStudentModal({ open, psychologistId, onClose, onCreat
                   className={styles.input}
                   type="tel"
                   value={values.phone}
-                  onChange={(e) => field('phone', e.target.value)}
-                  placeholder="+7…"
+                  onChange={(e) => field('phone', formatPhoneInput(e.target.value))}
+                  placeholder={PHONE_PLACEHOLDER}
                   autoComplete="off"
-                  maxLength={50}
                 />
               </div>
             </div>

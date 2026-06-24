@@ -4,6 +4,7 @@ import Button from '../../../components/UI/Button/Button';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
 import DateInput from '../../../components/UI/DateInput/DateInput';
 import { createUnregisteredStudentCard } from '../../../api/supervisor.api';
+import { formatPhoneInput, PHONE_PLACEHOLDER } from '../../../features/admin/users/phone';
 import styles from './UnregisteredCardModal.module.css';
 
 const CONSENT_LABEL =
@@ -107,10 +108,9 @@ export default function UnregisteredCardModal({ open, onClose, onCreated }) {
                 className={styles.input}
                 type="tel"
                 value={values.phone}
-                onChange={(e) => field('phone', e.target.value)}
-                placeholder="+7…"
+                onChange={(e) => field('phone', formatPhoneInput(e.target.value))}
+                placeholder={PHONE_PLACEHOLDER}
                 autoComplete="off"
-                maxLength={50}
               />
             </div>
             <div className={styles.field}>
