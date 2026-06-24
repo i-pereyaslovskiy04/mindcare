@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../components/Icon/Icon';
 import Select from '../../../components/UI/Select/Select';
 import Button from '../../../components/UI/Button/Button';
 import Toggle from '../../../components/UI/Toggle/Toggle';
 import { useAuth } from '../../../features/auth/AuthContext';
+import { formatPhoneInput, PHONE_PLACEHOLDER } from '../../../features/admin/users/phone';
 import * as authApi from '../../../api/auth.api';
 import styles from './SettingsPage.module.css';
 
@@ -15,6 +16,18 @@ const TIMEZONE_OPTIONS = [
   { value: 'msk', label: 'Москва (UTC+3)' },
   { value: 'ekb', label: 'Екатеринбург (UTC+5)' },
 ];
+
+const ROLE_LABEL = {
+  student: 'Студент',
+  psychologist: 'Психолог',
+  supervisor: 'Супервизор',
+  admin: 'Администратор',
+};
+
+function avatarLetter(name) {
+  const t = (name || '').trim();
+  return t ? t[0].toUpperCase() : '?';
+}
 
 function NotifRow({ label, desc, on, onToggle }) {
   return (
@@ -29,8 +42,64 @@ function NotifRow({ label, desc, on, onToggle }) {
 }
 
 export default function SettingsPage() {
-  const { logout } = useAuth();
+  const { logout, refreshUser } = useAuth();
   const navigate = useNavigate();
+
+  // ── Профиль (реальные данные текущего пользователя) ──
+  const [profile, setProfile] = useState({ full_name: '', email: '', phone: '', role: '' });
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setProfileLoading(true);
+      setProfileLoadError('');
+      try {
+        const data = await authApi.getProfile();
+        if (cancelled) return;
+        setProfile({
+          full_name: data.full_name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          role: data.role || '',
+        });
+      } catch (err) {
+        if (!cancelled) setProfileLoadError(err.message || 'Не удалось загрузить профиль');
+      } finally {
+        if (!cancelled) setProfileLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleSaveProfile(e) {
+    e.preventDefault();
+    setProfileError('');
+    setProfileSuccess(false);
+    setProfileSaving(true);
+    // ПДн (ФИО/телефон) не логируются.
+    try {
+      const updated = await authApi.updateProfile({
+        full_name: profile.full_name,
+        phone: profile.phone || null,
+      });
+      setProfile((p) => ({
+        ...p,
+        full_name: updated.full_name || '',
+        phone: updated.phone || '',
+      }));
+      setProfileSuccess(true);
+      await refreshUser();
+    } catch (err) {
+      setProfileError(err.message || 'Не удалось сохранить профиль');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   const [pwForm, setPwForm] = useState({
     current_password: '',
@@ -69,10 +138,8 @@ export default function SettingsPage() {
 
   const [timezone, setTimezone] = useState('msk');
 
-  const [socials, setSocials] = useState([
-    { id: 1, type: 'Telegram',   url: '@anna_polina' },
-    { id: 2, type: 'Instagram',  url: '' },
-  ]);
+  // UI-only (нет backend API): локальные ссылки на соцсети.
+  const [socials, setSocials] = useState([]);
 
   function toggleNotif(key) {
     setNotif((n) => ({ ...n, [key]: !n[key] }));
@@ -107,45 +174,85 @@ export default function SettingsPage() {
           <div className={styles.card}>
             <h2 className={styles.sectionTitle}>Профиль</h2>
 
-            <div className={styles.profileHead}>
-              <div className={styles.avatar}>А</div>
-              <div>
-                <div className={styles.profileName}>Анна Полина</div>
-                <div className={styles.profileRole}>Студент · 3 курс · ФЦиЯ</div>
-                <Button variant="ghost" size="sm" style={{ marginTop: 8 }}>
-                  Изменить фото
+            {profileLoading ? (
+              <div className={styles.empty}>Загрузка профиля…</div>
+            ) : profileLoadError ? (
+              <div className={styles.formError}>{profileLoadError}</div>
+            ) : (
+              <form onSubmit={handleSaveProfile}>
+                <div className={styles.profileHead}>
+                  <div className={styles.avatar}>{avatarLetter(profile.full_name)}</div>
+                  <div>
+                    <div className={styles.profileName}>
+                      {profile.full_name || 'Без имени'}
+                    </div>
+                    <div className={styles.profileRole}>
+                      {ROLE_LABEL[profile.role] || profile.role}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.field}>
+                  <label>ФИО</label>
+                  <input
+                    className={styles.input}
+                    value={profile.full_name}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setProfile((p) => ({ ...p, full_name: v }));
+                      setProfileSuccess(false);
+                    }}
+                    placeholder="Иванов Иван Иванович"
+                    disabled={profileSaving}
+                    maxLength={255}
+                  />
+                </div>
+                <div className={styles.field}>
+                  <label>Email</label>
+                  <input
+                    className={styles.input}
+                    type="email"
+                    value={profile.email}
+                    readOnly
+                  />
+                </div>
+                <div className={styles.field}>
+                  <label>Номер телефона</label>
+                  <input
+                    className={styles.input}
+                    type="tel"
+                    value={profile.phone}
+                    onChange={(e) => {
+                      const v = formatPhoneInput(e.target.value);
+                      setProfile((p) => ({ ...p, phone: v }));
+                      setProfileSuccess(false);
+                    }}
+                    placeholder={PHONE_PLACEHOLDER}
+                    disabled={profileSaving}
+                  />
+                </div>
+                <div className={styles.field}>
+                  <label>Часовой пояс</label>
+                  <Select
+                    value={timezone}
+                    options={TIMEZONE_OPTIONS}
+                    onChange={setTimezone}
+                  />
+                </div>
+
+                {profileError && <div className={styles.formError}>{profileError}</div>}
+                {profileSuccess && <div className={styles.formSuccess}>Изменения сохранены.</div>}
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  style={{ marginTop: 6 }}
+                  loading={profileSaving}
+                >
+                  Сохранить изменения
                 </Button>
-              </div>
-            </div>
-
-            <div className={styles.field}>
-              <label>Имя</label>
-              <input className={styles.input} defaultValue="Анна" />
-            </div>
-            <div className={styles.field}>
-              <label>Фамилия</label>
-              <input className={styles.input} defaultValue="Полина" />
-            </div>
-            <div className={styles.field}>
-              <label>Email</label>
-              <input className={styles.input} type="email" defaultValue="a.polina@donnu.ru" />
-            </div>
-            <div className={styles.field}>
-              <label>Номер телефона</label>
-              <input className={styles.input} type="tel" placeholder="+7 (___) ___-__-__" defaultValue="+7 (949) 312-04-78" />
-            </div>
-            <div className={styles.field}>
-              <label>Часовой пояс</label>
-              <Select
-                value={timezone}
-                options={TIMEZONE_OPTIONS}
-                onChange={setTimezone}
-              />
-            </div>
-
-            <Button variant="primary" style={{ marginTop: 6 }}>
-              Сохранить изменения
-            </Button>
+              </form>
+            )}
           </div>
 
           {/* Security */}
