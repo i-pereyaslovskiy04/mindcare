@@ -353,16 +353,23 @@
     inline errors; после delete история перечитывается с offset=0
   - ✅ Hotfix: local frontend today helper вместо UTC `toISOString()`, честный session copy,
     malformed UUID 422 и empty PATCH no-op
+  - ✅ **Diary Analytics Lite / observation summary**: `/student/diary` использует
+    `/api/diary/summary?period=14d|month|year` и показывает tiles `Отметок`,
+    `Последняя отметка`/`Последний период`, `Диапазон`, а также последние 3–5
+    non-null отметок в chips; save/edit/delete обновляют сводку
+  - ✅ Линейный `MoodChart` удалён после manual UI smoke: для нерегулярного дневника
+    разрывы линии давали неудачную медицинскую визуальную метафору; текущий UI без SVG,
+    осей, линий и утверждений об улучшении/ухудшении
   - ✅ Проверенный статус проекта: backend **587 passed**; frontend
-    **40 suites / 530 passed**; lint **0 warnings**; build **success**
+    **39 suites / 540 passed**; lint **0 warnings**; build **success**
   - **Pending / будущие этапы:**
-    - Diary analytics / интеграция существующего `MoodChart` в `/student/diary`
     - Audit trail для diary edit/delete — compliance gap до production hardening
     - Доступ психолога — только отдельная policy с explicit consent/legal basis
     - Timezone-aware backend date policy вместо server-side `date.today()` MVP
     - Admin UI для `diary_emotions`
     - Export diary data с отдельной политикой/согласием/audit
-    - Advanced analytics: тренды, корреляции, сравнения периодов
+    - Advanced diary analytics / observation insights только после отдельной UX-validation,
+      без заранее выбранного формата линейного графика и без медицинских выводов
     - GAD-7/PHQ-9 как отдельный валидированный questionnaire-модуль, не dashboard stats
     - Реальная appointments integration для session data
     - Mobile/a11y hardening: `aria-live`, focus management delete confirm, textarea labels

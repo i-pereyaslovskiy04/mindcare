@@ -212,7 +212,6 @@ mindcare_web/
     │   │   ├── DiaryPage.jsx
     │   │   ├── components/
     │   │   │   ├── Sidebar/Sidebar.jsx + .module.css
-    │   │   │   ├── MoodChart/MoodChart.jsx
     │   │   │   ├── StatCard/StatCard.jsx
     │   │   │   └── Diary/ (MoodSelector, DiaryEntryForm, DiaryHistoryList, DiaryEntryItem)
     │   │   ├── Tests/TestsPage.jsx
@@ -530,12 +529,14 @@ sleep/anxiety, fake appointment/psychologist/date удалены. Карточк
 появится здесь позже.»
 
 `DiaryPage` поддерживает mood-only quick check-in, optional collapsible emotions/text,
-history `limit/offset`, load more, edit/delete и inline errors. После успешного delete
-история перечитывается с offset=0, а сравнение today entry использует local date helper,
-не UTC `toISOString()`.
+observation summary, history `limit/offset`, load more, edit/delete и inline errors.
+После успешного delete история перечитывается с offset=0, а сравнение today entry
+использует local date helper, не UTC `toISOString()`.
 
-`MoodChart` существует и покрыт тестами, но не используется на StudentHome и пока не
-интегрирован в DiaryPage. Diary analytics — отдельный future stage.
+Observation summary загружает `/api/diary/summary?period=14d|month|year`, фильтрует
+points с `mood_score=null` и выводит tiles `Отметок`, `Последняя отметка`/`Последний период`,
+`Диапазон`, а также последние 3–5 отметок в chips. Линейный `MoodChart`, SVG, оси и линии
+удалены после UI smoke. Тексты описательные и не интерпретируют данные медицински.
 
 ### Messenger / Chat UI (Stage 31y–31z-hotfix)
 

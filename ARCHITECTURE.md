@@ -97,16 +97,17 @@ live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts �
 **Student Diary MVP:** StudentHome и `/student/diary` подключены к real API. StudentHome
 построен вокруг `nextStepCard`, action cards и условного `observationCard`; fake GAD-7,
 sleep/anxiety, fake psychologist/date/appointment удалены. DiaryPage поддерживает quick
-check-in, optional details, history/load more, edit/delete и inline errors. `MoodChart`
-сохранён и протестирован, но не используется на StudentHome и пока не интегрирован
-в DiaryPage. Tasks/calendar остаются accepted demo/mock.
+check-in, optional details, сводку самонаблюдения, history/load more, edit/delete и inline
+errors. Сводка периода показывает `Отметок`, последнюю отметку/период, диапазон и последние
+3–5 non-null отметок; линий, осей и SVG-графика нет. Tasks/calendar остаются accepted demo/mock.
 
 Backend diary следует слоям `routes → service → storage → models`. Таблицы
 `diary_emotions` и `diary_entries` создаются миграцией `b2e4d7f1a9c3`; partial unique index
 разрешает одну активную запись на student/date при `deleted_at IS NULL`. DELETE является
 soft-delete. Summary: `14d` — 14 дневных точек, `month` — дни от начала месяца до today,
-`year` — 12 месячных агрегатов. Diary access остаётся student-only; audit trail edit/delete
-пока не реализован.
+`year` — 12 месячных агрегатов. Frontend фильтрует null points и выводит описательную
+self-report сводку без диагностических оценок. Diary access остаётся student-only;
+audit trail edit/delete пока не реализован.
 
 **Attachments (Stage 32b–32j + hotfixes):** файлы в engagement chat; upload через скрепку/drag&drop
 (`DragDropOverlay`); `SelectedAttachmentList` (pre-send); `AttachmentCard`/`AttachmentList`

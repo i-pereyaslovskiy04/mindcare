@@ -151,6 +151,10 @@ Encryption-at-rest защищает от утечки БД; политика д�
   psychologist, supervisor, admin получают 403 на всех diary-эндпоинтах
 - Plaintext mood score, entry_text, selected emotions **не пишутся в application logs и audit**;
   summary расшифровывает только `mood_score` для построения агрегатов
+- UI «Самонаблюдение» показывает только описательную self-report сводку периода:
+  количество отметок, последнюю отметку/период, диапазон и недавние заполненные значения
+- Сводка не является диагностикой: нет medical/risk score, labels «норма/отклонение»,
+  выводов об улучшении или ухудшении и автоматической клинической интерпретации
 - Audit trail для diary edit/delete сейчас **не реализован** и остаётся
   compliance-hardening backlog перед production; при реализации в audit допустимы только
   идентификаторы и метаданные операции, без plaintext diary content

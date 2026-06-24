@@ -360,8 +360,10 @@ lifespan() startup
 
 Все diary endpoints доступны только роли `student`; psychologist, supervisor и admin получают
 403. Mood score, текст и выбранные эмоции хранятся encrypted-at-rest с префиксом `enc:v1:`.
-Компонент `MoodChart` существует и протестирован, но сейчас не используется на StudentHome
-и не интегрирован в DiaryPage; diary analytics отложена в backlog.
+Блок «Самонаблюдение» на DiaryPage использует `/api/diary/summary?period=14d|month|year`
+и показывает описательную сводку периода: количество отметок, последнюю отметку/период,
+диапазон и последние заполненные отметки. `MoodChart` и линейный SVG-график удалены;
+интерфейс не делает медицинских или диагностических выводов.
 
 ---
 
@@ -369,7 +371,7 @@ lifespan() startup
 
 Текущий статус backend: **587 passed** (unit + API/integration; integration-тесты требуют
 запущенный dev PostgreSQL на alembic head).
-Frontend: **40 suites / 530 passed** (`npm test -- --watchAll=false`).
+Frontend: **39 suites / 540 passed** (`npm test -- --watchAll=false`).
 Последняя проверка frontend lint: **0 warnings**; production build: **success**.
 
 ```bash

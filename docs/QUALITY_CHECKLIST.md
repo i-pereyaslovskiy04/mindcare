@@ -258,9 +258,9 @@ backend обязан отклонять (роль не меняется). `conse
 
 Итого backend: **587 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **40 suites / 530 passed**.
+Frontend (CRA jest, `npm test -- --watchAll=false`): **39 suites / 540 passed**.
 Lint: **0 warnings**. Production build: **success**. Diary frontend покрыт suites
-StudentHome, DiaryPage, DiaryEntryForm, DiaryEntryItem, DiaryHistoryList и MoodChart.
+StudentHome, DiaryPage, DiaryEntryForm, DiaryEntryItem и DiaryHistoryList.
 Дополнительно —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
@@ -501,12 +501,12 @@ npm run build
 **Frontend (automated):**
 
 - `StudentHome.smoke.test.jsx`: next-step states, action cards, observationCard,
-  отсутствие fake metrics и MoodChart на главной;
+  отсутствие fake metrics и графика на главной;
 - `DiaryPage.test.jsx` + smoke: load/save, history pagination, edit/delete sync,
-  reload offset=0 после delete и inline errors;
+  reload offset=0 после delete, observation summary, period switching, recent marks,
+  null filtering, refresh summary после save/edit/delete и inline errors;
 - `DiaryEntryForm`, `DiaryEntryItem`, `DiaryHistoryList`: optional details,
-  edit/delete confirmation и load more;
-- `MoodChart.test.jsx`: компонент протестирован, но integration в production UI pending.
+  edit/delete confirmation и load more.
 
 **Manual smoke (/student/diary — обязателен перед demo):**
 
@@ -523,5 +523,15 @@ npm run build
 - в БД `mood_score_enc`, `entry_text_enc`, `emotions_enc` имеют `enc:v1:`;
 - malformed UUID для PATCH/DELETE → 422;
 - empty PATCH `{}` не меняет `updated_at`;
+- `/student/diary`, 0 entries → empty-state сводки самонаблюдения;
+- 1 entry → нейтральный текст о первой отметке;
+- 2–3 entries → нейтральный текст о небольшом количестве данных;
+- 4+ entries → нейтральный текст об отметках выбранного периода;
+- chips периодов `14 дней` / `Месяц` / `Год` переключают summary API;
+- tiles корректно показывают `Отметок`, `Последняя отметка`/`Последний период`, `Диапазон`;
+- recent marks показывают только non-null points (`DD.MM · X/10`, для year — `Янв · X/10`);
+- в observation block нет SVG, линии и осей; нет медицинских/диагностических выводов;
+- save/edit/delete обновляют сводку активного периода;
+- StudentHome не изменился и не содержит график;
 - mobile/a11y пройти вручную: textarea labels, focus delete confirm, error/status announcements;
-- MoodChart/analytics pending и не являются blocker Student Diary MVP.
+- будущие observation insights возможны только после отдельной UX-validation.

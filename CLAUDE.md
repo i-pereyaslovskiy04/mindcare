@@ -174,7 +174,7 @@ npm run build
 ### Текущее покрытие
 
 Всего backend: **587 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend: **40 suites / 530 passed** (`npm test -- --watchAll=false`); lint — **0 warnings**;
+Frontend: **39 suites / 540 passed** (`npm test -- --watchAll=false`); lint — **0 warnings**;
 production build — **success**.
 
 | Файл | Что покрыто |
@@ -210,12 +210,11 @@ production build — **success**.
 | `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
 | `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
 | `tests/integration/test_diary_api.py` | Diary API: endpoints, pagination/summary, student-only 403, cross-student 404, encryption, PATCH/DELETE, soft-delete, malformed UUID 422, empty PATCH no-op |
-| `src/pages/student/StudentHome.smoke.test.jsx` | StudentHome: nextStepCard states, action cards, observationCard, honest session copy, fake metrics/MoodChart removed |
+| `src/pages/student/StudentHome.smoke.test.jsx` | StudentHome: nextStepCard states, action cards, observationCard, honest session copy, fake metrics/graph removed |
 | `src/pages/student/components/Diary/DiaryEntryForm.test.jsx` | Mood-required check-in, optional emotions/text, collapsible details, save/error states |
 | `src/pages/student/components/Diary/DiaryEntryItem.test.jsx` | Read/edit/delete modes, confirmation, errors, emotion labels, local date safety |
 | `src/pages/student/components/Diary/DiaryHistoryList.test.jsx` | Empty/populated history, actions, load more and error states |
-| `src/pages/student/DiaryPage.test.jsx` + smoke | Load/save, pagination, edit/delete sync, history reload offset=0 after delete, local today handling |
-| `src/pages/student/components/MoodChart/MoodChart.test.jsx` | Sparse/all-null/month/year rendering; компонент orphaned и не включён в production UI |
+| `src/pages/student/DiaryPage.test.jsx` + smoke | Load/save, pagination, edit/delete sync, history reload offset=0, local today, observation summary, period chips, null filtering, recent marks, refresh after mutations |
 
 ---
 
@@ -431,9 +430,13 @@ mindcare_api/
 ✅ StudentHome: nextStepCard + actionCardsGrid + observationCard только при entriesCount>0;
    fake GAD-7/sleep/anxiety/appointment/psychologist/date удалены
 ✅ DiaryPage: quick check-in, mood required, emotions/text optional, collapsible details,
-   history/load more, edit/delete, inline errors; frontend today сравнивается по local date
-⚠️ MoodChart существует и протестирован, но не используется на StudentHome и не
-   интегрирован в DiaryPage; analytics — отдельный future stage
+   observation summary, history/load more, edit/delete, inline errors;
+   frontend today сравнивается по local date
+✅ Diary Analytics Lite: /api/diary/summary?period=14d|month|year используется для
+   описательной сводки периода — Отметок, Последняя отметка/Последний период, Диапазон,
+   последние 3–5 non-null отметок; save/edit/delete обновляют active period
+✅ MoodChart и его test suite удалены после manual UI smoke; в diary UI нет SVG, осей,
+   линий, trend claims или медицинской/диагностической интерпретации
 ⚠️ Audit trail для diary edit/delete не реализован; это compliance backlog
 ❌ Не логировать entry_text, decrypted mood_score, selected emotions из дневника
 ❌ Не давать psychologist/supervisor/admin доступ к diary content без compliance-этапа
@@ -996,9 +999,12 @@ Conventional Commits:
   edit/delete и soft-delete; backend encrypted-at-rest; мок-данные удалены
 - **StudentHome после UX redesign:** nextStepCard показывает no-entry/today-entry state,
   action cards ведут на реальные маршруты, observationCard виден только при наличии записей;
-  MoodChart и fake dashboard metrics удалены
-- **Diary pending:** MoodChart integration/analytics; audit trail edit/delete; timezone-aware
-  backend date policy; psychologist access только после отдельной consent/legal policy
+  график и fake dashboard metrics удалены
+- **Diary Analytics Lite завершён:** DiaryPage показывает сводку периода поверх summary API;
+  MoodChart удалён, линейный график не возвращать без отдельной UX-validation
+- **Diary pending:** audit trail edit/delete; timezone-aware backend date policy;
+  psychologist access только после отдельной consent/legal policy; advanced observation
+  insights — только отдельный этап без обязательного line-chart формата
 - `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
   единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read

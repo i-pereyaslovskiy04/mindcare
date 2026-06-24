@@ -142,15 +142,16 @@
 
 ---
 
-## StudentHome period chips
+## DiaryPage observation period chips
 
-- **Где:** `pages/student/StudentHome.jsx`
+- **Где:** `pages/student/DiaryPage.jsx`
 - **Похоже на:** `FilterChip`
-- **Почему оставлено:** period selector для графика — single-select между 14d/month/year. Семантически отличается от фильтра данных.
+- **Почему оставлено:** period selector для сводки самонаблюдения — single-select между
+  14d/month/year. Семантически отличается от фильтра данных.
 - **Что делать дальше:** не мигрировать в FilterChip. При создании ChoiceChip — рассмотреть.
 - **Можно мигрировать позже:** нет без ChoiceChip
 - **Риск:** низкий
-- **Закрыто:** добавлены `type="button"`, `aria-pressed`, реальная логика переключения (state + mock-данные по периодам)
+- **Текущее состояние:** переключает real `/api/diary/summary`; линейный график удалён.
 
 ---
 
