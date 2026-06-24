@@ -125,7 +125,7 @@ export default function DiaryPage() {
         diaryApi.getDiaryEntries({ limit: HISTORY_LIMIT, offset: 0 }),
       ]);
       setEmotions(emotionsData ?? []);
-      setMood(todayData.mood_score);
+      setMood(todayData.mood_score ?? 5);
       setText(todayData.entry_text ?? '');
       setSelectedEmotions(todayData.emotions ?? []);
       setIsExistingEntry(todayData.mood_score !== null);
@@ -200,7 +200,7 @@ export default function DiaryPage() {
     const deleted = entries.find((e) => e.uuid === uuid);
     setEntries((prev) => prev.filter((e) => e.uuid !== uuid));
     if (deleted?.entry_date === todayLocal) {
-      setMood(null);
+      setMood(5);
       setText('');
       setSelectedEmotions([]);
       setIsExistingEntry(false);

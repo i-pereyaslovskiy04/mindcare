@@ -125,6 +125,11 @@ test('submit button shows "Сохранение…" when saving is true', () => 
 
 // ─── disabled / hints ─────────────────────────────────────────────────────────
 
+test('submit button is enabled when moodSelected is true (default mood 5 scenario)', () => {
+  renderForm({ moodSelected: true, isExistingEntry: false });
+  expect(screen.getByRole('button', { name: 'Сохранить отметку' })).not.toBeDisabled();
+});
+
 test('submit button is disabled when moodSelected is false', () => {
   renderForm({ moodSelected: false });
   expect(screen.getByRole('button', { name: 'Сохранить отметку' })).toBeDisabled();

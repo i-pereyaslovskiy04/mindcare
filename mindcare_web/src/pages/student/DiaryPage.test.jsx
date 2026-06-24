@@ -583,3 +583,59 @@ test('hint shows 4+-entry text when entries_count >= 4', async () => {
   render(<DiaryPage />); // MOCK_SUMMARY has entries_count: 5
   expect(await screen.findByText(/Можно посмотреть/i)).toBeInTheDocument();
 });
+
+// ─── default mood 5 ───────────────────────────────────────────────────────────
+
+test('passes moodSelected=true for new entry because mood defaults to 5', async () => {
+  // MOCK_NO_ENTRY: mood_score=null → DiaryPage initializes mood to 5 → moodSelected=true
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+  expect(screen.getByTestId('mood-selected')).toHaveTextContent('true');
+});
+
+test('new entry saves with mood_score 5 when save clicked without changing slider', async () => {
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+  fireEvent.click(screen.getByTestId('save-btn'));
+  await waitFor(() =>
+    expect(diaryApi.saveTodayDiaryEntry).toHaveBeenCalledWith({
+      mood_score: 5,
+      entry_text: '',
+      emotions: [],
+    })
+  );
+});
+
+test('existing entry with mood_score 8 is not overridden by default 5', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue({
+    entry_date: '2026-06-23', mood_score: 8, entry_text: '', emotions: [],
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+  fireEvent.click(screen.getByTestId('save-btn'));
+  await waitFor(() =>
+    expect(diaryApi.saveTodayDiaryEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ mood_score: 8 })
+    )
+  );
+});
+
+test('after delete today entry, moodSelected resets to true (default mood 5)', async () => {
+  diaryApi.getDiaryEntries
+    .mockResolvedValueOnce({
+      items: [{ uuid: 'p-today', entry_date: TODAY, mood_score: 7, entry_text: '', emotions: [] }],
+      total: 1, limit: 10, offset: 0,
+    })
+    .mockResolvedValueOnce({ items: [], total: 0, limit: 10, offset: 0 });
+  diaryApi.getTodayDiaryEntry.mockResolvedValue({
+    entry_date: TODAY, mood_score: 7, entry_text: '', emotions: [],
+  });
+  render(<DiaryPage />);
+  await screen.findByTestId('diary-form');
+
+  expect(screen.getByTestId('is-existing')).toHaveTextContent('true');
+  fireEvent.click(screen.getByTestId('trig-delete-today'));
+  // isExisting resets to false, mood resets to 5 → moodSelected stays true
+  expect(screen.getByTestId('is-existing')).toHaveTextContent('false');
+  expect(screen.getByTestId('mood-selected')).toHaveTextContent('true');
+});

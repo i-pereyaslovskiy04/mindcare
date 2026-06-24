@@ -76,11 +76,11 @@ test('renders emotion chips from API after load', async () => {
   expect(screen.getByText('Радостно')).toBeInTheDocument();
 });
 
-test('shows empty today state — Выберите настроение and dash score', async () => {
+test('new entry defaults to mood 5 — shows Нейтрально, not Выберите настроение', async () => {
   render(<DiaryPage />);
   await screen.findByText('Что вы чувствуете?');
-  expect(screen.getByText('Выберите настроение')).toBeInTheDocument();
-  expect(screen.getByText('—')).toBeInTheDocument();
+  expect(screen.getByText('Нейтрально')).toBeInTheDocument();
+  expect(screen.queryByText('Выберите настроение')).not.toBeInTheDocument();
 });
 
 test('emotion chips from API props — custom emotion key appears as label', async () => {
@@ -191,15 +191,14 @@ test('shows save error inline after failed save', async () => {
 
 // ─── submit button state ──────────────────────────────────────────────────────
 
-test('submit button is disabled when mood is not selected', async () => {
+test('submit button is enabled for new entry with default mood 5', async () => {
   render(<DiaryPage />);
   await screen.findByText('Что вы чувствуете?');
-  // mood starts as null from EMPTY_TODAY
   const submitBtn = screen.getByRole('button', { name: /сохранить отметку/i });
-  expect(submitBtn).toBeDisabled();
+  expect(submitBtn).not.toBeDisabled();
 });
 
-test('submit button enables after slider is moved', async () => {
+test('submit button remains enabled after slider is moved to a different value', async () => {
   render(<DiaryPage />);
   await screen.findByText('Что вы чувствуете?');
 

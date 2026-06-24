@@ -34,9 +34,9 @@ export default function MoodSelector({ value, onChange }) {
         aria-label="Уровень настроения"
       />
       <div className={styles.scaleLabels}>
-        <span>тяжело</span>
-        <span>нейтрально</span>
-        <span>светло</span>
+        <span>1 · тяжело</span>
+        <span>5–6 · нейтрально</span>
+        <span>10 · светло</span>
       </div>
     </div>
   );
