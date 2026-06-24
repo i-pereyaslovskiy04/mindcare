@@ -23,7 +23,7 @@
   font-weight: 400;
   line-height: 1.15;
   color: var(--espresso);
-  margin-bottom: 6px;
+  margin-bottom: 24px;
 }
 
 .pageTitle em {
@@ -31,68 +31,77 @@
   color: var(--coffee);
 }
 
-.pageSub {
+/* ── next step card ── */
+.nextStepCard {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+  padding: 28px 32px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.nextStepContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.nextStepLabel {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-light);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.nextStepTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--espresso);
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.nextStepText {
   font-size: 14px;
   color: var(--text-muted);
-  font-weight: 400;
   line-height: 1.6;
-  margin-bottom: 28px;
-  max-width: 640px;
+  margin: 0;
+  max-width: 480px;
 }
 
-/* ── dashboard layout ── */
-.homeDashboard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  gap: 20px;
-  align-items: start;
-}
-
-/* ── panels ── */
-.wellbeingPanel {
-  background: var(--warm-white);
-  border: 1px solid var(--nav-border);
-  border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
-  padding: 28px;
+.nextStepActions {
   display: flex;
-  flex-direction: column;
-}
-
-.supportPanel {
-  background: var(--warm-white);
-  border: 1px solid var(--nav-border);
-  border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
-  padding: 22px 24px;
-  display: flex;
-  flex-direction: column;
-}
-
-.panelTitle {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 22px;
-  font-weight: 500;
-  color: var(--espresso);
-  margin-bottom: 20px;
-  line-height: 1.2;
-}
-
-/* ── panel sections ── */
-.panelSection {
-  padding: 16px 0;
-  border-top: 1px solid var(--nav-border);
-  display: flex;
-  flex-direction: column;
   gap: 10px;
+  flex-shrink: 0;
+  align-items: center;
 }
 
-.panelSection:first-of-type {
-  border-top: none;
-  padding-top: 0;
+/* ── action cards grid ── */
+.actionCardsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
-.sectionLabel {
+.actionCard {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cardTitle {
   font-size: 11px;
   letter-spacing: 0.12em;
   color: var(--text-light);
@@ -100,75 +109,79 @@
   font-weight: 700;
 }
 
-/* ── today state ── */
-.stateLoading {
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
-.stateEmpty {
-  font-size: 14px;
+.cardText {
+  font-size: 13px;
   color: var(--text-muted);
   line-height: 1.6;
+  margin: 0;
+  flex: 1;
 }
 
-.moodRow {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.moodScoreBlock {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-}
-
-.moodScoreNum {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 48px;
-  color: var(--espresso);
-  line-height: 1;
-  font-weight: 300;
-}
-
-.moodScoreOf {
+.cardMeta {
   font-size: 14px;
-  color: var(--text-muted);
-  padding-bottom: 4px;
+  color: var(--espresso);
+  font-weight: 500;
+  margin: 0;
+  flex: 1;
 }
 
-.moodWord {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 24px;
-  font-weight: 400;
+.cardAction {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--coffee);
-  line-height: 1.2;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  margin-top: 2px;
+  transition: color 0.15s;
 }
 
+.cardAction:hover {
+  color: var(--espresso);
+}
+
+/* ── emotion chips ── */
 .emotionChips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
 .emotionChip {
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 11px;
   background: rgba(74, 55, 40, 0.07);
   color: var(--coffee);
   font-weight: 500;
 }
 
-.sectionActions {
+/* ── observation card ── */
+.observationCard {
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 20px 22px;
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-top: 4px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* ── self-observation ── */
+.obsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.obsTitle {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-light);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
 .obsMeta {
   display: flex;
   align-items: baseline;
@@ -201,6 +214,7 @@
   color: var(--coffee);
   text-decoration: none;
   letter-spacing: 0.01em;
+  white-space: nowrap;
   transition: color 0.15s;
 }
 
@@ -208,60 +222,20 @@
   color: var(--espresso);
 }
 
-/* ── mini stats ── */
-.miniStatsRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding-top: 16px;
-  border-top: 1px solid var(--nav-border);
-  margin-top: 6px;
-}
-
-.miniStat {
-  background: var(--cream);
-  border-radius: 10px;
-  padding: 12px 14px;
-}
-
-.miniStatValue {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 26px;
-  font-weight: 400;
-  color: var(--espresso);
-  line-height: 1.1;
-}
-
-.miniStatLabel {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 3px;
-  line-height: 1.4;
-}
-
-/* ── support text ── */
-.supportText {
-  font-size: 13px;
-  color: var(--text-muted);
-  line-height: 1.6;
-}
-
 /* ── buttons ── */
 .btnPrimary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
+  padding: 10px 20px;
   border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
-  border: none;
-  cursor: pointer;
   font-family: inherit;
   letter-spacing: 0.02em;
   background: var(--espresso);
   color: var(--milk);
   text-decoration: none;
+  white-space: nowrap;
   transition: background 0.15s;
 }
 
@@ -272,18 +246,17 @@
 .btnGhost {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
+  padding: 10px 20px;
   border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
   font-family: inherit;
   letter-spacing: 0.02em;
   background: transparent;
   color: var(--espresso);
   border: 1px solid rgba(74, 55, 40, 0.25);
   text-decoration: none;
+  white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
 }
 
@@ -292,39 +265,27 @@
   border-color: rgba(74, 55, 40, 0.4);
 }
 
-.btnSoft {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 9px 16px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  letter-spacing: 0.02em;
-  background: var(--cream);
-  color: var(--espresso);
-  border: 1px solid var(--nav-border);
-  width: 100%;
-  text-decoration: none;
-  transition: background 0.15s;
-}
-
-.btnSoft:hover {
-  background: var(--sand);
-}
-
 /* ── responsive ── */
 @media (max-width: 980px) {
-  .homeDashboard {
-    grid-template-columns: 1fr;
+  .nextStepCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .actionCardsGrid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 600px) {
   .pageTitle { font-size: 30px; }
-  .wellbeingPanel,
-  .supportPanel { padding: 20px; }
+  .nextStepCard { padding: 20px; }
+  .nextStepTitle { font-size: 22px; }
+  .nextStepActions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  .nextStepActions > * { text-align: center; justify-content: center; }
+  .actionCardsGrid { grid-template-columns: 1fr; }
 }

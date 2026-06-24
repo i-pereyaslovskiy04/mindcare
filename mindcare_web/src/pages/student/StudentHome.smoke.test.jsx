@@ -12,7 +12,7 @@ jest.mock('react-router-dom', () => ({
   ),
 }), { virtual: true });
 
-const MOCK_SUMMARY_14D = {
+const MOCK_SUMMARY_14D_WITH_ENTRIES = {
   period: '14d',
   entries_count: 3,
   points: [
@@ -27,13 +27,23 @@ const MOCK_SUMMARY_14D = {
   ].slice(0, 14),
 };
 
-const MOCK_TODAY_NO_ENTRY   = { entry_date: '2026-06-23', mood_score: null, entry_text: '', emotions: [] };
-const MOCK_TODAY_WITH_ENTRY = { entry_date: '2026-06-23', mood_score: 7,    entry_text: 'Хорошо', emotions: ['calm'] };
+const MOCK_SUMMARY_14D_EMPTY = {
+  period: '14d',
+  entries_count: 0,
+  points: Array.from({ length: 14 }, (_, i) => ({
+    date: `2026-06-${String(i + 10).padStart(2, '0')}`,
+    label: String(i + 10),
+    mood_score: null,
+  })),
+};
+
+const MOCK_TODAY_NO_ENTRY   = { entry_date: '2026-06-24', mood_score: null, entry_text: '', emotions: [] };
+const MOCK_TODAY_WITH_ENTRY = { entry_date: '2026-06-24', mood_score: 7,    entry_text: 'Хорошо', emotions: ['calm'] };
 
 beforeEach(() => {
   jest.clearAllMocks();
   AuthContext.useAuth.mockReturnValue({ user: { name: 'Тест Тестов' } });
-  diaryApi.getDiarySummary.mockResolvedValue(MOCK_SUMMARY_14D);
+  diaryApi.getDiarySummary.mockResolvedValue(MOCK_SUMMARY_14D_WITH_ENTRIES);
   diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
   diaryApi.getDiaryEmotions.mockResolvedValue([
     { key: 'calm', label: 'Спокойно', sort_order: 1 },
@@ -41,127 +51,160 @@ beforeEach(() => {
   ]);
 });
 
-// ─── panel headings ───────────────────────────────────────────────────────────
+// ─── nextStepCard: no today entry ────────────────────────────────────────────
 
-test('wellbeing panel heading Моё состояние is visible', async () => {
+test('nextStepCard shows "Ваш следующий шаг" when no today entry', async () => {
   render(<StudentHome />);
-  expect(await screen.findByText('Моё состояние')).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Ваш следующий шаг' })).toBeInTheDocument();
 });
 
-test('support panel heading Поддержка is visible', async () => {
+test('primary CTA "Отметить состояние" links to /student/diary when no today entry', async () => {
   render(<StudentHome />);
-  expect(await screen.findByText('Поддержка')).toBeInTheDocument();
+  const link = await screen.findByRole('link', { name: 'Отметить состояние' });
+  expect(link).toHaveAttribute('href', '/student/diary');
 });
 
-test('old heading Связь и действия is not rendered', async () => {
+test('secondary CTA "Открыть материалы" links to /student/materials when no today entry', async () => {
   render(<StudentHome />);
-  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
-  expect(screen.queryByText('Связь и действия')).not.toBeInTheDocument();
+  const link = await screen.findByRole('link', { name: 'Открыть материалы' });
+  expect(link).toHaveAttribute('href', '/student/materials');
 });
 
-test('old heading Быстрые действия is not rendered', async () => {
+test('nextStepCard text mentions self-observation materials when no today entry', async () => {
   render(<StudentHome />);
-  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
-  expect(screen.queryByText('Быстрые действия')).not.toBeInTheDocument();
+  expect(await screen.findByText(/материалам для самостоятельной работы/i)).toBeInTheDocument();
 });
 
-// ─── today section (left panel) ───────────────────────────────────────────────
+// ─── nextStepCard: today entry present ───────────────────────────────────────
 
-test('today section label Состояние сегодня is visible', async () => {
-  render(<StudentHome />);
-  expect(await screen.findByText('Состояние сегодня')).toBeInTheDocument();
-});
-
-test('shows empty state when no today diary entry', async () => {
-  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
-  render(<StudentHome />);
-  expect(await screen.findByText(/Сегодня состояние ещё не отмечено/i)).toBeInTheDocument();
-  // CTA in left panel; all "Отметить состояние" links must go to /student/diary
-  const links = screen.getAllByRole('link', { name: /Отметить состояние/i });
-  expect(links.length).toBeGreaterThanOrEqual(1);
-  links.forEach((link) => expect(link).toHaveAttribute('href', '/student/diary'));
-});
-
-test('shows today mood score and word when entry exists', async () => {
+test('nextStepCard shows "Сегодняшняя отметка сохранена" when entry exists', async () => {
   diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
   render(<StudentHome />);
-  expect(await screen.findByText('Хорошо')).toBeInTheDocument();
-  expect(screen.getByText('7')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: /Дополнить запись/i })).toHaveAttribute('href', '/student/diary');
+  expect(await screen.findByRole('heading', { name: 'Сегодняшняя отметка сохранена' })).toBeInTheDocument();
 });
 
-test('getTodayDiaryEntry is called on mount', async () => {
+test('nextStepCard shows mood score X/10 in text when entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText(/Вы отметили состояние: 7\/10/)).toBeInTheDocument();
+});
+
+test('"Дополнить запись" links to /student/diary when entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  const link = await screen.findByRole('link', { name: 'Дополнить запись' });
+  expect(link).toHaveAttribute('href', '/student/diary');
+});
+
+test('nextStepCard secondary CTA "Написать психологу" links to /student/chat when entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  await screen.findByRole('heading', { name: 'Сегодняшняя отметка сохранена' });
+  const links = screen.getAllByRole('link', { name: /Написать психологу/i });
+  links.forEach((l) => expect(l).toHaveAttribute('href', '/student/chat'));
+});
+
+// ─── psychologistCard ─────────────────────────────────────────────────────────
+
+test('psychologistCard shows "Психолог" heading', async () => {
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  expect(screen.getByText('Психолог')).toBeInTheDocument();
 });
 
-// ─── support panel: psychologist section ─────────────────────────────────────
-
-test('support panel Психолог section label is visible', async () => {
-  render(<StudentHome />);
-  expect(await screen.findByText('Психолог')).toBeInTheDocument();
-});
-
-test('Написать психологу link appears exactly once and leads to /student/chat', async () => {
+test('psychologistCard "Написать психологу" links to /student/chat', async () => {
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
   const links = screen.getAllByRole('link', { name: /Написать психологу/i });
-  expect(links).toHaveLength(1);
-  expect(links[0]).toHaveAttribute('href', '/student/chat');
+  expect(links.length).toBeGreaterThanOrEqual(1);
+  links.forEach((l) => expect(l).toHaveAttribute('href', '/student/chat'));
 });
 
-// ─── support panel: materials section ────────────────────────────────────────
-
-test('support panel Материалы section label is visible', async () => {
+test('psychologistCard does not show fake date or full name', async () => {
   render(<StudentHome />);
-  expect(await screen.findByText('Материалы')).toBeInTheDocument();
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Мария Ковалёва')).not.toBeInTheDocument();
+  expect(screen.queryByText(/30 апреля/i)).not.toBeInTheDocument();
 });
 
-test('Открыть материалы link leads to /student/materials', async () => {
+// ─── wellbeingCard ────────────────────────────────────────────────────────────
+
+test('wellbeingCard shows "Самочувствие" heading', async () => {
   render(<StudentHome />);
-  expect(await screen.findByRole('link', { name: /Открыть материалы/i })).toHaveAttribute('href', '/student/materials');
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  expect(screen.getByText('Самочувствие')).toBeInTheDocument();
 });
 
-test('right panel does not contain Отметить состояние as quick action to /student/diary only in support', async () => {
+test('wellbeingCard shows "Сегодня ещё нет отметки" when no today entry', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByText('Сегодня ещё нет отметки.')).toBeInTheDocument();
+});
+
+test('wellbeingCard "Отметить" links to /student/diary when no today entry', async () => {
+  render(<StudentHome />);
+  const link = await screen.findByRole('link', { name: 'Отметить' });
+  expect(link).toHaveAttribute('href', '/student/diary');
+});
+
+test('wellbeingCard shows mood score when today entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText(/Сегодня: 7\/10/)).toBeInTheDocument();
+});
+
+test('wellbeingCard shows emotion labels when today entry has emotions', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  expect(await screen.findByText('Спокойно')).toBeInTheDocument();
+});
+
+test('wellbeingCard "Открыть дневник" links to /student/diary when entry exists', async () => {
+  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+  render(<StudentHome />);
+  const links = await screen.findAllByRole('link', { name: /Открыть дневник/i });
+  links.forEach((l) => expect(l).toHaveAttribute('href', '/student/diary'));
+});
+
+// ─── materialsCard ────────────────────────────────────────────────────────────
+
+test('materialsCard shows "Материалы" heading', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  expect(screen.getByText('Материалы')).toBeInTheDocument();
+});
+
+test('materialsCard "Открыть" links to /student/materials', async () => {
+  render(<StudentHome />);
+  const link = await screen.findByRole('link', { name: 'Открыть' });
+  expect(link).toHaveAttribute('href', '/student/materials');
+});
+
+// ─── observationCard ──────────────────────────────────────────────────────────
+
+test('observationCard is NOT shown when entries_count = 0', async () => {
+  diaryApi.getDiarySummary.mockResolvedValue(MOCK_SUMMARY_14D_EMPTY);
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
-  // All "Отметить состояние" links (if any remain from left panel) must go to diary, not chat
-  const links = screen.queryAllByRole('link', { name: /Отметить состояние/i });
-  links.forEach((link) => expect(link).toHaveAttribute('href', '/student/diary'));
+  expect(screen.queryByText('Самонаблюдение за 14 дней')).not.toBeInTheDocument();
 });
 
-// ─── self-observation section ─────────────────────────────────────────────────
-
-test('self-observation label Самонаблюдение · 14 дней is visible', async () => {
+test('observationCard IS shown when entries_count > 0', async () => {
   render(<StudentHome />);
-  expect(await screen.findByText('Самонаблюдение · 14 дней')).toBeInTheDocument();
+  expect(await screen.findByText('Самонаблюдение за 14 дней')).toBeInTheDocument();
 });
 
-test('getDiarySummary is called with 14d on mount', async () => {
+test('observationCard shows entries count when visible', async () => {
   render(<StudentHome />);
-  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('14d'));
+  await screen.findByText('Самонаблюдение за 14 дней');
+  expect(screen.getByText(/3 записи/)).toBeInTheDocument();
 });
 
-test('self-observation shows first-entry prompt when 0 entries in 14d', async () => {
-  diaryApi.getDiarySummary.mockResolvedValue({
-    period: '14d',
-    entries_count: 0,
-    points: Array.from({ length: 14 }, (_, i) => ({
-      date: `2026-06-${String(i + 10).padStart(2, '0')}`,
-      label: String(i + 10),
-      mood_score: null,
-    })),
-  });
-  render(<StudentHome />);
-  expect(await screen.findByText(/Здесь появится динамика после первых отметок/)).toBeInTheDocument();
-});
-
-test('self-observation shows sparse-data hint when 1–3 entries in 14d', async () => {
+test('observationCard shows sparse-data insight for 1–3 entries', async () => {
   render(<StudentHome />);
   expect(await screen.findByText(/Пока мало данных для тренда/)).toBeInTheDocument();
 });
 
-test('self-observation shows first-changes hint when 4+ entries in 14d', async () => {
+test('observationCard shows first-changes insight for 4+ entries', async () => {
   diaryApi.getDiarySummary.mockResolvedValue({
     period: '14d',
     entries_count: 5,
@@ -175,90 +218,106 @@ test('self-observation shows first-changes hint when 4+ entries in 14d', async (
   expect(await screen.findByText(/Можно смотреть первые изменения/)).toBeInTheDocument();
 });
 
-test('Открыть дневник link leads to /student/diary', async () => {
+test('observationCard "Открыть дневник" links to /student/diary', async () => {
+  render(<StudentHome />);
+  await screen.findByText('Самонаблюдение за 14 дней');
+  const links = screen.getAllByRole('link', { name: /Открыть дневник/i });
+  links.forEach((l) => expect(l).toHaveAttribute('href', '/student/diary'));
+});
+
+test('observationCard shows avg mood when available', async () => {
+  render(<StudentHome />);
+  await screen.findByText('Самонаблюдение за 14 дней');
+  expect(screen.getByText(/среднее/)).toBeInTheDocument();
+});
+
+// ─── api calls ────────────────────────────────────────────────────────────────
+
+test('getTodayDiaryEntry is called on mount', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+});
+
+test('getDiarySummary is called with "14d" on mount', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('14d'));
+});
+
+// ─── removed old panels ───────────────────────────────────────────────────────
+
+test('old panel heading "Моё состояние" is not rendered', async () => {
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
-  const links = await screen.findAllByRole('link', { name: /Открыть дневник/i });
-  expect(links.length).toBeGreaterThan(0);
-  links.forEach((link) => expect(link).toHaveAttribute('href', '/student/diary'));
+  expect(screen.queryByText('Моё состояние')).not.toBeInTheDocument();
 });
 
-// ─── mini stats ───────────────────────────────────────────────────────────────
-
-test('mini stat Записей за 14 дней is visible after summary loads', async () => {
+test('old panel heading "Поддержка" is not rendered', async () => {
   render(<StudentHome />);
-  expect(await screen.findByText('Записей за 14 дней')).toBeInTheDocument();
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Поддержка')).not.toBeInTheDocument();
 });
 
-test('mini stat Запись сегодня is visible', async () => {
+test('"Записей за 14 дней" stat label is not rendered as a standalone block', async () => {
   render(<StudentHome />);
-  expect(await screen.findByText('Запись сегодня')).toBeInTheDocument();
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Записей за 14 дней')).not.toBeInTheDocument();
 });
 
-test('mini stat shows Нет for Запись сегодня when no entry', async () => {
+test('"Запись сегодня" stat label is not rendered as a standalone block', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Запись сегодня')).not.toBeInTheDocument();
+});
+
+test('"Нет" is not shown as a standalone mini stat value when no today entry', async () => {
   diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
   render(<StudentHome />);
-  expect(await screen.findByText('Нет')).toBeInTheDocument();
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Нет')).not.toBeInTheDocument();
 });
 
-test('mini stat shows Есть for Запись сегодня when entry exists', async () => {
-  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
+test('"Состояние сегодня" section label is not rendered (old panel structure removed)', async () => {
   render(<StudentHome />);
-  expect(await screen.findByText('Есть')).toBeInTheDocument();
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Состояние сегодня')).not.toBeInTheDocument();
 });
 
-// ─── emotion display ──────────────────────────────────────────────────────────
+// ─── removed fake / mock content ─────────────────────────────────────────────
 
-test('shows emotion labels when today entry has emotions', async () => {
-  diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_WITH_ENTRY);
-  diaryApi.getDiaryEmotions.mockResolvedValue([
-    { key: 'calm', label: 'Спокойно', sort_order: 1 },
-  ]);
-  render(<StudentHome />);
-  expect(await screen.findByText('Спокойно')).toBeInTheDocument();
-});
-
-// ─── removed charts and period chips ─────────────────────────────────────────
-
-test('MoodChart is not rendered', async () => {
+test('does not render MoodChart or period chip buttons', async () => {
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
   expect(screen.queryByText('Динамика настроения')).not.toBeInTheDocument();
-});
-
-test('period chip buttons are not shown', async () => {
-  render(<StudentHome />);
-  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
   expect(screen.queryByRole('button', { name: 'Месяц' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Год' })).not.toBeInTheDocument();
 });
 
-// ─── removed fake/mock content ───────────────────────────────────────────────
-
-test('does not render hardcoded anxiety metric (Тревожность 3.2)', () => {
+test('does not render hardcoded anxiety or sleep metrics', async () => {
   render(<StudentHome />);
   expect(screen.queryByText('Тревожность')).not.toBeInTheDocument();
   expect(screen.queryByText('3.2')).not.toBeInTheDocument();
-});
-
-test('does not render hardcoded sleep metric (Сон 7.4)', () => {
-  render(<StudentHome />);
   expect(screen.queryByText('Сон')).not.toBeInTheDocument();
   expect(screen.queryByText('7.4')).not.toBeInTheDocument();
 });
 
-test('does not render hardcoded session with Мария Ковалёва or April 30', () => {
-  render(<StudentHome />);
-  expect(screen.queryByText('Мария Ковалёва')).not.toBeInTheDocument();
-  expect(screen.queryByText(/30 апреля/i)).not.toBeInTheDocument();
-});
-
-test('does not render GAD-7 quick action', () => {
+test('does not render GAD-7 quick action', async () => {
   render(<StudentHome />);
   expect(screen.queryByText(/GAD-7/i)).not.toBeInTheDocument();
 });
 
-test('does not render mood slider on home page', () => {
+test('does not render mood slider on home page', async () => {
   render(<StudentHome />);
   expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+});
+
+test('old heading "Связь и действия" is not rendered', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Связь и действия')).not.toBeInTheDocument();
+});
+
+test('old heading "Быстрые действия" is not rendered', async () => {
+  render(<StudentHome />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Быстрые действия')).not.toBeInTheDocument();
 });
