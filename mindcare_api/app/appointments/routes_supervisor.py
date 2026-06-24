@@ -31,6 +31,7 @@ from app.appointments.schemas import (
     ScheduleRuleCreate,
     ScheduleRuleRead,
     ScheduleSeriesRead,
+    ScheduleUpdate,
     SlotsResponse,
     SupervisorAppointmentCreate,
     UnregisteredStudentCardCreate,
@@ -202,6 +203,34 @@ def create_schedule(
             brk["end_time"] = dt_time.fromisoformat(brk["end_time"])
         data["created_by"] = int(current_user["id"])
         return service.create_schedule(data)
+    except service.AppointmentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.patch("/schedules/{series_id}", response_model=ScheduleSeriesRead)
+def update_schedule(series_id: str, body: ScheduleUpdate):
+    """Редактировать серию расписания (та же series_id, тот же психолог).
+
+    Существующие записи не удаляются и не переносятся. auto_extend требует
+    effective_until. is_active серии сохраняется.
+    """
+    sid = _parse_series_id(series_id)
+    try:
+        from datetime import time as dt_time, date as dt_date
+        data = body.model_dump()
+        data["start_time"] = dt_time.fromisoformat(data["start_time"])
+        data["end_time"] = dt_time.fromisoformat(data["end_time"])
+        data["effective_from"] = dt_date.fromisoformat(data["effective_from"])
+        if data.get("effective_until"):
+            data["effective_until"] = dt_date.fromisoformat(
+                data["effective_until"]
+            )
+        for brk in data.get("breaks", []):
+            brk["start_time"] = dt_time.fromisoformat(brk["start_time"])
+            brk["end_time"] = dt_time.fromisoformat(brk["end_time"])
+        return service.update_schedule(sid, data)
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except ValueError as exc:
@@ -432,6 +461,26 @@ def create_schedule_exception(body: ScheduleExceptionCreate):
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get(
+    "/schedule-exceptions", response_model=list[ScheduleExceptionRead]
+)
+def list_schedule_exceptions(
+    psychologist_id: int = Query(...),
+    date_from: str = Query(default=None, description="YYYY-MM-DD"),
+    date_to: str = Query(default=None, description="YYYY-MM-DD"),
+):
+    """Список разовых изменений психолога (новейшая дата первой)."""
+    from datetime import date as dt_date
+    try:
+        df = dt_date.fromisoformat(date_from) if date_from else None
+        dt = dt_date.fromisoformat(date_to) if date_to else None
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="Некорректная дата (YYYY-MM-DD)"
+        )
+    return service.list_schedule_exceptions(psychologist_id, df, dt)
 
 
 # ── GroupSessions ──────────────────────────────────────────────────────────────

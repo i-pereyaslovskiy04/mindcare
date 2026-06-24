@@ -1753,6 +1753,39 @@ class TestUnifiedScheduleCreate:
         assert r.status_code == 201, r.text
         assert r.json()["auto_extend"] is True
 
+    def test_43b_create_empty_days_422(self, client):
+        """POST /schedules с пустым days_of_week → 422."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        payload = {
+            "psychologist_id": pid,
+            "days_of_week": [],
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "effective_from": "2026-07-01",
+        }
+        r = client.post(
+            "/api/supervisor/schedules", json=payload, headers=_auth(tok_sv)
+        )
+        assert r.status_code == 422, r.text
+
+    def test_43c_create_day_out_of_range_422(self, client):
+        """POST /schedules с днём вне диапазона 0..6 → 422."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        for bad in ([7], [-1]):
+            payload = {
+                "psychologist_id": pid,
+                "days_of_week": bad,
+                "start_time": "09:00",
+                "end_time": "17:00",
+                "effective_from": "2026-07-01",
+            }
+            r = client.post(
+                "/api/supervisor/schedules", json=payload, headers=_auth(tok_sv)
+            )
+            assert r.status_code == 422, f"{bad}: {r.text}"
+
 
 class TestScheduleSoftDelete:
 
@@ -2688,3 +2721,455 @@ class TestScheduleV3WorkingWindows:
             headers=_auth(tok_sv),
         )
         assert r.status_code == 422
+
+
+# ─── Schedule series update (PATCH) ───────────────────────────────────────────
+
+def _create_series(client, tok_sv, pid, target, *, start="09:00", end="12:00",
+                   period=None, effective_until=None, auto_extend=False,
+                   breaks=None):
+    """Создаёт серию через API на день недели target. Возвращает series_id."""
+    payload = {
+        "psychologist_id": pid,
+        "days_of_week": [target.weekday()],
+        "start_time": start,
+        "end_time": end,
+        "effective_from": "2020-01-01",
+    }
+    if period is not None:
+        payload["period"] = period
+    if effective_until is not None:
+        payload["effective_until"] = effective_until
+    if auto_extend:
+        payload["auto_extend"] = True
+    if breaks is not None:
+        payload["breaks"] = breaks
+    r = client.post(
+        "/api/supervisor/schedules", json=payload, headers=_auth(tok_sv)
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["series_id"]
+
+
+class TestScheduleUpdate:
+
+    def test_70_patch_changes_days_time_period_dates_autoextend(self, client):
+        """PATCH меняет дни/время/period/effective_*/auto_extend; series_id тот же."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [1, 3],
+                "start_time": "10:00",
+                "end_time": "15:00",
+                "effective_from": "2021-02-01",
+                "effective_until": "2027-12-31",
+                "auto_extend": True,
+                "period": "afternoon",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["series_id"] == series_id
+        assert body["auto_extend"] is True
+        assert body["effective_from"] == "2021-02-01"
+        assert body["effective_until"] == "2027-12-31"
+        assert {ru["day_of_week"] for ru in body["rules"]} == {1, 3}
+        assert all(ru["start_time"] == "10:00" for ru in body["rules"])
+        assert all(ru["end_time"] == "15:00" for ru in body["rules"])
+        assert all(ru["period"] == "afternoon" for ru in body["rules"])
+        assert {ru["series_id"] for ru in body["rules"]} == {series_id}
+
+        # Старые лишние дни не остаются в активном списке.
+        r_active = client.get(
+            f"/api/supervisor/schedule-rules?psychologist_id={pid}",
+            headers=_auth(tok_sv),
+        )
+        days = {ru["day_of_week"] for ru in r_active.json()
+                if ru["series_id"] == series_id}
+        assert days == {1, 3}
+
+    def test_71_patch_changes_breaks(self, client):
+        """PATCH заменяет перерывы серии без дублей."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(
+            client, tok_sv, pid, target,
+            breaks=[{"start_time": "10:00", "end_time": "10:30", "title": "Кофе"}],
+        )
+
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [target.weekday()],
+                "start_time": "09:00",
+                "end_time": "12:00",
+                "effective_from": "2020-01-01",
+                "breaks": [
+                    {"start_time": "11:00", "end_time": "11:30", "title": "Обед"},
+                ],
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        brks = r.json()["breaks"]
+        assert len(brks) == 1
+        assert brks[0]["start_time"] == "11:00"
+        assert brks[0]["end_time"] == "11:30"
+        assert brks[0]["title"] == "Обед"
+
+    def test_72_patch_with_psychologist_id_in_body_422(self, client):
+        """Лишний psychologist_id в body → 422 (extra=forbid)."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        _, other_pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "psychologist_id": other_pid,
+                "days_of_week": [target.weekday()],
+                "start_time": "09:00",
+                "end_time": "12:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 422, r.text
+
+    def test_73_patch_keeps_psychologist(self, client):
+        """Обычный PATCH не меняет психолога серии."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [2],
+                "start_time": "13:00",
+                "end_time": "16:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["psychologist_id"] == pid
+        assert all(ru["psychologist_id"] == pid for ru in r.json()["rules"])
+
+    def test_74_patch_empty_days_422(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [],
+                "start_time": "09:00",
+                "end_time": "12:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 422, r.text
+
+    def test_75_patch_day_out_of_range_422(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [7],
+                "start_time": "09:00",
+                "end_time": "12:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 422, r.text
+
+    def test_76_patch_autoextend_without_until_422(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [target.weekday()],
+                "start_time": "09:00",
+                "end_time": "12:00",
+                "effective_from": "2020-01-01",
+                "auto_extend": True,
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 422, r.text
+
+    def test_77_patch_bad_time_422(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [target.weekday()],
+                "start_time": "12:00",
+                "end_time": "09:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 422, r.text
+        r2 = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [target.weekday()],
+                "start_time": "09:00",
+                "end_time": "12:00",
+                "effective_from": "2020-01-01",
+                "breaks": [
+                    {"start_time": "11:00", "end_time": "10:00", "title": "x"},
+                ],
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r2.status_code == 422, r2.text
+
+    def test_78_patch_nonexistent_series_404(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        r = client.patch(
+            f"/api/supervisor/schedules/{_uuid.uuid4()}",
+            json={
+                "days_of_week": [0],
+                "start_time": "09:00",
+                "end_time": "12:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 404, r.text
+
+    def test_79_patch_keeps_existing_appointments(self, client):
+        """PATCH не удаляет/не отменяет уже созданные записи."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        tok_p, pid, _ = _make_user(client, "psychologist")
+        tok_s, sid = _student_for(client, pid)
+        target = _future_date(20)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, duration=50, buffer=10)
+            mt_id = mt.id
+            db.commit()
+        series_id = _create_series(
+            client, tok_sv, pid, target, start="09:00", end="12:00"
+        )
+        slot = datetime.combine(target, time(9, 0)).replace(tzinfo=MOSCOW_TZ)
+        r_book = client.post(
+            "/api/appointments",
+            json={
+                "starts_at": slot.isoformat(),
+                "modality": "in_person",
+                "meeting_type_id": mt_id,
+            },
+            headers=_auth(tok_s),
+        )
+        assert r_book.status_code == 201, r_book.text
+        appt_uuid = r_book.json()["uuid"]
+
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [target.weekday()],
+                "start_time": "14:00",
+                "end_time": "17:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+
+        r_list = client.get("/api/appointments/my", headers=_auth(tok_s))
+        item = next(
+            (i for i in r_list.json()["items"] if i["uuid"] == appt_uuid), None
+        )
+        assert item is not None
+        assert item["status"] == "pending_confirmation"
+        with SessionLocal() as db:
+            appt = (
+                db.query(Appointment)
+                .filter(Appointment.uuid == appt_uuid)
+                .first()
+            )
+            assert appt is not None
+            assert appt.deleted_at is None
+
+    def test_80_patch_recomputes_slots(self, client):
+        """После PATCH слоты считаются по новому рабочему окну."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        tok_p, pid, _ = _make_user(client, "psychologist")
+        tok_s, sid = _student_for(client, pid)
+        target = _future_date(21)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, duration=50, buffer=10)
+            mt_id = mt.id
+            db.commit()
+        series_id = _create_series(
+            client, tok_sv, pid, target, start="09:00", end="10:00"
+        )
+        url = (
+            f"/api/appointments/slots?date={target.isoformat()}"
+            f"&meeting_type_id={mt_id}&modality=in_person"
+        )
+        before = client.get(url, headers=_auth(tok_s)).json()["slots"]
+        before_starts = {s["starts_at"] for s in before}
+
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [target.weekday()],
+                "start_time": "09:00",
+                "end_time": "18:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        after = client.get(url, headers=_auth(tok_s)).json()["slots"]
+        assert len(after) > len(before)
+        after_starts = {s["starts_at"] for s in after}
+        assert before_starts <= after_starts
+
+    def test_81_patch_preserves_inactive_state(self, client):
+        """PATCH деактивированной серии не активирует её обратно."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        target = _future_date(14)
+        series_id = _create_series(client, tok_sv, pid, target)
+        client.delete(
+            f"/api/supervisor/schedules/{series_id}", headers=_auth(tok_sv)
+        )
+
+        r = client.patch(
+            f"/api/supervisor/schedules/{series_id}",
+            json={
+                "days_of_week": [target.weekday()],
+                "start_time": "10:00",
+                "end_time": "13:00",
+                "effective_from": "2020-01-01",
+            },
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["is_active"] is False
+        assert all(not ru["is_active"] for ru in r.json()["rules"])
+
+
+# ─── Schedule exceptions list (GET) ───────────────────────────────────────────
+
+class TestScheduleExceptionsList:
+
+    def _make_exc(self, client, tok_sv, pid, exc_date, *, etype="day_off",
+                  start=None, end=None, reason=None):
+        payload = {
+            "psychologist_id": pid,
+            "exception_date": exc_date,
+            "exception_type": etype,
+        }
+        if start:
+            payload["start_time"] = start
+        if end:
+            payload["end_time"] = end
+        if reason:
+            payload["reason"] = reason
+        r = client.post(
+            "/api/supervisor/schedule-exceptions",
+            json=payload,
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    def test_82_returns_psychologist_exceptions(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        self._make_exc(client, tok_sv, pid, "2027-03-01", etype="day_off")
+        self._make_exc(
+            client, tok_sv, pid, "2027-03-02", etype="unavailable",
+            start="13:00", end="14:00", reason="Совещание",
+        )
+
+        r = client.get(
+            f"/api/supervisor/schedule-exceptions?psychologist_id={pid}",
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        items = r.json()
+        assert len(items) == 2
+        by_date = {i["exception_date"]: i for i in items}
+        day_off = by_date["2027-03-01"]
+        assert day_off["exception_type"] == "day_off"
+        assert day_off["start_time"] is None
+        assert day_off["end_time"] is None
+        timed = by_date["2027-03-02"]
+        assert timed["start_time"] == "13:00"
+        assert timed["end_time"] == "14:00"
+        assert timed["reason"] == "Совещание"
+
+    def test_83_excludes_other_psychologist(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid_a, _ = _make_user(client, "psychologist")
+        _, pid_b, _ = _make_user(client, "psychologist")
+        self._make_exc(client, tok_sv, pid_a, "2027-04-01")
+        self._make_exc(client, tok_sv, pid_b, "2027-04-02")
+
+        r = client.get(
+            f"/api/supervisor/schedule-exceptions?psychologist_id={pid_a}",
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        dates = {i["exception_date"] for i in r.json()}
+        assert dates == {"2027-04-01"}
+
+    def test_84_filters_by_date_range(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        self._make_exc(client, tok_sv, pid, "2027-05-01")
+        self._make_exc(client, tok_sv, pid, "2027-05-15")
+        self._make_exc(client, tok_sv, pid, "2027-05-31")
+
+        r = client.get(
+            f"/api/supervisor/schedule-exceptions?psychologist_id={pid}"
+            f"&date_from=2027-05-10&date_to=2027-05-20",
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        dates = [i["exception_date"] for i in r.json()]
+        assert dates == ["2027-05-15"]
+
+    def test_85_ordering_newest_first(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        self._make_exc(client, tok_sv, pid, "2027-06-01")
+        self._make_exc(client, tok_sv, pid, "2027-06-10")
+        self._make_exc(client, tok_sv, pid, "2027-06-05")
+
+        r = client.get(
+            f"/api/supervisor/schedule-exceptions?psychologist_id={pid}",
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 200, r.text
+        dates = [i["exception_date"] for i in r.json()]
+        assert dates == ["2027-06-10", "2027-06-05", "2027-06-01"]

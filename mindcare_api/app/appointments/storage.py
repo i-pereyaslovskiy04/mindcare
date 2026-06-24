@@ -856,6 +856,90 @@ def create_schedule_series(data: dict, db) -> dict:
     }
 
 
+def update_schedule_series(series_id, data: dict, db) -> dict:
+    """Update a schedule series in place (recreate rules+breaks, same series_id).
+
+    Existing rules/breaks of the series are physically removed and recreated
+    within the same transaction, keeping the same series_id. psychologist_id,
+    is_active (soft-delete state) and created_by are preserved from the current
+    series — they are NOT taken from the payload. Appointments have no FK to
+    schedule_rules, so they are untouched (existing bookings keep their slots).
+
+    Schedule v3: recreated rules carry no meeting_type_id (working window).
+    Caller must ensure the series exists (404 handled in service).
+    """
+    existing = get_series_rules(series_id, db)
+    head = existing[0]
+    psychologist_id = head.psychologist_id
+    is_active = head.is_active
+    created_by = head.created_by
+
+    # series_id здесь — тот же тип (UUID), что и колонка ScheduleRule.series_id,
+    # поэтому bulk delete реально находит строки. Записи (appointments) не трогаем.
+    db.query(ScheduleBreak).filter(
+        ScheduleBreak.series_id == series_id
+    ).delete(synchronize_session=False)
+    db.query(ScheduleRule).filter(
+        ScheduleRule.series_id == series_id
+    ).delete(synchronize_session=False)
+    db.flush()
+
+    rules = []
+    for dow in data["days_of_week"]:
+        rule = ScheduleRule(
+            psychologist_id=psychologist_id,
+            meeting_type_id=None,
+            day_of_week=dow,
+            start_time=data["start_time"],
+            end_time=data["end_time"],
+            period=data.get("period"),
+            series_id=series_id,
+            effective_from=data["effective_from"],
+            effective_until=data.get("effective_until"),
+            auto_extend=bool(data.get("auto_extend", False)),
+            created_by=created_by,
+            is_active=is_active,
+        )
+        db.add(rule)
+        rules.append(rule)
+
+    breaks = []
+    for brk in data.get("breaks", []):
+        for dow in data["days_of_week"]:
+            br = ScheduleBreak(
+                psychologist_id=psychologist_id,
+                day_of_week=dow,
+                start_time=brk["start_time"],
+                end_time=brk["end_time"],
+                title=brk.get("title"),
+                series_id=series_id,
+                effective_from=data["effective_from"],
+                effective_until=data.get("effective_until"),
+                is_active=is_active,
+            )
+            db.add(br)
+            breaks.append(br)
+
+    db.flush()
+    for r in rules:
+        db.refresh(r)
+    for b in breaks:
+        db.refresh(b)
+
+    return {
+        "series_id":       str(series_id),
+        "psychologist_id": psychologist_id,
+        "meeting_type_id": None,
+        "auto_extend":     bool(data.get("auto_extend", False)),
+        "effective_from":  str(data["effective_from"]),
+        "effective_until": str(data["effective_until"])
+                           if data.get("effective_until") else None,
+        "is_active":       is_active,
+        "rules":           [_rule_to_dict(r) for r in rules],
+        "breaks":          [_break_to_dict(b) for b in breaks],
+    }
+
+
 def get_series_rules(series_id, db) -> list[ScheduleRule]:
     return (
         db.query(ScheduleRule)
@@ -1066,12 +1150,7 @@ def deactivate_schedule_break(break_id: int, db) -> bool:
     return True
 
 
-def create_schedule_exception(data: dict, db) -> dict:
-    exc = ScheduleException(**data)
-    db.add(exc)
-    db.flush()
-    db.refresh(exc)
-    e = exc
+def _exception_to_dict(e: ScheduleException) -> dict:
     return {
         "id":               e.id,
         "psychologist_id":  e.psychologist_id,
@@ -1082,6 +1161,43 @@ def create_schedule_exception(data: dict, db) -> dict:
         "reason":           e.reason,
         "created_at":       e.created_at,
     }
+
+
+def create_schedule_exception(data: dict, db) -> dict:
+    exc = ScheduleException(**data)
+    db.add(exc)
+    db.flush()
+    db.refresh(exc)
+    return _exception_to_dict(exc)
+
+
+def get_schedule_exceptions(
+    psychologist_id: int,
+    date_from: Optional[date],
+    date_to: Optional[date],
+    db,
+) -> list[dict]:
+    """Разовые изменения психолога, новейшая дата первой.
+
+    Сортировка: exception_date DESC, start_time ASC (NULLS LAST в PG → day_off
+    без времени после timed на ту же дату), id DESC.
+    """
+    q = db.query(ScheduleException).filter(
+        ScheduleException.psychologist_id == psychologist_id
+    )
+    if date_from is not None:
+        q = q.filter(ScheduleException.exception_date >= date_from)
+    if date_to is not None:
+        q = q.filter(ScheduleException.exception_date <= date_to)
+    rows = (
+        q.order_by(
+            ScheduleException.exception_date.desc(),
+            ScheduleException.start_time.asc(),
+            ScheduleException.id.desc(),
+        )
+        .all()
+    )
+    return [_exception_to_dict(e) for e in rows]
 
 
 # ── GroupSession CRUD ─────────────────────────────────────────────────────────

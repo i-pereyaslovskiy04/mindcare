@@ -900,6 +900,29 @@ def _series_or_404(series_id: str, db) -> list:
     return rules
 
 
+def update_schedule(series_id, data: dict) -> dict:
+    """Отредактировать серию расписания атомарно (один commit).
+
+    Психолог серии и существующие записи не меняются (см. storage). auto_extend
+    требует effective_until; время правил и перерывов валидируется как в create.
+    is_active серии сохраняется (PATCH не активирует деактивированную серию).
+    """
+    _validate_time_range(data.get("start_time"), data.get("end_time"))
+    if data.get("auto_extend") and not data.get("effective_until"):
+        raise AppointmentError(
+            "Для авто-продления укажите дату окончания (effective_until)",
+            status_code=422,
+        )
+    for brk in data.get("breaks", []):
+        _validate_time_range(brk.get("start_time"), brk.get("end_time"))
+
+    with SessionLocal() as db:
+        _series_or_404(series_id, db)
+        result = storage.update_schedule_series(series_id, data, db)
+        db.commit()
+    return result
+
+
 def schedule_impact(series_id: str) -> dict:
     """Сколько будущих записей попадает в период серии (предупреждение)."""
     with SessionLocal() as db:
@@ -1097,6 +1120,18 @@ def create_schedule_exception(data: dict) -> dict:
                 "Конфликт исключения расписания", status_code=409
             )
     return result
+
+
+def list_schedule_exceptions(
+    psychologist_id: int,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+) -> list[dict]:
+    """Список разовых изменений психолога (с опц. фильтром по периоду)."""
+    with SessionLocal() as db:
+        return storage.get_schedule_exceptions(
+            psychologist_id, date_from, date_to, db
+        )
 
 
 # ── GroupSession management (supervisor) ──────────────────────────────────

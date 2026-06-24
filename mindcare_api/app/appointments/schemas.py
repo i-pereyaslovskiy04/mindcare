@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Slots ─────────────────────────────────────────────────────────────────────
@@ -169,6 +169,13 @@ class ScheduleRuleRead(BaseModel):
 
 # ── Unified schedule create (rules + recurring breaks in one series) ─────────
 
+def _validate_days_of_week(v):
+    """Общая проверка списка дней недели (0=Mon…6=Sun) для create и update."""
+    if any(d < 0 or d > 6 for d in v):
+        raise ValueError("day_of_week должен быть в диапазоне 0..6")
+    return v
+
+
 class ScheduleBreakInput(BaseModel):
     """Один повторяющийся перерыв внутри создаваемого расписания."""
     start_time: str = Field(description="HH:MM")
@@ -210,6 +217,38 @@ class ScheduleCreate(BaseModel):
         default_factory=list,
         description="Повторяющиеся перерывы (общие для всех дней серии)",
     )
+
+    @field_validator("days_of_week")
+    @classmethod
+    def _days_in_range(cls, v):
+        return _validate_days_of_week(v)
+
+
+class ScheduleUpdate(BaseModel):
+    """Редактирование серии расписания.
+
+    Как ScheduleCreate, но БЕЗ psychologist_id и meeting_type_id (schedule v3 =
+    рабочее окно без типа). Психолог серии не меняется. extra='forbid' — лишний
+    psychologist_id или любое другое поле в body даёт 422 (ошибка не скрывается).
+    """
+    model_config = {"extra": "forbid"}
+    days_of_week: list[int] = Field(
+        min_length=1, description="Список дней 0=Mon…6=Sun"
+    )
+    start_time: str = Field(description="HH:MM")
+    end_time: str = Field(description="HH:MM")
+    effective_from: str = Field(description="YYYY-MM-DD")
+    effective_until: Optional[str] = Field(
+        default=None, description="YYYY-MM-DD (обязателен при auto_extend)"
+    )
+    auto_extend: bool = Field(default=False)
+    period: Optional[str] = Field(default=None, max_length=20)
+    breaks: list[ScheduleBreakInput] = Field(default_factory=list)
+
+    @field_validator("days_of_week")
+    @classmethod
+    def _days_in_range(cls, v):
+        return _validate_days_of_week(v)
 
 
 class ScheduleSeriesRead(BaseModel):
