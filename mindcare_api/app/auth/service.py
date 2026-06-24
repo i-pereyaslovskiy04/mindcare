@@ -254,6 +254,30 @@ def change_password(
     )
 
 
+def get_profile(user_id: str) -> dict:
+    """Self-profile текущего пользователя."""
+    profile = storage.get_profile(user_id)
+    if not profile:
+        raise AuthError("Пользователь не найден", 404)
+    return profile
+
+
+def update_profile(
+    user_id: str,
+    full_name: str,
+    phone: Optional[str],
+) -> dict:
+    """Обновляет разрешённые self-поля. ПДн (ФИО/телефон) не логируются."""
+    name = (full_name or "").strip()
+    if len(name) < 2:
+        raise AuthError("ФИО должно содержать минимум 2 символа", 422)
+    p = (phone or "").strip() or None  # пустой телефон → NULL
+    try:
+        return storage.update_profile_atomic(user_id, name, p)
+    except storage.UserNotFoundError:
+        raise AuthError("Пользователь не найден", 404)
+
+
 def terminate_session(token: str) -> None:
     """Отзывает сессию (logout)."""
     storage.revoke_session(token)

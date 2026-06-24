@@ -11,6 +11,8 @@ from app.auth.schemas import (
     PasswordResetInitRequest,
     PasswordResetConfirmRequest,
     ChangePasswordRequest,
+    ProfileRead,
+    ProfileUpdate,
 )
 from app.auth import service, audit
 from app.auth.deps import get_current_user, get_session_token
@@ -146,6 +148,40 @@ def me(current_user: dict = Depends(get_current_user)):
         "name":  current_user["name"],
         "role":  current_user["role"],
     }
+
+
+@router.get("/profile", response_model=ProfileRead)
+def get_profile(current_user: dict = Depends(get_current_user)):
+    try:
+        return service.get_profile(current_user["id"])
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.patch("/profile", response_model=ProfileRead)
+def update_profile(
+    body: ProfileUpdate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        profile = service.update_profile(
+            user_id=current_user["id"],
+            full_name=body.full_name,
+            phone=body.phone,
+        )
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    # ФИО/телефон НЕ логируются.
+    audit.log_auth_event(
+        event="profile_update",
+        success=True,
+        user_id=int(current_user["id"]),
+        user_email=current_user["email"],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    return profile
 
 
 @router.post("/password/reset/init", response_model=MessageResponse)
