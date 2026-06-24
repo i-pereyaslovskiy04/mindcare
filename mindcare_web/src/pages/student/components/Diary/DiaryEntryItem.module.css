@@ -73,43 +73,59 @@
 
 .actions {
   display: flex;
-  gap: 2px;
   align-items: center;
 }
 
-.iconButton {
-  display: flex;
+.actionGroup {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: transparent;
-  border: none;
+  height: 32px;
+  border: 1px solid var(--nav-border);
   border-radius: 999px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.actionIconButton {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  border: none;
+  background: transparent;
   color: var(--text-light);
   cursor: pointer;
   padding: 0;
-  flex-shrink: 0;
+  line-height: 1;
   transition: background 0.15s, color 0.15s;
 }
 
-.iconButton:hover {
+.actionIconButton:hover {
   background: rgba(139, 111, 71, 0.1);
   color: var(--coffee);
 }
 
-.iconButton:focus-visible {
-  outline: 2px solid var(--coffee);
-  outline-offset: 1px;
+.actionIconButton:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--coffee);
 }
 
-.iconButtonDanger:hover {
-  background: rgba(185, 64, 64, 0.1);
+.actionIconDanger:hover {
+  background: rgba(185, 64, 64, 0.08);
   color: #b94040;
 }
 
-.iconButtonDanger:focus-visible {
-  outline-color: #b94040;
+.actionIconDanger:focus-visible {
+  box-shadow: inset 0 0 0 2px #b94040;
+}
+
+.actionDivider {
+  display: block;
+  width: 1px;
+  height: 18px;
+  background: var(--nav-border);
+  opacity: 0.8;
+  flex-shrink: 0;
 }
 
 /* ── Edit mode ──────────────────────────────────────────────────────────────── */

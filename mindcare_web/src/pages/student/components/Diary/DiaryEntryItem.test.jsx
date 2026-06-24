@@ -72,6 +72,13 @@ test('no action buttons when onUpdate and onDelete not provided', () => {
   expect(screen.queryByRole('button', { name: /удалить запись/i })).not.toBeInTheDocument();
 });
 
+test('action group has accessible label "Действия записи" when callbacks provided', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  expect(screen.getByRole('group', { name: /действия записи/i })).toBeInTheDocument();
+});
+
 test('shows edit and delete icon buttons when both callbacks provided', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
