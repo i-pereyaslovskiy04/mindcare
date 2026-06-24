@@ -50,7 +50,7 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **534 passed**.
+Текущий ожидаемый статус: **587 passed**.
 
 ### Alembic
 
@@ -252,13 +252,16 @@ backend обязан отклонять (роль не меняется). `conse
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
 | **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | backend full suite: 534 passed; diary covered by test_diary_api (46); chat attachments: chat_attachment_models (20), chat_attachment_api (37), chat_attachment_edit (18) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | backend full suite: 587 passed; diary покрывает endpoints, access control, encryption, summary, PATCH/DELETE, soft-delete, malformed UUID и empty PATCH |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **534 passed** (`.\test.ps1`).
+Итого backend: **587 passed** (`.\test.ps1`).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **36 suites / 395 tests** (после Stage Diary Frontend Integration) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **40 suites / 530 passed**.
+Lint: **0 warnings**. Production build: **success**. Diary frontend покрыт suites
+StudentHome, DiaryPage, DiaryEntryForm, DiaryEntryItem, DiaryHistoryList и MoodChart.
+Дополнительно —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —
@@ -469,39 +472,56 @@ npm run build
 **Backend (automated — `tests/integration/test_diary_api.py`):**
 
 - Alembic migration `b2e4d7f1a9c3` применена — `diary_emotions` и `diary_entries` существуют;
-- `GET /api/diary/emotions` возвращает список `{key, label, sort_order}` (10 записей из seed);
-- `GET /api/diary/today` — 200 для student; если записи нет — пустой объект или null;
+- seed эмоций: `calm`, `joyful`, `anxious`, `sad`, `tired`, `angry`, `inspired`,
+  `confused`, `light`, `focused`;
+- `GET /api/diary/emotions` возвращает список `{key, label, sort_order}`;
+- `GET /api/diary/today` — 200 для student; если записи нет — структура с `mood_score: null`;
 - `PUT /api/diary/today` — создаёт или обновляет запись; идемпотентно;
-- `GET /api/diary/entries` — пагинация, формат `{items, total, limit, offset}`;
-- `GET /api/diary/summary` — поддерживает `period=14d`, `month`, `year`;
+- `GET /api/diary/entries?limit&offset` — пагинация, формат `{items, total, limit, offset}`;
+- `PATCH /api/diary/entries/{entry_uuid}` — partial update; empty `{}` = no-op без изменения `updated_at`;
+- `DELETE /api/diary/entries/{entry_uuid}` — soft-delete через `deleted_at`;
+- `GET /api/diary/summary?period=14d|month|year` — fixed daily frames для 14d/month
+  и monthly aggregation для year;
 - Все `/api/diary/*` — **403 для psychologist, supervisor, admin** (student-only);
+- чужая, удалённая или несуществующая запись при PATCH/DELETE → 404;
+- malformed UUID при PATCH/DELETE → 422;
 - `diary_entries.mood_score_enc`, `entry_text_enc`, `emotions_enc` — хранятся с prefix `enc:v1:`;
 - Decrypt-on-read — возвращает plaintext; encrypt-on-write — принимает plaintext;
-- Partial unique index: не более одной активной записи на `student_id + entry_date`.
+- Partial unique index: не более одной активной записи на `student_id + entry_date`;
+  после soft-delete разрешено создать новую запись на ту же дату.
 
 **Security rules (НЕ нарушать):**
 
 - entry_text, mood_score, selected emotions — **не логировать** (ни в stdout, ни в audit);
 - diary content — **только student** — 403 для всех остальных ролей;
 - не смешивать с `session_notes` и `chat_messages`;
-- selected emotions — только encrypted JSON в `emotions_enc`, не FK-таблица.
+- selected emotions — только encrypted JSON в `emotions_enc`, не FK-таблица;
+- audit trail diary edit/delete пока pending; не считать его реализованным.
 
 **Frontend (automated):**
 
-- `DiaryPage.smoke.test.jsx` (11 тестов): API calls on mount, emotion chips из справочника,
-  null mood state, save, history, fallback для unknown emotion key, error states, disabled button;
-- `StudentHome.smoke.test.jsx` (7 тестов): summary API период 14d/month/year, empty state;
-- `MoodChart.test.jsx` (8 тестов): empty data, all-null, mixed, single point, null in middle.
+- `StudentHome.smoke.test.jsx`: next-step states, action cards, observationCard,
+  отсутствие fake metrics и MoodChart на главной;
+- `DiaryPage.test.jsx` + smoke: load/save, history pagination, edit/delete sync,
+  reload offset=0 после delete и inline errors;
+- `DiaryEntryForm`, `DiaryEntryItem`, `DiaryHistoryList`: optional details,
+  edit/delete confirmation и load more;
+- `MoodChart.test.jsx`: компонент протестирован, но integration в production UI pending.
 
 **Manual smoke (/student/diary — обязателен перед demo):**
 
-- Открыть /student/diary → форма загружается, эмоции показаны (не hardcoded);
-- Slider начинается без значения → кнопка «Сохранить» задизейблена;
-- Двинуть slider → кнопка активируется;
-- Выбрать эмоции, написать текст, нажать «Сохранить» → «✓ Сохранено» появляется;
-- История обновляется — новая запись видна внизу;
-- Обновить страницу → сегодняшняя запись подгружается в форму;
-- Открыть StudentHome → график показывает реальные данные (не мок);
-- Переключить период (14 дней / Месяц / Год) → график перерисовывается;
-- API error → форма показывает сообщение об ошибке + кнопку «Повторить»;
-- Ошибка сохранения → inline ошибка, текст не теряется.
+- No today entry: StudentHome показывает «Ваш следующий шаг», CTA «Отметить состояние»
+  и «Открыть материалы»;
+- создать mood-only запись; затем добавить emotions/text;
+- проверить collapsible details и inline ошибки;
+- edit today entry; delete today entry; создать запись повторно после delete;
+- history load more; edit old entry; delete old entry; после delete нет пропуска записей;
+- today entry: StudentHome показывает «Сегодняшняя отметка сохранена», score X/10,
+  «Дополнить запись» и «Написать психологу»;
+- `observationCard` скрыт при 0 entries и видим при `entriesCount > 0`;
+- psychologist/supervisor/admin получают 403;
+- в БД `mood_score_enc`, `entry_text_enc`, `emotions_enc` имеют `enc:v1:`;
+- malformed UUID для PATCH/DELETE → 422;
+- empty PATCH `{}` не меняет `updated_at`;
+- mobile/a11y пройти вручную: textarea labels, focus delete confirm, error/status announcements;
+- MoodChart/analytics pending и не являются blocker Student Diary MVP.

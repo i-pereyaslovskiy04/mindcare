@@ -173,8 +173,9 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **554 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend после Stage Diary History 1: **40 suites / 483 passed** (`npm test -- --watchAll=false`).
+Всего backend: **587 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Frontend: **40 suites / 530 passed** (`npm test -- --watchAll=false`); lint — **0 warnings**;
+production build — **success**.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -208,12 +209,13 @@ Frontend после Stage Diary History 1: **40 suites / 483 passed** (`npm test
 | `tests/integration/test_chat_attachment_models.py` | constraints chat_attachments (Stage 32b) — 20 |
 | `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
 | `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
-| `tests/integration/test_diary_api.py` | Diary API: CRUD сегодняшней записи, история, summary (fixed calendar frame 14d/month/year, year monthly aggregation Jan→current month, null gaps, cross-student isolation), encrypted-at-rest, student-only 403 — 65 |
-| `src/pages/student/StudentHome.smoke.test.jsx` | StudentHome: getDiarySummary 14d, getTodayDiaryEntry, obs block + Открыть дневник, stat cards реальные, MoodChart/period chips убраны, fake metrics убраны, mood slider убран, hardcoded session убран, GAD-7 убран — 22 |
-| `src/pages/student/components/Diary/DiaryEntryItem.test.jsx` | DiaryEntryItem: date format TZ safety (local constructor), mood score/word, emotion key→label, unknown key fallback, entry text — 5 |
-| `src/pages/student/components/Diary/DiaryHistoryList.test.jsx` | DiaryHistoryList: empty state, populated, emotion catalog, load more button (show/hide/click/loading/disabled/error) — 13 |
-| `src/pages/student/DiaryPage.test.jsx` | DiaryPage: loading/error/retry, form+history after load, isExistingEntry/moodSelected props, save flow, pagination (hasMore, loadMore appends, after-save reset, loadMore error, disabled during load) — 20 |
-| `src/pages/student/DiaryPage.smoke.test.jsx` | DiaryPage integration smoke: API calls on mount, emotion chips, today states, save flow, error states, submit button, "Загрузить ещё" visibility — 14 |
+| `tests/integration/test_diary_api.py` | Diary API: endpoints, pagination/summary, student-only 403, cross-student 404, encryption, PATCH/DELETE, soft-delete, malformed UUID 422, empty PATCH no-op |
+| `src/pages/student/StudentHome.smoke.test.jsx` | StudentHome: nextStepCard states, action cards, observationCard, honest session copy, fake metrics/MoodChart removed |
+| `src/pages/student/components/Diary/DiaryEntryForm.test.jsx` | Mood-required check-in, optional emotions/text, collapsible details, save/error states |
+| `src/pages/student/components/Diary/DiaryEntryItem.test.jsx` | Read/edit/delete modes, confirmation, errors, emotion labels, local date safety |
+| `src/pages/student/components/Diary/DiaryHistoryList.test.jsx` | Empty/populated history, actions, load more and error states |
+| `src/pages/student/DiaryPage.test.jsx` + smoke | Load/save, pagination, edit/delete sync, history reload offset=0 after delete, local today handling |
+| `src/pages/student/components/MoodChart/MoodChart.test.jsx` | Sparse/all-null/month/year rendering; компонент orphaned и не включён в production UI |
 
 ---
 
@@ -296,6 +298,7 @@ mindcare_api/
 │   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
 │   ├── diary/               — /api/diary/* Дневник студента: одна запись в день,
 │   │                          mood_score_enc/entry_text_enc/emotions_enc encrypted-at-rest,
+│   │                          history limit/offset, PATCH edit, DELETE soft-delete, summary;
 │   │                          справочник эмоций diary_emotions (сидирован); только student
 │   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
 │   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
@@ -406,8 +409,13 @@ mindcare_api/
    Office/TXT preview, thumbnails, PDF.js, S3/MinIO или at-rest encryption физических файлов
 ✅ Diary content (mood_score, entry_text, selected emotions) хранится encrypted-at-rest
    через enc:v1: в diary_entries.mood_score_enc / entry_text_enc / emotions_enc
-✅ Diary API (GET /api/diary/emotions, GET/PUT /api/diary/today, GET /api/diary/entries,
-   GET /api/diary/summary) только для role=student — остальные роли получают 403
+✅ Diary API: GET emotions, GET/PUT today, GET entries?limit&offset,
+   PATCH/DELETE entries/{entry_uuid}, GET summary?period=14d|month|year;
+   только role=student — остальные роли получают 403
+✅ PATCH/DELETE: чужая/удалённая/несуществующая запись → 404; malformed UUID → 422;
+   DELETE = soft-delete; empty PATCH {} = no-op и не меняет updated_at
+✅ Partial UNIQUE (student_id, entry_date) WHERE deleted_at IS NULL:
+   после soft-delete можно создать новую запись на ту же дату
 ✅ Справочник эмоций diary_emotions хранится в БД (не hardcoded на фронте);
    фронт получает [{key, label, sort_order}] через GET /api/diary/emotions
 ✅ date policy MVP: backend использует date.today() без timezone; сервер должен быть Moscow UTC+3
@@ -418,10 +426,15 @@ mindcare_api/
      будущие месяцы (> current month) включены с mood_score=null;
      entries_count = реальные записи (future null-slots не считаются);
    day/month без записи → mood_score=null; нет записей → полный фрейм с all null;
-   empty state определяется на фронте по тому, что все v===null;
+   empty state определяется на фронте по тому, что все mood_score===null;
    year avg = round(avg, 1) → float;
-   MoodChart x-axis: 14d=все 14 labels в DD.MM; month=каждый 5-й день + last в DD.MM;
-   year=все 12 месяцев по имени; sparse hint (1-2 точки) = compact SVG text overlay
+✅ StudentHome: nextStepCard + actionCardsGrid + observationCard только при entriesCount>0;
+   fake GAD-7/sleep/anxiety/appointment/psychologist/date удалены
+✅ DiaryPage: quick check-in, mood required, emotions/text optional, collapsible details,
+   history/load more, edit/delete, inline errors; frontend today сравнивается по local date
+⚠️ MoodChart существует и протестирован, но не используется на StudentHome и не
+   интегрирован в DiaryPage; analytics — отдельный future stage
+⚠️ Audit trail для diary edit/delete не реализован; это compliance backlog
 ❌ Не логировать entry_text, decrypted mood_score, selected emotions из дневника
 ❌ Не давать psychologist/supervisor/admin доступ к diary content без compliance-этапа
 ❌ Не смешивать diary с session_notes — разные таблицы, разные маршруты, разная цель
@@ -512,7 +525,7 @@ mindcare_web/src/
 │   ├── articles.api.js — /api/articles/* + /api/admin/articles/* + categories
 │   ├── materials.api.js — реэкспорт getArticles/getArticleById из articles.api.js
 │   ├── diary.api.js    — /api/diary/* (getDiaryEmotions, getTodayDiaryEntry, saveTodayDiaryEntry,
-│   │                     getDiaryEntries, getDiarySummary)
+│   │                     getDiaryEntries, updateDiaryEntry, deleteDiaryEntry, getDiarySummary)
 │   └── appointments.api.js
 ├── features/           — бизнес-логика по доменам
 │   ├── auth/           — AuthContext, LoginForm, RegisterForm, forgot-password
@@ -807,6 +820,8 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/diary/today` | Student | ✅ |
 | PUT | `/api/diary/today` | Student | ✅ |
 | GET | `/api/diary/entries` | Student | ✅ |
+| PATCH | `/api/diary/entries/{entry_uuid}` | Student | ✅ |
+| DELETE | `/api/diary/entries/{entry_uuid}` | Student | ✅ |
 | GET | `/api/diary/summary` | Student | ✅ |
 
 ## Соглашения по коду
@@ -974,9 +989,16 @@ Conventional Commits:
 **Student tasks/calendar — accepted demo/mock (НЕ баг):**
 - `/student/tasks` и `/student/calendar` работают на hardcoded mock-данных —
   это осознанная демо-витрина до отдельных этапов
+- **Stage Diary Docs Sync — docs-only:** актуализация README/architecture/backlog/compliance/
+  quality docs не меняет backend, frontend, Alembic, DB schema, `.env` или runtime storage
 - **`/student/diary` подключён к real API** (Stage Diary Frontend Integration):
-  одна запись в день, mood score 1–10, текст, эмоции из справочника, история записей,
-  summary-график на StudentHome; backend encrypted-at-rest; мок-данные удалены
+  одна активная запись в день, mood score 1–10, optional text/emotions, history/load more,
+  edit/delete и soft-delete; backend encrypted-at-rest; мок-данные удалены
+- **StudentHome после UX redesign:** nextStepCard показывает no-entry/today-entry state,
+  action cards ведут на реальные маршруты, observationCard виден только при наличии записей;
+  MoodChart и fake dashboard metrics удалены
+- **Diary pending:** MoodChart integration/analytics; audit trail edit/delete; timezone-aware
+  backend date policy; psychologist access только после отдельной consent/legal policy
 - `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
   единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read

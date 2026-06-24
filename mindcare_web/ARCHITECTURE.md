@@ -30,6 +30,7 @@ mindcare_web/
     │   ├── news.api.js
     │   ├── articles.api.js
     │   ├── materials.api.js
+    │   ├── diary.api.js       ← /api/diary/* (today, history, edit/delete, summary)
     │   ├── supervisor.api.js  ← /api/supervisor/* (students, psychologists, engagements)
     │   ├── appointments.api.js
     │   ├── media.api.js       ← /api/media/upload
@@ -520,6 +521,22 @@ State lives in: useMaterials hook → MaterialsPage props → SearchBar
 Технические имена API, модулей и моделей остаются `categories` и `tags`.
 Не переименовывать файлы и URL ради UI-терминов.
 
+### Student Diary MVP
+
+`StudentHome` и `/student/diary` используют real `/api/diary/*`. StudentHome построен
+вокруг `nextStepCard`, `actionCardsGrid` и условного `observationCard`; fake GAD-7,
+sleep/anxiety, fake appointment/psychologist/date удалены. Карточка психолога не утверждает
+наличие или отсутствие встречи: «Связаться с психологом можно в чате. Информация о встречах
+появится здесь позже.»
+
+`DiaryPage` поддерживает mood-only quick check-in, optional collapsible emotions/text,
+history `limit/offset`, load more, edit/delete и inline errors. После успешного delete
+история перечитывается с offset=0, а сравнение today entry использует local date helper,
+не UTC `toISOString()`.
+
+`MoodChart` существует и покрыт тестами, но не используется на StudentHome и пока не
+интегрирован в DiaryPage. Diary analytics — отдельный future stage.
+
 ### Messenger / Chat UI (Stage 31y–31z-hotfix)
 
 ```
@@ -745,7 +762,7 @@ const {
 
 ### 8.7 Кабинеты студента и психолога — частично в stub-состоянии
 
-- `StudentHome` и `PsychologistHome` отображают только приветствие.
+- `StudentHome` реализован вокруг реальных diary-данных; `PsychologistHome` остаётся частично stub.
 - В кабинете психолога навигационные пункты «Клиенты», «Сессии», «Чат», «Материалы» — `disabled: true` (заглушки в навигации).
 - В кабинете супервизора пункты «Психологи», «Сессии супервизии», «Отчёты» — также заглушки.
 

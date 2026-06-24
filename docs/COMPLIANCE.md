@@ -150,11 +150,14 @@ Encryption-at-rest защищает от утечки БД; политика д�
 - Доступ к дневнику — **только student** (роль самого субъекта данных);
   psychologist, supervisor, admin получают 403 на всех diary-эндпоинтах
 - Plaintext mood score, entry_text, selected emotions **не пишутся в application logs и audit**;
-  аудит diary-операций — только идентификаторы (student_id, date, признак наличия записи)
+  summary расшифровывает только `mood_score` для построения агрегатов
+- Audit trail для diary edit/delete сейчас **не реализован** и остаётся
+  compliance-hardening backlog перед production; при реализации в audit допустимы только
+  идентификаторы и метаданные операции, без plaintext diary content
 - Доступ психолога к дневнику студента требует отдельного compliance-решения, consent
   субъекта и visibility policy — **не реализовывать без отдельного этапа**
 - Export дневника (CSV/PDF) — потенциальный риск утечки; при реализации требует
-  student-consent на каждый export и аудит
+  отдельной политики, явного legal basis/consent и аудита
 - MVP date policy: backend использует `date.today()` без timezone; при многозональном
   деплое нужен user-timezone header
 

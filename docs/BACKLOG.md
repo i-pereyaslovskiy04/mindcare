@@ -296,8 +296,7 @@
     `AttachmentList` в `MessageBubble`; high-contrast outgoing dark-card fix
   - ✅ Stage 32d-hotfix-b: **safe Office download** — Chromium safe save flow через
     `showSaveFilePicker`, fallback через anchor download; Office attachments скачиваются
-    без top-level navigation на `blob:` URL; чат остаётся открытым; backend full suite
-    после Office header tests — 488 passed
+    без top-level navigation на `blob:` URL; чат остаётся открытым; Office header tests пройдены
   - ✅ Stage 32d-hotfix-b layout: **files-first attachment layout** — в сообщениях с
     файлами и текстом сначала отображаются файлы, затем divider, затем текст как caption;
     attachment-only сообщения без divider
@@ -315,8 +314,7 @@
     (`URL.createObjectURL` / `URL.revokeObjectURL`), без public static и без токенов в URL
   - ✅ Stage 32j: **PDF Preview / Lightbox** — preview `application/pdf` в том же
     `AttachmentPreviewLightbox` через native browser PDF rendering в iframe с blob URL;
-    Office/TXT/SVG/unknown MIME остаются download-only; frontend full suite —
-    33 suites / 369 passed, backend full suite — 488 passed
+    Office/TXT/SVG/unknown MIME остаются download-only; frontend/backend suites пройдены
   - **Future (chat):** preview последнего сообщения в списке бесед; WebSocket/SSE
     realtime presence; inline image thumbnails; Office preview; TXT preview; PDF.js integration
     при необходимости; upload progress percent; upload retry queue; MIME magic bytes validation (`python-magic`);
@@ -337,30 +335,37 @@
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать
 
-**✅ Student Diary MVP** — дневник студента реализован backend + frontend:
-  - ✅ **Backend foundation**: Alembic миграция `b2e4d7f1a9c3` — таблицы `diary_emotions`
-    (справочник, 10 записей, seed при старте) и `diary_entries` (partial UNIQUE active
-    per student + date); ORM-модель `app/db/models/diary.py`; модуль `app/diary/`
-    (schemas, storage, service, routes)
-  - ✅ **API**: `GET /api/diary/emotions`, `GET /api/diary/today`, `PUT /api/diary/today`,
-    `GET /api/diary/entries`, `GET /api/diary/summary?period=14d|month|year` — только student,
-    403 для psychologist/supervisor/admin
-  - ✅ **Encryption-at-rest**: `mood_score_enc`, `entry_text_enc`, `emotions_enc` —
-    Fernet (`enc:v1:`), тот же `DATA_ENCRYPTION_KEY`, что для session_notes и chat
-  - ✅ **Frontend integration**: DiaryPage подключён к real API, MOCK_ENTRIES удалён;
-    emotions из справочника (не hardcoded); StudentHome chart через `getDiarySummary`;
-    MoodChart обрабатывает null gaps и empty state; история записей из API
-  - ✅ **Тесты**: `tests/integration/test_diary_api.py` (46 backend); DiaryPage.smoke.test.jsx (11),
-    StudentHome.smoke.test.jsx (7), MoodChart.test.jsx (8 frontend)
-  - ✅ **Security**: entry_text, mood_score и selected emotions не логируются; plaintext не в logs/audit
+**✅ Student Diary MVP + UX/History Hotfix** — завершено:
+  - ✅ Backend `routes → service → storage → models`; миграция `b2e4d7f1a9c3`;
+    `diary_emotions` с seed `calm`, `joyful`, `anxious`, `sad`, `tired`, `angry`,
+    `inspired`, `confused`, `light`, `focused`; `diary_entries` с partial UNIQUE
+    `(student_id, entry_date) WHERE deleted_at IS NULL`
+  - ✅ API: emotions, today GET/PUT, entries `limit/offset`, PATCH/DELETE по UUID,
+    summary `14d|month|year`; все endpoints student-only, non-student → 403;
+    чужая/удалённая/несуществующая запись → 404, malformed UUID → 422
+  - ✅ DELETE — soft-delete через `deleted_at`; после delete можно создать новую запись
+    на ту же дату; empty PATCH `{}` — no-op без изменения `updated_at`
+  - ✅ Encryption-at-rest: `mood_score_enc`, `entry_text_enc`, `emotions_enc` —
+    Fernet `enc:v1:`; plaintext diary content не логируется
+  - ✅ Frontend: StudentHome вокруг `nextStepCard`, action cards и `observationCard`;
+    fake GAD-7/sleep/anxiety/appointment/psychologist/date удалены; DiaryPage —
+    quick check-in, optional collapsible details, history/load more, edit/delete,
+    inline errors; после delete история перечитывается с offset=0
+  - ✅ Hotfix: local frontend today helper вместо UTC `toISOString()`, честный session copy,
+    malformed UUID 422 и empty PATCH no-op
+  - ✅ Проверенный статус проекта: backend **587 passed**; frontend
+    **40 suites / 530 passed**; lint **0 warnings**; build **success**
   - **Pending / будущие этапы:**
-    - Доступ психолога к дневнику студента — требует отдельной policy/consent/visibility stage
-    - Редактирование и удаление старых записей (не сегодняшней) — по запросу
-    - Timezone-aware date policy: MVP использует server-side `date.today()`; при многозональном
-      деплое нужен user-timezone header и aware approach
-    - Admin UI для управления справочником эмоций (`diary_emotions` — catalog)
-    - Advanced analytics: тренды, корреляции, сравнения по периодам
-    - Export дневника (если понадобится пользователю или психологу со student-consent)
+    - Diary analytics / интеграция существующего `MoodChart` в `/student/diary`
+    - Audit trail для diary edit/delete — compliance gap до production hardening
+    - Доступ психолога — только отдельная policy с explicit consent/legal basis
+    - Timezone-aware backend date policy вместо server-side `date.today()` MVP
+    - Admin UI для `diary_emotions`
+    - Export diary data с отдельной политикой/согласием/audit
+    - Advanced analytics: тренды, корреляции, сравнения периодов
+    - GAD-7/PHQ-9 как отдельный валидированный questionnaire-модуль, не dashboard stats
+    - Реальная appointments integration для session data
+    - Mobile/a11y hardening: `aria-live`, focus management delete confirm, textarea labels
 
 ---
 

@@ -55,7 +55,7 @@ mindcare/
 │   │   ├── main.py                  # Точка входа: FastAPI app, CORS, lifespan, роутеры
 │   │   ├── core/
 │   │   │   ├── config.py            # Настройки из .env (pydantic-settings)
-│   │   │   ├── encryption.py        # Fernet encrypt/decrypt для session_notes и chat_messages
+│   │   │   ├── encryption.py        # Fernet encrypt/decrypt для session_notes, chat и diary
 │   │   │   ├── normalization.py     # normalize_email()
 │   │   │   └── rate_limit.py        # In-memory sliding-window limiter для auth (Stage 21)
 │   │   ├── db/
@@ -63,7 +63,7 @@ mindcare/
 │   │   │   ├── session.py           # engine, SessionLocal, get_db()
 │   │   │   ├── init_db.py           # Startup: ensure_database + check_migrations + seed
 │   │   │   ├── seed.py              # Идемпотентный seed: роли, permissions, consents
-│   │   │   └── models/              # ORM-модели (12 модулей, 48 таблиц)
+│   │   │   └── models/              # ORM-модели, включая diary.py
 │   │   │       ├── auth.py          # users, roles, user_roles, permissions, user_sessions
 │   │   │       ├── profiles.py      # student_profiles, psychologist_profiles
 │   │   │       ├── consents.py      # consents, consent_records (личное согласие субъекта)
@@ -96,6 +96,7 @@ mindcare/
 │   │   ├── articles/                # /api/admin/articles/* + /api/articles/* (public)
 │   │   ├── media/                   # POST /api/media/upload + Pillow resize/WebP
 │   │   ├── session_notes/           # /api/session-notes/* + Fernet encrypt-on-write
+│   │   ├── diary/                   # /api/diary/* — student-only дневник, encrypt-on-write
 │   │   ├── chat/                    # /api/chat/* — one-to-one чат (Stage 28c), encrypt-on-write
 │   │   ├── supervisor/              # /api/supervisor/* (supervisor role)
 │   │   ├── psychologist/            # /api/psychologist/* (psychologist role)
@@ -108,7 +109,7 @@ mindcare/
 │   │   ├── backfill_legal_basis.py              # Backfill legal basis records (--dry-run по умолчанию)
 │   │   ├── repair_missing_chat_conversations.py # Восстановление бесед для существующих engagements
 │   │   └── test_smtp.py                         # Диагностика SMTP-соединения
-│   ├── tests/                       # 488 тестов: unit + integration (см. «Тестирование»)
+│   ├── tests/                       # 587 тестов: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -350,10 +351,26 @@ lifespan() startup
 
 ---
 
+## Student Diary MVP
+
+`/student/diary` и StudentHome работают с реальным `/api/diary/*`, без runtime mock-данных.
+Студент может сделать короткую отметку с обязательным `mood_score` 1–10, опционально
+добавить эмоции и текст, просматривать историю с пагинацией, редактировать и мягко удалять
+записи. После soft-delete разрешено снова создать запись на ту же дату.
+
+Все diary endpoints доступны только роли `student`; psychologist, supervisor и admin получают
+403. Mood score, текст и выбранные эмоции хранятся encrypted-at-rest с префиксом `enc:v1:`.
+Компонент `MoodChart` существует и протестирован, но сейчас не используется на StudentHome
+и не интегрирован в DiaryPage; diary analytics отложена в backlog.
+
+---
+
 ## Тестирование
 
-Текущий статус: **488 passed** (unit + API/integration; integration-тесты требуют запущенный dev PostgreSQL на alembic head).
-Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
+Текущий статус backend: **587 passed** (unit + API/integration; integration-тесты требуют
+запущенный dev PostgreSQL на alembic head).
+Frontend: **40 suites / 530 passed** (`npm test -- --watchAll=false`).
+Последняя проверка frontend lint: **0 warnings**; production build: **success**.
 
 ```bash
 # Backend
@@ -398,6 +415,7 @@ npm run build
 | `tests/integration/test_system_conversation.py` | system conversation backend (17) |
 | `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (11) |
 | `tests/integration/test_chat_presence.py` | approximate online/offline presence (12) |
+| `tests/integration/test_diary_api.py` | diary endpoints, student-only policy, encryption, summary, PATCH/DELETE, soft-delete, malformed UUID и empty PATCH |
 
 ---
 
@@ -619,6 +637,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 | `/api/session-notes/*` | Session notes (enc:v1: ciphertext): psychologist — свои с content; supervisor — meta-list + audited content read; admin — metadata-only | Psychologist / Supervisor / Admin |
 | `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts, `peer_is_online` presence; attachments upload/download (private storage) | Student / Psychologist (admin/supervisor — 403) |
 | `/api/chat/system-conversation*` | Read-only system conversation (своя беседа): GET conversation/messages, POST read; write только internal publisher | Auth (любая роль — к своей беседе) |
+| `/api/diary/*` | emotions, today GET/PUT, entries list/PATCH/DELETE, summary 14d/month/year | Student only |
 | `/api/supervisor/*` | Student list, psychologist list, engagements | Supervisor |
 | `/api/psychologist/*` | Cabinet: clients, schedule, appointments | Psychologist |
 | `/api/health` | Health check: status, tables, revision | Public |
