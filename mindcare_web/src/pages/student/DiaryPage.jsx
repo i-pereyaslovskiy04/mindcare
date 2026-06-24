@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import MoodChart from './components/MoodChart/MoodChart';
 import MoodSelector from './components/Diary/MoodSelector';
 import DiaryEntryForm from './components/Diary/DiaryEntryForm';
 import DiaryHistoryList from './components/Diary/DiaryHistoryList';
@@ -6,6 +7,12 @@ import * as diaryApi from '../../api/diary.api';
 import styles from './DiaryPage.module.css';
 
 const HISTORY_LIMIT = 10;
+
+const PERIOD_LABELS = {
+  '14d': '14 дней',
+  month: 'Месяц',
+  year: 'Год',
+};
 
 function formatLocalDate(d) {
   const y = d.getFullYear();
@@ -20,6 +27,13 @@ function formatTodayLabel() {
     day: 'numeric',
     month: 'long',
   });
+}
+
+function getObservationHint(entriesCount) {
+  if (entriesCount === 0) return 'Пока нет данных для графика. Добавьте несколько отметок, чтобы увидеть динамику.';
+  if (entriesCount === 1) return 'Есть первая отметка. Для динамики нужно больше записей.';
+  if (entriesCount <= 3) return 'Пока мало данных для тренда, но эти записи уже можно обсудить с психологом.';
+  return 'Можно смотреть первые изменения за выбранный период.';
 }
 
 export default function DiaryPage() {
@@ -41,6 +55,25 @@ export default function DiaryPage() {
   const [showSaved, setShowSaved] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
+
+  // Observation / summary state — independent from main load
+  const [activePeriod, setActivePeriod] = useState('14d');
+  const [summaryData, setSummaryData] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState(null);
+
+  async function loadSummary(period) {
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const data = await diaryApi.getDiarySummary(period);
+      setSummaryData(data);
+    } catch {
+      setSummaryError('Не удалось загрузить самонаблюдение.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
 
   async function loadAll() {
     setLoading(true);
@@ -73,6 +106,16 @@ export default function DiaryPage() {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    loadSummary('14d');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handlePeriodChange(period) {
+    setActivePeriod(period);
+    loadSummary(period);
+  }
 
   function handleEmotionToggle(key) {
     setSelectedEmotions((prev) =>
@@ -109,6 +152,7 @@ export default function DiaryPage() {
       setSelectedEmotions(updatedEntry.emotions ?? []);
       setIsExistingEntry(true);
     }
+    loadSummary(activePeriod);
   }
 
   async function handleEntryDelete(uuid) {
@@ -133,6 +177,7 @@ export default function DiaryPage() {
     } catch {
       // Non-critical: list already updated optimistically above.
     }
+    loadSummary(activePeriod);
   }
 
   async function handleSave() {
@@ -157,12 +202,19 @@ export default function DiaryPage() {
       setEntriesLoadMoreError(null);
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
+      loadSummary(activePeriod);
     } catch (err) {
       setSaveError(err.message || 'Не удалось сохранить запись.');
     } finally {
       setSaving(false);
     }
   }
+
+  const chartData = (summaryData?.points ?? []).map((p) => ({
+    l: p.label,
+    v: p.mood_score,
+    d: p.date,
+  }));
 
   return (
     <div className={styles.page}>
@@ -200,7 +252,57 @@ export default function DiaryPage() {
               saveError={saveError}
               onSave={handleSave}
             />
+
+            {/* ── Observation card ── */}
+            <div className={styles.observationCard}>
+              <div className={styles.observationHeader}>
+                <span className={styles.observationTitle}>Самонаблюдение</span>
+              </div>
+              <p className={styles.observationSub}>
+                Записи помогают заметить изменения в самочувствии и обсудить их с психологом.
+              </p>
+              <div className={styles.periodChips}>
+                {['14d', 'month', 'year'].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={
+                      activePeriod === p
+                        ? `${styles.periodChip} ${styles.periodChipActive}`
+                        : styles.periodChip
+                    }
+                    onClick={() => handlePeriodChange(p)}
+                  >
+                    {PERIOD_LABELS[p]}
+                  </button>
+                ))}
+              </div>
+              {summaryLoading ? (
+                <p className={styles.observationLoading}>Загружается…</p>
+              ) : summaryError ? (
+                <div className={styles.observationError}>
+                  <span>{summaryError}</span>
+                  <button
+                    type="button"
+                    className={styles.retryBtn}
+                    onClick={() => loadSummary(activePeriod)}
+                  >
+                    Повторить
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.chartWrap}>
+                    <MoodChart data={chartData} period={activePeriod} />
+                  </div>
+                  <p className={styles.observationHint}>
+                    {getObservationHint(summaryData?.entries_count ?? 0)}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
+
           <div className={styles.historyCol}>
             <DiaryHistoryList
               entries={entries}

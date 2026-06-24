@@ -104,3 +104,96 @@
 .retryBtn:hover {
   background: var(--cream);
 }
+
+/* ── Observation card ─────────────────────────────────────────────────────── */
+
+.observationCard {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.observationHeader {
+  margin-bottom: 6px;
+}
+
+.observationTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--espresso);
+  letter-spacing: 0.02em;
+}
+
+.observationSub {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.periodChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.periodChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  color: var(--coffee);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.periodChip:hover {
+  background: var(--cream);
+}
+
+.periodChipActive {
+  background: var(--coffee);
+  color: var(--warm-white);
+  border-color: var(--coffee);
+}
+
+.periodChipActive:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+}
+
+.chartWrap {
+  margin: 0 -4px;
+}
+
+.observationHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.observationLoading {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 24px 0;
+  text-align: center;
+}
+
+.observationError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0;
+  font-size: 13px;
+  color: var(--error);
+  text-align: center;
+}

@@ -23,6 +23,16 @@ const FILLED_TODAY = {
   emotions: ['calm'],
 };
 
+const MOCK_SUMMARY = {
+  period: '14d',
+  entries_count: 3,
+  points: Array.from({ length: 14 }, (_, i) => ({
+    date: `2026-06-${String(i + 10).padStart(2, '0')}`,
+    label: String(i + 10),
+    mood_score: i < 3 ? 6 : null,
+  })),
+};
+
 const MOCK_ENTRIES_RESP = {
   items: [
     {
@@ -46,6 +56,7 @@ beforeEach(() => {
   diaryApi.getTodayDiaryEntry.mockResolvedValue(EMPTY_TODAY);
   diaryApi.getDiaryEntries.mockResolvedValue(MOCK_ENTRIES_RESP);
   diaryApi.saveTodayDiaryEntry.mockResolvedValue(FILLED_TODAY);
+  diaryApi.getDiarySummary.mockResolvedValue(MOCK_SUMMARY);
 });
 
 // ─── mount + data loading ─────────────────────────────────────────────────────
@@ -216,4 +227,33 @@ test('"Загрузить ещё" shown when total > items in first page', async
   });
   render(<DiaryPage />);
   expect(await screen.findByRole('button', { name: /загрузить ещё/i })).toBeInTheDocument();
+});
+
+// ─── observation block ────────────────────────────────────────────────────────
+
+test('observation block "Самонаблюдение" heading renders after load', async () => {
+  render(<DiaryPage />);
+  expect(await screen.findByText('Самонаблюдение')).toBeInTheDocument();
+});
+
+test('period chips 14 дней / Месяц / Год are visible', async () => {
+  render(<DiaryPage />);
+  await screen.findByText('Самонаблюдение');
+  expect(screen.getByRole('button', { name: '14 дней' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Месяц' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Год' })).toBeInTheDocument();
+});
+
+test('getDiarySummary is called with "14d" on mount', async () => {
+  render(<DiaryPage />);
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('14d'));
+});
+
+test('clicking "Месяц" calls getDiarySummary with "month"', async () => {
+  render(<DiaryPage />);
+  await screen.findByText('Самонаблюдение');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Месяц' }));
+
+  await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledWith('month'));
 });
