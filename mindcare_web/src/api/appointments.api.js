@@ -115,6 +115,14 @@ export const createScheduleException = (data) =>
     body: JSON.stringify(data),
   });
 
+export const getScheduleExceptions = ({ psychologistId, dateFrom, dateTo } = {}) => {
+  const p = new URLSearchParams();
+  if (psychologistId) p.set('psychologist_id', psychologistId);
+  if (dateFrom) p.set('date_from', dateFrom);
+  if (dateTo) p.set('date_to', dateTo);
+  return apiFetch(`/api/supervisor/schedule-exceptions?${p}`);
+};
+
 // ── Schedule series (schedule v2) ─────────────────────────────────────────────
 
 export const getScheduleBreaks = ({ psychologistId } = {}) => {
@@ -126,6 +134,12 @@ export const getScheduleBreaks = ({ psychologistId } = {}) => {
 export const createSchedule = (data) =>
   apiFetch('/api/supervisor/schedules', {
     method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updateSchedule = (seriesId, data) =>
+  apiFetch(`/api/supervisor/schedules/${seriesId}`, {
+    method: 'PATCH',
     body: JSON.stringify(data),
   });
 

@@ -13,11 +13,13 @@ import {
   getScheduleRules,
   getScheduleBreaks,
   createSchedule,
+  updateSchedule,
   getScheduleImpact,
   deleteSchedule,
   restoreSchedule,
   extendSchedule,
   createScheduleException,
+  getScheduleExceptions,
 } from '../../api/appointments.api';
 import styles from './SchedulePage.module.css';
 
@@ -37,6 +39,24 @@ const EXCEPTION_TYPES = [
   { value: 'unavailable',        label: 'Блокировка (недоступность)' },
   { value: 'extra_availability', label: 'Доп. окно (доступность)' },
 ];
+const EXCEPTION_TYPE_LABEL = Object.fromEntries(
+  EXCEPTION_TYPES.map(t => [t.value, t.label])
+);
+const EXCEPTION_TYPE_TONE = {
+  day_off: 'neutral',
+  unavailable: 'warning',
+  extra_availability: 'success',
+};
+
+const PERIOD_OPTIONS = [
+  { value: '',          label: 'Не указан' },
+  { value: 'morning',   label: 'Утро' },
+  { value: 'afternoon', label: 'День' },
+  { value: 'evening',   label: 'Вечер' },
+];
+const PERIOD_LABEL = Object.fromEntries(
+  PERIOD_OPTIONS.filter(o => o.value).map(o => [o.value, o.label])
+);
 
 const EMPTY_SCHEDULE = {
   days_of_week: [],
@@ -45,6 +65,7 @@ const EMPTY_SCHEDULE = {
   effective_from: '',
   effective_until: '',
   auto_extend: false,
+  period: '',
 };
 
 const EMPTY_EXC = {
@@ -116,6 +137,11 @@ export default function SchedulePage() {
   const [schedBreaks, setSchedBreaks] = useState([]);
   const [savingSched, setSavingSched] = useState(false);
   const [schedErr, setSchedErr] = useState(null);
+  const [editingSeriesId, setEditingSeriesId] = useState(null);
+  const [editImpact, setEditImpact] = useState(0);
+
+  // One-off changes (exceptions)
+  const [exceptions, setExceptions] = useState([]);
 
   // Exception modal
   const [excModal, setExcModal] = useState(false);
@@ -135,16 +161,18 @@ export default function SchedulePage() {
   }, []);
 
   const loadSchedule = useCallback(async (pid) => {
-    if (!pid) { setRules([]); setBreaks([]); return; }
+    if (!pid) { setRules([]); setBreaks([]); setExceptions([]); return; }
     setLoading(true);
     setError(null);
     try {
-      const [r, b] = await Promise.all([
+      const [r, b, ex] = await Promise.all([
         getScheduleRules({ psychologistId: pid, includeInactive: true }),
         getScheduleBreaks({ psychologistId: pid }),
+        getScheduleExceptions({ psychologistId: pid }),
       ]);
       setRules(r.items || r || []);
       setBreaks(b.items || b || []);
+      setExceptions(ex.items || ex || []);
     } catch (e) {
       setError(e.message || 'Ошибка загрузки');
     } finally {
@@ -164,10 +192,40 @@ export default function SchedulePage() {
   // ── Schedule series create ────────────────────────────────────────────────
 
   function openSched() {
+    setEditingSeriesId(null);
+    setEditImpact(0);
     setSchedForm(EMPTY_SCHEDULE);
     setSchedBreaks([]);
     setSchedErr(null);
     setSchedModal(true);
+  }
+
+  async function openEditSched(s) {
+    setEditingSeriesId(s.series_id);
+    setEditImpact(0);
+    setSchedForm({
+      days_of_week: s.days.map(String),
+      start_time: s.start_time,
+      end_time: s.end_time,
+      effective_from: s.effective_from || '',
+      effective_until: s.effective_until || '',
+      auto_extend: !!s.auto_extend,
+      period: s.period || '',
+    });
+    setSchedBreaks(
+      (s.breaks || []).map(b => ({
+        start_time: b.start_time,
+        end_time: b.end_time,
+        title: b.title || '',
+      }))
+    );
+    setSchedErr(null);
+    setSchedModal(true);
+    // Предупреждение о будущих записях (не блокирует сохранение).
+    try {
+      const impact = await getScheduleImpact(s.series_id);
+      setEditImpact(impact.future_appointments || 0);
+    } catch { /* impact optional */ }
   }
 
   function addBreak() {
@@ -201,21 +259,26 @@ export default function SchedulePage() {
     }
     setSavingSched(true);
     setSchedErr(null);
+    const common = {
+      days_of_week: schedForm.days_of_week.map(Number),
+      start_time: schedForm.start_time,
+      end_time: schedForm.end_time,
+      effective_from: schedForm.effective_from,
+      effective_until: schedForm.effective_until || null,
+      auto_extend: schedForm.auto_extend,
+      period: schedForm.period || null,
+      breaks: schedBreaks.map(br => ({
+        start_time: br.start_time,
+        end_time: br.end_time,
+        title: br.title || null,
+      })),
+    };
     try {
-      await createSchedule({
-        psychologist_id: Number(psychId),
-        days_of_week: schedForm.days_of_week.map(Number),
-        start_time: schedForm.start_time,
-        end_time: schedForm.end_time,
-        effective_from: schedForm.effective_from,
-        effective_until: schedForm.effective_until || null,
-        auto_extend: schedForm.auto_extend,
-        breaks: schedBreaks.map(br => ({
-          start_time: br.start_time,
-          end_time: br.end_time,
-          title: br.title || null,
-        })),
-      });
+      if (editingSeriesId) {
+        await updateSchedule(editingSeriesId, common);
+      } else {
+        await createSchedule({ psychologist_id: Number(psychId), ...common });
+      }
       setSchedModal(false);
       loadSchedule(psychId);
     } catch (e) {
@@ -296,6 +359,7 @@ export default function SchedulePage() {
       });
       setExcDone(true);
       setExcForm(EMPTY_EXC);
+      loadSchedule(psychId);
     } catch (e) {
       setExcErr(e.message || 'Ошибка сохранения');
     } finally {
@@ -382,6 +446,12 @@ export default function SchedulePage() {
                 {s.effective_until ? ` — ${s.effective_until}` : ' — бессрочно'}
               </div>
 
+              {s.period && PERIOD_LABEL[s.period] && (
+                <div className={styles.seriesMeta}>
+                  Период: {PERIOD_LABEL[s.period]}
+                </div>
+              )}
+
               {s.breaks.length > 0 && (
                 <div className={styles.breaksLine}>
                   Перерывы:{' '}
@@ -396,6 +466,11 @@ export default function SchedulePage() {
               )}
 
               <div className={styles.seriesActions}>
+                {s.series_id && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => openEditSched(s)}>
+                    Редактировать
+                  </Button>
+                )}
                 {s.series_id && s.is_active && (
                   <>
                     <Button type="button" variant="ghost" size="sm" onClick={() => handleExtend(s)}>
@@ -420,14 +495,52 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {/* One-off changes (exceptions) */}
+      {psychId && !loading && !error && (
+        <div className={styles.excSection}>
+          <h2 className={styles.excSectionTitle}>Разовые изменения</h2>
+          {exceptions.length === 0 ? (
+            <div className={styles.empty}>
+              Разовых изменений нет.
+            </div>
+          ) : (
+            <div className={styles.excList}>
+              {exceptions.map(ex => (
+                <div key={ex.id} className={styles.excRow}>
+                  <span className={styles.excDate}>{ex.exception_date}</span>
+                  <Badge tone={EXCEPTION_TYPE_TONE[ex.exception_type] || 'neutral'}>
+                    {EXCEPTION_TYPE_LABEL[ex.exception_type] || ex.exception_type}
+                  </Badge>
+                  {ex.start_time && ex.end_time && (
+                    <span className={styles.excTime}>
+                      {ex.start_time}–{ex.end_time}
+                    </span>
+                  )}
+                  {ex.reason && <span className={styles.excReason}>{ex.reason}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Schedule (series) modal */}
-      <Modal open={schedModal} onClose={() => setSchedModal(false)} ariaLabel="Новое расписание" size="md">
+      <Modal open={schedModal} onClose={() => setSchedModal(false)} ariaLabel={editingSeriesId ? 'Редактирование расписания' : 'Новое расписание'} size="md">
         <div className={styles.modalBody}>
-          <h2 className={styles.modalTitle}>Новое расписание</h2>
+          <h2 className={styles.modalTitle}>
+            {editingSeriesId ? 'Редактирование расписания' : 'Новое расписание'}
+          </h2>
           <p className={styles.pageSub}>
             Рабочие окна психолога. Тип встречи выбирается при записи —
             здесь его указывать не нужно.
           </p>
+
+          {editingSeriesId && editImpact > 0 && (
+            <div className={styles.editNote}>
+              В периоде серии есть будущих записей: {editImpact}. Они не будут
+              удалены или перенесены.
+            </div>
+          )}
 
           <div className={styles.formField}>
             <span className={styles.formLabel}>Дни недели</span>
@@ -485,6 +598,15 @@ export default function SchedulePage() {
             </label>
           </div>
 
+          <div className={styles.formField}>
+            <Select
+              label="Период (необязательно)"
+              value={schedForm.period}
+              options={PERIOD_OPTIONS}
+              onChange={v => setSchedForm(f => ({ ...f, period: v }))}
+            />
+          </div>
+
           <div className={styles.breaksEditor}>
             <div className={styles.breaksEditorHead}>
               <span className={styles.formLabel}>Повторяющиеся перерывы</span>
@@ -530,7 +652,9 @@ export default function SchedulePage() {
               Отмена
             </Button>
             <Button type="button" variant="primary" disabled={savingSched} onClick={saveSched}>
-              {savingSched ? 'Сохраняем…' : 'Создать расписание'}
+              {savingSched
+                ? 'Сохраняем…'
+                : editingSeriesId ? 'Сохранить изменения' : 'Создать расписание'}
             </Button>
           </div>
         </div>
