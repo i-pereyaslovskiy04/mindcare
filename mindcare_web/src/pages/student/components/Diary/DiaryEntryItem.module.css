@@ -179,35 +179,6 @@
   background: rgba(185, 64, 64, 0.07);
 }
 
-.menuCancel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 7px 12px;
-  border-radius: 7px;
-  border: 1px solid var(--nav-border);
-  background: transparent;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  font-family: inherit;
-  cursor: pointer;
-  text-align: center;
-  white-space: nowrap;
-  margin-top: 2px;
-  transition: background 0.12s;
-}
-
-.menuCancel:hover {
-  background: var(--cream);
-}
-
-.menuCancel:focus-visible {
-  outline: 2px solid var(--coffee);
-  outline-offset: -2px;
-}
-
 /* ── Edit mode ──────────────────────────────────────────────────────────────── */
 
 .editHeader {

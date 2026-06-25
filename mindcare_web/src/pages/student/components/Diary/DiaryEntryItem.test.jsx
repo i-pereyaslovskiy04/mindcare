@@ -141,7 +141,7 @@ test('clicking kebab opens action menu', () => {
   expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
 });
 
-test('action menu buttons have short visible labels: Редактировать, Удалить, Отмена', () => {
+test('action menu buttons have short visible labels: Редактировать, Удалить', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
@@ -149,7 +149,7 @@ test('action menu buttons have short visible labels: Редактировать,
   const menu = screen.getByTestId('entry-action-sheet');
   expect(within(menu).getByText('Редактировать')).toBeInTheDocument();
   expect(within(menu).getByText('Удалить')).toBeInTheDocument();
-  expect(within(menu).getByText('Отмена')).toBeInTheDocument();
+  expect(within(menu).queryByText('Отмена')).not.toBeInTheDocument();
 });
 
 test('action menu buttons do not show long text "Редактировать запись" or "Удалить запись" as visible text', () => {
@@ -170,7 +170,7 @@ test('action menu buttons are accessible via aria-label (full name)', () => {
   const menu = screen.getByTestId('entry-action-sheet');
   expect(within(menu).getByRole('button', { name: /редактировать запись/i })).toBeInTheDocument();
   expect(within(menu).getByRole('button', { name: /удалить запись/i })).toBeInTheDocument();
-  expect(within(menu).getByRole('button', { name: /отмена/i })).toBeInTheDocument();
+  expect(within(menu).queryByRole('button', { name: /^отмена$/i })).not.toBeInTheDocument();
 });
 
 test('menu shows only edit when only onUpdate provided', () => {
@@ -189,16 +189,6 @@ test('clicking kebab again closes the menu', () => {
   fireEvent.click(kebab);
   expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
   fireEvent.click(kebab);
-  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
-});
-
-test('"Отмена" in menu closes it', () => {
-  render(
-    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
-  );
-  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
-  const menu = screen.getByTestId('entry-action-sheet');
-  fireEvent.click(within(menu).getByRole('button', { name: /отмена/i }));
   expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
 });
 

@@ -325,13 +325,6 @@ export default function DiaryEntryItem({
                     Удалить
                   </button>
                 )}
-                <button
-                  type="button"
-                  className={styles.menuCancel}
-                  onClick={closeMenu}
-                >
-                  Отмена
-                </button>
               </div>
             )}
           </div>
