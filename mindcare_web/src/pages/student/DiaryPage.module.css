@@ -233,101 +233,47 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .markChip {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  gap: 7px;
+  padding: 5px 11px;
   border-radius: 20px;
   font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
   background: var(--cream, #faf7f2);
   border: 1px solid var(--nav-border);
-  color: var(--espresso);
   white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  cursor: default;
+  transition: background 0.16s ease, border-color 0.16s ease;
 }
 
 .markChip:hover {
-  background: var(--cream);
-  border-color: var(--coffee);
+  background: var(--sand, #ede8df);
+  border-color: var(--latte, #c4aa88);
 }
 
-.markChip:focus-visible {
-  outline: 2px solid var(--coffee);
-  outline-offset: 2px;
-}
-
-.markChipActive {
-  background: var(--coffee);
-  color: var(--warm-white);
-  border-color: var(--coffee);
-}
-
-.markChipActive:hover {
-  background: var(--espresso);
-  border-color: var(--espresso);
-}
-
-/* ── Mark detail panel ────────────────────────────────────────────────────── */
-
-.markDetail {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 10px;
-  padding: 10px 14px;
-  background: var(--cream, #faf7f2);
-  border: 1px solid var(--nav-border);
-  border-radius: 8px;
-}
-
-.markDetailContent {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.markDetailTitle {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--espresso);
-}
-
-.markDetailScore {
-  font-size: 12px;
+.markDate {
+  font-weight: 400;
   color: var(--text-muted);
 }
 
-.markDetailClose {
-  display: inline-flex;
-  align-items: center;
+.markDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--nav-border);
+  opacity: 0.7;
   flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  border: 1px solid var(--nav-border);
-  background: var(--warm-white);
+}
+
+.markScore {
+  font-weight: 700;
   color: var(--coffee);
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-
-.markDetailClose:hover {
-  background: var(--cream);
-}
-
-.markDetailClose:focus-visible {
-  outline: 2px solid var(--coffee);
-  outline-offset: 2px;
+  letter-spacing: 0.01em;
 }
 
 /* ── Observation states ───────────────────────────────────────────────────── */

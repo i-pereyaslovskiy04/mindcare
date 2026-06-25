@@ -7,6 +7,14 @@ const MOOD_WORDS = [
   'Нейтрально', 'Спокойно', 'Хорошо', 'Светло', 'Радостно', 'Прекрасно',
 ];
 
+// Устаревшие ключи эмоций (деактивированы в каталоге после c3a7f8e2d1b9).
+// Исторические записи дневника с этими ключами отображаются через legacy-метки
+// вместо технического ключа.
+const LEGACY_EMOTION_LABELS = {
+  light: 'легко',
+  angry: 'злобно',
+};
+
 function formatDate(iso) {
   // Use local Date constructor (not ISO string) to avoid UTC→local timezone shift
   const [year, month, day] = iso.split('-').map(Number);
@@ -26,7 +34,8 @@ function getMoodColor(v) {
 
 function getEmotionLabel(key, catalog) {
   const found = catalog.find((e) => e.key === key);
-  return found ? found.label : key;
+  if (found) return found.label;
+  return LEGACY_EMOTION_LABELS[key] ?? key;
 }
 
 export default function DiaryEntryItem({
@@ -167,7 +176,12 @@ export default function DiaryEntryItem({
         </div>
 
         <div className={styles.editMoodRow}>
-          <span className={styles.editFieldLabel}>Настроение: {editMood}/10</span>
+          <div className={styles.editMoodHeader}>
+            <span className={styles.editMoodLabel}>Настроение</span>
+            <strong className={styles.editMoodValue}>
+              {editMood}/10 · {MOOD_WORDS[editMood]}
+            </strong>
+          </div>
           <input
             type="range"
             min="1"
@@ -177,6 +191,7 @@ export default function DiaryEntryItem({
             className={styles.editMoodSlider}
             disabled={saving}
             aria-label="Настроение"
+            aria-valuetext={`${editMood} из 10, ${MOOD_WORDS[editMood]}`}
           />
         </div>
 
@@ -215,19 +230,19 @@ export default function DiaryEntryItem({
         <div className={styles.editActions}>
           <button
             type="button"
-            className={styles.saveBtn}
-            onClick={handleSaveEdit}
-            disabled={saving}
-          >
-            {saving ? 'Сохранение…' : 'Сохранить'}
-          </button>
-          <button
-            type="button"
             className={styles.cancelBtn}
             onClick={cancelEdit}
             disabled={saving}
           >
             Отмена
+          </button>
+          <button
+            type="button"
+            className={styles.saveBtn}
+            onClick={handleSaveEdit}
+            disabled={saving}
+          >
+            {saving ? 'Сохранение…' : 'Сохранить'}
           </button>
         </div>
       </div>

@@ -65,13 +65,10 @@ function getRecentMarks(realPoints, activePeriod, limit = 5) {
   return realPoints.slice(-limit).map((p) => {
     const isYear = activePeriod === 'year';
     const displayDate = isYear ? p.label : formatShortDate(p.date);
-    const scoreStr = formatScore(p.mood_score);
     return {
       key: p.date,
-      chipLabel: `${displayDate} · ${scoreStr}`,
-      accessibleLabel: `Показать отметку за ${displayDate}`,
-      detailTitle: displayDate,
-      detailScoreLabel: isYear ? `Средняя отметка: ${scoreStr}` : `Отметка: ${scoreStr}`,
+      displayDate,
+      scoreStr: formatScore(p.mood_score),
     };
   });
 }
@@ -106,8 +103,6 @@ export default function DiaryPage() {
   const [summaryData, setSummaryData] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState(null);
-
-  const [activeMarkKey, setActiveMarkKey] = useState(null);
 
   async function loadSummary(period) {
     setSummaryLoading(true);
@@ -159,12 +154,7 @@ export default function DiaryPage() {
 
   function handlePeriodChange(period) {
     setActivePeriod(period);
-    setActiveMarkKey(null);
     loadSummary(period);
-  }
-
-  function handleMarkChipClick(key) {
-    setActiveMarkKey((prev) => (prev === key ? null : key));
   }
 
   function handleEmotionToggle(key) {
@@ -242,9 +232,6 @@ export default function DiaryPage() {
   const avgScore = getAverageScore(realPoints);
   const avgLabel = activePeriod === 'year' ? 'Среднее по месяцам' : 'Средняя отметка';
   const recentMarks = getRecentMarks(realPoints, activePeriod);
-  const activeMarkData = activeMarkKey != null
-    ? (recentMarks.find((m) => m.key === activeMarkKey) ?? null)
-    : null;
 
   const historyFooterLink = entriesTotal > 0
     ? <Link to="/student/diary/history">Смотреть всю историю</Link>
@@ -358,48 +345,15 @@ export default function DiaryPage() {
                   {recentMarks.length > 0 && (
                     <div className={styles.recentMarks}>
                       <p className={styles.recentMarksTitle}>Последние отметки</p>
-                      <div className={styles.markChips}>
-                        {recentMarks.map(({ key, chipLabel, accessibleLabel }) => (
-                          <button
-                            key={key}
-                            type="button"
-                            className={
-                              activeMarkKey === key
-                                ? `${styles.markChip} ${styles.markChipActive}`
-                                : styles.markChip
-                            }
-                            aria-expanded={activeMarkKey === key}
-                            aria-label={accessibleLabel}
-                            onClick={() => handleMarkChipClick(key)}
-                          >
-                            {chipLabel}
-                          </button>
+                      <ul className={styles.markChips} aria-label="Последние отметки">
+                        {recentMarks.map(({ key, displayDate, scoreStr }) => (
+                          <li key={key} className={styles.markChip}>
+                            <span className={styles.markDate}>{displayDate}</span>
+                            <span className={styles.markDivider} aria-hidden="true" />
+                            <span className={styles.markScore}>{scoreStr}</span>
+                          </li>
                         ))}
-                      </div>
-                      {activeMarkData && (
-                        <div
-                          className={styles.markDetail}
-                          role="region"
-                          aria-label="Детали отметки"
-                        >
-                          <div className={styles.markDetailContent}>
-                            <span className={styles.markDetailTitle}>
-                              {activeMarkData.detailTitle}
-                            </span>
-                            <span className={styles.markDetailScore}>
-                              {activeMarkData.detailScoreLabel}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            className={styles.markDetailClose}
-                            aria-label="Закрыть детали отметки"
-                            onClick={() => setActiveMarkKey(null)}
-                          >
-                            Закрыть
-                          </button>
-                        </div>
-                      )}
+                      </ul>
                     </div>
                   )}
                   <p className={styles.observationHint}>

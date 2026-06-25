@@ -78,6 +78,16 @@ test('shows raw key when emotion is not in catalog', () => {
   expect(screen.getByText('unknown_key')).toBeInTheDocument();
 });
 
+test('shows legacy label for deprecated emotion key light', () => {
+  render(<DiaryEntryItem entry={entry({ emotions: ['light'] })} emotionCatalog={CATALOG} />);
+  expect(screen.getByText('легко')).toBeInTheDocument();
+});
+
+test('shows legacy label for deprecated emotion key angry', () => {
+  render(<DiaryEntryItem entry={entry({ emotions: ['angry'] })} emotionCatalog={CATALOG} />);
+  expect(screen.getByText('злобно')).toBeInTheDocument();
+});
+
 test('renders entry text', () => {
   render(<DiaryEntryItem entry={entry()} emotionCatalog={[]} />);
   expect(screen.getByText('Сегодня был хороший день')).toBeInTheDocument();
@@ -373,6 +383,34 @@ test('save button disabled and shows Сохранение… while saving', asyn
   await waitFor(() =>
     expect(screen.getByText('Сохранение…')).toBeDisabled()
   );
+});
+
+test('edit mode displays mood score as visible text', () => {
+  render(
+    <DiaryEntryItem entry={entry({ mood_score: 7 })} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  openEditViaMenu();
+  expect(screen.getByText(/7\/10/)).toBeInTheDocument();
+});
+
+test('edit mode displays mood word for current score', () => {
+  render(
+    <DiaryEntryItem entry={entry({ mood_score: 7 })} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  openEditViaMenu();
+  // MOOD_WORDS[7] = 'Хорошо'
+  expect(screen.getByText(/хорошо/i)).toBeInTheDocument();
+});
+
+test('mood value text updates reactively when slider changes', () => {
+  render(
+    <DiaryEntryItem entry={entry({ mood_score: 7 })} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  openEditViaMenu();
+  const slider = screen.getByRole('slider', { name: /настроение/i });
+  fireEvent.change(slider, { target: { value: '5' } });
+  // MOOD_WORDS[5] = 'Нейтрально'
+  expect(screen.getByText(/нейтрально/i)).toBeInTheDocument();
 });
 
 // ─── delete confirm mode ──────────────────────────────────────────────────────

@@ -197,7 +197,26 @@
 }
 
 .editMoodRow {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.editMoodHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.editMoodLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.editMoodValue {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--coffee);
 }
 
 .editFieldLabel {
@@ -209,9 +228,52 @@
 }
 
 .editMoodSlider {
+  appearance: none;
+  -webkit-appearance: none;
   width: 100%;
-  accent-color: var(--coffee);
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
+  outline: none;
   cursor: pointer;
+  display: block;
+}
+
+.editMoodSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2px solid var(--espresso);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(74, 55, 40, 0.2);
+  transition: transform 0.12s;
+}
+
+.editMoodSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.editMoodSlider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2px solid var(--espresso);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(74, 55, 40, 0.2);
+}
+
+.editMoodSlider::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
+}
+
+.editMoodSlider:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 4px;
 }
 
 .editMoodSlider:disabled {
@@ -294,12 +356,14 @@
 
 .editActions {
   display: flex;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .saveBtn {
-  flex: 1;
-  padding: 7px 12px;
+  min-width: 110px;
+  padding: 7px 18px;
   background: var(--coffee);
   color: #fff;
   border: none;
@@ -311,13 +375,18 @@
   transition: opacity 0.15s;
 }
 
+.saveBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
 .saveBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 .cancelBtn {
-  padding: 7px 12px;
+  min-width: 80px;
+  padding: 7px 16px;
   background: transparent;
   border: 1px solid var(--nav-border);
   border-radius: 8px;

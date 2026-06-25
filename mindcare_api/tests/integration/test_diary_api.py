@@ -1,14 +1,16 @@
 """
-Integration tests for Diary backend (Stage Diary Backend + Chart Hotfix 2).
+Integration tests for Diary backend (Stage Diary Backend + Chart Hotfix 2 + Catalog Update).
 
 Покрывает:
   - GET /api/diary/emotions — активный справочник
+  - обновлённый каталог: 12 активных состояний, tense/irritated/low/lonely,
+    angry/light — деактивированы и не возвращаются API
   - GET /api/diary/today — пустая запись при отсутствии
   - PUT /api/diary/today — создание записи
   - повторный PUT /today — обновляет, не создаёт вторую
   - mood_score < 1 → 422; mood_score > 10 → 422
   - неизвестный emotion key → 422
-  - неактивный emotion key → 422
+  - неактивный emotion key → 422 (в т.ч. deprecated: angry, light)
   - GET /api/diary/entries — только свои записи
   - другой student не видит чужие записи
   - psychologist / admin / supervisor → 403
@@ -19,7 +21,7 @@ Integration tests for Diary backend (Stage Diary Backend + Chart Hotfix 2).
   - GET /api/diary/summary — fixed calendar period frame, year monthly aggregation
   - summary отклоняет неизвестный period → 422
 
-Требования: dev PostgreSQL на alembic head (b2e4d7f1a9c3), DATA_ENCRYPTION_KEY.
+Требования: dev PostgreSQL на alembic head (c3a7f8e2d1b9), DATA_ENCRYPTION_KEY.
 """
 
 import json as _json
@@ -901,3 +903,84 @@ class TestEmptyPatch:
         token, _ = _make_user(client, "student")
         r = _patch_entry(client, token, str(_uuid_mod.uuid4()), {})
         assert r.status_code == 404
+
+
+# ─── 11. Updated emotions catalog (c3a7f8e2d1b9) ─────────────────────────────
+
+class TestUpdatedCatalog:
+    """Проверяет состояние каталога после миграции c3a7f8e2d1b9.
+
+    После миграции:
+      - 12 активных состояний (tense, irritated, low, lonely добавлены;
+        angry, light деактивированы)
+      - GET /api/diary/emotions возвращает ровно 12 записей
+      - Новые ключи принимаются API; deprecated ключи отвергаются (is_active=False)
+    """
+
+    def test_active_emotions_count_is_12(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/emotions", headers=_auth(token))
+        assert r.status_code == 200
+        assert len(r.json()) == 12
+
+    def test_new_keys_present_in_catalog(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/emotions", headers=_auth(token))
+        keys = {e["key"] for e in r.json()}
+        assert "tense"    in keys
+        assert "irritated" in keys
+        assert "low"       in keys
+        assert "lonely"    in keys
+
+    def test_deprecated_angry_not_in_active_catalog(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/emotions", headers=_auth(token))
+        keys = [e["key"] for e in r.json()]
+        assert "angry" not in keys
+
+    def test_deprecated_light_not_in_active_catalog(self, client):
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/emotions", headers=_auth(token))
+        keys = [e["key"] for e in r.json()]
+        assert "light" not in keys
+
+    def test_catalog_sorted_by_new_order(self, client):
+        """Первые 5 активных: calm, joyful, inspired, focused, anxious."""
+        token, _ = _make_user(client, "student")
+        r = client.get("/api/diary/emotions", headers=_auth(token))
+        keys = [e["key"] for e in r.json()]
+        assert keys[:5] == ["calm", "joyful", "inspired", "focused", "anxious"]
+
+    def test_new_key_tense_accepted_in_put(self, client):
+        token, _ = _make_user(client, "student")
+        r = _put_today(client, token, {"mood_score": 5, "emotions": ["tense"]})
+        assert r.status_code == 200
+        assert "tense" in r.json()["emotions"]
+
+    def test_new_key_irritated_accepted_in_put(self, client):
+        token, _ = _make_user(client, "student")
+        r = _put_today(client, token, {"mood_score": 4, "emotions": ["irritated"]})
+        assert r.status_code == 200
+        assert "irritated" in r.json()["emotions"]
+
+    def test_new_key_low_accepted_in_put(self, client):
+        token, _ = _make_user(client, "student")
+        r = _put_today(client, token, {"mood_score": 3, "emotions": ["low"]})
+        assert r.status_code == 200
+        assert "low" in r.json()["emotions"]
+
+    def test_new_key_lonely_accepted_in_put(self, client):
+        token, _ = _make_user(client, "student")
+        r = _put_today(client, token, {"mood_score": 4, "emotions": ["lonely"]})
+        assert r.status_code == 200
+        assert "lonely" in r.json()["emotions"]
+
+    def test_deprecated_angry_rejected_in_put(self, client):
+        token, _ = _make_user(client, "student")
+        r = _put_today(client, token, {"mood_score": 5, "emotions": ["angry"]})
+        assert r.status_code == 422
+
+    def test_deprecated_light_rejected_in_put(self, client):
+        token, _ = _make_user(client, "student")
+        r = _put_today(client, token, {"mood_score": 5, "emotions": ["light"]})
+        assert r.status_code == 422

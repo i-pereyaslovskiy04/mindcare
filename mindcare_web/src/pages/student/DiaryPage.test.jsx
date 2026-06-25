@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import * as diaryApi from '../../api/diary.api';
 import DiaryPage from './DiaryPage';
 
@@ -430,8 +430,8 @@ test('latest mark tile: value shows score without date (e.g. "7/10")', async () 
 test('latest mark tile: date shown separately as summaryMeta (e.g. "14.06")', async () => {
   render(<DiaryPage />);
   await screen.findByTestId('observation-summary');
-  // Date of latest point is 2026-06-14 → formatShortDate → "14.06"
-  expect(screen.getByText('14.06')).toBeInTheDocument();
+  // Date of latest point is 2026-06-14 → appears in summaryMeta AND in chips
+  expect(screen.getAllByText('14.06').length).toBeGreaterThan(0);
 });
 
 test('latest mark tile: no data shows "—"', async () => {
@@ -534,73 +534,33 @@ test('average: null-scored points ignored in calculation', async () => {
   expect(screen.getByText('7/10')).toBeInTheDocument();
 });
 
-test('recent marks render as buttons, not spans', async () => {
+test('recent marks show date and score as separate elements', async () => {
   render(<DiaryPage />);
   await screen.findByTestId('observation-summary');
-  // chip text "14.06 · 7/10" should be inside a button
-  const chipBtn = screen.getByRole('button', { name: /Показать отметку за 14\.06/i });
-  expect(chipBtn).toBeInTheDocument();
+  // MOCK_SUMMARY: latest non-null chip has date "14.06" and score "7/10" in separate spans
+  const list = screen.getByRole('list', { name: /последние отметки/i });
+  expect(within(list).getByText('14.06')).toBeInTheDocument();
+  // Old combined "14.06 · 7/10" string no longer exists as single text node
+  expect(screen.queryByText('14.06 · 7/10')).not.toBeInTheDocument();
 });
 
-test('recent marks chip text is visible', async () => {
-  render(<DiaryPage />);
-  // MOCK_SUMMARY: latest chip text is "14.06 · 7/10"
-  expect(await screen.findByText('14.06 · 7/10')).toBeInTheDocument();
-});
-
-test('clicking recent mark chip opens detail panel', async () => {
+test('recent marks are not interactive buttons', async () => {
   render(<DiaryPage />);
   await screen.findByTestId('observation-summary');
-
-  expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
-
-  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
+  // chips rendered as <li>, not as <button>
+  expect(screen.queryByRole('button', { name: /Показать отметку за/i })).not.toBeInTheDocument();
 });
 
-test('detail panel shows date title and score', async () => {
+test('detail region is never rendered', async () => {
   render(<DiaryPage />);
   await screen.findByTestId('observation-summary');
-
-  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
-
-  expect(screen.getByText('Отметка: 7/10')).toBeInTheDocument();
-});
-
-test('close button hides detail panel', async () => {
-  render(<DiaryPage />);
-  await screen.findByTestId('observation-summary');
-
-  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
-  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole('button', { name: /Закрыть детали отметки/i }));
   expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument();
 });
 
-test('toggling same chip closes detail panel', async () => {
+test('close button "Закрыть детали отметки" is never rendered', async () => {
   render(<DiaryPage />);
   await screen.findByTestId('observation-summary');
-
-  const chipBtn = screen.getByRole('button', { name: /Показать отметку за 14\.06/i });
-  fireEvent.click(chipBtn);
-  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
-
-  fireEvent.click(chipBtn);
-  expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument();
-});
-
-test('changing period chip closes open detail panel', async () => {
-  render(<DiaryPage />);
-  await screen.findByTestId('observation-summary');
-
-  fireEvent.click(screen.getByRole('button', { name: /Показать отметку за 14\.06/i }));
-  expect(screen.getByRole('region', { name: /детали отметки/i })).toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole('button', { name: 'Месяц' }));
-
-  await waitFor(() => expect(screen.queryByRole('region', { name: /детали отметки/i })).not.toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: /Закрыть детали отметки/i })).not.toBeInTheDocument();
 });
 
 test('null-scored points do not appear in recent marks', async () => {
