@@ -51,20 +51,27 @@ def get_my_schedule(
 
 @group_router.get("", response_model=PaginatedGroupSessionsResponse)
 def list_my_group_sessions(
-    page:         int  = Query(default=1, ge=1),
-    size:         int  = Query(default=20, ge=1, le=100),
-    include_past: bool = Query(default=False),
-    current_user: dict = Depends(get_current_user),
+    page:         int           = Query(default=1, ge=1),
+    size:         int           = Query(default=20, ge=1, le=100),
+    include_past: bool          = Query(default=False),
+    date_from:    Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    date_to:      Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    current_user: dict          = Depends(get_current_user),
 ):
     """Групповые занятия, назначенные текущему психологу.
 
     Подтверждение психологом не требуется — это read-only список.
+    date_from/date_to — опц. фильтр по диапазону (для календарного обзора).
     """
+    df = _parse_date(date_from) if date_from else None
+    dt = _parse_date(date_to) if date_to else None
     items, total = service.list_group_sessions_psychologist(
         psychologist_id=current_user["id"],
         page=page,
         size=size,
         include_past=include_past,
+        date_from=df,
+        date_to=dt,
     )
     return {"items": items, "total": total, "page": page, "size": size}
 

@@ -1157,6 +1157,8 @@ def list_group_sessions_psychologist(
     page: int = 1,
     size: int = 20,
     include_past: bool = False,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
 ) -> tuple[list[dict], int]:
     """Group sessions assigned to a given psychologist."""
     with SessionLocal() as db:
@@ -1167,6 +1169,8 @@ def list_group_sessions_psychologist(
             include_past=include_past,
             open_only=False,
             psychologist_id_filter=int(psychologist_id),
+            date_from=date_from,
+            date_to=date_to,
         )
 
 

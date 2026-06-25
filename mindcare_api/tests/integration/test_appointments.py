@@ -1300,6 +1300,108 @@ class TestPsychologistGroupSessions:
         assert r.status_code == 403
         assert "неактив" in r.json()["detail"].lower()
 
+    def test_29b_group_sessions_date_range_filter(self, client):
+        """date_from/date_to отдают только группы психолога внутри диапазона."""
+        tok_p, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs_in = _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=3)
+            )
+            _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=40)
+            )
+            in_uuid = str(gs_in.uuid)
+            db.commit()
+
+        df = now.date().isoformat()
+        dt = (now + timedelta(days=7)).date().isoformat()
+        r = client.get(
+            f"/api/psychologist/group-sessions?date_from={df}&date_to={dt}",
+            headers=_auth(tok_p),
+        )
+        assert r.status_code == 200, r.text
+        uuids = [i["uuid"] for i in r.json()["items"]]
+        assert in_uuid in uuids
+        assert len(uuids) == 1
+
+    def test_29c_group_sessions_include_past_in_range(self, client):
+        """include_past=true + диапазон показывает прошедшую группу в периоде."""
+        tok_p, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs_past = _make_group_session(
+                db, mt.id, pid, starts_at=now - timedelta(days=2)
+            )
+            past_uuid = str(gs_past.uuid)
+            db.commit()
+
+        df = (now - timedelta(days=7)).date().isoformat()
+        dt = (now + timedelta(days=1)).date().isoformat()
+        # Без include_past прошедшая отсекается фильтром > now.
+        r_no = client.get(
+            f"/api/psychologist/group-sessions?date_from={df}&date_to={dt}",
+            headers=_auth(tok_p),
+        )
+        assert r_no.status_code == 200, r_no.text
+        assert past_uuid not in [i["uuid"] for i in r_no.json()["items"]]
+        # С include_past=true прошедшая в периоде видна.
+        r_yes = client.get(
+            f"/api/psychologist/group-sessions"
+            f"?date_from={df}&date_to={dt}&include_past=true",
+            headers=_auth(tok_p),
+        )
+        assert r_yes.status_code == 200, r_yes.text
+        assert past_uuid in [i["uuid"] for i in r_yes.json()["items"]]
+
+    def test_29d_group_sessions_date_filter_isolation(self, client):
+        """date-фильтр не отдаёт группы другого психолога."""
+        tok_p1, pid1, _ = _make_user(client, "psychologist")
+        _, pid2, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            _make_group_session(
+                db, mt.id, pid2, starts_at=now + timedelta(days=3)
+            )
+            db.commit()
+
+        df = now.date().isoformat()
+        dt = (now + timedelta(days=7)).date().isoformat()
+        r = client.get(
+            f"/api/psychologist/group-sessions?date_from={df}&date_to={dt}",
+            headers=_auth(tok_p1),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["items"] == []
+
+    def test_29e_group_sessions_no_date_filter_backward_compat(self, client):
+        """Без date-фильтров список по-прежнему отдаёт будущие группы."""
+        tok_p, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs_soon = _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=3)
+            )
+            gs_far = _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=40)
+            )
+            soon_uuid = str(gs_soon.uuid)
+            far_uuid = str(gs_far.uuid)
+            db.commit()
+
+        r = client.get(
+            "/api/psychologist/group-sessions",
+            headers=_auth(tok_p),
+        )
+        assert r.status_code == 200, r.text
+        uuids = [i["uuid"] for i in r.json()["items"]]
+        assert soon_uuid in uuids
+        assert far_uuid in uuids
+
 
 # ─── Schedule rules (supervisor) ──────────────────────────────────────────────
 

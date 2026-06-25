@@ -1275,6 +1275,8 @@ def get_group_sessions_list(
     open_only: bool = False,
     student_id: Optional[int] = None,
     psychologist_id_filter: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
 ) -> tuple[list[dict], int]:
     now = datetime.now(MOSCOW_TZ)
     q = db.query(GroupSession).filter(
@@ -1288,6 +1290,18 @@ def get_group_sessions_list(
         q = q.filter(
             GroupSession.psychologist_id == psychologist_id_filter
         )
+    # date_from/date_to — строго опциональны: фильтр применяется только если
+    # переданы; без них поведение прежнее (student/supervisor/group list).
+    if date_from is not None:
+        dt_from = datetime.combine(date_from, time(0, 0)).replace(
+            tzinfo=MOSCOW_TZ
+        )
+        q = q.filter(GroupSession.starts_at >= dt_from)
+    if date_to is not None:
+        dt_to = datetime.combine(date_to, time(23, 59, 59)).replace(
+            tzinfo=MOSCOW_TZ
+        )
+        q = q.filter(GroupSession.starts_at <= dt_to)
     total = q.count()
     rows = (
         q.order_by(GroupSession.starts_at.asc())
