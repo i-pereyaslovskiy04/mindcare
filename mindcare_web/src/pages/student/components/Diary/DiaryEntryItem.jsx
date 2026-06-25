@@ -45,17 +45,17 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  // Mobile action sheet
-  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  // Action menu (kebab) state — shared between desktop and mobile
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!mobileSheetOpen) return;
+    if (!menuOpen) return;
     function onKeyDown(e) {
-      if (e.key === 'Escape') setMobileSheetOpen(false);
+      if (e.key === 'Escape') setMenuOpen(false);
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [mobileSheetOpen]);
+  }, [menuOpen]);
 
   function openEdit() {
     setEditMood(mood_score);
@@ -244,54 +244,20 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
           </span>
         </div>
 
-        {/* Right: desktop icon group + mobile kebab */}
+        {/* Right: single kebab button — opacity-hidden on desktop, shown on hover/focus/open */}
         {(onUpdate || onDelete) && (
           <div className={styles.topActionsSlot}>
-            <div
-              role="group"
-              className={styles.actionGroup}
-              aria-label="Действия записи"
-            >
-              {onUpdate && (
-                <button
-                  type="button"
-                  className={styles.actionIconButton}
-                  onClick={openEdit}
-                  aria-label="Редактировать запись"
-                >
-                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
-                </button>
-              )}
-              {onUpdate && onDelete && (
-                <span className={styles.actionDivider} aria-hidden="true" />
-              )}
-              {onDelete && (
-                <button
-                  type="button"
-                  className={`${styles.actionIconButton} ${styles.actionIconDanger}`}
-                  onClick={openDeleteConfirm}
-                  aria-label="Удалить запись"
-                >
-                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    <line x1="10" y1="11" x2="10" y2="17"/>
-                    <line x1="14" y1="11" x2="14" y2="17"/>
-                  </svg>
-                </button>
-              )}
-            </div>
-
             <button
               type="button"
-              className={styles.kebabButton}
+              className={
+                menuOpen
+                  ? `${styles.kebabButton} ${styles.kebabButtonOpen}`
+                  : styles.kebabButton
+              }
               aria-label="Действия с записью"
-              aria-haspopup="dialog"
-              aria-expanded={mobileSheetOpen}
-              onClick={() => setMobileSheetOpen((prev) => !prev)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((prev) => !prev)}
             >
               ⋮
             </button>
@@ -299,20 +265,19 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
         )}
       </div>
 
-      {/* Mobile action sheet — appears inline below the top row */}
-      {mobileSheetOpen && (
+      {/* Action menu — compact on desktop (right-aligned), full-width inline on mobile */}
+      {menuOpen && (
         <div
           className={styles.actionSheet}
           role="region"
           aria-label="Действия с записью"
           data-testid="entry-action-sheet"
         >
-          <p className={styles.actionSheetTitle}>Действия с записью</p>
           {onUpdate && (
             <button
               type="button"
               className={styles.sheetAction}
-              onClick={() => { setMobileSheetOpen(false); openEdit(); }}
+              onClick={() => { setMenuOpen(false); openEdit(); }}
             >
               Редактировать запись
             </button>
@@ -321,7 +286,7 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
             <button
               type="button"
               className={`${styles.sheetAction} ${styles.sheetActionDanger}`}
-              onClick={() => { setMobileSheetOpen(false); openDeleteConfirm(); }}
+              onClick={() => { setMenuOpen(false); openDeleteConfirm(); }}
             >
               Удалить запись
             </button>
@@ -329,7 +294,7 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
           <button
             type="button"
             className={styles.sheetCancel}
-            onClick={() => setMobileSheetOpen(false)}
+            onClick={() => setMenuOpen(false)}
           >
             Отмена
           </button>

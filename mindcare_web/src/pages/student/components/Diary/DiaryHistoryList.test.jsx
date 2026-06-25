@@ -76,7 +76,7 @@ test('renders emotion label via catalog', () => {
 
 // ─── onEntryUpdate / onEntryDelete prop pass-through ─────────────────────────
 
-test('entry items show action buttons when onEntryUpdate and onEntryDelete provided', () => {
+test('entry items show kebab buttons when onEntryUpdate and onEntryDelete provided', () => {
   render(
     <DiaryHistoryList
       entries={ENTRIES}
@@ -85,12 +85,12 @@ test('entry items show action buttons when onEntryUpdate and onEntryDelete provi
       onEntryDelete={jest.fn()}
     />
   );
-  expect(screen.getAllByRole('button', { name: /редактировать запись/i }).length).toBeGreaterThan(0);
-  expect(screen.getAllByRole('button', { name: /удалить запись/i }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole('button', { name: /действия с записью/i }).length).toBeGreaterThan(0);
 });
 
 test('no action buttons on items when onEntryUpdate and onEntryDelete not provided', () => {
   render(<DiaryHistoryList entries={ENTRIES} emotionCatalog={CATALOG} />);
+  expect(screen.queryByRole('button', { name: /действия с записью/i })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /редактировать запись/i })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /удалить запись/i })).not.toBeInTheDocument();
 });
