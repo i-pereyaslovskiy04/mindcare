@@ -95,6 +95,71 @@ test('no action buttons on items when onEntryUpdate and onEntryDelete not provid
   expect(screen.queryByRole('button', { name: /удалить запись/i })).not.toBeInTheDocument();
 });
 
+// ─── single-open behavior ─────────────────────────────────────────────────────
+
+test('opening first entry menu shows exactly one action menu', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      onEntryUpdate={jest.fn()}
+      onEntryDelete={jest.fn()}
+    />
+  );
+  const [kebab1] = screen.getAllByRole('button', { name: /действия с записью/i });
+  fireEvent.click(kebab1);
+  expect(screen.getAllByTestId('entry-action-sheet')).toHaveLength(1);
+});
+
+test('opening second entry menu closes first entry menu', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      onEntryUpdate={jest.fn()}
+      onEntryDelete={jest.fn()}
+    />
+  );
+  const [kebab1, kebab2] = screen.getAllByRole('button', { name: /действия с записью/i });
+  fireEvent.click(kebab1);
+  expect(screen.getAllByTestId('entry-action-sheet')).toHaveLength(1);
+  fireEvent.click(kebab2);
+  // only second entry's menu is now open
+  expect(screen.getAllByTestId('entry-action-sheet')).toHaveLength(1);
+});
+
+test('only one action menu is open at a time', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      onEntryUpdate={jest.fn()}
+      onEntryDelete={jest.fn()}
+    />
+  );
+  const kebabs = screen.getAllByRole('button', { name: /действия с записью/i });
+  kebabs.forEach((kebab) => {
+    fireEvent.click(kebab);
+    expect(screen.getAllByTestId('entry-action-sheet')).toHaveLength(1);
+  });
+});
+
+test('clicking same kebab twice closes its menu', () => {
+  render(
+    <DiaryHistoryList
+      entries={ENTRIES}
+      emotionCatalog={CATALOG}
+      onEntryUpdate={jest.fn()}
+      onEntryDelete={jest.fn()}
+    />
+  );
+  const [kebab1] = screen.getAllByRole('button', { name: /действия с записью/i });
+  fireEvent.click(kebab1);
+  expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
+  fireEvent.click(kebab1);
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
+});
+
 // ─── load more ────────────────────────────────────────────────────────────────
 
 test('does not show "Загрузить ещё" button when hasMore=false (default)', () => {

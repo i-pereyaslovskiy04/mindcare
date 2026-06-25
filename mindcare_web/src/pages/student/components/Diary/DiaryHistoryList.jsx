@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import DiaryEntryItem from './DiaryEntryItem';
 import styles from './DiaryHistoryList.module.css';
 
@@ -13,6 +14,9 @@ export default function DiaryHistoryList({
   footerLink,
   hideTitle = false,
 }) {
+  // Only one action menu open at a time across the list
+  const [openActionsUuid, setOpenActionsUuid] = useState(null);
+
   return (
     <div className={styles.panel}>
       {!hideTitle && <h2 className={styles.title}>История записей</h2>}
@@ -27,6 +31,13 @@ export default function DiaryHistoryList({
               emotionCatalog={emotionCatalog}
               onUpdate={onEntryUpdate}
               onDelete={onEntryDelete}
+              actionsOpen={openActionsUuid === entry.uuid}
+              onActionsToggle={() =>
+                setOpenActionsUuid((prev) =>
+                  prev === entry.uuid ? null : entry.uuid
+                )
+              }
+              onActionsClose={() => setOpenActionsUuid(null)}
             />
           ))}
         </div>

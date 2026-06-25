@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import * as diaryApi from '../../../../api/diary.api';
 import styles from './DiaryEntryItem.module.css';
 
@@ -29,7 +29,17 @@ function getEmotionLabel(key, catalog) {
   return found ? found.label : key;
 }
 
-export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, onDelete }) {
+export default function DiaryEntryItem({
+  entry,
+  emotionCatalog = [],
+  onUpdate,
+  onDelete,
+  // Controlled from parent (DiaryHistoryList) for single-open behavior.
+  // When not provided, falls back to internal state (standalone usage / tests).
+  actionsOpen,
+  onActionsToggle,
+  onActionsClose,
+}) {
   const { uuid, entry_date, mood_score, emotions, entry_text } = entry;
 
   // Edit state
@@ -45,17 +55,44 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  // Action menu (kebab) state — shared between desktop and mobile
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Menu open: controlled from parent when actionsOpen is provided, else internal
+  const isControlled = actionsOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const menuOpen = isControlled ? actionsOpen : internalOpen;
+
+  function toggleMenu() {
+    if (isControlled) onActionsToggle?.();
+    else setInternalOpen((prev) => !prev);
+  }
+
+  // Stable ref so Escape / click-outside handlers never hold stale closures
+  const slotRef = useRef(null);
+  const doCloseRef = useRef();
+  doCloseRef.current = isControlled
+    ? () => onActionsClose?.()
+    : () => setInternalOpen(false);
 
   useEffect(() => {
     if (!menuOpen) return;
     function onKeyDown(e) {
-      if (e.key === 'Escape') setMenuOpen(false);
+      if (e.key === 'Escape') doCloseRef.current();
+    }
+    function onPointerDown(e) {
+      if (slotRef.current && !slotRef.current.contains(e.target)) {
+        doCloseRef.current();
+      }
     }
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [menuOpen]);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [menuOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function closeMenu() {
+    doCloseRef.current();
+  }
 
   function openEdit() {
     setEditMood(mood_score);
@@ -244,9 +281,9 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
           </span>
         </div>
 
-        {/* Right: single kebab button — opacity-hidden on desktop, shown on hover/focus/open */}
+        {/* Right: kebab + absolute dropdown menu — position:relative anchor */}
         {(onUpdate || onDelete) && (
-          <div className={styles.topActionsSlot}>
+          <div className={styles.topActionsSlot} ref={slotRef}>
             <button
               type="button"
               className={
@@ -257,49 +294,49 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
               aria-label="Действия с записью"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((prev) => !prev)}
+              onClick={toggleMenu}
             >
               ⋮
             </button>
+
+            {menuOpen && (
+              <div
+                className={styles.actionMenu}
+                aria-label="Действия с записью"
+                data-testid="entry-action-sheet"
+              >
+                {onUpdate && (
+                  <button
+                    type="button"
+                    className={styles.menuAction}
+                    aria-label="Редактировать запись"
+                    onClick={() => { closeMenu(); openEdit(); }}
+                  >
+                    Редактировать
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    className={`${styles.menuAction} ${styles.menuActionDanger}`}
+                    aria-label="Удалить запись"
+                    onClick={() => { closeMenu(); openDeleteConfirm(); }}
+                  >
+                    Удалить
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={styles.menuCancel}
+                  onClick={closeMenu}
+                >
+                  Отмена
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      {/* Action menu — compact on desktop (right-aligned), full-width inline on mobile */}
-      {menuOpen && (
-        <div
-          className={styles.actionSheet}
-          role="region"
-          aria-label="Действия с записью"
-          data-testid="entry-action-sheet"
-        >
-          {onUpdate && (
-            <button
-              type="button"
-              className={styles.sheetAction}
-              onClick={() => { setMenuOpen(false); openEdit(); }}
-            >
-              Редактировать запись
-            </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              className={`${styles.sheetAction} ${styles.sheetActionDanger}`}
-              onClick={() => { setMenuOpen(false); openDeleteConfirm(); }}
-            >
-              Удалить запись
-            </button>
-          )}
-          <button
-            type="button"
-            className={styles.sheetCancel}
-            onClick={() => setMenuOpen(false)}
-          >
-            Отмена
-          </button>
-        </div>
-      )}
 
       {emotions && emotions.length > 0 && (
         <div className={styles.emotionRow}>

@@ -29,7 +29,9 @@
   gap: 6px 12px;
 }
 
+/* position:relative — anchor for absolute dropdown menu */
 .topActionsSlot {
+  position: relative;
   display: flex;
   align-items: flex-start;
   flex-shrink: 0;
@@ -124,42 +126,30 @@
   }
 }
 
-/* ── Action menu / sheet ────────────────────────────────────────────────────── */
+/* ── Action dropdown menu — absolute overlay, does not shift card layout ──── */
 
-.actionSheet {
-  /* Desktop: compact right-aligned dropdown */
-  margin-top: 6px;
-  margin-left: auto;
-  width: fit-content;
-  min-width: 192px;
-  padding: 6px;
+.actionMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 152px;
+  padding: 5px;
   background: var(--warm-white, #fff);
   border: 1px solid var(--nav-border);
   border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10);
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-@media (max-width: 600px) {
-  .actionSheet {
-    /* Mobile: full-width inline */
-    margin-top: 10px;
-    margin-left: 0;
-    width: auto;
-    box-shadow: none;
-    padding: 12px;
-    gap: 4px;
-  }
-}
-
-.sheetAction {
+.menuAction {
   display: flex;
   align-items: center;
   width: 100%;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 7px;
   border: none;
   background: transparent;
   font-size: 13px;
@@ -172,29 +162,30 @@
   transition: background 0.12s;
 }
 
-.sheetAction:hover {
+.menuAction:hover {
   background: var(--cream);
 }
 
-.sheetAction:focus-visible {
+.menuAction:focus-visible {
   outline: 2px solid var(--coffee);
   outline-offset: -2px;
 }
 
-.sheetActionDanger {
+.menuActionDanger {
   color: #b94040;
 }
 
-.sheetActionDanger:hover {
+.menuActionDanger:hover {
   background: rgba(185, 64, 64, 0.07);
 }
 
-.sheetCancel {
+.menuCancel {
   display: flex;
   align-items: center;
+  justify-content: center;
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 7px 12px;
+  border-radius: 7px;
   border: 1px solid var(--nav-border);
   background: transparent;
   font-size: 13px;
@@ -202,17 +193,17 @@
   color: var(--text-muted);
   font-family: inherit;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   white-space: nowrap;
   margin-top: 2px;
   transition: background 0.12s;
 }
 
-.sheetCancel:hover {
+.menuCancel:hover {
   background: var(--cream);
 }
 
-.sheetCancel:focus-visible {
+.menuCancel:focus-visible {
   outline: 2px solid var(--coffee);
   outline-offset: -2px;
 }

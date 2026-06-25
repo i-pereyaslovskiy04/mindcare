@@ -36,7 +36,10 @@ beforeEach(() => {
   diaryApi.deleteDiaryEntry.mockResolvedValue(undefined);
 });
 
-// ─── helpers: open action menu and trigger actions ────────────────────────────
+// ─── helpers ─────────────────────────────────────────────────────────────────
+// Buttons have aria-label="Редактировать запись" / "Удалить запись" (full label
+// for screen readers) but visible text is the short form "Редактировать" / "Удалить".
+// getByRole matches accessible name (aria-label takes priority), so helpers work.
 
 function openEditViaMenu() {
   fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
@@ -99,11 +102,10 @@ test('shows kebab button when only onUpdate provided', () => {
   expect(screen.getByRole('button', { name: /действия с записью/i })).toBeInTheDocument();
 });
 
-test('read mode does not render persistent edit/delete icon buttons outside menu', () => {
+test('read mode does not render persistent edit/delete buttons outside menu', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
-  // buttons only appear inside the menu (closed by default)
   expect(screen.queryByRole('button', { name: /редактировать запись/i })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /удалить запись/i })).not.toBeInTheDocument();
 });
@@ -139,7 +141,28 @@ test('clicking kebab opens action menu', () => {
   expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
 });
 
-test('action menu contains Редактировать запись, Удалить запись and Отмена', () => {
+test('action menu buttons have short visible labels: Редактировать, Удалить, Отмена', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  const menu = screen.getByTestId('entry-action-sheet');
+  expect(within(menu).getByText('Редактировать')).toBeInTheDocument();
+  expect(within(menu).getByText('Удалить')).toBeInTheDocument();
+  expect(within(menu).getByText('Отмена')).toBeInTheDocument();
+});
+
+test('action menu buttons do not show long text "Редактировать запись" or "Удалить запись" as visible text', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  const menu = screen.getByTestId('entry-action-sheet');
+  expect(within(menu).queryByText('Редактировать запись')).not.toBeInTheDocument();
+  expect(within(menu).queryByText('Удалить запись')).not.toBeInTheDocument();
+});
+
+test('action menu buttons are accessible via aria-label (full name)', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
@@ -189,7 +212,7 @@ test('Escape key closes action menu', () => {
   expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
 });
 
-test('"Редактировать запись" in menu closes menu and opens edit mode', () => {
+test('"Редактировать" in menu closes menu and opens edit mode', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
@@ -198,7 +221,7 @@ test('"Редактировать запись" in menu closes menu and opens ed
   expect(screen.getByText('Редактирование')).toBeInTheDocument();
 });
 
-test('"Удалить запись" in menu opens delete confirm without immediate API call', () => {
+test('"Удалить" in menu opens delete confirm without immediate API call', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
@@ -208,9 +231,60 @@ test('"Удалить запись" in menu opens delete confirm without immedia
   expect(diaryApi.deleteDiaryEntry).not.toHaveBeenCalled();
 });
 
+// ─── controlled mode (actionsOpen prop) ──────────────────────────────────────
+
+test('actionsOpen=true renders menu without clicking kebab', () => {
+  const noop = jest.fn();
+  render(
+    <DiaryEntryItem
+      entry={entry()}
+      emotionCatalog={CATALOG}
+      onUpdate={jest.fn()}
+      onDelete={jest.fn()}
+      actionsOpen
+      onActionsToggle={noop}
+      onActionsClose={noop}
+    />
+  );
+  expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
+});
+
+test('actionsOpen=false does not render menu even when it was toggled', () => {
+  const noop = jest.fn();
+  render(
+    <DiaryEntryItem
+      entry={entry()}
+      emotionCatalog={CATALOG}
+      onUpdate={jest.fn()}
+      onDelete={jest.fn()}
+      actionsOpen={false}
+      onActionsToggle={noop}
+      onActionsClose={noop}
+    />
+  );
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
+});
+
+test('kebab click calls onActionsToggle in controlled mode', () => {
+  const onActionsToggle = jest.fn();
+  render(
+    <DiaryEntryItem
+      entry={entry()}
+      emotionCatalog={CATALOG}
+      onUpdate={jest.fn()}
+      onDelete={jest.fn()}
+      actionsOpen={false}
+      onActionsToggle={onActionsToggle}
+      onActionsClose={jest.fn()}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  expect(onActionsToggle).toHaveBeenCalledTimes(1);
+});
+
 // ─── edit mode ────────────────────────────────────────────────────────────────
 
-test('clicking Редактировать запись opens edit form', () => {
+test('clicking edit opens edit form', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
@@ -313,7 +387,7 @@ test('save button disabled and shows Сохранение… while saving', asyn
 
 // ─── delete confirm mode ──────────────────────────────────────────────────────
 
-test('clicking Удалить запись opens delete confirmation', () => {
+test('clicking delete opens delete confirmation', () => {
   render(
     <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
   );
