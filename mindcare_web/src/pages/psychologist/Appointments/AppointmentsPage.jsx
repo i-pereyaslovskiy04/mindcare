@@ -4,7 +4,10 @@ import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
 import Modal from '../../../components/Modal/Modal';
 import { usePsychologistAppointments } from '../../../features/psychologist/hooks/usePsychologistAppointments';
+import { usePsychologistCalendarMonth } from '../../../features/psychologist/hooks/usePsychologistCalendarRange';
 import { confirmAppointment, declineAppointment } from '../../../api/appointments.api';
+import { mskTodayKey } from '../../../features/psychologist/calendar/calendarMappers';
+import PsychologistCalendar from './PsychologistCalendar';
 import GroupSessionsPanel from './GroupSessionsPanel';
 import ScheduleTab from './ScheduleTab';
 import styles from './AppointmentsPage.module.css';
@@ -96,6 +99,31 @@ export default function PsychologistAppointmentsPage() {
   const [declining, setDeclining] = useState(false);
   const [actionError, setActionError] = useState(null);
 
+  // Календарный обзор месяца — отдельный источник данных (диапазон месяца),
+  // не из пагинированного списка. Начальный месяц — текущий (Europe/Moscow).
+  const [todayY, todayM] = mskTodayKey().split('-').map(Number);
+  const [calYear, setCalYear] = useState(todayY);
+  const [calMonth, setCalMonth] = useState(todayM - 1); // 0-indexed
+  const [selectedDay, setSelectedDay] = useState(null);
+  const {
+    eventsByDay: calEventsByDay,
+    loading: calLoading,
+    refetch: calRefetch,
+  } = usePsychologistCalendarMonth({
+    year: calYear, month: calMonth, status: statusFilter,
+  });
+
+  function calPrev() {
+    setSelectedDay(null);
+    setCalMonth(m => (m === 0 ? 11 : m - 1));
+    setCalYear(y => (calMonth === 0 ? y - 1 : y));
+  }
+  function calNext() {
+    setSelectedDay(null);
+    setCalMonth(m => (m === 11 ? 0 : m + 1));
+    setCalYear(y => (calMonth === 11 ? y + 1 : y));
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / 20));
 
   async function handleConfirm(uuid) {
@@ -104,6 +132,7 @@ export default function PsychologistAppointmentsPage() {
     try {
       await confirmAppointment(uuid);
       refetch();
+      calRefetch();
     } catch (e) {
       setActionError(e.message || 'Ошибка подтверждения');
     } finally {
@@ -124,6 +153,7 @@ export default function PsychologistAppointmentsPage() {
       await declineAppointment(declineModal, { reason: declineReason });
       setDeclineModal(null);
       refetch();
+      calRefetch();
     } catch (e) {
       setActionError(e.message || 'Ошибка отклонения');
     } finally {
@@ -192,6 +222,17 @@ export default function PsychologistAppointmentsPage() {
           </button>
         ))}
       </div>
+
+      <PsychologistCalendar
+        year={calYear}
+        month={calMonth}
+        eventsByDay={calEventsByDay}
+        loading={calLoading}
+        onPrev={calPrev}
+        onNext={calNext}
+        selectedDay={selectedDay}
+        onSelectDay={setSelectedDay}
+      />
 
       {actionError && <div className={styles.actionError}>{actionError}</div>}
 

@@ -64,8 +64,12 @@ export const getPsychologistGroupSessions = ({
   page = 1,
   size = 20,
   includePast = false,
+  dateFrom,
+  dateTo,
 } = {}) => {
   const p = new URLSearchParams({ page, size, include_past: includePast });
+  if (dateFrom) p.set('date_from', dateFrom);
+  if (dateTo) p.set('date_to', dateTo);
   return apiFetch(`/api/psychologist/group-sessions?${p}`);
 };
 
