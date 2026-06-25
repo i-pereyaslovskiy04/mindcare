@@ -11,12 +11,28 @@
   border-color: var(--latte);
 }
 
+/* ── Read mode: top row ─────────────────────────────────────────────────────── */
+
 .top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.topMeta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+
+.topActionsSlot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+  flex-shrink: 0;
 }
 
 .date {
@@ -63,18 +79,7 @@
   overflow: hidden;
 }
 
-/* ── Read mode: action buttons ──────────────────────────────────────────────── */
-
-.topRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-}
+/* ── Read mode: desktop action group ────────────────────────────────────────── */
 
 .actionGroup {
   display: inline-flex;
@@ -84,6 +89,13 @@
   border-radius: 999px;
   background: transparent;
   overflow: hidden;
+  opacity: 0.62;
+  transition: opacity 0.16s ease;
+}
+
+.item:hover .actionGroup,
+.item:focus-within .actionGroup {
+  opacity: 1;
 }
 
 .actionIconButton {
@@ -126,6 +138,129 @@
   background: var(--nav-border);
   opacity: 0.8;
   flex-shrink: 0;
+}
+
+/* ── Mobile: kebab button (hidden on desktop) ───────────────────────────────── */
+
+.kebabButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.kebabButton:hover {
+  background: var(--cream);
+  color: var(--espresso);
+}
+
+.kebabButton:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .actionGroup {
+    display: none;
+  }
+
+  .kebabButton {
+    display: inline-flex;
+  }
+}
+
+/* ── Mobile action sheet ────────────────────────────────────────────────────── */
+
+.actionSheet {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.actionSheetTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+}
+
+.sheetAction {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--espresso);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.sheetAction:hover {
+  background: var(--cream);
+}
+
+.sheetAction:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: -2px;
+}
+
+.sheetActionDanger {
+  color: #b94040;
+}
+
+.sheetActionDanger:hover {
+  background: rgba(185, 64, 64, 0.07);
+}
+
+.sheetCancel {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  margin-top: 4px;
+  transition: background 0.12s;
+}
+
+.sheetCancel:hover {
+  background: var(--cream);
+}
+
+.sheetCancel:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: -2px;
 }
 
 /* ── Edit mode ──────────────────────────────────────────────────────────────── */

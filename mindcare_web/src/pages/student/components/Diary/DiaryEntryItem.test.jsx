@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import * as diaryApi from '../../../../api/diary.api';
 import DiaryEntryItem from './DiaryEntryItem';
 
@@ -277,4 +277,99 @@ test('delete button disabled and shows Удаление… while deleting', asyn
   await waitFor(() =>
     expect(screen.getByText('Удаление…')).toBeDisabled()
   );
+});
+
+// ─── mobile action sheet ──────────────────────────────────────────────────────
+
+test('kebab button with label "Действия с записью" renders when callbacks provided', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  expect(screen.getByRole('button', { name: /действия с записью/i })).toBeInTheDocument();
+});
+
+test('kebab button not rendered when no callbacks provided', () => {
+  render(<DiaryEntryItem entry={entry()} emotionCatalog={[]} />);
+  expect(screen.queryByRole('button', { name: /действия с записью/i })).not.toBeInTheDocument();
+});
+
+test('action sheet is not visible initially', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
+});
+
+test('clicking kebab opens action sheet', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
+});
+
+test('action sheet contains Редактировать запись, Удалить запись and Отмена buttons', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  const sheet = screen.getByTestId('entry-action-sheet');
+  expect(within(sheet).getByRole('button', { name: /редактировать запись/i })).toBeInTheDocument();
+  expect(within(sheet).getByRole('button', { name: /удалить запись/i })).toBeInTheDocument();
+  expect(within(sheet).getByRole('button', { name: /отмена/i })).toBeInTheDocument();
+});
+
+test('"Редактировать запись" in action sheet closes sheet and opens edit mode', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  const sheet = screen.getByTestId('entry-action-sheet');
+  fireEvent.click(within(sheet).getByRole('button', { name: /редактировать запись/i }));
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
+  expect(screen.getByText('Редактирование')).toBeInTheDocument();
+});
+
+test('"Удалить запись" in action sheet opens delete confirm without immediate API call', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  const sheet = screen.getByTestId('entry-action-sheet');
+  fireEvent.click(within(sheet).getByRole('button', { name: /удалить запись/i }));
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
+  expect(screen.getByText(/удалить запись за/i)).toBeInTheDocument();
+  expect(diaryApi.deleteDiaryEntry).not.toHaveBeenCalled();
+});
+
+test('"Отмена" in action sheet closes the sheet', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
+  const sheet = screen.getByTestId('entry-action-sheet');
+  fireEvent.click(within(sheet).getByRole('button', { name: /отмена/i }));
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
+});
+
+test('clicking kebab again closes action sheet (toggle)', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  const kebab = screen.getByRole('button', { name: /действия с записью/i });
+  fireEvent.click(kebab);
+  expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
+  fireEvent.click(kebab);
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
+});
+
+test('Escape key closes action sheet', () => {
+  render(
+    <DiaryEntryItem entry={entry()} emotionCatalog={CATALOG} onUpdate={jest.fn()} onDelete={jest.fn()} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /действия с записью/i }));
+  expect(screen.getByTestId('entry-action-sheet')).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByTestId('entry-action-sheet')).not.toBeInTheDocument();
 });

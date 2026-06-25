@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as diaryApi from '../../../../api/diary.api';
 import styles from './DiaryEntryItem.module.css';
 
@@ -44,6 +44,18 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+
+  // Mobile action sheet
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileSheetOpen) return;
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setMobileSheetOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [mobileSheetOpen]);
 
   function openEdit() {
     setEditMood(mood_score);
@@ -224,12 +236,17 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
   return (
     <div className={styles.item}>
       <div className={styles.top}>
-        <span className={styles.date}>{formatDate(entry_date)}</span>
-        <div className={styles.topRight}>
+        {/* Left: date + mood badge */}
+        <div className={styles.topMeta}>
+          <span className={styles.date}>{formatDate(entry_date)}</span>
           <span className={styles.moodBadge} style={{ color: getMoodColor(mood_score) }}>
             {mood_score}/10 · {MOOD_WORDS[mood_score]}
           </span>
-          {(onUpdate || onDelete) && (
+        </div>
+
+        {/* Right: desktop icon group + mobile kebab */}
+        {(onUpdate || onDelete) && (
+          <div className={styles.topActionsSlot}>
             <div
               role="group"
               className={styles.actionGroup}
@@ -267,9 +284,57 @@ export default function DiaryEntryItem({ entry, emotionCatalog = [], onUpdate, o
                 </button>
               )}
             </div>
-          )}
-        </div>
+
+            <button
+              type="button"
+              className={styles.kebabButton}
+              aria-label="Действия с записью"
+              aria-haspopup="dialog"
+              aria-expanded={mobileSheetOpen}
+              onClick={() => setMobileSheetOpen((prev) => !prev)}
+            >
+              ⋮
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Mobile action sheet — appears inline below the top row */}
+      {mobileSheetOpen && (
+        <div
+          className={styles.actionSheet}
+          role="region"
+          aria-label="Действия с записью"
+          data-testid="entry-action-sheet"
+        >
+          <p className={styles.actionSheetTitle}>Действия с записью</p>
+          {onUpdate && (
+            <button
+              type="button"
+              className={styles.sheetAction}
+              onClick={() => { setMobileSheetOpen(false); openEdit(); }}
+            >
+              Редактировать запись
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              className={`${styles.sheetAction} ${styles.sheetActionDanger}`}
+              onClick={() => { setMobileSheetOpen(false); openDeleteConfirm(); }}
+            >
+              Удалить запись
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.sheetCancel}
+            onClick={() => setMobileSheetOpen(false)}
+          >
+            Отмена
+          </button>
+        </div>
+      )}
 
       {emotions && emotions.length > 0 && (
         <div className={styles.emotionRow}>
