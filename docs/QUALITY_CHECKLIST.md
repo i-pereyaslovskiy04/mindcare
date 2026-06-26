@@ -50,9 +50,9 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: после слияния dev + mindcare_igor сьюты включают
-appointments/profile/unregistered-cards, chat-attachments и diary — точное число
-подтверждается прогоном `.\test.ps1` на смерженной ветке.
+Текущий ожидаемый статус: **809 passed** (`.\test.ps1` на смерженной ветке dev,
+alembic head db0b2e177da5; включая appointments/profile/unregistered-cards,
+chat-attachments и diary сьюты).
 
 ### Alembic
 
@@ -262,8 +262,8 @@ backend обязан отклонять (роль не меняется). `conse
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: после слияния dev + mindcare_igor — appointment/profile/unregistered-cards,
-chat-attachments и diary сьюты; точное число подтверждается прогоном `.\test.ps1`.
+Итого backend: **809 passed** (`.\test.ps1` на смерженной ветке dev, alembic head db0b2e177da5;
+включает appointment/profile/unregistered-cards, chat-attachments и diary сьюты).
 
 Frontend (CRA jest, `npm test -- --watchAll=false`): chat attachments (Stage 32i/32j) +
 appointment/schedule UI + diary (StudentHome, DiaryPage, DiaryEntryForm, DiaryEntryItem,

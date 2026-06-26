@@ -201,9 +201,9 @@ npm run build
 
 ### Текущее покрытие
 
-Backend-сьюты после слияния dev + mindcare_igor включают чат-вложения (Stage 32b–32j),
-систему записи на консультации (appointments, 112+) и дневник студента (diary) —
-итоговое число подтверждается прогоном `.\test.ps1` на смерженной ветке.
+Всего backend: **809 passed** (`.\test.ps1` на смерженной ветке dev, alembic head db0b2e177da5) —
+включает чат-вложения (Stage 32b–32j), систему записи на консультации (appointments, 112+)
+и дневник студента (diary).
 Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 Frontend (`npm test -- --watchAll=false`): suites чата/вложений + appointments + diary;
 lint — 0 warnings, production build — success; точное число подтверждается прогоном.
