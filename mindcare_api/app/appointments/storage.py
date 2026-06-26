@@ -1267,6 +1267,25 @@ def is_psychologist(user_id: int, db) -> bool:
     return row is not None
 
 
+def complete_due_group_sessions(db, now: datetime) -> int:
+    """Lazy-перевод начавшихся/прошедших занятий в completed (+ закрыть запись).
+
+    Трогает ТОЛЬКО status='scheduled' (cancelled/completed не меняются).
+    Коммит — на стороне вызывающего service-метода (та же сессия, что и чтение).
+    """
+    return (
+        db.query(GroupSession)
+        .filter(
+            GroupSession.status == "scheduled",
+            GroupSession.starts_at <= now,
+        )
+        .update(
+            {"status": "completed", "booking_enabled": False},
+            synchronize_session=False,
+        )
+    )
+
+
 def get_group_sessions_list(
     db,
     page: int = 1,
@@ -1277,10 +1296,12 @@ def get_group_sessions_list(
     psychologist_id_filter: Optional[int] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    statuses: tuple = ("scheduled",),
+    order_by: str = "starts_at",
 ) -> tuple[list[dict], int]:
     now = datetime.now(MOSCOW_TZ)
     q = db.query(GroupSession).filter(
-        GroupSession.status == "scheduled"
+        GroupSession.status.in_(statuses)
     )
     if not include_past:
         q = q.filter(GroupSession.starts_at > now)
@@ -1303,9 +1324,12 @@ def get_group_sessions_list(
         )
         q = q.filter(GroupSession.starts_at <= dt_to)
     total = q.count()
+    if order_by == "created_at_desc":
+        q = q.order_by(GroupSession.created_at.desc(), GroupSession.id.desc())
+    else:
+        q = q.order_by(GroupSession.starts_at.asc())
     rows = (
-        q.order_by(GroupSession.starts_at.asc())
-        .offset((page - 1) * size)
+        q.offset((page - 1) * size)
         .limit(size)
         .all()
     )

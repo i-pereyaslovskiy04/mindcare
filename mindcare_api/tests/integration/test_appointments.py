@@ -3275,3 +3275,210 @@ class TestScheduleExceptionsList:
         assert r.status_code == 200, r.text
         dates = [i["exception_date"] for i in r.json()]
         assert dates == ["2027-06-10", "2027-06-05", "2027-06-01"]
+
+
+# ─── Group session lazy-completion + sorting ──────────────────────────────────
+
+class TestGroupSessionLazyCompletion:
+
+    def test_86_due_session_becomes_completed_on_list(self, client):
+        """scheduled с starts_at<=now после запроса списка → completed, запись закрыта."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs = _make_group_session(
+                db, mt.id, pid, starts_at=now - timedelta(hours=1)
+            )
+            gs_uuid = str(gs.uuid)
+            db.commit()
+
+        r = client.get(
+            "/api/supervisor/group-sessions", headers=_auth(tok_sv)
+        )
+        assert r.status_code == 200, r.text
+        item = next(
+            (i for i in r.json()["items"] if i["uuid"] == gs_uuid), None
+        )
+        assert item is not None
+        assert item["status"] == "completed"
+
+        with SessionLocal() as db:
+            from app.db.models import GroupSession as GS
+            row = db.query(GS).filter(GS.uuid == gs_uuid).first()
+            assert row.status == "completed"
+            assert row.booking_enabled is False
+
+    def test_87_lazy_completion_does_not_touch_cancelled(self, client):
+        """cancelled занятие не переводится в completed."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs = _make_group_session(
+                db, mt.id, pid, starts_at=now - timedelta(hours=2)
+            )
+            gs.status = "cancelled"
+            gs_uuid = str(gs.uuid)
+            db.commit()
+
+        client.get("/api/supervisor/group-sessions", headers=_auth(tok_sv))
+
+        with SessionLocal() as db:
+            from app.db.models import GroupSession as GS
+            row = db.query(GS).filter(GS.uuid == gs_uuid).first()
+            assert row.status == "cancelled"
+
+    def test_88_cannot_register_on_started_session(self, client):
+        """Студент не может записаться на начавшееся/прошедшее занятие (422)."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        tok_s, _, _ = _make_user(client, "student")
+        _, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs = _make_group_session(
+                db, mt.id, pid, starts_at=now - timedelta(minutes=30)
+            )
+            gs_uuid = str(gs.uuid)
+            db.commit()
+
+        r = client.post(
+            f"/api/group-sessions/{gs_uuid}/register",
+            headers=_auth(tok_s),
+        )
+        assert r.status_code == 422, r.text
+
+    def test_89_supervisor_list_sorted_created_desc(self, client):
+        """supervisor list — новые созданные сверху (created_at DESC)."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        _, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs_a = _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=3)
+            )
+            gs_b = _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=4)
+            )
+            uuid_a, uuid_b = str(gs_a.uuid), str(gs_b.uuid)
+            db.commit()
+        # Явно проставить created_at: A старее, B новее.
+        with SessionLocal() as db:
+            from app.db.models import GroupSession as GS
+            db.query(GS).filter(GS.uuid == uuid_a).update(
+                {"created_at": datetime(2024, 1, 1, tzinfo=timezone.utc)}
+            )
+            db.query(GS).filter(GS.uuid == uuid_b).update(
+                {"created_at": datetime(2024, 1, 2, tzinfo=timezone.utc)}
+            )
+            db.commit()
+
+        r = client.get(
+            "/api/supervisor/group-sessions", headers=_auth(tok_sv)
+        )
+        assert r.status_code == 200, r.text
+        uuids = [i["uuid"] for i in r.json()["items"]]
+        assert uuid_b in uuids and uuid_a in uuids
+        assert uuids.index(uuid_b) < uuids.index(uuid_a)
+
+    def test_90_student_list_sorted_starts_asc(self, client):
+        """student list — по starts_at ASC (ранние первыми)."""
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        tok_s, _, _ = _make_user(client, "student")
+        _, pid, _ = _make_user(client, "psychologist")
+        now = datetime.now(MOSCOW_TZ)
+        with SessionLocal() as db:
+            mt = _make_meeting_type(db, is_group=True)
+            gs_late = _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=5)
+            )
+            gs_soon = _make_group_session(
+                db, mt.id, pid, starts_at=now + timedelta(days=2)
+            )
+            uuid_late, uuid_soon = str(gs_late.uuid), str(gs_soon.uuid)
+            db.commit()
+
+        r = client.get("/api/group-sessions", headers=_auth(tok_s))
+        assert r.status_code == 200, r.text
+        uuids = [i["uuid"] for i in r.json()["items"]]
+        assert uuids.index(uuid_soon) < uuids.index(uuid_late)
+
+
+# ─── Psychologist schedule-exceptions (read-only) ─────────────────────────────
+
+class TestPsychologistScheduleExceptions:
+
+    def _make_exc(self, client, tok_sv, pid, exc_date, *, etype="day_off",
+                  start=None, end=None, reason=None):
+        payload = {
+            "psychologist_id": pid,
+            "exception_date": exc_date,
+            "exception_type": etype,
+        }
+        if start:
+            payload["start_time"] = start
+        if end:
+            payload["end_time"] = end
+        if reason:
+            payload["reason"] = reason
+        r = client.post(
+            "/api/supervisor/schedule-exceptions",
+            json=payload,
+            headers=_auth(tok_sv),
+        )
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    def test_91_psychologist_sees_only_own(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        tok_p1, pid1, _ = _make_user(client, "psychologist")
+        _, pid2, _ = _make_user(client, "psychologist")
+        self._make_exc(client, tok_sv, pid1, "2027-03-01", etype="day_off")
+        self._make_exc(
+            client, tok_sv, pid1, "2027-03-02", etype="unavailable",
+            start="13:00", end="14:00", reason="Совещание",
+        )
+        self._make_exc(client, tok_sv, pid2, "2027-03-03", etype="day_off")
+
+        r = client.get(
+            "/api/psychologist/schedule-exceptions", headers=_auth(tok_p1)
+        )
+        assert r.status_code == 200, r.text
+        items = r.json()
+        assert {i["exception_date"] for i in items} == {"2027-03-01", "2027-03-02"}
+        assert all(i["psychologist_id"] == pid1 for i in items)
+
+    def test_92_date_filter(self, client):
+        tok_sv, _, _ = _make_user(client, "supervisor")
+        tok_p, pid, _ = _make_user(client, "psychologist")
+        self._make_exc(client, tok_sv, pid, "2027-05-01")
+        self._make_exc(client, tok_sv, pid, "2027-05-15")
+        self._make_exc(client, tok_sv, pid, "2027-05-31")
+
+        r = client.get(
+            "/api/psychologist/schedule-exceptions"
+            "?date_from=2027-05-10&date_to=2027-05-20",
+            headers=_auth(tok_p),
+        )
+        assert r.status_code == 200, r.text
+        dates = [i["exception_date"] for i in r.json()]
+        assert dates == ["2027-05-15"]
+
+    def test_93_invalid_date_returns_422(self, client):
+        tok_p, _, _ = _make_user(client, "psychologist")
+        r = client.get(
+            "/api/psychologist/schedule-exceptions?date_from=not-a-date",
+            headers=_auth(tok_p),
+        )
+        assert r.status_code == 422, r.text
+
+    def test_94_forbidden_for_non_psychologist(self, client):
+        tok_s, _, _ = _make_user(client, "student")
+        r = client.get(
+            "/api/psychologist/schedule-exceptions", headers=_auth(tok_s)
+        )
+        assert r.status_code == 403

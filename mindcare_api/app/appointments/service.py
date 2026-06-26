@@ -1139,16 +1139,20 @@ def list_schedule_exceptions(
 def list_group_sessions(
     page: int = 1,
     size: int = 20,
-    include_past: bool = False,
+    include_past: bool = True,
     open_only: bool = False,
 ) -> tuple[list[dict], int]:
     with SessionLocal() as db:
+        storage.complete_due_group_sessions(db, datetime.now(MOSCOW_TZ))
+        db.commit()
         return storage.get_group_sessions_list(
             db,
             page=page,
             size=size,
             include_past=include_past,
             open_only=open_only,
+            statuses=("scheduled", "completed", "cancelled"),
+            order_by="created_at_desc",
         )
 
 
@@ -1156,12 +1160,14 @@ def list_group_sessions_psychologist(
     psychologist_id: int,
     page: int = 1,
     size: int = 20,
-    include_past: bool = False,
+    include_past: bool = True,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
 ) -> tuple[list[dict], int]:
     """Group sessions assigned to a given psychologist."""
     with SessionLocal() as db:
+        storage.complete_due_group_sessions(db, datetime.now(MOSCOW_TZ))
+        db.commit()
         return storage.get_group_sessions_list(
             db,
             page=page,
@@ -1171,6 +1177,7 @@ def list_group_sessions_psychologist(
             psychologist_id_filter=int(psychologist_id),
             date_from=date_from,
             date_to=date_to,
+            statuses=("scheduled", "completed", "cancelled"),
         )
 
 
@@ -1263,6 +1270,8 @@ def list_group_sessions_student(
     size: int = 20,
 ) -> tuple[list[dict], int]:
     with SessionLocal() as db:
+        storage.complete_due_group_sessions(db, datetime.now(MOSCOW_TZ))
+        db.commit()
         return storage.get_group_sessions_list(
             db,
             page=page,
@@ -1270,6 +1279,7 @@ def list_group_sessions_student(
             include_past=False,
             open_only=False,
             student_id=student_id,
+            statuses=("scheduled",),
         )
 
 
@@ -1284,6 +1294,8 @@ def student_register_group(uuid: str, student_user: dict) -> dict:
         )
 
     with SessionLocal() as db:
+        storage.complete_due_group_sessions(db, now_msk)
+        db.commit()
         gs = storage.get_group_session_by_uuid(uuid, db)
         if gs is None:
             raise AppointmentError(

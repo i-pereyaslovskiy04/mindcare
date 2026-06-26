@@ -16,6 +16,7 @@ from app.appointments.schemas import (
     PaginatedAppointmentsResponse,
     PaginatedGroupSessionsResponse,
     PsychologistScheduleRead,
+    ScheduleExceptionRead,
 )
 
 router = APIRouter(
@@ -129,6 +130,28 @@ def decline_appointment(
         )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+exception_router = APIRouter(
+    prefix="/psychologist/schedule-exceptions",
+    tags=["schedule-psychologist"],
+    dependencies=[Depends(require_role("psychologist"))],
+)
+
+
+@exception_router.get("", response_model=list[ScheduleExceptionRead])
+def list_my_schedule_exceptions(
+    date_from: Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    date_to:   Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Разовые изменения (исключения) своего расписания (read-only)."""
+    try:
+        df = _parse_date(date_from) if date_from else None
+        dt = _parse_date(date_to) if date_to else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Некорректная дата (YYYY-MM-DD)")
+    return service.list_schedule_exceptions(int(current_user["id"]), df, dt)
 
 
 def _parse_date(s: str):
