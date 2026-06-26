@@ -47,7 +47,7 @@ export default function TimePicker({
   placeholder = 'чч:мм',
   disabled = false,
   error,
-  minuteStep = 15,
+  minuteStep = 1,
   id,
   className,
 }) {

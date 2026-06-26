@@ -14,7 +14,7 @@ import styles from './DateTimeInput.module.css';
  * Эмитит полную строку только когда заданы И дата, И время; иначе '' (чтобы
  * required-валидация в форме срабатывала на неполном вводе).
  *
- * Props: value, onChange, label?, minDate?, disabled?, error?, minuteStep=15
+ * Props: value, onChange, label?, minDate?, disabled?, error?, minuteStep=1
  */
 function splitValue(v) {
   if (!v || typeof v !== 'string') return { date: '', time: '' };
@@ -32,7 +32,7 @@ export default function DateTimeInput({
   minDate,
   disabled = false,
   error,
-  minuteStep = 15,
+  minuteStep = 1,
 }) {
   const [dt, setDt] = useState(() => splitValue(value));
   // Запоминаем то, что сами отдали наверх, чтобы внешний value (наш же '')
