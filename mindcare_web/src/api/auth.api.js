@@ -32,6 +32,19 @@ export function me() {
   return apiFetch(`${BASE}/me`);
 }
 
+/** GET /api/auth/profile → { id, email, full_name, phone, role } */
+export function getProfile() {
+  return apiFetch(`${BASE}/profile`);
+}
+
+/** PATCH /api/auth/profile — обновляет self-поля (full_name, phone). */
+export function updateProfile({ full_name, phone }) {
+  return apiFetch(`${BASE}/profile`, {
+    method: 'PATCH',
+    body: JSON.stringify({ full_name, phone }),
+  });
+}
+
 /** POST /api/auth/register/init — sends OTP to email. */
 export function registerInit({ name, email, password }) {
   return apiFetch(`${BASE}/register/init`, {

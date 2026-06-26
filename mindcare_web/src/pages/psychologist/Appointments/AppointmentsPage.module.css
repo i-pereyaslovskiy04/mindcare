@@ -1,0 +1,248 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.labelTag {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  margin-bottom: 4px;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h1);
+  font-weight: 400;
+  color: var(--text-main);
+  line-height: 1.1;
+  margin: 0 0 4px;
+}
+
+.pageTitle em { font-style: italic; color: var(--mocha); }
+
+.pageSub {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--nav-border);
+}
+
+.tab {
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab:hover { color: var(--text-main); }
+
+.tabActive {
+  color: var(--text-main);
+  font-weight: 600;
+  border-bottom-color: var(--espresso);
+}
+
+/* Filter chips */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filterChip {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--nav-border);
+  background: none;
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filterChip:hover { background: var(--sand); }
+
+.filterChipActive {
+  background: var(--espresso);
+  color: var(--text-on-dark);
+  border-color: var(--espresso);
+}
+
+/* Cards */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardStudent { display: flex; flex-direction: column; gap: 2px; }
+
+.cardBadges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.studentName {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.studentEmail {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+}
+
+.cardDesc {
+  font-size: var(--fs-sub);
+  color: var(--text-light);
+  white-space: pre-wrap;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.metaItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-sub);
+  color: var(--text-light);
+}
+
+.cardTopic,
+.cardReason {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cardActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* State boxes */
+.stateBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+
+.loadingText { font-size: var(--fs-body); color: var(--text-muted); }
+
+.stateTitle {
+  font-size: var(--fs-h3-sm);
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.stateSub { font-size: var(--fs-sub); }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.pageInfo { font-size: var(--fs-sub); color: var(--text-muted); }
+
+.totalHint {
+  text-align: center;
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+}
+
+.actionError {
+  font-size: var(--fs-sub);
+  color: var(--error, #c0392b);
+  padding: 4px 0;
+}
+
+/* Modal */
+.modalBody { padding: 22px 28px 26px; }
+
+.modalTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  font-weight: 400;
+  margin: 0 0 6px;
+}
+
+.modalSub {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+.reasonInput {
+  width: 100%;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: var(--fs-body);
+  color: var(--text-main);
+  background: var(--cream);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.reasonInput:focus {
+  outline: none;
+  border-color: var(--coffee);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}

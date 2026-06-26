@@ -136,12 +136,20 @@ export function AuthProvider({ children }) {
     _clearSession();
   }, [_clearSession]);
 
+  /** Re-fetch /me и обновить user (например, после смены профиля). */
+  const refreshUser = useCallback(async () => {
+    const userData = await authApi.me();
+    setUser(userData);
+    return userData;
+  }, []);
+
   const value = {
     user,
     loading,
     isAuthenticated: !!user,
     login,
     logout,
+    refreshUser,
     getToken,
   };
 

@@ -1,4 +1,10 @@
 import { useAuth } from '../../features/auth/AuthContext';
+import Badge from '../../components/UI/Badge/Badge';
+import Icon from '../../components/Icon/Icon';
+import { usePsychologistCalendarRange } from '../../features/psychologist/hooks/usePsychologistCalendarRange';
+import {
+  mskTodayKey, addDaysToKey, isHomeUpcomingEvent,
+} from '../../features/psychologist/calendar/calendarMappers';
 import styles from '../../components/CabinetLayout/CabinetHome.module.css';
 
 function getFirstName(fullName) {
@@ -6,11 +12,77 @@ function getFirstName(fullName) {
   return fullName.trim().split(/\s+/)[0];
 }
 
+const STATUS_TONE = {
+  pending_confirmation: 'warning',
+  confirmed:            'success',
+  cancelled:            'error',
+  declined:             'error',
+  completed:            'neutral',
+  no_show:              'warning',
+};
+const STATUS_SHORT = {
+  pending_confirmation: 'Ожидает',
+  confirmed:            'Подтв.',
+  cancelled:            'Отменена',
+  declined:             'Отклонена',
+  completed:            'Завершена',
+  no_show:              'Не явился',
+};
+
+const _dayShortFmt = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Europe/Moscow', day: 'numeric', month: 'short',
+});
+function fmtDayShort(iso) {
+  return _dayShortFmt.format(new Date(iso));
+}
+
+function HomeEventRow({ ev, showDate }) {
+  return (
+    <div className={styles.liRow}>
+      <div className={styles.liIcon}><Icon name="calendar" size={18} /></div>
+      <div className={styles.liBody}>
+        <div className={styles.liTitle}>
+          {ev.kind === 'group' ? ev.title : ev.subject.name}
+        </div>
+        <div className={styles.liDesc}>
+          {showDate ? `${fmtDayShort(ev.startsAtIso)}, ` : ''}{ev.time}
+          {ev.kind === 'group'
+            ? ` · мест ${ev.registered}/${ev.capacity}`
+            : ` · ${ev.title}`}
+        </div>
+      </div>
+      {ev.kind === 'group'
+        ? <Badge tone="neutral">Группа</Badge>
+        : (
+          <Badge tone={STATUS_TONE[ev.status] || 'neutral'}>
+            {STATUS_SHORT[ev.status] || ev.status}
+          </Badge>
+        )}
+    </div>
+  );
+}
+
 export default function PsychologistHome() {
   const { user } = useAuth();
   const today    = new Date().toLocaleDateString('ru-RU', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+
+  // Ближайшие встречи: диапазон [сегодня, сегодня+7] по Europe/Moscow.
+  const todayKey = mskTodayKey();
+  const { eventsByDay, loading: calLoading } = usePsychologistCalendarRange({
+    dateFrom: todayKey,
+    dateTo: addDaysToKey(todayKey, 7),
+    includeGroups: true,
+  });
+  // Только реальные ближайшие встречи: pending/confirmed appointments + scheduled groups.
+  const todayEvents = (eventsByDay[todayKey] || []).filter(isHomeUpcomingEvent);
+  const upcoming = Object.keys(eventsByDay)
+    .filter(k => k > todayKey)
+    .sort()
+    .flatMap(k => eventsByDay[k])
+    .filter(isHomeUpcomingEvent)
+    .slice(0, 5);
 
   return (
     <div className={styles.page}>
@@ -40,34 +112,29 @@ export default function PsychologistHome() {
         </div>
 
         <div className={styles.card} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className={styles.sectionTitle}>Сегодня</div>
-          <div className={styles.liRow}>
-            <div className={styles.liIcon}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <path d="M16 2v4M8 2v4M3 10h18" />
-              </svg>
-            </div>
-            <div className={styles.liBody}>
-              <div className={styles.liTitle}>Сессий запланировано</div>
-              <div className={styles.liDesc}>Расписание недоступно</div>
-            </div>
-            <span className={styles.liBadge}>скоро</span>
-          </div>
-          <div className={styles.liRow}>
-            <div className={styles.liIcon}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </div>
-            <div className={styles.liBody}>
-              <div className={styles.liTitle}>Активных клиентов</div>
-              <div className={styles.liDesc}>База клиентов недоступна</div>
-            </div>
-            <span className={styles.liBadge}>скоро</span>
-          </div>
+          <div className={styles.sectionTitle}>Ближайшие встречи</div>
+
+          {calLoading && <div className={styles.liDesc}>Загрузка…</div>}
+
+          {!calLoading && (
+            <>
+              <div className={styles.liDesc} style={{ fontWeight: 600 }}>Сегодня</div>
+              {todayEvents.length === 0 ? (
+                <div className={styles.liDesc}>На сегодня встреч нет.</div>
+              ) : (
+                todayEvents.map(ev => <HomeEventRow key={ev.id} ev={ev} />)
+              )}
+
+              <div className={styles.liDesc} style={{ fontWeight: 600, marginTop: 4 }}>
+                Ближайшие 7 дней
+              </div>
+              {upcoming.length === 0 ? (
+                <div className={styles.liDesc}>Нет встреч на ближайшие дни.</div>
+              ) : (
+                upcoming.map(ev => <HomeEventRow key={ev.id} ev={ev} showDate />)
+              )}
+            </>
+          )}
         </div>
       </div>
 

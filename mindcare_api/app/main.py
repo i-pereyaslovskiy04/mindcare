@@ -130,6 +130,13 @@ from app.chat.routes import router as chat_router                          # noq
 from app.chat.routes import system_router as chat_system_router            # noqa: E402
 from app.tests.routes_admin import router as admin_tests_router            # noqa: E402
 from app.tests.routes import router as tests_router                        # noqa: E402
+from app.appointments.routes_student import router as appointments_student_router      # noqa: E402
+from app.appointments.routes_student import group_router as group_sessions_student_router  # noqa: E402
+from app.appointments.routes_psychologist import router as appointments_psychologist_router  # noqa: E402
+from app.appointments.routes_psychologist import group_router as group_sessions_psychologist_router  # noqa: E402
+from app.appointments.routes_psychologist import schedule_router as schedule_psychologist_router  # noqa: E402
+from app.appointments.routes_psychologist import exception_router as schedule_exceptions_psychologist_router  # noqa: E402
+from app.appointments.routes_supervisor import router as appointments_supervisor_router  # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
@@ -148,6 +155,13 @@ app.include_router(chat_router,               prefix="/api")
 app.include_router(chat_system_router,        prefix="/api")
 app.include_router(admin_tests_router,        prefix="/api")
 app.include_router(tests_router,              prefix="/api")
+app.include_router(appointments_student_router,      prefix="/api")
+app.include_router(group_sessions_student_router,    prefix="/api")
+app.include_router(appointments_psychologist_router, prefix="/api")
+app.include_router(group_sessions_psychologist_router, prefix="/api")
+app.include_router(schedule_psychologist_router,               prefix="/api")
+app.include_router(schedule_exceptions_psychologist_router,   prefix="/api")
+app.include_router(appointments_supervisor_router,             prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

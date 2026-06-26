@@ -1,7 +1,7 @@
 # ФЗ-152 Compliance Checklist
 
 Статус выполнения требований ФЗ-152 «О персональных данных» для платформы MindCare.
-Последнее обновление: 2026-06-16.
+Последнее обновление: 2026-06-26.
 
 ---
 
@@ -39,8 +39,9 @@
 - переход `staff → student` основания не требует и старые `user_legal_basis_records` не удаляет;
 - админ НЕ создаёт consent от имени пользователя ни в create, ни в PATCH;
 - смена роли доступна в admin edit-модалке (Stage 31n / 31n-hotfix), но `student`
-  НЕ назначается через admin role-dropdown — студенты появляются только через
-  self-registration (их личное согласие — `consent_records`); при смене роли на
+  НЕ назначается через admin role-dropdown — студенты появляются через
+  self-registration или staff-created student flow `POST /api/supervisor/students`
+  (их личное согласие — `consent_records`); при смене роли на
   staff/admin UI требует подтвердить документированное основание;
 - UI-формулировка при создании: «Подтверждаю наличие документированного основания
   для создания учётной записи и обработки персональных данных пользователя»;
@@ -52,6 +53,33 @@
   (`--dry-run` по умолчанию)
 - Исторические bootstrap consent_records (`user_agent='bootstrap-script'`)
   не удалялись — оставлены как historical record
+
+### Создание аккаунта студента силами staff (2026-06-23)
+Помимо self-registration и карточки незарегистрированного студента, admin/supervisor
+может создать **полноценный** аккаунт студента через `POST /api/supervisor/students`
+(временный пароль, как `POST /api/admin/users`).
+
+Правовое основание обработки ПДн:
+- **личное согласие субъекта**, полученное ОЧНО (`consent_records`) — staff
+  подтверждает `personal_data_consent` («студент лично дал согласие»), как у карточки
+  незарегистрированного студента; это НЕ «согласие за пользователя»;
+- **НЕ** `user_legal_basis_records` — legal basis остаётся механизмом только для
+  staff-ролей (psychologist/supervisor/admin); студент — субъект, у него consent;
+- ответственность сотрудника фиксируется в `audit_log` (`supervisor_create_student`;
+  при назначении психолога — `supervisor_assign_psychologist`), т.к. `consent_records`
+  не хранит actor.
+
+Реализация:
+- core-запись атомарна: `User` + `UserRole(student)` + `ConsentRecord[]`
+  (privacy_policy + data_processing) + опц. active `TherapyEngagement` + `AuditLog`
+  в одной транзакции/одном commit; `AuditLog` обязателен и не swallow'ится (его сбой
+  откатывает всю запись); сбой валидации психолога не оставляет студента-orphan;
+- `consent_records.ip_address/user_agent` = контекст запроса staff, в котором согласие
+  внесено (личность actor — в `audit_log`);
+- post-commit (soft-fail): привязка карточки незарег. студента по `normalized_email`,
+  welcome-письмо (нейтральный текст, без staff-специфики), system-уведомления;
+- временный пароль и ПДн не логируются (только HTTP-ответ авторизованному caller и
+  тело письма; в `EMAIL_MODE=dev` тело письма печатается в stdout — как все OTP/welcome).
 
 ### Хранение данных
 - Все данные хранятся в PostgreSQL на серверах в РФ
@@ -220,6 +248,7 @@ UUID цели закодирован в строке события (време�
 | Данные | Таблица | Чувствительность |
 |--------|---------|-----------------|
 | ФИО, email, телефон | `users` | Базовые ПДн |
+| ФИО, email, телефон walk-in клиента | `unregistered_student_cards` | Базовые ПДн |
 | Результаты тестов | `test_results` | Специальные категории |
 | Заметки сессий | `session_notes` | Специальные категории |
 | Переписка student ↔ psychologist | `chat_messages` | Специальные категории |

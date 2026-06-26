@@ -90,8 +90,10 @@ outbox на текущем этапе отсутствует. Failure-injection 
 открывается автоматически, mark-read только по явному клику); unread — глобальный nav badge +
 per-dialog; system conversation всегда видна и **последняя** в списке (read-only, без composer);
 live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts ✓/✓✓; online/offline
-точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat — postponed.
-Diary/tasks/calendar студента остаются accepted demo/mock.
+точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat — postponed
+(attachments реализованы, см. ниже). Diary/tasks студента остаются accepted demo/mock.
+Calendar студента уже подключён к real appointments API: тип встречи → формат → дата →
+доступные слоты назначенного психолога, upcoming/history из backend.
 
 **Attachments (Stage 32b–32j + hotfixes):** файлы в engagement chat; upload через скрепку/drag&drop
 (`DragDropOverlay`); `SelectedAttachmentList` (pre-send); `AttachmentCard`/`AttachmentList`

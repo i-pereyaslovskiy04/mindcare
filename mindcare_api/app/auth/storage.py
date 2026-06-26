@@ -125,6 +125,56 @@ def find_user_by_id(user_id: str) -> Optional[dict]:
         return _user_to_dict(user, db) if user else None
 
 
+def _profile_to_dict(user: User, db) -> dict:
+    return {
+        "id":        str(user.id),
+        "email":     user.email,
+        "full_name": user.full_name,
+        "phone":     user.phone,
+        "role":      _get_primary_role(db, user.id),
+    }
+
+
+def get_profile(user_id: str) -> Optional[dict]:
+    """Self-profile текущего пользователя (без password_hash)."""
+    with SessionLocal() as db:
+        user = (
+            db.query(User)
+            .filter(
+                User.id == int(user_id),
+                User.deleted_at.is_(None),
+            )
+            .first()
+        )
+        return _profile_to_dict(user, db) if user else None
+
+
+def update_profile_atomic(
+    user_id: str,
+    full_name: str,
+    phone: Optional[str],
+) -> dict:
+    """Атомарно обновляет разрешённые self-поля (full_name, phone) текущего
+    пользователя. Один SessionLocal + один commit."""
+    with SessionLocal() as db:
+        user = (
+            db.query(User)
+            .filter(
+                User.id == int(user_id),
+                User.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if user is None:
+            raise UserNotFoundError("User not found")
+        user.full_name = full_name
+        user.phone = phone
+        user.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(user)
+        return _profile_to_dict(user, db)
+
+
 def save_user(user: dict) -> dict:
     with SessionLocal() as db:
         db_user = User(

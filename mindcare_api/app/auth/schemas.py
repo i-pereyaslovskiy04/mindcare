@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr
-from typing import Literal
+from pydantic import BaseModel, EmailStr, Field
+from typing import Literal, Optional
 from datetime import datetime
 
 Role = Literal["student", "psychologist", "admin", "supervisor"]
@@ -33,6 +33,23 @@ class UserResponse(BaseModel):
     email: str
     name: str
     role: Role
+
+
+class ProfileRead(BaseModel):
+    """Self-profile (нечувствительные поля текущего пользователя)."""
+    id: str
+    email: str
+    full_name: str
+    phone: Optional[str] = None
+    role: Role
+
+
+class ProfileUpdate(BaseModel):
+    """Self-update: только разрешённые поля. extra='forbid' → email/role/is_active
+    в body дают 422, а не молча игнорируются."""
+    model_config = {"extra": "forbid"}
+    full_name: str
+    phone: Optional[str] = Field(default=None, max_length=50)
 
 
 class MessageResponse(BaseModel):

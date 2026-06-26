@@ -1,0 +1,304 @@
+.page { display: flex; flex-direction: column; gap: 20px; }
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.headerActions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.labelTag {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  margin-bottom: 4px;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h1);
+  font-weight: 400;
+  color: var(--text-main);
+  line-height: 1.1;
+  margin: 0 0 4px;
+}
+
+.pageTitle em { font-style: italic; color: var(--mocha); }
+
+.pageSub { font-size: var(--fs-sub); color: var(--text-muted); margin: 0; }
+
+.psychPicker { max-width: 360px; }
+
+.empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-light);
+  font-size: var(--fs-sub);
+  border: 1px dashed var(--nav-border);
+  border-radius: 12px;
+}
+
+/* Table */
+.tableWrap {
+  overflow-x: auto;
+  border-radius: 16px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.table thead tr { border-bottom: 1px solid var(--nav-border); }
+
+.table th {
+  text-align: left;
+  padding: 11px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 16px;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--nav-border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+.row:hover td { background: var(--cream); }
+
+.dayCell { font-weight: 600; white-space: nowrap; }
+.muted { color: var(--text-muted); }
+
+.emptyCell {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-light);
+}
+
+.errorCell {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--error, #c0392b);
+}
+
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+
+/* Modal form */
+.modalBody { padding: 22px 28px 26px; }
+
+.modalTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  font-weight: 400;
+  margin: 0 0 16px;
+}
+
+.formRow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.formField { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+
+.formLabel {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+}
+
+.formInput {
+  padding: 8px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: var(--fs-body);
+  color: var(--text-main);
+  background: var(--cream);
+}
+
+.formInput:focus { outline: none; border-color: var(--coffee); }
+
+.saveErr { font-size: var(--fs-sub); color: var(--error, #c0392b); }
+.okMsg   { font-size: var(--fs-sub); color: var(--success, #2e7d32); }
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ── Series cards ─────────────────────────────────────── */
+.seriesList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.seriesCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  background: var(--warm-white);
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04);
+}
+
+.seriesCardOff { opacity: 0.7; background: var(--cream); }
+
+.seriesHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.seriesTitle { font-weight: 600; color: var(--text-main); }
+.seriesBadges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.dayChips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.seriesTime { font-weight: 600; color: var(--text-main); margin-left: 4px; }
+
+.seriesMeta { font-size: var(--fs-sub); color: var(--text-muted); }
+
+.breaksLine { font-size: var(--fs-sub); color: var(--text-light); }
+
+.seriesActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.legacyHint { font-size: var(--fs-sub); color: var(--text-muted); }
+
+/* ── One-off changes (exceptions) ─────────────────────── */
+.excSection { display: flex; flex-direction: column; gap: 12px; }
+
+.excSectionTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  font-weight: 400;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.excList { display: flex; flex-direction: column; gap: 8px; }
+
+.excRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  background: var(--warm-white);
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04);
+}
+
+.excDate { font-weight: 600; color: var(--text-main); }
+.excTime { font-size: var(--fs-sub); color: var(--text-muted); }
+.excReason { font-size: var(--fs-sub); color: var(--text-light); }
+
+.editNote {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+/* ── Schedule form extras ─────────────────────────────── */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+
+.toggleLabel {
+  font-size: var(--fs-sub);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.breaksEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px dashed var(--nav-border);
+  border-radius: 10px;
+}
+
+.breaksEditorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.breaksHint { font-size: var(--fs-sub); color: var(--text-muted); }
+
+.breakRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Slot picker (manual booking) ─────────────────────── */
+.slotGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.slotBtn {
+  padding: 7px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: var(--warm-white);
+  font-family: inherit;
+  font-size: var(--fs-sub);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.slotBtn:hover { border-color: var(--coffee); }
+
+.slotBtnActive {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}

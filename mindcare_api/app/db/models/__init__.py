@@ -85,8 +85,13 @@ from app.db.models.diagnostics import (  # noqa: F401
 from app.db.models.consultations import (  # noqa: F401
     TherapyEngagement,
     ScheduleRule,
+    ScheduleBreak,
     ScheduleException,
+    MeetingType,
+    UnregisteredStudentCard,
     Appointment,
+    GroupSession,
+    GroupSessionRegistration,
     SessionNote,
 )
 
@@ -133,7 +138,9 @@ __all__ = [
     "QuestionMedia", "OptionMedia",
     "TestResult", "TestResultScale", "StudentAnswer",
     # consultations
-    "TherapyEngagement", "ScheduleRule", "ScheduleException", "Appointment", "SessionNote",
+    "TherapyEngagement", "ScheduleRule", "ScheduleBreak", "ScheduleException",
+    "MeetingType", "UnregisteredStudentCard", "Appointment",
+    "GroupSession", "GroupSessionRegistration", "SessionNote",
     # chat
     "ChatConversation", "ChatMessage", "ChatAttachment",
     # notifications

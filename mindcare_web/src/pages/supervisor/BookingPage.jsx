@@ -1,0 +1,535 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Button from '../../components/UI/Button/Button';
+import Select from '../../components/UI/Select/Select';
+import DateInput from '../../components/UI/DateInput/DateInput';
+import FilterChip from '../../components/UI/FilterChip/FilterChip';
+import Badge from '../../components/UI/Badge/Badge';
+import {
+  getMeetingTypes,
+  getSupervisorPsychologists,
+  getSupervisorSlots,
+  supervisorBookAppointment,
+} from '../../api/appointments.api';
+import { getSupervisorEngagements } from '../../api/supervisor.api';
+import UnregisteredCardPicker from './booking/UnregisteredCardPicker';
+import NewStudentModal from './booking/NewStudentModal';
+import { buildBookingPayload } from './booking/buildBookingPayload';
+import { resolveCreatedStudentSubject } from './booking/resolveStudentSubject';
+import styles from './BookingPage.module.css';
+
+// Moscow is UTC+3
+function mskTime(iso) {
+  const msk = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
+  return msk.toISOString().substring(11, 16);
+}
+
+const MODALITY_OPTIONS = [
+  { value: 'online',    label: 'Онлайн' },
+  { value: 'in_person', label: 'Очно' },
+];
+
+const EMPTY_FORM = {
+  meeting_type_id: '',
+  modality:        'in_person',
+  date:            '',
+  topic:           '',
+};
+
+export default function BookingPage() {
+  const [psychologists, setPsychologists] = useState([]);
+  const [meetingTypes,  setMeetingTypes]  = useState([]);
+  const [psychId, setPsychId] = useState('');
+
+  const [engagements, setEngagements] = useState([]);
+  const [engLoading, setEngLoading]   = useState(false);
+  const [engError, setEngError]       = useState(null);
+
+  // Субъект записи: ровно один из типов.
+  const [clientMode, setClientMode]         = useState('registered'); // 'registered' | 'unregistered' | 'new_account'
+  const [subject, setSubject]               = useState(null);          // { kind, id, label }
+  const [cardJustCreated, setCardJustCreated] = useState(false);
+  const [accountJustCreated, setAccountJustCreated] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+
+  const [form, setForm]                   = useState(EMPTY_FORM);
+  const [slots, setSlots]                 = useState([]);
+  const [slotsLoading, setSlotsLoading]   = useState(false);
+  const [selectedSlot, setSelectedSlot]   = useState(null);
+  const [slotsReloadKey, setSlotsReloadKey] = useState(0);
+  const [saving, setSaving]               = useState(false);
+  const [error, setError]                 = useState(null);
+  const [done, setDone]                   = useState(false);
+
+  // Load psychologists + individual meeting types once
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await getSupervisorPsychologists();
+        setPsychologists(data.items || data || []);
+      } catch { /* ignore */ }
+      try {
+        const mt = await getMeetingTypes();
+        const all = mt.items || mt || [];
+        setMeetingTypes(all.filter(t => !t.is_group && t.is_active));
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  // Load all active engagements page-by-page (backend caps size at 100).
+  const loadEngagements = useCallback(async (pid) => {
+    if (!pid) { setEngagements([]); setEngError(null); return []; }
+    setEngLoading(true);
+    setEngError(null);
+    try {
+      const size = 100;
+      let page = 1;
+      let all = [];
+      let total = Infinity;
+      while (all.length < total) {
+        // eslint-disable-next-line no-await-in-loop -- sequential pagination
+        const data = await getSupervisorEngagements({
+          status: 'active', page, size,
+        });
+        const items = Array.isArray(data) ? data : (data.items || []);
+        all = all.concat(items);
+        total = (data && typeof data.total === 'number')
+          ? data.total
+          : all.length;
+        if (items.length < size) break;
+        page += 1;
+      }
+      setEngagements(all);
+      return all;
+    } catch (e) {
+      setEngagements([]);
+      setEngError(e.message || 'Не удалось загрузить назначения студентов');
+      return [];
+    } finally {
+      setEngLoading(false);
+    }
+  }, []);
+
+  // Reset everything below the psychologist when it changes.
+  useEffect(() => {
+    setForm(EMPTY_FORM);
+    setSlots([]);
+    setSelectedSlot(null);
+    setError(null);
+    setDone(false);
+    setClientMode('registered');
+    setSubject(null);
+    setCardJustCreated(false);
+    setAccountJustCreated(false);
+    setAccountModalOpen(false);
+    loadEngagements(psychId);
+  }, [psychId, loadEngagements]);
+
+  const psychOptions = psychologists.map(p => ({
+    value: String(p.id),
+    label: p.full_name || p.email,
+  }));
+
+  // Filter students assigned to the selected psychologist using engagement.psychologist.id
+  const studentOptions = useMemo(() => {
+    const pid = Number(psychId);
+    if (!pid) return [];
+    return engagements
+      .filter(e => Number(e.psychologist?.id) === pid)
+      .map(e => ({
+        value: String(e.client.id),
+        label: e.client.full_name || e.client.email || `Студент #${e.client.id}`,
+      }));
+  }, [engagements, psychId]);
+
+  const selectedMt = meetingTypes.find(m => String(m.id) === String(form.meeting_type_id));
+
+  const formatOptions = selectedMt
+    ? [
+        selectedMt.allow_online    && { value: 'online',    label: 'Онлайн' },
+        selectedMt.allow_in_person && { value: 'in_person', label: 'Очно' },
+      ].filter(Boolean)
+    : MODALITY_OPTIONS;
+
+  function handleMtChange(v) {
+    const mt = meetingTypes.find(m => String(m.id) === String(v));
+    setForm(f => {
+      let modality = f.modality;
+      if (mt) {
+        const allowed = [];
+        if (mt.allow_online)    allowed.push('online');
+        if (mt.allow_in_person) allowed.push('in_person');
+        if (!allowed.includes(modality)) modality = allowed[0] || 'in_person';
+      }
+      return { ...f, meeting_type_id: v, modality };
+    });
+    setSelectedSlot(null);
+    setSlots([]);
+    setDone(false);
+  }
+
+  function selectMode(mode) {
+    if (mode === clientMode) return;
+    setClientMode(mode);
+    setSubject(null);
+    setCardJustCreated(false);
+    setAccountJustCreated(false);
+    setSelectedSlot(null);
+    setError(null);
+    setDone(false);
+  }
+
+  function handleStudentSelect(v) {
+    const opt = studentOptions.find(o => o.value === v);
+    setSubject(v ? { kind: 'student', id: Number(v), label: opt?.label || `Студент #${v}` } : null);
+    setCardJustCreated(false);
+    setAccountJustCreated(false);
+    setSelectedSlot(null);
+    setDone(false);
+  }
+
+  function handleCardSelect(card, { justCreated } = {}) {
+    setSubject({ kind: 'card', id: card.id, label: card.full_name });
+    setCardJustCreated(!!justCreated);
+    setAccountJustCreated(false);
+    setSelectedSlot(null);
+    setDone(false);
+  }
+
+  // Новый аккаунт студента создан в модалке: рефетчим engagements (там появилась
+  // active-связь с выбранным психологом), находим студента по uuid и выбираем его
+  // субъектом записи через INT student_id. ПДн/пароль не логируются.
+  async function handleAccountCreated(created) {
+    setAccountModalOpen(false);
+    const all = await loadEngagements(psychId);
+    const subj = resolveCreatedStudentSubject(created, all, psychId);
+    if (subj) {
+      setSubject(subj);
+      setCardJustCreated(false);
+      setAccountJustCreated(true);
+    } else {
+      // Подстраховка: список ещё не обновился — даём выбрать из обычного списка.
+      setClientMode('registered');
+    }
+    setSelectedSlot(null);
+    setDone(false);
+  }
+
+  // Load free slots when psychologist + subject + type + format + date are all set.
+  const { meeting_type_id: mtId, modality, date } = form;
+  const hasSubject = !!subject;
+  useEffect(() => {
+    if (!psychId || !hasSubject || !mtId || !modality || !date) {
+      setSlots([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    setSelectedSlot(null);
+    getSupervisorSlots({
+      psychologistId: Number(psychId),
+      date,
+      meetingTypeId:  Number(mtId),
+      modality,
+    })
+      .then(data => { if (!cancelled) setSlots(data.slots || []); })
+      .catch(() => { if (!cancelled) setSlots([]); })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
+    return () => { cancelled = true; };
+  }, [psychId, hasSubject, mtId, modality, date, slotsReloadKey]);
+
+  async function handleBook() {
+    if (!subject)              { setError('Выберите клиента'); return; }
+    if (!form.meeting_type_id) { setError('Выберите тип встречи'); return; }
+    if (!selectedSlot)         { setError('Выберите свободный слот'); return; }
+    const payload = buildBookingPayload({
+      subject,
+      psychId,
+      meetingTypeId: form.meeting_type_id,
+      modality:      form.modality,
+      slot:          selectedSlot,
+      topic:         form.topic,
+    });
+    if (!payload) { setError('Не удалось сформировать запись'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await supervisorBookAppointment(payload);
+      setDone(true);
+      // Оставляем психолога, клиента, тип и дату — чтобы быстро записать ещё одну
+      // встречу. Сбрасываем тему и слот; перезагружаем слоты, чтобы занятый исчез.
+      setForm(f => ({ ...f, topic: '' }));
+      setSelectedSlot(null);
+      setSlotsReloadKey(k => k + 1);
+    } catch (e) {
+      setError(e.message || 'Ошибка записи');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const canSubmit = !!subject && !!form.meeting_type_id && !!selectedSlot && !saving;
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <div>
+          <div className={styles.labelTag}>Супервизор</div>
+          <h1 className={styles.pageTitle}>Запись <em>на консультацию</em></h1>
+          <p className={styles.pageSub}>
+            Ручная запись студента к психологу. Запись создаётся в статусе
+            «ожидает подтверждения», психолог получит уведомление.
+          </p>
+        </div>
+      </div>
+
+      <div className={styles.form}>
+
+        {/* Step 1: Psychologist */}
+        <div className={styles.section}>
+          <div className={styles.sectionLabel}>Шаг 1. Психолог</div>
+          <div className={styles.fieldWrap}>
+            <Select
+              label="Психолог"
+              placeholder="Выберите психолога"
+              value={psychId}
+              options={psychOptions}
+              onChange={v => setPsychId(v)}
+            />
+          </div>
+        </div>
+
+        {/* Step 2: Client — registered student or unregistered card */}
+        {psychId && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Шаг 2. Клиент</div>
+
+            <div className={styles.modeRow}>
+              <FilterChip
+                active={clientMode === 'registered'}
+                onClick={() => selectMode('registered')}
+              >
+                Зарегистрированный студент
+              </FilterChip>
+              <FilterChip
+                active={clientMode === 'unregistered'}
+                onClick={() => selectMode('unregistered')}
+              >
+                Незарегистрированный / пришёл лично
+              </FilterChip>
+              <FilterChip
+                active={clientMode === 'new_account'}
+                onClick={() => selectMode('new_account')}
+              >
+                Новый аккаунт
+              </FilterChip>
+            </div>
+
+            {clientMode === 'registered' && (
+              <>
+                {engLoading && (
+                  <span className={styles.hint}>Загрузка студентов…</span>
+                )}
+                {!engLoading && engError && (
+                  <div className={styles.fieldWrap}>
+                    <span className={styles.saveErr}>{engError}</span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => loadEngagements(psychId)}
+                    >
+                      Повторить
+                    </Button>
+                  </div>
+                )}
+                {!engLoading && !engError && studentOptions.length === 0 && (
+                  <span className={styles.hint}>
+                    У этого психолога нет активных назначений студентов.
+                    Используйте карточку незарегистрированного студента.
+                  </span>
+                )}
+                {!engLoading && !engError && studentOptions.length > 0 && (
+                  <div className={styles.fieldWrap}>
+                    <Select
+                      label="Студент"
+                      placeholder="Выберите студента"
+                      value={subject?.kind === 'student' ? String(subject.id) : ''}
+                      options={studentOptions}
+                      onChange={handleStudentSelect}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {clientMode === 'unregistered' && (
+              <UnregisteredCardPicker
+                selectedCardId={subject?.kind === 'card' ? subject.id : null}
+                onSelect={handleCardSelect}
+              />
+            )}
+
+            {clientMode === 'new_account' && !subject && (
+              <div className={styles.fieldWrap}>
+                <span className={styles.hint}>
+                  Создать полноценный аккаунт студента (логин и временный пароль).
+                  Студент будет назначен выбранному психологу и сразу доступен
+                  для записи.
+                </span>
+                <div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setAccountModalOpen(true)}
+                  >
+                    Создать аккаунт студента
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {subject && (
+              <div className={styles.selectedClient}>
+                <span className={styles.hint}>Выбран клиент:</span>
+                <Badge tone="neutral">{subject.label}</Badge>
+                {cardJustCreated && <Badge tone="success">Карточка создана</Badge>}
+                {accountJustCreated && <Badge tone="success">Аккаунт создан</Badge>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 3: Meeting type + format */}
+        {psychId && subject && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Шаг 3. Тип встречи и формат</div>
+            <div className={styles.row}>
+              <div className={styles.fieldWrap}>
+                <Select
+                  label="Тип встречи"
+                  placeholder="Выберите тип"
+                  value={form.meeting_type_id}
+                  options={meetingTypes.map(t => ({ value: String(t.id), label: t.name }))}
+                  onChange={handleMtChange}
+                />
+              </div>
+              <div className={styles.fieldWrap}>
+                <Select
+                  label="Формат"
+                  value={form.modality}
+                  options={formatOptions}
+                  onChange={v => {
+                    setForm(f => ({ ...f, modality: v }));
+                    setSelectedSlot(null);
+                    setDone(false);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Date */}
+        {psychId && subject && form.meeting_type_id && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Шаг 4. Дата</div>
+            <div className={styles.fieldWrap}>
+              <DateInput
+                label="Дата"
+                value={form.date}
+                onChange={v => {
+                  setForm(f => ({ ...f, date: v }));
+                  setSelectedSlot(null);
+                  setDone(false);
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Free slots */}
+        {psychId && subject && form.meeting_type_id && form.date && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Шаг 5. Свободные слоты</div>
+            {slotsLoading && (
+              <span className={styles.hint}>Загружаем слоты…</span>
+            )}
+            {!slotsLoading && slots.length === 0 && (
+              <span className={styles.hint}>Нет свободных слотов на эту дату.</span>
+            )}
+            {!slotsLoading && slots.length > 0 && (
+              <div className={styles.slotGrid}>
+                {slots.map(slot => {
+                  const active = selectedSlot?.starts_at === slot.starts_at;
+                  return (
+                    <button
+                      key={slot.starts_at}
+                      type="button"
+                      aria-pressed={active}
+                      className={active
+                        ? `${styles.slotBtn} ${styles.slotBtnActive}`
+                        : styles.slotBtn}
+                      onClick={() => {
+                        setDone(false);
+                        setSelectedSlot(prev =>
+                          prev?.starts_at === slot.starts_at ? null : slot
+                        );
+                      }}
+                    >
+                      {mskTime(slot.starts_at)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Topic — optional, shown once a client is selected */}
+        {psychId && subject && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Тема (необязательно)</div>
+            <div className={styles.fieldWrap}>
+              <label className={styles.formLabel}>Тема встречи</label>
+              <input
+                className={styles.formInput}
+                type="text"
+                value={form.topic}
+                onChange={e => setForm(f => ({ ...f, topic: e.target.value }))}
+                placeholder="Например: тревожность, стресс"
+              />
+            </div>
+          </div>
+        )}
+
+        {done && (
+          <div className={styles.okMsg}>
+            Запись создана и ожидает подтверждения психолога.
+          </div>
+        )}
+        {error && <div className={styles.saveErr}>{error}</div>}
+
+        {psychId && subject && (
+          <div className={styles.actions}>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={!canSubmit}
+              onClick={handleBook}
+            >
+              {saving ? 'Записываем…' : 'Записать на консультацию'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <NewStudentModal
+        open={accountModalOpen}
+        psychologistId={psychId ? Number(psychId) : null}
+        onClose={() => setAccountModalOpen(false)}
+        onCreated={handleAccountCreated}
+      />
+    </div>
+  );
+}

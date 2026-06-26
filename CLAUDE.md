@@ -200,7 +200,9 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **525 passed** (`.\test.ps1`). Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
+Backend-сьюты включают и чат-вложения (Stage 32b–32j), и систему записи на консультации
+(appointments, 112+) — итоговое число подтверждается прогоном `.\test.ps1` на смерженной ветке.
+Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
 
 | Файл | Что покрыто |
@@ -235,6 +237,10 @@ Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 
 | `tests/integration/test_chat_attachment_models.py` | constraints chat_attachments (Stage 32b) — 20 |
 | `tests/integration/test_chat_attachment_api.py` | upload/download/send/list attachments (Stage 32c) — 37 |
 | `tests/integration/test_chat_attachment_edit.py` | редактирование сообщения с вложениями (Stage 32g) — 18 |
+| `tests/integration/test_appointments.py` | appointments system: booking validation, slot computation from MeetingType.duration+buffer, group-session slot blocking/lazy completion, recurring breaks (with effective_from/until period filtering), schedule-out-of-range, pending-cancel soft-delete, confirmed-cancel notify, multiple one-off blockers, group sessions, meeting-type role access, bulk schedule rules, optional meeting_type_id on working windows, break period tests, unified schedule create/update (rules+breaks one series), auto_extend requires effective_until, series soft-delete/restore (is_active) hides from active list & slots, soft-delete keeps appointments + future-appt warning, extend-by-month, supervisor manual booking (registered student or unregistered card, occupies slot, 409 on busy, system msg to psychologist, booking_source/created_by audit), auto_extend maintenance (extend+notify, dry-run), read-only frontend support endpoints for student meeting types, psychologist schedule/exceptions, supervisor slots, and schedule v3 working-window behavior — 112+ |
+| `tests/integration/test_unregistered_student_cards.py` | карточки незарегистрированных студентов + привязка к аккаунту (этап 2) |
+| `tests/integration/test_supervisor_create_student.py` | создание аккаунта студента супервизором (POST /students) |
+| `tests/integration/test_auth_profile.py` | self-service профиль (GET/PATCH /api/auth/profile) |
 
 ---
 
@@ -321,7 +327,10 @@ mindcare_api/
 │   │                          upload/download/preview (private storage, not public static),
 │   │                          send with attachment_uuids, edit remove_attachment_uuids,
 │   │                          soft delete via chat_attachments.deleted_at (Stage 32b–32j)
-│   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог)
+│   ├── supervisor/          — /api/supervisor/* (назначения студент ↔ психолог,
+│   │                          создание аккаунта студента: POST /students)
+│   ├── appointments/        — /api/* записи на консультации (student/psychologist/
+│   │                          supervisor), расписание, типы встреч, групповые сессии
 │   ├── psychologist/        — /api/psychologist/* (свои студенты)
 │   └── services/
 │       ├── _smtp.py         — SMTP транспорт (dev/smtp режимы, внутренний)
@@ -331,6 +340,8 @@ mindcare_api/
 │   ├── ensure_audit_partitions.py           — будущие партиции audit-таблиц
 │   ├── backfill_legal_basis.py              — backfill legal basis (--dry-run default)
 │   ├── repair_missing_chat_conversations.py — восстановление бесед для существующих engagements
+│   ├── extend_schedules.py                  — автопродление расписаний с auto_extend
+│   │                                          (maintenance, НЕ из lifespan; --dry-run)
 │   └── test_smtp.py                         — диагностика SMTP
 └── db/
     └── sql/
@@ -353,7 +364,19 @@ mindcare_api/
 ✅ Soft delete — deleted_at, не физическое удаление
 ✅ Внешний API использует users.uuid (UUID), не users.id (INT)
 ✅ Схема БД — только через Alembic (alembic upgrade head перед стартом)
-✅ consent_records — ТОЛЬКО личное согласие субъекта (студент сам принимает политику)
+✅ consent_records — ТОЛЬКО личное согласие субъекта (НЕ «согласие за пользователя»):
+   студент сам принимает политику при self-registration, ЛИБО staff фиксирует личное
+   согласие студента, полученное ОЧНО, при создании аккаунта через
+   POST /api/supervisor/students (как у карточки незарег. студента) — это не legal basis
+✅ admin/supervisor создаёт ПОЛНОЦЕННЫЙ аккаунт студента через
+   POST /api/supervisor/students (temp password, как POST /api/admin/users). Основание
+   ПДн — consent_records (личное согласие, получено очно; staff подтверждает
+   personal_data_consent), НЕ user_legal_basis_records. Core-запись атомарна:
+   User+UserRole(student)+ConsentRecord[]+опц. active TherapyEngagement+AuditLog в одном
+   commit; AuditLog обязателен (consent_records не хранит actor); psychologist_id создаёт
+   active engagement в ТОЙ ЖЕ транзакции (не отдельным вызовом assign_psychologist);
+   карточка незарег. студента с тем же email привязывается (этап 2). Это НЕ admin
+   role-dropdown (там student по-прежнему НЕ selectable). Пароль/ПДн не логировать
 ✅ Для admin-created psychologist/supervisor/admin — user_legal_basis_records
    (документированное основание организации; чекбокс в UI формулируется как
    «Подтверждаю наличие документированного основания для создания учётной
@@ -367,9 +390,10 @@ mindcare_api/
    read-only» отменено) — но безопасно: при реальной смене на staff/admin UI
    показывает блок legal basis и шлёт его поля; backend PATCH guard обязателен
    как defense-in-depth (не полагаться только на UI)
-✅ student НЕ selectable в admin edit-dropdown (Stage 31n-hotfix; студенты —
-   self-registration). Текущая роль student показывается через Select displayLabel,
-   но недоступна для выбора. student как target роли из UI не отправляется
+✅ student НЕ selectable в admin edit-dropdown (Stage 31n-hotfix). Студенты появляются
+   через self-registration ИЛИ через staff-created student flow (`POST /api/supervisor/students`);
+   текущая роль student показывается через Select displayLabel, но недоступна для выбора.
+   student как target роли из admin edit UI не отправляется
 ❌ Не делать роль read-only в admin edit и не слать role без legal basis при смене на staff
 ❌ Не писать «админ подтверждает согласие пользователя» — только «документированное
    основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
@@ -379,6 +403,29 @@ mindcare_api/
 ✅ Metadata-путь session_notes не должен вызывать decrypt_text
 ✅ Chat content доступен только student/psychologist — участникам therapy_engagement
 ✅ Chat content шифруется при записи и не попадает в logs/audit
+✅ Расписание создаётся серией (POST /api/supervisor/schedules): rules + breaks
+   c общим series_id и периодом. meeting_type_id НЕ задаётся для новых рабочих
+   окон schedule v3; тип встречи выбирается при поиске/создании записи.
+   auto_extend=true требует effective_until (валидация в service → 422)
+✅ Soft-delete/restore расписания — на уровне СЕРИИ через is_active (rules+breaks);
+   существующие Appointment НЕ удаляются и продолжают занимать слоты. Перед
+   деактивацией возвращается счётчик будущих записей в периоде (предупреждение)
+✅ Ручная запись supervisor'ом (POST /api/supervisor/appointments) создаёт обычный
+   Appointment в pending_confirmation; для зарегистрированного студента требует активного
+   engagement студент↔психолог. Для walk-in клиента можно использовать
+   unregistered_student_card_id; карточка хранит минимальные ПДн и может привязаться к
+   будущему аккаунту по normalized_email. Психолог получает system-сообщение
+   (event_key appointment_supervisor_new:{uuid})
+✅ Групповые занятия (`group_sessions`) создаёт supervisor; student записывается только
+   на `scheduled` + `booking_enabled=true`, без подтверждения психолога. При чтении списков
+   lazy-completion переводит начавшиеся/прошедшие `scheduled` в `completed` и выключает
+   `booking_enabled`. Student видит только `scheduled`; supervisor/psychologist видят
+   `scheduled`/`completed`/`cancelled`
+✅ Автопродление расписаний — ТОЛЬКО maintenance (scripts/extend_schedules.py →
+   service.auto_extend_schedules); НЕ из FastAPI lifespan. После продления —
+   system-сообщение создавшему серию supervisor'у (created_by, soft-fail)
+❌ Не запускать auto_extend из FastAPI lifespan; не удалять Appointment при
+   деактивации/удалении расписания
 ✅ Auth бизнес-операции АТОМАРНЫ (Stage 31m-fix-b2/b3): registration confirm,
    password reset confirm, change password — одна SessionLocal() + один commit.
    password+revoke sessions (и consume OTP) — в одной транзакции
@@ -447,9 +494,21 @@ mindcare_api/
 | `b6e1f4a7c9d3` | add_user_legal_basis_records (Stage 23b) |
 | `d8f3a6c1e9b4` | add_chat_conversations_and_messages (Stage 28b) |
 | `c4f7a2e9d1b8` | add_system_conversation_support: type/recipient_id + message_kind/event_key (Stage 29b) |
+| **Ветка psychodiagnostics+chat (dev):** | |
 | `f7e9c2a4b8d1` | add_chat_message_edited_at: chat_messages.edited_at (Stage 31z) |
 | `a9b3e1f7c2d4` | add_chat_attachments: chat_attachments table + FK (Stage 32b) |
-| `c1d4e7a2f9b3` | add_test_interpretations: пороги интерпретации тестов (психодиагностика, Этап A) — **head** |
+| `c1d4e7a2f9b3` | add_test_interpretations: пороги интерпретации тестов (психодиагностика, Этап A) — **head A** |
+| **Ветка appointments (alex):** | |
+| `e1a2b3c4d5f6` | add_appointments_system: meeting_types, group_sessions, group_session_registrations, appointments.meeting_type_id+decline_reason; appointments.status VARCHAR(20→30); partial unique index `ux_gsr_active` (status='registered'); БЕЗ ALTER TYPE и БЕЗ повторного ends_at (он уже в baseline) |
+| `71dfb9c56b13` | add_online_to_appointment_modality: идемпотентный DO $$ (enum только для legacy SQL-bootstrap DBs; в Alembic-chain modality уже VARCHAR(20)) |
+| `9e193b84bba8` | rework_schedule_slot_model: meeting_types +description/+buffer_minutes; schedule_rules +meeting_type_id/+period/+series_id, −slot_duration_minutes/−break_minutes; новая schedule_breaks (recurring breaks); schedule_exceptions enum→varchar + снята уникальность `(psychologist_id, exception_date)`; group_sessions +description; view `v_schedule_active` пересоздан без slot/break |
+| `c9a3f2e1d8b6` | schedule_rule_not_null_break_periods: schedule_rules.meeting_type_id→NOT NULL (FK→RESTRICT); schedule_breaks +effective_from (NOT NULL) +effective_until (nullable) |
+| `b2d4f6a8c1e3` | schedule_auto_extend_created_by: schedule_rules +auto_extend (BOOL NOT NULL default false) +created_by (FK users→SET NULL); только ADD COLUMN/FK, обратимо |
+| `d3e6f9a2b5c8` | appointments_booking_source_created_by: appointments +booking_source (default `student_self`) +created_by (FK users→SET NULL) для аудита студентской и supervisor-created записи |
+| `f1a4c7e0b9d2` | schedule_rule_meeting_type_optional: schedule_rules.meeting_type_id снова nullable; расписание v3 хранит рабочие окна психолога без привязки к типу встречи, а MeetingType выбирается при поиске/создании записи |
+| `a1b2c3d4e5f6` | add_unregistered_student_cards: карточки walk-in клиентов без аккаунта; appointments.client_id nullable + unregistered_student_card_id; CHECK ровно один субъект записи |
+| `b7c8d9e0f1a2` | index_card_linked_user_id: индекс для привязки карточек незарегистрированных студентов к созданному/зарегистрированному аккаунту — **head B** |
+| `<merge>` | После слияния dev↔alex в Alembic две головы (A: `c1d4e7a2f9b3`, B: `b7c8d9e0f1a2`). Требуется merge-миграция (`alembic merge`), объединяющая обе ветви в один head. Миграции вручную не удалять. |
 
 **Ключевые таблицы:**
 
@@ -465,7 +524,11 @@ mindcare_api/
 | `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
 | `chat_attachments` | Вложения чата (Stage 32b): metadata (original_filename, mime_type, file_size, storage_key, checksum, is_image); физический файл — в `CHAT_FILE_STORAGE_DIR` (private FS, не public static); soft delete через `deleted_at`; скачивание только через auth backend endpoint |
 | `appointments` | Записи на консультации |
-| `schedule_rules` | Расписание психологов (не материализованные слоты) |
+| `unregistered_student_cards` | Карточки walk-in клиентов без аккаунта: минимальные ПДн, consent_source/created_by, archived, optional linked_user_id. Используются supervisor manual booking через `unregistered_student_card_id`; при регистрации/создании аккаунта могут привязаться по normalized_email |
+| `meeting_types` | Типы встреч; владеют `duration_minutes` + `buffer_minutes` (по ним строятся слоты), `description`, форматами, `is_group/is_active/is_bookable` |
+| `schedule_rules` | Рабочие окна психолога (только доступность; `meeting_type_id` опционален/legacy и НЕ ограничивает тип встречи в schedule v3, `period`, `series_id` для серии rules+breaks, `auto_extend`, `created_by`). Длительность/буфер — НЕ здесь, а в `meeting_types`. Soft-delete/restore расписания — через `is_active` на уровне серии (не трогает Appointment) |
+| `schedule_breaks` | Повторяющиеся перерывы по дню недели (например обед 13:00–14:00); вырезают пересекающиеся слоты. Перерыв, созданный вместе с расписанием, разделяет `series_id` и период с правилами |
+| `schedule_exceptions` | Разовые изменения на дату: `day_off` / `unavailable` / `extra_availability`; на одну дату допускается несколько (без уникальности) |
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
 | `categories`, `article_categories`, `test_categories` | Типы материалов/категории. В MVP плоские: `parent_id` не используется в Admin CRUD |
 | `tags`, `article_tags`, `news_tags`, `test_tags` | Темы/теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
@@ -481,7 +544,7 @@ mindcare_api/
 
 | Роль | Кто | Как создаётся |
 |------|-----|---------------|
-| `student` | Студент/клиент | Публичная регистрация с OTP |
+| `student` | Студент/клиент | Публичная регистрация с OTP, либо admin/supervisor через `POST /api/supervisor/students` (очное согласие, consent_records) |
 | `psychologist` | Психолог | Только через `POST /api/admin/users` |
 | `admin` | Администратор | Только через `POST /api/admin/users` или `scripts/create_admin.py` |
 | `supervisor` | Супервизор | Только через `POST /api/admin/users` |
@@ -601,7 +664,11 @@ src/components/UI/DateInput
 ✅ Badge — display-only статусы, роли и состояния: опубликовано, черновик, активен, заблокирован, роль пользователя.
 ✅ Tag — display-only теги контента: тема материала, тег новости, категория статьи.
 ✅ Select / MultiSelect — выбор одного или нескольких значений.
-✅ DateInput — выбор ТОЛЬКО даты (value YYYY-MM-DD, кастомный popover). Перед созданием локального календаря/date-поля проверить src/components/UI/DateInput. Не использовать нативный datetime-local/date в новых формах без причины. DateTimePicker/TimeInput/SlotPicker пока НЕ реализованы; для записи на приём/слотов DateInput не использовать (нужен будущий SlotPicker).
+✅ DateInput — выбор ТОЛЬКО даты (value YYYY-MM-DD, кастомный popover). Перед созданием локального календаря/date-поля проверить src/components/UI/DateInput. Не использовать нативный datetime-local/date в новых формах без причины.
+✅ TimePicker — shared выбор времени (`HH:MM`, поминутно 00..59), без native `type=time`.
+✅ DateTimeInput — shared дата+время на базе DateInput+TimePicker, без native `datetime-local`.
+   Используется для групповых занятий и похожих форм. Для выбора свободного слота записи
+   всё ещё использовать feature-specific slot UI, а не DateInput как замену слотам.
 ```
 
 Запрещено без отдельного обоснования:
@@ -957,9 +1024,11 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
-**Student diary/tasks/calendar — accepted demo/mock (НЕ баг):**
-- `/student/diary`, `/student/tasks`, `/student/calendar` работают на hardcoded
-  mock-данных — это осознанная демо-витрина до отдельных этапов
+**Student diary/tasks — accepted demo/mock (НЕ баг):**
+- `/student/diary`, `/student/tasks` работают на hardcoded mock-данных — это осознанная
+  демо-витрина до отдельных этапов
+- `/student/calendar` уже подключён к real appointments API: тип встречи → формат →
+  дата → доступные слоты назначенного психолога; upcoming/history показывают реальные записи
 - `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
   единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read

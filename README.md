@@ -664,7 +664,10 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 **Смена роли в админке (Stage 31n / 31n-hotfix).** Роль пользователя **редактируема** в edit-модалке админки (ранее, Stage 31h, была read-only — правило отменено). UI-поведение:
 - поле «Роль пользователя» расположено сразу под ФИО; при реальной смене роли на `psychologist`/`supervisor`/`admin` появляется блок legal basis (тип основания, документ-основание, опц. комментарий, чекбокс подтверждения) и его поля уходят в PATCH; без документа-основания submit не проходит;
 - если роль не менялась — `role` в PATCH не отправляется и legal basis не требуется;
-- `student` **не предлагается** в edit-dropdown (студенты появляются через self-registration); текущая роль `student` отображается как значение (shared `Select` `displayLabel`), но недоступна для повторного выбора;
+- `student` **не предлагается** в edit-dropdown. Студенты появляются через self-registration
+  или через staff-created student flow (`POST /api/supervisor/students`); текущая роль
+  `student` отображается как значение (shared `Select` `displayLabel`), но недоступна
+  для повторного выбора;
 - backend PATCH guard (Stage 31f-fix) остаётся обязательным defense-in-depth — UI-проверка его не заменяет.
 
 ---
@@ -698,8 +701,9 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 | `/api/session-notes/*` | Session notes (enc:v1: ciphertext): psychologist — свои с content; supervisor — meta-list + audited content read; admin — metadata-only | Psychologist / Supervisor / Admin |
 | `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts, `peer_is_online` presence; attachments upload/download (private storage) | Student / Psychologist (admin/supervisor — 403) |
 | `/api/chat/system-conversation*` | Read-only system conversation (своя беседа): GET conversation/messages, POST read; write только internal publisher | Auth (любая роль — к своей беседе) |
-| `/api/supervisor/*` | Student list, psychologist list, engagements | Supervisor |
-| `/api/psychologist/*` | Cabinet: clients, schedule, appointments | Psychologist |
+| `/api/supervisor/*` | Student list/create, psychologist list, engagements, meeting types, schedules, schedule exceptions, manual booking, group sessions, unregistered student cards | Supervisor |
+| `/api/psychologist/*` | Cabinet: students, schedule, schedule exceptions, appointments, group sessions | Psychologist |
+| `/api/appointments/*` | Student appointments, available slots, meeting types | Student |
 | `/api/health` | Health check: status, tables, revision | Public |
 
 ---

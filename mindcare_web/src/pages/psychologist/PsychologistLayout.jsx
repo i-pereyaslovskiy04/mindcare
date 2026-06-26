@@ -9,7 +9,7 @@ function buildNavSections(messagesBadge) {
       items: [
         { key: 'home',      label: 'Главная',      icon: 'home',     to: '/psychologist',           end: true,  disabled: false },
         { key: 'students',  label: 'Мои студенты', icon: 'users',    to: '/psychologist/students',  end: false, disabled: false },
-        { key: 'sessions',  label: 'Сессии',       icon: 'calendar', to: '/psychologist/sessions',              disabled: true  },
+        { key: 'sessions',  label: 'Сессии',       icon: 'calendar', to: '/psychologist/appointments',          disabled: false },
         { key: 'chat',      label: 'Сообщения',    icon: 'chat',     to: '/psychologist/chat',      end: true,  disabled: false,
           badge: messagesBadge > 0 ? String(messagesBadge) : undefined },
         { key: 'materials', label: 'Материалы',    icon: 'articles', to: '/psychologist/materials',             disabled: true  },
@@ -25,10 +25,11 @@ function buildNavSections(messagesBadge) {
 }
 
 const CRUMB_LABELS = {
-  '/psychologist':          'Главная',
-  '/psychologist/students': 'Мои студенты',
-  '/psychologist/chat':     'Сообщения',
-  '/psychologist/settings': 'Настройки',
+  '/psychologist':               'Главная',
+  '/psychologist/students':      'Мои студенты',
+  '/psychologist/appointments':  'Сессии',
+  '/psychologist/chat':          'Сообщения',
+  '/psychologist/settings':      'Настройки',
 };
 
 const DYNAMIC_CRUMBS = [

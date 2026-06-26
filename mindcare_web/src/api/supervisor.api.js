@@ -8,6 +8,16 @@ export function getSupervisorStudents({ page = 1, size = 20, search } = {}) {
   return apiFetch(`/api/supervisor/students?${params}`);
 }
 
+// Создание полноценного аккаунта студента (admin/supervisor). Возвращает
+// { uuid, email, full_name, role, is_active, created_at, temporary_password,
+//   engagement, linked_cards_count }. ПДн/пароль не логировать.
+export function createSupervisorStudent(payload) {
+  return apiFetch('/api/supervisor/students', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Psychologists ─────────────────────────────────────────────────────────────
 
 export function getSupervisorPsychologists({ page = 1, size = 100, search } = {}) {
@@ -51,4 +61,41 @@ export function closeEngagement(engagementId, { reason } = {}) {
     method: 'PATCH',
     body: JSON.stringify({ reason: reason || null }),
   });
+}
+
+// ── Unregistered student cards ────────────────────────────────────────────────
+// Карточки незарегистрированных (пришедших лично) студентов. Используются как
+// субъект ручной записи супервизором без active engagement.
+
+export function getUnregisteredStudentCards({
+  q,
+  include_archived = false,
+  page = 1,
+  size = 20,
+} = {}) {
+  const params = new URLSearchParams({ page, size });
+  if (q) params.set('q', q);
+  if (include_archived) params.set('include_archived', 'true');
+  return apiFetch(`/api/supervisor/unregistered-student-cards?${params}`);
+}
+
+export function createUnregisteredStudentCard(payload) {
+  return apiFetch('/api/supervisor/unregistered-student-cards', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateUnregisteredStudentCard(cardId, payload) {
+  return apiFetch(`/api/supervisor/unregistered-student-cards/${cardId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveUnregisteredStudentCard(cardId) {
+  return apiFetch(
+    `/api/supervisor/unregistered-student-cards/${cardId}/archive`,
+    { method: 'POST' },
+  );
 }

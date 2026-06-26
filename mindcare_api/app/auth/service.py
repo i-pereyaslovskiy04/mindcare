@@ -98,6 +98,19 @@ def register_confirm(
     except ValueError as e:
         raise AuthError(str(e), 400)
 
+    # Привязка карточек незарегистрированного студента к новому аккаунту (этап 2).
+    # Только ПОСЛЕ подтверждения владения email (этот шаг и есть подтверждение).
+    # Вне core-транзакции и soft-fail: регистрация уже зафиксирована, сбой
+    # привязки её не откатывает. ПДн (email) не логируем — только user_id.
+    try:
+        from app.appointments.service import link_unregistered_cards_to_user
+        link_unregistered_cards_to_user(user["id"], user["email"])
+    except Exception:
+        log.exception(
+            "[register_confirm] card linking failed for user_id=%s",
+            user["id"],
+        )
+
     # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
     # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
     # не должен ломать регистрацию.
@@ -239,6 +252,30 @@ def change_password(
         event_key=f"password_changed:user:{user['id']}:{_ts}",
         text="Пароль вашей учётной записи был изменён.",
     )
+
+
+def get_profile(user_id: str) -> dict:
+    """Self-profile текущего пользователя."""
+    profile = storage.get_profile(user_id)
+    if not profile:
+        raise AuthError("Пользователь не найден", 404)
+    return profile
+
+
+def update_profile(
+    user_id: str,
+    full_name: str,
+    phone: Optional[str],
+) -> dict:
+    """Обновляет разрешённые self-поля. ПДн (ФИО/телефон) не логируются."""
+    name = (full_name or "").strip()
+    if len(name) < 2:
+        raise AuthError("ФИО должно содержать минимум 2 символа", 422)
+    p = (phone or "").strip() or None  # пустой телефон → NULL
+    try:
+        return storage.update_profile_atomic(user_id, name, p)
+    except storage.UserNotFoundError:
+        raise AuthError("Пользователь не найден", 404)
 
 
 def terminate_session(token: str) -> None:

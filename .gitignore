@@ -53,6 +53,9 @@ mindcare_api/media/uploads/
 # --- Dev launcher logs (start.sh, runtime) ---
 /logs/
 
+# --- Runtime log files (maintenance scripts) ---
+mindcare_api/logs/
+
 # --- AI tools local settings (не синхронизировать) ---
 .claude/
 .gemini/

@@ -11,7 +11,7 @@ function parseDate(dateStr) {
 
 const TYPE_ICON = { audio: 'bell', chat: 'chat' };
 
-export default function UpcomingList({ sessions }) {
+export default function UpcomingList({ sessions, onCancel }) {
   if (!sessions.length) return null;
 
   return (
@@ -29,13 +29,24 @@ export default function UpcomingList({ sessions }) {
               <div className={styles.info}>
                 <span className={styles.title}>{s.title}</span>
                 <span className={styles.sub}>
-                  {day} {MONTH_NAMES_GENITIVE[month]} · {s.time} · {s.psychologist}
+                  {day} {MONTH_NAMES_GENITIVE[month]} · {s.time}
+                  {s.psychologist ? ` · ${s.psychologist}` : ''}
                 </span>
               </div>
               <div className={styles.right}>
-                <Badge tone="success">Подтверждена</Badge>
-                {i === 0 && (
-                  <Button variant="primary" size="sm">Подключиться</Button>
+                <Badge tone={s.statusTone || 'neutral'}>{s.statusLabel || 'Запись'}</Badge>
+                {i === 0 && s.rawStatus === 'confirmed' && (
+                  <Button variant="primary" size="sm" disabled>Подключиться</Button>
+                )}
+                {s.canCancel && onCancel && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onCancel(s.uuid)}
+                  >
+                    Отменить
+                  </Button>
                 )}
               </div>
             </li>
