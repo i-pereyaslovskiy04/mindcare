@@ -205,8 +205,8 @@ npm run build
 включает чат-вложения (Stage 32b–32j), систему записи на консультации (appointments, 112+)
 и дневник студента (diary).
 Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend (`npm test -- --watchAll=false`): suites чата/вложений + appointments + diary;
-lint — 0 warnings, production build — success; точное число подтверждается прогоном.
+Frontend (`npm test -- --watchAll=false`): **45 suites / 646 passed** (чат/вложения +
+appointments + diary); lint — 0 warnings; production build — success.
 
 | Файл | Что покрыто |
 |------|-------------|

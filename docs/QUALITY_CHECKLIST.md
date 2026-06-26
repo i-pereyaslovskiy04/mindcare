@@ -265,9 +265,9 @@ backend обязан отклонять (роль не меняется). `conse
 Итого backend: **809 passed** (`.\test.ps1` на смерженной ветке dev, alembic head db0b2e177da5;
 включает appointment/profile/unregistered-cards, chat-attachments и diary сьюты).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): chat attachments (Stage 32i/32j) +
-appointment/schedule UI + diary (StudentHome, DiaryPage, DiaryEntryForm, DiaryEntryItem,
-DiaryHistoryList). Lint: 0 warnings; production build: success. Дополнительно —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **45 suites / 646 passed** — chat attachments
+(Stage 32i/32j) + appointment/schedule UI + diary (StudentHome, DiaryPage, DiaryEntryForm,
+DiaryEntryItem, DiaryHistoryList). Lint: 0 warnings; production build: success. Дополнительно —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —
