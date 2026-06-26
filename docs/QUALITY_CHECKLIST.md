@@ -50,8 +50,8 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **488+ passed** (после слияния добавляются appointments/
-profile/unregistered-cards сьюты — точное число подтверждается прогоном `.\test.ps1`).
+Текущий ожидаемый статус: **699 passed** (`.\test.ps1` на смерженной ветке dev,
+включая appointments/profile/unregistered-cards и chat-attachments сьюты).
 
 ### Alembic
 
@@ -261,8 +261,8 @@ backend обязан отклонять (роль не меняется). `conse
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **488+ passed** (`.\test.ps1`; после слияния добавляются appointment/profile/
-unregistered-cards сьюты — точное число подтверждается прогоном).
+Итого backend: **699 passed** (`.\test.ps1` на смерженной ветке dev, alembic head be8d3ad39b3a;
+включает appointment/profile/unregistered-cards и chat-attachments сьюты).
 
 Frontend (CRA jest, `npm test -- --watchAll=false`): **33+ suites / 369+ tests** (chat attachments
 Stage 32i/32j + appointment/schedule UI) —

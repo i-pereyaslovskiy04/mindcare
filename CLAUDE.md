@@ -200,8 +200,8 @@ npm run build
 
 ### Текущее покрытие
 
-Backend-сьюты включают и чат-вложения (Stage 32b–32j), и систему записи на консультации
-(appointments, 112+) — итоговое число подтверждается прогоном `.\test.ps1` на смерженной ветке.
+Всего: **699 passed** (`.\test.ps1` на смерженной ветке dev, alembic head be8d3ad39b3a) —
+включает и чат-вложения (Stage 32b–32j), и систему записи на консультации (appointments, 112+).
 Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
 Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
 
