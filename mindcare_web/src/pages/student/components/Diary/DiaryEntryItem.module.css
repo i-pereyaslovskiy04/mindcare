@@ -11,12 +11,30 @@
   border-color: var(--latte);
 }
 
+/* ── Read mode: top row ─────────────────────────────────────────────────────── */
+
 .top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
   margin-bottom: 6px;
+}
+
+.topMeta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+
+/* position:relative — anchor for absolute dropdown menu */
+.topActionsSlot {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  flex-shrink: 0;
 }
 
 .date {
@@ -61,4 +79,365 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ── Kebab button: opacity-hidden on desktop, visible on hover/focus/open/mobile ── */
+
+.kebabButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.item:hover .kebabButton,
+.item:focus-within .kebabButton,
+.kebabButtonOpen {
+  opacity: 1;
+}
+
+.kebabButton:hover {
+  background: rgba(139, 111, 71, 0.08);
+  border-color: var(--nav-border);
+  color: var(--coffee);
+}
+
+.kebabButton:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+@media (max-width: 600px) {
+  .kebabButton {
+    opacity: 1;
+  }
+}
+
+/* ── Action dropdown menu — absolute overlay, does not shift card layout ──── */
+
+.actionMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 152px;
+  padding: 5px;
+  background: var(--warm-white, #fff);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuAction {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--espresso);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+
+.menuAction:hover {
+  background: var(--cream);
+}
+
+.menuAction:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: -2px;
+}
+
+.menuActionDanger {
+  color: #b94040;
+}
+
+.menuActionDanger:hover {
+  background: rgba(185, 64, 64, 0.07);
+}
+
+/* ── Edit mode ──────────────────────────────────────────────────────────────── */
+
+.editHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.editLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--coffee);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editMoodRow {
+  margin-bottom: 12px;
+}
+
+.editMoodHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.editMoodLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.editMoodValue {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--coffee);
+}
+
+.editFieldLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.editMoodSlider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
+  outline: none;
+  cursor: pointer;
+  display: block;
+}
+
+.editMoodSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2px solid var(--espresso);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(74, 55, 40, 0.2);
+  transition: transform 0.12s;
+}
+
+.editMoodSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.editMoodSlider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  border: 2px solid var(--espresso);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(74, 55, 40, 0.2);
+}
+
+.editMoodSlider::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
+}
+
+.editMoodSlider:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 4px;
+}
+
+.editMoodSlider:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editEmotionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.editEmotionChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.editEmotionChip:hover:not(:disabled) {
+  background: rgba(139, 111, 71, 0.08);
+  border-color: var(--latte);
+}
+
+.editEmotionChipActive {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(139, 111, 71, 0.15);
+  border: 1px solid var(--latte);
+  color: var(--coffee);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.editEmotionChip:disabled,
+.editEmotionChipActive:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editTextarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--espresso);
+  background: var(--warm-white);
+  resize: vertical;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.editTextarea:disabled {
+  opacity: 0.6;
+}
+
+.editError {
+  font-size: 12px;
+  color: var(--error);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.editActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.saveBtn {
+  min-width: 110px;
+  padding: 7px 18px;
+  background: var(--coffee);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.saveBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  min-width: 80px;
+  padding: 7px 16px;
+  background: transparent;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: var(--cream);
+}
+
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Delete confirm mode ─────────────────────────────────────────────────────── */
+
+.deleteConfirmText {
+  font-size: 13px;
+  color: var(--espresso);
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+
+.deleteError {
+  font-size: 12px;
+  color: var(--error);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.deleteBtnConfirm {
+  flex: 1;
+  padding: 7px 12px;
+  background: #b94040;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.deleteBtnConfirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

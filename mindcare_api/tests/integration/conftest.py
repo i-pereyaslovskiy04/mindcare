@@ -23,7 +23,7 @@ from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
 from app.db.models import (
     Appointment, ChatAttachment, ChatConversation, ChatMessage, ConsentRecord,
-    GroupSession, GroupSessionRegistration, MeetingType,
+    DiaryEntry, GroupSession, GroupSessionRegistration, MeetingType,
     OtpVerification, TherapyEngagement, UnregisteredStudentCard, User,
 )
 
@@ -157,6 +157,9 @@ def cleanup_test_records():
                 db.query(TherapyEngagement).filter(
                     TherapyEngagement.id.in_(eng_ids)
                 ).delete(synchronize_session=False)
+            db.query(DiaryEntry).filter(
+                DiaryEntry.student_id.in_(ids)
+            ).delete(synchronize_session=False)
             db.query(ConsentRecord).filter(
                 ConsentRecord.user_id.in_(ids)
             ).delete(synchronize_session=False)

@@ -54,16 +54,251 @@
 }
 
 .historyCol {
-  position: sticky;
-  top: 0;
+  min-width: 0;
 }
 
 @media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;
   }
+}
 
-  .historyCol {
-    position: static;
+.loadingMsg {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 40px 0;
+  text-align: center;
+}
+
+.errorBlock {
+  padding: 40px 0;
+  text-align: center;
+}
+
+.errorMsg {
+  font-size: 14px;
+  color: var(--error);
+  margin-bottom: 12px;
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--coffee);
+  transition: background 0.15s;
+}
+
+.retryBtn:hover {
+  background: var(--cream);
+}
+
+/* ── Observation card ─────────────────────────────────────────────────────── */
+
+.observationCard {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.observationHeader {
+  margin-bottom: 6px;
+}
+
+.observationTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--espresso);
+  letter-spacing: 0.02em;
+}
+
+.observationSub {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.periodChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.periodChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  color: var(--coffee);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.periodChip:hover {
+  background: var(--cream);
+}
+
+.periodChipActive {
+  background: var(--coffee);
+  color: var(--warm-white);
+  border-color: var(--coffee);
+}
+
+.periodChipActive:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+}
+
+/* ── Summary tiles ────────────────────────────────────────────────────────── */
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 480px) {
+  .summaryGrid {
+    grid-template-columns: 1fr 1fr;
   }
+}
+
+.summaryTile {
+  background: var(--cream, #faf7f2);
+  border-radius: 8px;
+  padding: 14px 16px;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.summaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--espresso);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summaryLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
+.summaryMeta {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.2;
+  opacity: 0.8;
+  margin-top: 1px;
+}
+
+/* ── Recent marks ─────────────────────────────────────────────────────────── */
+
+.recentMarks {
+  margin-bottom: 12px;
+}
+
+.recentMarksTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.markChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.markChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  font-size: 12px;
+  background: var(--cream, #faf7f2);
+  border: 1px solid var(--nav-border);
+  white-space: nowrap;
+  cursor: default;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.markChip:hover {
+  background: var(--sand, #ede8df);
+  border-color: var(--latte, #c4aa88);
+}
+
+.markDate {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.markDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--nav-border);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.markScore {
+  font-weight: 700;
+  color: var(--coffee);
+  letter-spacing: 0.01em;
+}
+
+/* ── Observation states ───────────────────────────────────────────────────── */
+
+.observationHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.observationLoading {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 24px 0;
+  text-align: center;
+}
+
+.observationError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0;
+  font-size: 13px;
+  color: var(--error);
+  text-align: center;
 }

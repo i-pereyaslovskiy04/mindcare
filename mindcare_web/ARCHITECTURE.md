@@ -30,6 +30,7 @@ mindcare_web/
     │   ├── news.api.js
     │   ├── articles.api.js
     │   ├── materials.api.js
+    │   ├── diary.api.js       ← /api/diary/* (today, history, edit/delete, summary)
     │   ├── supervisor.api.js  ← /api/supervisor/* (students, psychologists, engagements)
     │   ├── appointments.api.js
     │   ├── media.api.js       ← /api/media/upload
@@ -211,7 +212,6 @@ mindcare_web/
     │   │   ├── DiaryPage.jsx
     │   │   ├── components/
     │   │   │   ├── Sidebar/Sidebar.jsx + .module.css
-    │   │   │   ├── MoodChart/MoodChart.jsx
     │   │   │   ├── StatCard/StatCard.jsx
     │   │   │   └── Diary/ (MoodSelector, DiaryEntryForm, DiaryHistoryList, DiaryEntryItem)
     │   │   ├── Tests/TestsPage.jsx
@@ -538,6 +538,24 @@ State lives in: useMaterials hook → MaterialsPage props → SearchBar
 Технические имена API, модулей и моделей остаются `categories` и `tags`.
 Не переименовывать файлы и URL ради UI-терминов.
 
+### Student Diary MVP
+
+`StudentHome` и `/student/diary` используют real `/api/diary/*`. StudentHome построен
+вокруг `nextStepCard`, `actionCardsGrid` и условного `observationCard`; fake GAD-7,
+sleep/anxiety, fake appointment/psychologist/date удалены. Карточка психолога не утверждает
+наличие или отсутствие встречи: «Связаться с психологом можно в чате. Информация о встречах
+появится здесь позже.»
+
+`DiaryPage` поддерживает mood-only quick check-in, optional collapsible emotions/text,
+observation summary, history `limit/offset`, load more, edit/delete и inline errors.
+После успешного delete история перечитывается с offset=0, а сравнение today entry
+использует local date helper, не UTC `toISOString()`.
+
+Observation summary загружает `/api/diary/summary?period=14d|month|year`, фильтрует
+points с `mood_score=null` и выводит tiles `Отметок`, `Последняя отметка`/`Последний период`,
+`Диапазон`, а также последние 3–5 отметок в chips. Линейный `MoodChart`, SVG, оси и линии
+удалены после UI smoke. Тексты описательные и не интерпретируют данные медицински.
+
 ### Messenger / Chat UI (Stage 31y–31z-hotfix)
 
 ```
@@ -778,8 +796,8 @@ const {
 
 ### 8.7 Кабинеты студента, психолога и супервизора — текущий статус
 
-- `StudentHome` ещё остаётся частично витринным, но `/student/calendar`, `/student/chat`,
-  `/student/group-sessions`, `/student/settings` уже подключены к real API.
+- `StudentHome` реализован вокруг реальных diary-данных; `/student/diary`, `/student/calendar`,
+  `/student/chat`, `/student/group-sessions`, `/student/settings` уже подключены к real API.
 - Кабинет психолога уже содержит студентов, карточку студента, чат, записи, календарь,
   групповые занятия и read-only расписание/разовые изменения.
 - Кабинет супервизора уже содержит назначения, типы встреч, расписание, ручную запись

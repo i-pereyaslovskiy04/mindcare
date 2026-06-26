@@ -296,8 +296,7 @@
     `AttachmentList` в `MessageBubble`; high-contrast outgoing dark-card fix
   - ✅ Stage 32d-hotfix-b: **safe Office download** — Chromium safe save flow через
     `showSaveFilePicker`, fallback через anchor download; Office attachments скачиваются
-    без top-level navigation на `blob:` URL; чат остаётся открытым; backend full suite
-    после Office header tests — 488 passed
+    без top-level navigation на `blob:` URL; чат остаётся открытым; Office header tests пройдены
   - ✅ Stage 32d-hotfix-b layout: **files-first attachment layout** — в сообщениях с
     файлами и текстом сначала отображаются файлы, затем divider, затем текст как caption;
     attachment-only сообщения без divider
@@ -315,8 +314,7 @@
     (`URL.createObjectURL` / `URL.revokeObjectURL`), без public static и без токенов в URL
   - ✅ Stage 32j: **PDF Preview / Lightbox** — preview `application/pdf` в том же
     `AttachmentPreviewLightbox` через native browser PDF rendering в iframe с blob URL;
-    Office/TXT/SVG/unknown MIME остаются download-only; frontend full suite —
-    33 suites / 369 passed, backend full suite — 488 passed
+    Office/TXT/SVG/unknown MIME остаются download-only; frontend/backend suites пройдены
   - **Future (chat):** preview последнего сообщения в списке бесед; WebSocket/SSE
     realtime presence; inline image thumbnails; Office preview; TXT preview; PDF.js integration
     при необходимости; upload progress percent; upload retry queue; MIME magic bytes validation (`python-magic`);
@@ -336,6 +334,45 @@
   - **Open product question:** retention policy для chat messages
     (срок хранения переписки после завершения терапии)
   - `questions_answers` — не чат, не использовать
+
+**✅ Student Diary MVP + UX/History Hotfix** — завершено:
+  - ✅ Backend `routes → service → storage → models`; миграция `b2e4d7f1a9c3`;
+    `diary_emotions` с seed `calm`, `joyful`, `anxious`, `sad`, `tired`, `angry`,
+    `inspired`, `confused`, `light`, `focused`; `diary_entries` с partial UNIQUE
+    `(student_id, entry_date) WHERE deleted_at IS NULL`
+  - ✅ API: emotions, today GET/PUT, entries `limit/offset`, PATCH/DELETE по UUID,
+    summary `14d|month|year`; все endpoints student-only, non-student → 403;
+    чужая/удалённая/несуществующая запись → 404, malformed UUID → 422
+  - ✅ DELETE — soft-delete через `deleted_at`; после delete можно создать новую запись
+    на ту же дату; empty PATCH `{}` — no-op без изменения `updated_at`
+  - ✅ Encryption-at-rest: `mood_score_enc`, `entry_text_enc`, `emotions_enc` —
+    Fernet `enc:v1:`; plaintext diary content не логируется
+  - ✅ Frontend: StudentHome вокруг `nextStepCard`, action cards и `observationCard`;
+    fake GAD-7/sleep/anxiety/appointment/psychologist/date удалены; DiaryPage —
+    quick check-in, optional collapsible details, history/load more, edit/delete,
+    inline errors; после delete история перечитывается с offset=0
+  - ✅ Hotfix: local frontend today helper вместо UTC `toISOString()`, честный session copy,
+    malformed UUID 422 и empty PATCH no-op
+  - ✅ **Diary Analytics Lite / observation summary**: `/student/diary` использует
+    `/api/diary/summary?period=14d|month|year` и показывает tiles `Отметок`,
+    `Последняя отметка`/`Последний период`, `Диапазон`, а также последние 3–5
+    non-null отметок в chips; save/edit/delete обновляют сводку
+  - ✅ Линейный `MoodChart` удалён после manual UI smoke: для нерегулярного дневника
+    разрывы линии давали неудачную медицинскую визуальную метафору; текущий UI без SVG,
+    осей, линий и утверждений об улучшении/ухудшении
+  - ✅ Проверенный статус проекта: backend **587 passed**; frontend
+    **39 suites / 540 passed**; lint **0 warnings**; build **success**
+  - **Pending / будущие этапы:**
+    - Audit trail для diary edit/delete — compliance gap до production hardening
+    - Доступ психолога — только отдельная policy с explicit consent/legal basis
+    - Timezone-aware backend date policy вместо server-side `date.today()` MVP
+    - Admin UI для `diary_emotions`
+    - Export diary data с отдельной политикой/согласием/audit
+    - Advanced diary analytics / observation insights только после отдельной UX-validation,
+      без заранее выбранного формата линейного графика и без медицинских выводов
+    - GAD-7/PHQ-9 как отдельный валидированный questionnaire-модуль, не dashboard stats
+    - Реальная appointments integration для session data
+    - Mobile/a11y hardening: `aria-live`, focus management delete confirm, textarea labels
 
 ---
 

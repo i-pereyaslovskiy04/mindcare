@@ -19,9 +19,10 @@
 - Все данные пользователей хранятся на серверах в РФ
 - Согласие на обработку ПДн фиксируется в `consent_records` при регистрации
 - Перед каждым тестом и записью на консультацию проверяется актуальность согласия
-- Заметки сессий (`session_notes`) и сообщения чата (`chat_messages.content`) шифруются
+- Заметки сессий (`session_notes`), сообщения чата (`chat_messages.content`) и данные
+  дневника (`diary_entries.mood_score_enc / entry_text_enc / emotions_enc`) шифруются
   на уровне приложения: Fernet, `enc:v1:` prefix, `app/core/encryption.py`;
-  не сохранять и не логировать plaintext `content`
+  не сохранять и не логировать plaintext content
 - IP-адреса анонимизируются через 90 дней (`anonymize_old_ips()` в БД)
 
 **Монорепо с двумя проектами:**
@@ -200,10 +201,12 @@ npm run build
 
 ### Текущее покрытие
 
-Всего: **699 passed** (`.\test.ps1` на смерженной ветке dev, alembic head be8d3ad39b3a) —
-включает и чат-вложения (Stage 32b–32j), и систему записи на консультации (appointments, 112+).
+Backend-сьюты после слияния dev + mindcare_igor включают чат-вложения (Stage 32b–32j),
+систему записи на консультации (appointments, 112+) и дневник студента (diary) —
+итоговое число подтверждается прогоном `.\test.ps1` на смерженной ветке.
 Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 passed** (`npm test -- --watchAll=false`).
+Frontend (`npm test -- --watchAll=false`): suites чата/вложений + appointments + diary;
+lint — 0 warnings, production build — success; точное число подтверждается прогоном.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -241,6 +244,12 @@ Frontend после Stage 32i/32j Image/PDF Preview Lightbox: **33 suites / 369 
 | `tests/integration/test_unregistered_student_cards.py` | карточки незарегистрированных студентов + привязка к аккаунту (этап 2) |
 | `tests/integration/test_supervisor_create_student.py` | создание аккаунта студента супервизором (POST /students) |
 | `tests/integration/test_auth_profile.py` | self-service профиль (GET/PATCH /api/auth/profile) |
+| `tests/integration/test_diary_api.py` | Diary API: endpoints, pagination/summary, student-only 403, cross-student 404, encryption, PATCH/DELETE, soft-delete, malformed UUID 422, empty PATCH no-op; обновлённый каталог (12 активных, tense/irritated/low/lonely, angry/light deprecated) |
+| `src/pages/student/StudentHome.smoke.test.jsx` | StudentHome: nextStepCard states, action cards, observationCard, honest session copy, fake metrics/graph removed |
+| `src/pages/student/components/Diary/DiaryEntryForm.test.jsx` | Mood-required check-in, optional emotions/text, collapsible details, save/error states |
+| `src/pages/student/components/Diary/DiaryEntryItem.test.jsx` | Read/edit/delete modes, confirmation, errors, emotion labels, local date safety |
+| `src/pages/student/components/Diary/DiaryHistoryList.test.jsx` | Empty/populated history, actions, load more and error states |
+| `src/pages/student/DiaryPage.test.jsx` + smoke | Load/save, pagination, edit/delete sync, history reload offset=0, local today, observation summary, period chips, null filtering, recent marks, refresh after mutations |
 
 ---
 
@@ -277,7 +286,7 @@ mindcare_api/
 │   │   ├── session.py       — engine, SessionLocal
 │   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
 │   │   ├── seed.py          — идемпотентный seed
-│   │   └── models/          — ORM-модели (12 модулей, 49 таблиц; chat.py — Stage 28b/32b)
+│   │   └── models/          — ORM-модели (13 модулей, 51 таблица; chat.py — Stage 28b/32b; diary.py — Diary)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
@@ -321,6 +330,10 @@ mindcare_api/
 │   │   ├── service.py       — бизнес-логика
 │   │   └── storage.py       — _article_to_dict, _sync_categories, _sync_tags
 │   ├── session_notes/       — /api/session-notes/* (Fernet encrypt-on-write)
+│   ├── diary/               — /api/diary/* Дневник студента: одна запись в день,
+│   │                          mood_score_enc/entry_text_enc/emotions_enc encrypted-at-rest,
+│   │                          history limit/offset, PATCH edit, DELETE soft-delete, summary;
+│   │                          справочник эмоций diary_emotions (сидирован); только student
 │   ├── chat/                — /api/chat/* Messenger: one-to-one + system conversation,
 │   │                          polling, read_at, encrypt-on-write, peer_is_online presence,
 │   │                          system_publisher (idempotency event_key); attachments:
@@ -469,13 +482,50 @@ mindcare_api/
 ❌ Не хранить физический файл чата в PostgreSQL (даже как bytea/blob)
 ❌ Не писать, что реализованы MIME magic bytes (`python-magic`), antivirus/ClamAV,
    Office/TXT preview, thumbnails, PDF.js, S3/MinIO или at-rest encryption физических файлов
+✅ Diary content (mood_score, entry_text, selected emotions) хранится encrypted-at-rest
+   через enc:v1: в diary_entries.mood_score_enc / entry_text_enc / emotions_enc
+✅ Diary API: GET emotions, GET/PUT today, GET entries?limit&offset,
+   PATCH/DELETE entries/{entry_uuid}, GET summary?period=14d|month|year;
+   только role=student — остальные роли получают 403
+✅ PATCH/DELETE: чужая/удалённая/несуществующая запись → 404; malformed UUID → 422;
+   DELETE = soft-delete; empty PATCH {} = no-op и не меняет updated_at
+✅ Partial UNIQUE (student_id, entry_date) WHERE deleted_at IS NULL:
+   после soft-delete можно создать новую запись на ту же дату
+✅ Справочник эмоций diary_emotions хранится в БД (не hardcoded на фронте);
+   фронт получает [{key, label, sort_order}] через GET /api/diary/emotions
+✅ date policy MVP: backend использует date.today() без timezone; сервер должен быть Moscow UTC+3
+✅ summary contract: fixed calendar period frame — нет clamp по первой записи;
+   period=14d — последние 14 дней (today-13…today), всегда 14 daily points;
+   period=month — с 1-го числа текущего месяца до today, quantity=today.day;
+   period=year — monthly aggregated, всегда 12 points (Jan–Dec текущего года);
+     будущие месяцы (> current month) включены с mood_score=null;
+     entries_count = реальные записи (future null-slots не считаются);
+   day/month без записи → mood_score=null; нет записей → полный фрейм с all null;
+   empty state определяется на фронте по тому, что все mood_score===null;
+   year avg = round(avg, 1) → float;
+✅ StudentHome: nextStepCard + actionCardsGrid + observationCard только при entriesCount>0;
+   fake GAD-7/sleep/anxiety/appointment/psychologist/date удалены
+✅ DiaryPage: quick check-in, mood required, emotions/text optional, collapsible details,
+   observation summary, history/load more, edit/delete, inline errors;
+   frontend today сравнивается по local date
+✅ Diary Analytics Lite: /api/diary/summary?period=14d|month|year используется для
+   описательной сводки периода — Отметок, Последняя отметка/Последний период, Диапазон,
+   последние 3–5 non-null отметок; save/edit/delete обновляют active period
+✅ MoodChart и его test suite удалены после manual UI smoke; в diary UI нет SVG, осей,
+   линий, trend claims или медицинской/диагностической интерпретации
+⚠️ Audit trail для diary edit/delete не реализован; это compliance backlog
+❌ Не логировать entry_text, decrypted mood_score, selected emotions из дневника
+❌ Не давать psychologist/supervisor/admin доступ к diary content без compliance-этапа
+❌ Не смешивать diary с session_notes — разные таблицы, разные маршруты, разная цель
+❌ Не хранить selected emotions пользователя как FK в отдельной связующей таблице —
+   только encrypted JSON в diary_entries.emotions_enc
 ```
 
 ---
 
 ### База данных: схема
 
-49 таблиц в 12 модулях. Схема управляется через Alembic.
+51 таблица в 13 модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -508,7 +558,11 @@ mindcare_api/
 | `f1a4c7e0b9d2` | schedule_rule_meeting_type_optional: schedule_rules.meeting_type_id снова nullable; расписание v3 хранит рабочие окна психолога без привязки к типу встречи, а MeetingType выбирается при поиске/создании записи |
 | `a1b2c3d4e5f6` | add_unregistered_student_cards: карточки walk-in клиентов без аккаунта; appointments.client_id nullable + unregistered_student_card_id; CHECK ровно один субъект записи |
 | `b7c8d9e0f1a2` | index_card_linked_user_id: индекс для привязки карточек незарегистрированных студентов к созданному/зарегистрированному аккаунту — **head B** |
-| `be8d3ad39b3a` | merge_appointments_and_psychodiagnostics_heads: merge-миграция (`alembic merge`), объединяет две ветви (A: `c1d4e7a2f9b3` психодиагностика+чат, B: `b7c8d9e0f1a2` appointments) в один head. Без операций над схемой (upgrade/downgrade = pass) — **head** |
+| `be8d3ad39b3a` | merge_appointments_and_psychodiagnostics_heads: merge-миграция (`alembic merge`), объединяет две ветви (A: `c1d4e7a2f9b3` психодиагностика+чат, B: `b7c8d9e0f1a2` appointments) в один head. Без операций над схемой (upgrade/downgrade = pass) |
+| **Ветка diary (igor, от `a9b3e1f7c2d4`):** | |
+| `b2e4d7f1a9c3` | add_diary_tables: diary_emotions (catalog), diary_entries (partial UNIQUE active per student+date) |
+| `c3a7f8e2d1b9` | update_diary_emotions_catalog: deactivate angry/light, add tense/irritated/low/lonely, reorder to 12 active states |
+| `<merge2>` | После слияния dev↔igor в Alembic снова две головы (`be8d3ad39b3a` и `c3a7f8e2d1b9`). Объединяются второй merge-миграцией (`alembic merge`). Миграции вручную не удалять — **head после merge-миграции** |
 
 **Ключевые таблицы:**
 
@@ -533,6 +587,8 @@ mindcare_api/
 | `categories`, `article_categories`, `test_categories` | Типы материалов/категории. В MVP плоские: `parent_id` не используется в Admin CRUD |
 | `tags`, `article_tags`, `news_tags`, `test_tags` | Темы/теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
 | `auth_log`, `audit_log`, `data_change_log` | Аудит. В prod могут быть партиционированы по месяцам |
+| `diary_emotions` | Справочник эмоций дневника: 12 активных состояний (after c3a7f8e2d1b9); key, label, sort_order, is_active; angry/light — деактивированы (is_active=false), legacy labels в DiaryEntryItem.jsx |
+| `diary_entries` | Дневник студента: одна активная запись в день (partial UNIQUE по student_id + entry_date WHERE NOT deleted); mood_score_enc, entry_text_enc, emotions_enc — Fernet encrypted; только student |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
 > **Партиционирование audit-таблиц:** `auth_log`/`audit_log`/`data_change_log`
@@ -567,6 +623,8 @@ mindcare_web/src/
 │   ├── news.api.js     — normalizeNewsItem() экспортируется для переиспользования
 │   ├── articles.api.js — /api/articles/* + /api/admin/articles/* + categories
 │   ├── materials.api.js — реэкспорт getArticles/getArticleById из articles.api.js
+│   ├── diary.api.js    — /api/diary/* (getDiaryEmotions, getTodayDiaryEntry, saveTodayDiaryEntry,
+│   │                     getDiaryEntries, updateDiaryEntry, deleteDiaryEntry, getDiarySummary)
 │   └── appointments.api.js
 ├── features/           — бизнес-логика по доменам
 │   ├── auth/           — AuthContext, LoginForm, RegisterForm, forgot-password
@@ -861,6 +919,13 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | GET | `/api/chat/student/conversations/{uuid}/attachments/{att_uuid}/download` | Student | ✅ |
 | POST | `/api/chat/conversations/{uuid}/attachments` | Psychologist | ✅ |
 | GET | `/api/chat/conversations/{uuid}/attachments/{att_uuid}/download` | Psychologist | ✅ |
+| GET | `/api/diary/emotions` | Student | ✅ |
+| GET | `/api/diary/today` | Student | ✅ |
+| PUT | `/api/diary/today` | Student | ✅ |
+| GET | `/api/diary/entries` | Student | ✅ |
+| PATCH | `/api/diary/entries/{entry_uuid}` | Student | ✅ |
+| DELETE | `/api/diary/entries/{entry_uuid}` | Student | ✅ |
+| GET | `/api/diary/summary` | Student | ✅ |
 
 ## Соглашения по коду
 
@@ -1024,11 +1089,21 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
-**Student diary/tasks — accepted demo/mock (НЕ баг):**
-- `/student/diary`, `/student/tasks` работают на hardcoded mock-данных — это осознанная
-  демо-витрина до отдельных этапов
-- `/student/calendar` уже подключён к real appointments API: тип встречи → формат →
+**Student tasks — accepted demo/mock (НЕ баг). Diary и calendar — уже на real API:**
+- `/student/tasks` работает на hardcoded mock-данных — осознанная демо-витрина до отдельного этапа
+- `/student/calendar` подключён к real appointments API: тип встречи → формат →
   дата → доступные слоты назначенного психолога; upcoming/history показывают реальные записи
+- **`/student/diary` подключён к real API** (Stage Diary Frontend Integration):
+  одна активная запись в день, mood score 1–10, optional text/emotions, history/load more,
+  edit/delete и soft-delete; backend encrypted-at-rest; мок-данные удалены
+- **StudentHome после UX redesign:** nextStepCard показывает no-entry/today-entry state,
+  action cards ведут на реальные маршруты, observationCard виден только при наличии записей;
+  график и fake dashboard metrics удалены
+- **Diary Analytics Lite завершён:** DiaryPage показывает сводку периода поверх summary API;
+  MoodChart удалён, линейный график не возвращать без отдельной UX-validation
+- **Diary pending:** audit trail edit/delete; timezone-aware backend date policy;
+  psychologist access только после отдельной consent/legal policy; advanced observation
+  insights — только отдельный этап без обязательного line-chart формата
 - `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
   единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read

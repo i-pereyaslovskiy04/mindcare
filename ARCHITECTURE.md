@@ -19,12 +19,12 @@ uvicorn app.main:app       # 2. Запустить приложение
 **Структура модулей:**
 ```
 mindcare_api/
-  alembic/               - конфиг и версии миграций (14 ревизий, head: a9b3e1f7c2d4)
+  alembic/               - конфиг и версии миграций; diary migration: b2e4d7f1a9c3
   app/
     main.py              - точка входа FastAPI, lifespan, роутеры
     core/
       config.py          - настройки из .env (pydantic-settings)
-      encryption.py      - Fernet encrypt/decrypt для session_notes и chat_messages
+      encryption.py      - Fernet encrypt/decrypt для session_notes, chat и diary
       normalization.py   - normalize_email()
       rate_limit.py      - in-memory rate limiter для auth-эндпоинтов (Stage 21)
     auth/                - /api/auth/* (+ hashed session tokens, Stage 22b)
@@ -35,6 +35,9 @@ mindcare_api/
     articles/            - /api/admin/articles/* + /api/articles/* (public)
     media/               - POST /api/media/upload (Pillow, WebP)
     session_notes/       - /api/session-notes/* (encrypt-on-write)
+    diary/               - /api/diary/*: routes → service → storage; только student;
+                           today upsert, history limit/offset, PATCH/DELETE, summary;
+                           mood_score/text/emotions encrypted-at-rest (enc:v1:)
     chat/                - /api/chat/* — Messenger (Stage 28–32g): one-to-one чат
                            student ↔ psychologist + read-only system conversation;
                            polling (after=<id>), encrypt-on-write (enc:v1:), read_at receipts,
@@ -60,7 +63,7 @@ mindcare_api/
     ensure_audit_partitions.py  - CLI: создание будущих партиций audit-таблиц
     backfill_legal_basis.py     - CLI: backfill legal basis records (--dry-run default)
     test_smtp.py                - CLI: диагностика SMTP
-  tests/                 - 488 тестов (unit + integration), запуск: .\test.ps1
+  tests/                 - 587 тестов (unit + integration), запуск: .\test.ps1
 ```
 
 **Auth: атомарность операций (Stage 31m-fix-b2/b3).** Бизнес-операции auth —
@@ -91,9 +94,24 @@ outbox на текущем этапе отсутствует. Failure-injection 
 per-dialog; system conversation всегда видна и **последняя** в списке (read-only, без composer);
 live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts ✓/✓✓; online/offline
 точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat — postponed
-(attachments реализованы, см. ниже). Diary/tasks студента остаются accepted demo/mock.
+(attachments реализованы, см. ниже). Tasks студента остаётся accepted demo/mock.
 Calendar студента уже подключён к real appointments API: тип встречи → формат → дата →
 доступные слоты назначенного психолога, upcoming/history из backend.
+
+**Student Diary MVP:** StudentHome и `/student/diary` подключены к real API. StudentHome
+построен вокруг `nextStepCard`, action cards и условного `observationCard`; fake GAD-7,
+sleep/anxiety, fake psychologist/date/appointment удалены. DiaryPage поддерживает quick
+check-in, optional details, сводку самонаблюдения, history/load more, edit/delete и inline
+errors. Сводка периода показывает `Отметок`, последнюю отметку/период, диапазон и последние
+3–5 non-null отметок; линий, осей и SVG-графика нет.
+
+Backend diary следует слоям `routes → service → storage → models`. Таблицы
+`diary_emotions` и `diary_entries` создаются миграцией `b2e4d7f1a9c3`; partial unique index
+разрешает одну активную запись на student/date при `deleted_at IS NULL`. DELETE является
+soft-delete. Summary: `14d` — 14 дневных точек, `month` — дни от начала месяца до today,
+`year` — 12 месячных агрегатов. Frontend фильтрует null points и выводит описательную
+self-report сводку без диагностических оценок. Diary access остаётся student-only;
+audit trail edit/delete пока не реализован.
 
 **Attachments (Stage 32b–32j + hotfixes):** файлы в engagement chat; upload через скрепку/drag&drop
 (`DragDropOverlay`); `SelectedAttachmentList` (pre-send); `AttachmentCard`/`AttachmentList`
@@ -152,7 +170,7 @@ staff/admin `useUserForm` показывает блок legal basis и шлёт 
 
 ## База данных
 
-PostgreSQL 15+, 48 таблиц, схема управляется только через Alembic.
+PostgreSQL 15+, схема управляется только через Alembic.
 
 | Revision | Описание |
 |----------|----------|
@@ -169,7 +187,8 @@ PostgreSQL 15+, 48 таблиц, схема управляется только 
 | d8f3a6c1e9b4 | chat_conversations + chat_messages (Stage 28b) |
 | c4f7a2e9d1b8 | system conversation support: type/recipient_id + message_kind/event_key (Stage 29b) |
 | f7e9c2a4b8d1 | chat_messages.edited_at (Stage 31z) |
-| a9b3e1f7c2d4 | chat_attachments table + FK (Stage 32b) — **head** |
+| a9b3e1f7c2d4 | chat_attachments table + FK (Stage 32b) |
+| b2e4d7f1a9c3 | diary_emotions + diary_entries; partial UNIQUE active student/date |
 
 ---
 

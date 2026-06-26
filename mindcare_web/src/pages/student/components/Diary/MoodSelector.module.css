@@ -95,8 +95,19 @@
 
 .scaleLabels {
   display: flex;
-  justify-content: space-between;
   font-size: 11px;
   color: var(--fog);
   font-weight: 300;
+}
+
+.scaleLabels span {
+  flex: 1;
+}
+
+.scaleLabels span:nth-child(2) {
+  text-align: center;
+}
+
+.scaleLabels span:last-child {
+  text-align: right;
 }

@@ -1,42 +1,12 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
-import MoodChart from './components/MoodChart/MoodChart';
-import StatCard from './components/StatCard/StatCard';
-import Icon from '../../components/Icon/Icon';
+import { getDiarySummary, getTodayDiaryEntry, getDiaryEmotions } from '../../api/diary.api';
 import styles from './StudentHome.module.css';
 
 const MOOD_WORDS = [
   '', 'Очень тяжело', 'Тяжело', 'Грустно', 'Так себе',
   'Нейтрально', 'Спокойно', 'Хорошо', 'Светло', 'Радостно', 'Прекрасно',
-];
-
-const CHART_DATA_14D = [
-  { l: 'Пн', v: 5 }, { l: 'Вт', v: 4 }, { l: 'Ср', v: 6 }, { l: 'Чт', v: 5 },
-  { l: 'Пт', v: 7 }, { l: 'Сб', v: 8 }, { l: 'Вс', v: 6 }, { l: 'Пн', v: 7 },
-  { l: 'Вт', v: 5 }, { l: 'Ср', v: 6 }, { l: 'Чт', v: 7 }, { l: 'Пт', v: 8 },
-  { l: 'Сб', v: 7 },
-];
-const CHART_DATA_MONTH = [
-  { l: 'Нед 1', v: 5 }, { l: 'Нед 2', v: 6 }, { l: 'Нед 3', v: 7 }, { l: 'Нед 4', v: 6 },
-];
-const CHART_DATA_YEAR = [
-  { l: 'Янв', v: 4 }, { l: 'Фев', v: 5 }, { l: 'Мар', v: 6 }, { l: 'Апр', v: 7 },
-  { l: 'Май', v: 6 }, { l: 'Июн', v: 7 }, { l: 'Июл', v: 8 }, { l: 'Авг', v: 7 },
-  { l: 'Сен', v: 6 }, { l: 'Окт', v: 5 }, { l: 'Ноя', v: 6 }, { l: 'Дек', v: 7 },
-];
-
-const MOOD_PERIODS = [
-  { key: '14d',   label: '14 дней' },
-  { key: 'month', label: 'Месяц'   },
-  { key: 'year',  label: 'Год'     },
-];
-
-const QUICK_ACTIONS = [
-  { icon: 'diary',    title: 'Записать настроение',        desc: '~2 минуты',           to: '/student/diary' },
-  { icon: 'tests',    title: 'Пройти тест GAD-7',          desc: 'Уровень тревоги · 5 мин', to: '/student/tests' },
-  { icon: 'tasks',    title: 'Задания психолога',           desc: '2 в работе',           to: '/student/tasks', badge: '2' },
-  { icon: 'leaf',     title: '5-минутная практика дыхания', desc: 'Аудио · для тревожности', to: '/student/articles' },
 ];
 
 function formatTodayLabel() {
@@ -52,18 +22,59 @@ function getFirstName(fullName) {
   return fullName.trim().split(' ')[0];
 }
 
+function plural(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'запись';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'записи';
+  return 'записей';
+}
+
+function getInsightText(count) {
+  if (count <= 3) return 'Пока мало данных для тренда, но записи уже можно обсудить с психологом.';
+  return 'Можно смотреть первые изменения.';
+}
+
 export default function StudentHome() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [moodValue, setMoodValue] = useState(7);
-  const [activePeriod, setActivePeriod] = useState('14d');
-
-  const chartData = activePeriod === '14d'
-    ? [...CHART_DATA_14D, { l: 'Сегодня', v: moodValue }]
-    : activePeriod === 'month'
-      ? CHART_DATA_MONTH
-      : CHART_DATA_YEAR;
+  const [obs14d, setObs14d] = useState(null);
+  const [todayEntry, setTodayEntry] = useState(undefined);
+  const [emotionCatalog, setEmotionCatalog] = useState([]);
   const todayLabel = formatTodayLabel();
+
+  useEffect(() => {
+    getTodayDiaryEntry()
+      .then((data) => {
+        setTodayEntry(data.mood_score !== null ? data : null);
+      })
+      .catch(() => setTodayEntry(null));
+  }, []);
+
+  useEffect(() => {
+    getDiaryEmotions()
+      .then((data) => setEmotionCatalog(data || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getDiarySummary('14d')
+      .then((data) => {
+        const nonNull = (data.points || []).filter((p) => p.mood_score != null);
+        const avg = nonNull.length > 0
+          ? Number((nonNull.reduce((s, p) => s + p.mood_score, 0) / nonNull.length).toFixed(1))
+          : null;
+        setObs14d({
+          entriesCount: data.entries_count ?? 0,
+          avgMood: avg,
+        });
+      })
+      .catch(() => {
+        setObs14d({ entriesCount: 0, avgMood: null });
+      });
+  }, []);
+
+  const todayLoading = todayEntry === undefined;
+  const hasTodayEntry = todayEntry !== null && todayEntry !== undefined;
 
   return (
     <div className={styles.page}>
@@ -71,139 +82,142 @@ export default function StudentHome() {
       <h1 className={styles.pageTitle}>
         Здравствуйте, <em>{getFirstName(user?.name)}</em>
       </h1>
-      <p className={styles.pageSub}>
-        Сегодня хороший день, чтобы прислушаться к себе. Сделайте короткую запись
-        о настроении или загляните к материалам.
-      </p>
 
-      {/* ---- mood + session row ---- */}
-      <div className={`${styles.grid} ${styles.g21}`} style={{ marginBottom: 18 }}>
-
-        {/* dark mood card */}
-        <div className={styles.moodCard}>
-          <div className={styles.moodCardTop}>
-            <div>
-              <div className={styles.moodCardTagLabel}>Состояние сегодня</div>
-              <div className={styles.moodCardTitle}>{MOOD_WORDS[moodValue]}</div>
-              <div className={styles.moodCardHint}>
-                Одно прикосновение к шкале — и день уже отмечен.
-              </div>
-            </div>
-            <div className={styles.moodScore}>
-              <div className={styles.moodScoreNum}>{moodValue}</div>
-              <div className={styles.moodScoreLabel}>из 10</div>
-            </div>
-          </div>
-
-          <div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={moodValue}
-              onChange={(e) => setMoodValue(Number(e.target.value))}
-              className={styles.moodSlider}
-            />
-            <div className={styles.moodScaleLabels}>
-              <span>тяжело</span>
-              <span>нейтрально</span>
-              <span>светло</span>
-            </div>
-          </div>
-
-          <div className={styles.moodButtons}>
-            <button
-              className={styles.btnLatte}
-              onClick={() => navigate('/student/diary')}
-            >
-              Записать в дневник
-            </button>
-            <button
-              className={styles.btnGhostDark}
-              onClick={() => navigate('/student/chat')}
-            >
-              Написать психологу
-            </button>
-          </div>
+      {/* ── Next step card ── */}
+      <div className={styles.nextStepCard}>
+        <div className={styles.nextStepContent}>
+          <div className={styles.nextStepLabel}>Сегодня</div>
+          {todayLoading ? (
+            <>
+              <h2 className={styles.nextStepTitle}>Ваш следующий шаг</h2>
+              <p className={styles.nextStepText}>Загружается…</p>
+            </>
+          ) : hasTodayEntry ? (
+            <>
+              <h2 className={styles.nextStepTitle}>Сегодняшняя отметка сохранена</h2>
+              <p className={styles.nextStepText}>
+                Вы отметили состояние: {todayEntry.mood_score}/10. Можно добавить подробности или написать психологу.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className={styles.nextStepTitle}>Ваш следующий шаг</h2>
+              <p className={styles.nextStepText}>
+                Можно начать с короткой отметки самочувствия или перейти к материалам для самостоятельной работы.
+              </p>
+            </>
+          )}
         </div>
-
-        {/* next session card */}
-        <div className={styles.sessionCard}>
-          <div className={styles.labelTagMuted}>Ближайшая сессия</div>
-          <div>
-            <div className={styles.sessionDate}>Пятница, 30 апреля</div>
-            <div className={styles.sessionTime}>15:00 · онлайн (видео)</div>
+        {!todayLoading && (
+          <div className={styles.nextStepActions}>
+            {hasTodayEntry ? (
+              <>
+                <Link to="/student/diary" className={styles.btnPrimary}>
+                  Дополнить запись
+                </Link>
+                <Link to="/student/chat" className={styles.btnGhost}>
+                  Написать психологу
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to="/student/diary" className={styles.btnPrimary}>
+                  Отметить состояние
+                </Link>
+                <Link to="/student/materials" className={styles.btnGhost}>
+                  Открыть материалы
+                </Link>
+              </>
+            )}
           </div>
-          <div className={styles.psychCard}>
-            <div className={styles.psychAvatar}>МК</div>
-            <div>
-              <div className={styles.psychName}>Мария Ковалёва</div>
-              <div className={styles.psychRole}>Клинический психолог</div>
-            </div>
-          </div>
-          <button
-            className={styles.btnSoft}
-            onClick={() => navigate('/student/calendar')}
-          >
-            <Icon name="video" size={14} /> Подключиться
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* ---- stat tiles ---- */}
-      <div className={`${styles.grid} ${styles.g3}`} style={{ marginBottom: 24 }}>
-        <StatCard label="Тревожность" value="3.2" unit="/10" trend="↓ 18% за неделю" />
-        <StatCard label="Записей в дневнике" value="12" unit="за месяц" trend="↑ постоянство растёт" />
-        <StatCard label="Сон" value="7.4" unit="часа" trend="↓ 0.6ч от нормы" trendDown />
-      </div>
+      {/* ── Action cards ── */}
+      <div className={styles.actionCardsGrid}>
 
-      {/* ---- mood chart + quick actions ---- */}
-      <div className={`${styles.grid} ${styles.g21}`}>
-        <div className={styles.card}>
-          <div className={styles.chartHeader}>
-            <h2 className={styles.sectionTitle}>Динамика настроения</h2>
-            <div className={styles.periodChips}>
-              {MOOD_PERIODS.map((period) => (
-                <button
-                  key={period.key}
-                  type="button"
-                  className={activePeriod === period.key ? styles.chipActive : styles.chip}
-                  aria-pressed={activePeriod === period.key}
-                  onClick={() => setActivePeriod(period.key)}
-                >
-                  {period.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <MoodChart data={chartData} height={160} />
+        {/* Psychologist */}
+        <div className={styles.actionCard}>
+          <div className={styles.cardTitle}>Психолог</div>
+          <p className={styles.cardText}>
+            Связаться с психологом можно в чате. Информация о встречах появится здесь позже.
+          </p>
+          <Link to="/student/chat" className={styles.cardAction}>
+            Написать психологу
+          </Link>
         </div>
 
-        <div className={styles.card}>
-          <h2 className={styles.sectionTitle}>Быстрые действия</h2>
-          <div>
-            {QUICK_ACTIONS.map((item) => (
-              <Link
-                key={item.icon}
-                to={item.to}
-                className={styles.liRow}
-              >
-                <div className={styles.liIcon}>
-                  <Icon name={item.icon} size={18} />
+        {/* Wellbeing */}
+        <div className={styles.actionCard}>
+          <div className={styles.cardTitle}>Самочувствие</div>
+          {todayLoading ? (
+            <p className={styles.cardText}>Загружается…</p>
+          ) : hasTodayEntry ? (
+            <>
+              <p className={styles.cardMeta}>
+                Сегодня: {todayEntry.mood_score}/10
+                {MOOD_WORDS[todayEntry.mood_score]
+                  ? ` · ${MOOD_WORDS[todayEntry.mood_score]}`
+                  : ''}
+              </p>
+              {todayEntry.emotions && todayEntry.emotions.length > 0 && (
+                <div className={styles.emotionChips}>
+                  {todayEntry.emotions.map((key) => {
+                    const found = emotionCatalog.find((e) => e.key === key);
+                    return (
+                      <span key={key} className={styles.emotionChip}>
+                        {found ? found.label : key}
+                      </span>
+                    );
+                  })}
                 </div>
-                <div>
-                  <div className={styles.liTitle}>{item.title}</div>
-                  <div className={styles.liDesc}>{item.desc}</div>
-                </div>
-                {item.badge
-                  ? <span className={styles.liBadge}>{item.badge}</span>
-                  : <span className={styles.liArrow}><Icon name="arrow-right" size={16} /></span>
-                }
+              )}
+              <Link to="/student/diary" className={styles.cardAction}>
+                Открыть дневник
               </Link>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <p className={styles.cardText}>Сегодня ещё нет отметки.</p>
+              <Link to="/student/diary" className={styles.cardAction}>
+                Отметить
+              </Link>
+            </>
+          )}
+        </div>
+
+        {/* Materials */}
+        <div className={styles.actionCard}>
+          <div className={styles.cardTitle}>Материалы</div>
+          <p className={styles.cardText}>
+            Статьи и упражнения для самостоятельной работы.
+          </p>
+          <Link to="/student/materials" className={styles.cardAction}>
+            Открыть
+          </Link>
         </div>
       </div>
+
+      {/* ── Observation card (only when data exists) ── */}
+      {obs14d !== null && obs14d.entriesCount > 0 && (
+        <div className={styles.observationCard}>
+          <div className={styles.obsHeader}>
+            <span className={styles.obsTitle}>Самонаблюдение за 14 дней</span>
+            <Link to="/student/diary" className={styles.obsLink}>
+              Открыть дневник
+            </Link>
+          </div>
+          <div className={styles.obsMeta}>
+            <span className={styles.obsCount}>
+              {obs14d.entriesCount} {plural(obs14d.entriesCount)}
+            </span>
+            {obs14d.avgMood !== null && (
+              <span className={styles.obsAvg}>· среднее {obs14d.avgMood}/10</span>
+            )}
+          </div>
+          <div className={styles.obsInsight}>{getInsightText(obs14d.entriesCount)}</div>
+        </div>
+      )}
     </div>
   );
 }

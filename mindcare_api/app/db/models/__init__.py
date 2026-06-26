@@ -115,6 +115,9 @@ from app.db.models.audit import (  # noqa: F401
     DataChangeLog,
 )
 
+# ── diary ─────────────────────────────────────────────────────────────────────
+from app.db.models.diary import DiaryEmotion, DiaryEntry  # noqa: F401
+
 # ── otp ───────────────────────────────────────────────────────────────────────
 from app.db.models.otp import OtpVerification  # noqa: F401
 
@@ -147,6 +150,8 @@ __all__ = [
     "NotificationTemplate", "Notification",
     # audit
     "AuditLog", "AuthLog", "DataChangeLog",
+    # diary
+    "DiaryEmotion", "DiaryEntry",
     # otp
     "OtpVerification",
 ]
