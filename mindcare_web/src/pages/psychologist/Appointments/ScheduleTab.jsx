@@ -2,8 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import Icon from '../../../components/Icon/Icon';
 import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
-import { getPsychologistSchedule } from '../../../api/appointments.api';
+import { getPsychologistSchedule, getPsychologistScheduleExceptions } from '../../../api/appointments.api';
 import styles from './AppointmentsPage.module.css';
+
+const EXCEPTION_TYPE_LABEL = {
+  day_off:            'Выходной (весь день)',
+  unavailable:        'Блокировка',
+  extra_availability: 'Доп. окно',
+};
+const EXCEPTION_TYPE_TONE = {
+  day_off:            'neutral',
+  unavailable:        'warning',
+  extra_availability: 'success',
+};
 
 const DAY_LABEL = [
   'Понедельник', 'Вторник', 'Среда', 'Четверг',
@@ -22,15 +33,21 @@ function fmtPeriod(item) {
  * день, время и период действия (тип/длительность здесь не отображаются).
  */
 export default function ScheduleTab() {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
+  const [data, setData]             = useState(null);
+  const [exceptions, setExceptions] = useState([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await getPsychologistSchedule());
+      const [sched, excs] = await Promise.all([
+        getPsychologistSchedule(),
+        getPsychologistScheduleExceptions(),
+      ]);
+      setData(sched);
+      setExceptions(Array.isArray(excs) ? excs : []);
     } catch (e) {
       setError(e.message || 'Ошибка загрузки');
     } finally {
@@ -100,38 +117,77 @@ export default function ScheduleTab() {
   })).filter(d => d.rules.length > 0 || d.breaks.length > 0);
 
   return (
-    <div className={styles.list}>
-      {days.map(day => (
-        <div key={day.dow} className={styles.card}>
-          <div className={styles.cardHead}>
-            <div className={styles.cardStudent}>
-              <span className={styles.studentName}>{day.label}</span>
+    <>
+      <div className={styles.list}>
+        {days.map(day => (
+          <div key={day.dow} className={styles.card}>
+            <div className={styles.cardHead}>
+              <div className={styles.cardStudent}>
+                <span className={styles.studentName}>{day.label}</span>
+              </div>
             </div>
+
+            {day.rules.map(r => (
+              <div key={`r-${r.id}`} className={styles.cardMeta}>
+                <span className={styles.metaItem}>
+                  <Icon name="calendar" size={13} />
+                  Рабочее время: {r.start_time}–{r.end_time}
+                </span>
+                <span className={styles.metaItem}>{fmtPeriod(r)}</span>
+                {r.auto_extend && <Badge tone="neutral">Автопродление</Badge>}
+              </div>
+            ))}
+
+            {day.breaks.map(b => (
+              <div key={`b-${b.id}`} className={styles.cardMeta}>
+                <span className={styles.metaItem}>
+                  <Icon name="bell" size={13} />
+                  Перерыв: {b.start_time}–{b.end_time}
+                  {b.title ? `, ${b.title}` : ''}
+                </span>
+                <span className={styles.metaItem}>{fmtPeriod(b)}</span>
+              </div>
+            ))}
           </div>
+        ))}
+      </div>
 
-          {day.rules.map(r => (
-            <div key={`r-${r.id}`} className={styles.cardMeta}>
-              <span className={styles.metaItem}>
-                <Icon name="calendar" size={13} />
-                Рабочее время: {r.start_time}–{r.end_time}
-              </span>
-              <span className={styles.metaItem}>{fmtPeriod(r)}</span>
-              {r.auto_extend && <Badge tone="neutral">Автопродление</Badge>}
-            </div>
-          ))}
-
-          {day.breaks.map(b => (
-            <div key={`b-${b.id}`} className={styles.cardMeta}>
-              <span className={styles.metaItem}>
-                <Icon name="bell" size={13} />
-                Перерыв: {b.start_time}–{b.end_time}
-                {b.title ? `, ${b.title}` : ''}
-              </span>
-              <span className={styles.metaItem}>{fmtPeriod(b)}</span>
+      <div className={styles.totalHint} style={{ marginTop: 16 }}>
+        Разовые изменения
+      </div>
+      {exceptions.length === 0 ? (
+        <div className={styles.stateSub}>Разовых изменений нет.</div>
+      ) : (
+        <div className={styles.list}>
+          {exceptions.map(ex => (
+            <div key={ex.id} className={styles.card}>
+              <div className={styles.cardHead}>
+                <div className={styles.cardStudent}>
+                  <span className={styles.studentName}>{ex.exception_date}</span>
+                </div>
+                <div className={styles.cardBadges}>
+                  <Badge tone={EXCEPTION_TYPE_TONE[ex.exception_type] || 'neutral'}>
+                    {EXCEPTION_TYPE_LABEL[ex.exception_type] || ex.exception_type}
+                  </Badge>
+                </div>
+              </div>
+              {(ex.start_time || ex.end_time || ex.reason) && (
+                <div className={styles.cardMeta}>
+                  {ex.start_time && ex.end_time && (
+                    <span className={styles.metaItem}>
+                      <Icon name="calendar" size={13} />
+                      {ex.start_time}–{ex.end_time}
+                    </span>
+                  )}
+                  {ex.reason && (
+                    <span className={styles.metaItem}>{ex.reason}</span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }

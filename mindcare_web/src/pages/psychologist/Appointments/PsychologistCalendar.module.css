@@ -2,7 +2,7 @@
   border: 1px solid var(--nav-border);
   border-radius: 16px;
   background: var(--warm-white);
-  padding: 16px 18px;
+  padding: 12px 14px;
   box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
   margin-bottom: 18px;
 }
@@ -27,14 +27,26 @@
   margin-left: auto;
 }
 
+.body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.gridWrap {
+  flex: 0 0 auto;
+  max-width: 360px;
+  width: 100%;
+}
+
 .dowRow,
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  gap: 4px;
 }
 
-.dowRow { margin-bottom: 6px; }
+.dowRow { margin-bottom: 4px; }
 
 .dowCell {
   text-align: center;
@@ -51,11 +63,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  aspect-ratio: 1;
-  border-radius: 10px;
+  min-height: 40px;
+  border-radius: 8px;
   border: 1px solid var(--nav-border);
   background: var(--warm-white);
-  padding: 6px 4px 14px;
+  padding: 4px 2px 12px;
   font-family: inherit;
   color: var(--text-main);
   cursor: default;
@@ -112,12 +124,24 @@
 
 /* ── Day detail (selected) ─────────────────────────────── */
 .dayDetail {
-  margin-top: 14px;
-  border-top: 1px solid var(--nav-border);
-  padding-top: 12px;
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid var(--nav-border);
+  padding-left: 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .body { flex-direction: column; }
+  .gridWrap { max-width: 100%; }
+  .dayDetail {
+    border-left: none;
+    border-top: 1px solid var(--nav-border);
+    padding-left: 0;
+    padding-top: 12px;
+  }
 }
 
 .dayDetailHead {
@@ -155,3 +179,22 @@
 .detailName { font-weight: 500; color: var(--text-main); }
 
 .detailMeta { font-size: var(--fs-sub); color: var(--text-muted); }
+
+/* ── Legend ─────────────────────────────────────────────── */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--nav-border);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-tag);
+  color: var(--text-muted);
+  white-space: nowrap;
+}

@@ -127,6 +127,13 @@ export const getScheduleExceptions = ({ psychologistId, dateFrom, dateTo } = {})
   return apiFetch(`/api/supervisor/schedule-exceptions?${p}`);
 };
 
+export const getPsychologistScheduleExceptions = ({ dateFrom, dateTo } = {}) => {
+  const p = new URLSearchParams();
+  if (dateFrom) p.set('date_from', dateFrom);
+  if (dateTo) p.set('date_to', dateTo);
+  return apiFetch(`/api/psychologist/schedule-exceptions?${p}`);
+};
+
 // ── Schedule series (schedule v2) ─────────────────────────────────────────────
 
 export const getScheduleBreaks = ({ psychologistId } = {}) => {

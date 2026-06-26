@@ -66,82 +66,105 @@ export default function PsychologistCalendar({
         {loading && <span className={styles.loadingHint}>Загрузка…</span>}
       </div>
 
-      <div className={styles.dowRow}>
-        {DOW.map(d => <span key={d} className={styles.dowCell}>{d}</span>)}
-      </div>
+      <div className={styles.body}>
+        <div className={styles.gridWrap}>
+          <div className={styles.dowRow}>
+            {DOW.map(d => <span key={d} className={styles.dowCell}>{d}</span>)}
+          </div>
 
-      <div className={styles.grid}>
-        {cells.map((cell, idx) => {
-          const key = dateKeyFromParts(cell.year, cell.month, cell.day);
-          const dayEvents = eventsByDay[key] || [];
-          const hasEvents = dayEvents.length > 0;
-          const isToday = key === todayKey;
-          const isSelected = key === selectedDay;
-          const cls = [
-            styles.cell,
-            cell.current ? '' : styles.cellOut,
-            isToday ? styles.cellToday : '',
-            isSelected ? styles.cellSelected : '',
-            hasEvents ? styles.cellHasEvents : '',
-          ].filter(Boolean).join(' ');
-          return (
-            <button
-              key={idx}
-              type="button"
-              className={cls}
-              disabled={!hasEvents}
-              aria-label={`${cell.day} ${MONTH_NAMES[cell.month]}${hasEvents ? `, встреч: ${dayEvents.length}` : ''}`}
-              onClick={() => hasEvents && onSelectDay(key)}
-            >
-              <span className={styles.dayNum}>{cell.day}</span>
-              {hasEvents && (
-                <span className={styles.dots}>
-                  {dayEvents.slice(0, 4).map(ev => (
-                    <span key={ev.id} className={`${styles.dot} ${dotClass(ev)}`} />
-                  ))}
-                </span>
-              )}
-              {dayEvents.length > 1 && (
-                <span className={styles.count}>{dayEvents.length}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {selectedDay && selectedEvents.length > 0 && (
-        <div className={styles.dayDetail}>
-          <div className={styles.dayDetailHead}>Встречи · {selectedDay}</div>
-          {selectedEvents.map(ev => (
-            <div key={ev.id} className={styles.detailRow}>
-              <span className={styles.detailTime}>
-                <Icon name="calendar" size={13} /> {ev.time}
-              </span>
-              <div className={styles.detailBody}>
-                <div className={styles.detailTitleRow}>
-                  <span className={styles.detailName}>
-                    {ev.kind === 'group' ? ev.title : ev.subject.name}
-                  </span>
-                  {ev.kind === 'group' && <Badge tone="neutral">Группа</Badge>}
-                  {ev.kind === 'appointment' && ev.subject.isCard && (
-                    <Badge tone="neutral">Карточка</Badge>
+          <div className={styles.grid}>
+            {cells.map((cell, idx) => {
+              const key = dateKeyFromParts(cell.year, cell.month, cell.day);
+              const dayEvents = eventsByDay[key] || [];
+              const hasEvents = dayEvents.length > 0;
+              const isToday = key === todayKey;
+              const isSelected = key === selectedDay;
+              const cls = [
+                styles.cell,
+                cell.current ? '' : styles.cellOut,
+                isToday ? styles.cellToday : '',
+                isSelected ? styles.cellSelected : '',
+                hasEvents ? styles.cellHasEvents : '',
+              ].filter(Boolean).join(' ');
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  className={cls}
+                  disabled={!hasEvents}
+                  aria-label={`${cell.day} ${MONTH_NAMES[cell.month]}${hasEvents ? `, встреч: ${dayEvents.length}` : ''}`}
+                  onClick={() => hasEvents && onSelectDay(key)}
+                >
+                  <span className={styles.dayNum}>{cell.day}</span>
+                  {hasEvents && (
+                    <span className={styles.dots}>
+                      {dayEvents.slice(0, 4).map(ev => (
+                        <span key={ev.id} className={`${styles.dot} ${dotClass(ev)}`} />
+                      ))}
+                    </span>
                   )}
-                </div>
-                <div className={styles.detailMeta}>
-                  {ev.kind === 'group'
-                    ? `${MODALITY_LABEL[ev.modality] || ev.modality} · мест: ${ev.registered}/${ev.capacity}`
-                    : `${ev.title} · ${MODALITY_LABEL[ev.modality] || ev.modality}`}
-                </div>
-              </div>
-              {ev.kind === 'appointment' && (
-                <Badge tone={STATUS_TONE[ev.status] || 'neutral'}>
-                  {STATUS_LABEL[ev.status] || ev.status}
-                </Badge>
-              )}
-            </div>
-          ))}
+                  {dayEvents.length > 1 && (
+                    <span className={styles.count}>{dayEvents.length}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className={styles.legend} aria-label="Легенда">
+            <span className={styles.legendItem}>
+              <span className={`${styles.dot} ${styles.dotPending}`} aria-hidden="true" />
+              Ожидает
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.dot} ${styles.dotConfirmed}`} aria-hidden="true" />
+              Подтверждена
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.dot} ${styles.dotMuted}`} aria-hidden="true" />
+              Отменена / завершена
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.dot} ${styles.dotGroup}`} aria-hidden="true" />
+              Группа
+            </span>
+          </div>
         </div>
-      )}
+
+        {selectedDay && selectedEvents.length > 0 && (
+          <div className={styles.dayDetail}>
+            <div className={styles.dayDetailHead}>Встречи · {selectedDay}</div>
+            {selectedEvents.map(ev => (
+              <div key={ev.id} className={styles.detailRow}>
+                <span className={styles.detailTime}>
+                  <Icon name="calendar" size={13} /> {ev.time}
+                </span>
+                <div className={styles.detailBody}>
+                  <div className={styles.detailTitleRow}>
+                    <span className={styles.detailName}>
+                      {ev.kind === 'group' ? ev.title : ev.subject.name}
+                    </span>
+                    {ev.kind === 'group' && <Badge tone="neutral">Группа</Badge>}
+                    {ev.kind === 'appointment' && ev.subject.isCard && (
+                      <Badge tone="neutral">Карточка</Badge>
+                    )}
+                  </div>
+                  <div className={styles.detailMeta}>
+                    {ev.kind === 'group'
+                      ? `${MODALITY_LABEL[ev.modality] || ev.modality} · мест: ${ev.registered}/${ev.capacity}`
+                      : `${ev.title} · ${MODALITY_LABEL[ev.modality] || ev.modality}`}
+                  </div>
+                </div>
+                {ev.kind === 'appointment' && (
+                  <Badge tone={STATUS_TONE[ev.status] || 'neutral'}>
+                    {STATUS_LABEL[ev.status] || ev.status}
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
