@@ -562,7 +562,7 @@ mindcare_api/
 | **Ветка diary (igor, от `a9b3e1f7c2d4`):** | |
 | `b2e4d7f1a9c3` | add_diary_tables: diary_emotions (catalog), diary_entries (partial UNIQUE active per student+date) |
 | `c3a7f8e2d1b9` | update_diary_emotions_catalog: deactivate angry/light, add tense/irritated/low/lonely, reorder to 12 active states |
-| `<merge2>` | После слияния dev↔igor в Alembic снова две головы (`be8d3ad39b3a` и `c3a7f8e2d1b9`). Объединяются второй merge-миграцией (`alembic merge`). Миграции вручную не удалять — **head после merge-миграции** |
+| `db0b2e177da5` | merge_diary_into_dev_heads: вторая merge-миграция (`alembic merge`), объединяет `be8d3ad39b3a` (dev) и `c3a7f8e2d1b9` (diary) в один head. Без операций над схемой (upgrade/downgrade = pass) — **head** |
 
 **Ключевые таблицы:**
 
