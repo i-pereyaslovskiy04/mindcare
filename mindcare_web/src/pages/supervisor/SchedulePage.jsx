@@ -48,16 +48,6 @@ const EXCEPTION_TYPE_TONE = {
   extra_availability: 'success',
 };
 
-const PERIOD_OPTIONS = [
-  { value: '',          label: 'Не указан' },
-  { value: 'morning',   label: 'Утро' },
-  { value: 'afternoon', label: 'День' },
-  { value: 'evening',   label: 'Вечер' },
-];
-const PERIOD_LABEL = Object.fromEntries(
-  PERIOD_OPTIONS.filter(o => o.value).map(o => [o.value, o.label])
-);
-
 const EMPTY_SCHEDULE = {
   days_of_week: [],
   start_time: '09:00',
@@ -65,7 +55,6 @@ const EMPTY_SCHEDULE = {
   effective_from: '',
   effective_until: '',
   auto_extend: false,
-  period: '',
 };
 
 const EMPTY_EXC = {
@@ -90,7 +79,6 @@ function buildSeries(rules, breaks) {
         legacy_rule_id: r.series_id ? null : r.id,
         start_time: r.start_time,
         end_time: r.end_time,
-        period: r.period,
         effective_from: r.effective_from,
         effective_until: r.effective_until,
         auto_extend: r.auto_extend,
@@ -210,7 +198,6 @@ export default function SchedulePage() {
       effective_from: s.effective_from || '',
       effective_until: s.effective_until || '',
       auto_extend: !!s.auto_extend,
-      period: s.period || '',
     });
     setSchedBreaks(
       (s.breaks || []).map(b => ({
@@ -266,7 +253,6 @@ export default function SchedulePage() {
       effective_from: schedForm.effective_from,
       effective_until: schedForm.effective_until || null,
       auto_extend: schedForm.auto_extend,
-      period: schedForm.period || null,
       breaks: schedBreaks.map(br => ({
         start_time: br.start_time,
         end_time: br.end_time,
@@ -446,12 +432,6 @@ export default function SchedulePage() {
                 {s.effective_until ? ` — ${s.effective_until}` : ' — бессрочно'}
               </div>
 
-              {s.period && PERIOD_LABEL[s.period] && (
-                <div className={styles.seriesMeta}>
-                  Период: {PERIOD_LABEL[s.period]}
-                </div>
-              )}
-
               {s.breaks.length > 0 && (
                 <div className={styles.breaksLine}>
                   Перерывы:{' '}
@@ -596,15 +576,6 @@ export default function SchedulePage() {
             <label htmlFor="auto-extend" className={styles.toggleLabel}>
               Ежемесячное автопродление (требует «действует по»)
             </label>
-          </div>
-
-          <div className={styles.formField}>
-            <Select
-              label="Период (необязательно)"
-              value={schedForm.period}
-              options={PERIOD_OPTIONS}
-              onChange={v => setSchedForm(f => ({ ...f, period: v }))}
-            />
           </div>
 
           <div className={styles.breaksEditor}>
