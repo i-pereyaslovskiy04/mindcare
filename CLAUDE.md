@@ -508,7 +508,7 @@ mindcare_api/
 | `f1a4c7e0b9d2` | schedule_rule_meeting_type_optional: schedule_rules.meeting_type_id снова nullable; расписание v3 хранит рабочие окна психолога без привязки к типу встречи, а MeetingType выбирается при поиске/создании записи |
 | `a1b2c3d4e5f6` | add_unregistered_student_cards: карточки walk-in клиентов без аккаунта; appointments.client_id nullable + unregistered_student_card_id; CHECK ровно один субъект записи |
 | `b7c8d9e0f1a2` | index_card_linked_user_id: индекс для привязки карточек незарегистрированных студентов к созданному/зарегистрированному аккаунту — **head B** |
-| `<merge>` | После слияния dev↔alex в Alembic две головы (A: `c1d4e7a2f9b3`, B: `b7c8d9e0f1a2`). Требуется merge-миграция (`alembic merge`), объединяющая обе ветви в один head. Миграции вручную не удалять. |
+| `be8d3ad39b3a` | merge_appointments_and_psychodiagnostics_heads: merge-миграция (`alembic merge`), объединяет две ветви (A: `c1d4e7a2f9b3` психодиагностика+чат, B: `b7c8d9e0f1a2` appointments) в один head. Без операций над схемой (upgrade/downgrade = pass) — **head** |
 
 **Ключевые таблицы:**
 
