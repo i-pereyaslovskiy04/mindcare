@@ -87,6 +87,8 @@ mindcare_web/src/components/UI
 | `Tag` | Display-only теги контента: тема материала, тег новости, категория статьи |
 | `Select` / `MultiSelect` | Выбор одного или нескольких значений |
 | `DateInput` | Выбор **только даты** (value `YYYY-MM-DD`, кастомный popover). Не использовать нативный `datetime-local`/`date` в новых формах без причины |
+| `TimePicker` | Выбор времени `HH:MM` через shared popover/input, без native `type=time`; минуты по умолчанию `00..59` |
+| `DateTimeInput` | Выбор даты+времени через `DateInput + TimePicker`, без native `datetime-local` |
 
 ### Date-only поля (`DateInput`)
 
@@ -94,7 +96,8 @@ mindcare_web/src/components/UI
 - `published_at` (news/articles): UI хранит `YYYY-MM-DD`, в API уходит ISO datetime (полдень UTC) — конверсия только через `dateHelpers` (`isoToDateOnly` / `dateOnlyToPublishedAtIso`). **Future date не откладывает публикацию** (нет scheduling).
 - Проверять popover: flip вниз/вверх и clamp в пределах viewport (bottom/top/right/left), Escape закрывает только календарь, клик вне закрывает popover.
 - Проверять mobile / low-height viewport (popover не выходит за экран, внутренний scroll).
-- Для записи на приём / слотов `DateInput` не использовать — нужен будущий `SlotPicker`.
+- Для записи на приём / выбора свободных слотов `DateInput`/`TimePicker` не использовать
+  как замену backend-расчёту доступности. Сетка доступных слотов остаётся feature-specific.
 
 ### Запрещено без явного обоснования
 
@@ -106,7 +109,7 @@ mindcare_web/src/components/UI
 
 Следующие элементы намеренно остаются feature-specific:
 
-- Calendar time slots / time picker
+- Calendar time slots / slot picker
 - Calendar format chips
 - `CabinetLayout` nav badges / `navBadgeSoon`
 - `CabinetLayout` notification dot
@@ -149,7 +152,8 @@ backend обязан отклонять (роль не меняется). `conse
 - при реальной смене роли на `psychologist`/`supervisor`/`admin` UI обязан показать
   блок legal basis и отправить `role` + `legal_basis_confirmed`/`basis_type`/
   `basis_reference` (+опц. `legal_basis_comment`); без основания submit не проходит;
-- `student` **не selectable** в edit-dropdown (студенты — через self-registration);
+- `student` **не selectable** в admin edit-dropdown. Студенты появляются через
+  self-registration или staff-created student flow (`POST /api/supervisor/students`);
   текущая роль `student` отображается через `Select displayLabel`, но недоступна для выбора;
 - если роль не менялась — legal basis не требуется и `role` в PATCH не отправляется;
 - формулировка подтверждения — «документированное основание для назначения роли
@@ -252,13 +256,13 @@ backend обязан отклонять (роль не меняется). `conse
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
 | **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 242 теста: email_normalization_api (11), rate_limit_api (10), session_token_hashing (9), legal_basis_api (11), admin_role_patch_legal_basis (12), register_confirm_atomic (8), register_consent_context (1), password_uow_atomic (11), session_notes_api (15), touch_session (9), chat_models (6), chat_api (20), system_conversation (17), engagement_system_messages (11), chat_presence (12), appointments (69) |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | 300+ тестов: auth/security, legal basis, session notes, chat/system conversation, appointments/schedules/group sessions/unregistered cards/staff-created students/profile |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **361 passed** (`.\test.ps1`).
+Итого backend: **400+ passed** (`.\test.ps1`; точное число меняется по мере добавления appointment/profile тестов).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **14 suites / 75 tests** (после Stage 31n-hotfix) —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **100+ tests** (после appointment/schedule UI этапов) —
 admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
 `UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
 раскрытие legal basis); плюс предыдущие —

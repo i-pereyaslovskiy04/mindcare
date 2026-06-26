@@ -88,7 +88,9 @@ outbox на текущем этапе отсутствует. Failure-injection 
 per-dialog; system conversation всегда видна и **последняя** в списке (read-only, без composer);
 live refresh snapshot=50 + `mergeMessages` (read_at без F5); read receipts ✓/✓✓; online/offline
 точкой (approximate, без WebSocket, без last-seen). WebSocket/group chat/attachments — postponed.
-Diary/tasks/calendar студента остаются accepted demo/mock.
+Diary/tasks студента остаются accepted demo/mock. Calendar студента уже подключён
+к real appointments API: тип встречи → формат → дата → доступные слоты
+назначенного психолога, upcoming/history из backend.
 
 **Mobile (Stage 30d):** breakpoints различаются по слоям — Messenger переключается в
 list/thread на `≤900px` (в шапке чата кнопка «назад»); CabinetLayout: `>980px` full sidebar,

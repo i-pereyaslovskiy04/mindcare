@@ -1,6 +1,6 @@
 # MindCare Web — Architecture Document
 
-> Updated: 2026-06-08
+> Updated: 2026-06-26
 > Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)
 > Purpose: University psychology center — public informational site with role-based dashboards and a full authentication flow.
 
@@ -218,15 +218,24 @@ mindcare_web/
     │   │   ├── Materials/MaterialsPage.jsx + useStudentMaterials.js
     │   │   ├── Tasks/TasksPage.jsx + components/TaskItem.jsx
     │   │   ├── Chat/ChatPage.jsx + components/
-    │   │   ├── Calendar/CalendarPage.jsx + components/ + utils/ + data/
+    │   │   ├── Calendar/CalendarPage.jsx + components/ + utils/ (real appointments API)
+    │   │   ├── GroupSessions/GroupSessionsPage.jsx
     │   │   └── Settings/SettingsPage.jsx
     │   ├── psychologist/        ← кабинет психолога (использует CabinetLayout)
     │   │   ├── PsychologistLayout.jsx
     │   │   └── PsychologistHome.jsx
+    │   │   ├── PsychologistStudentsPage.jsx
+    │   │   ├── PsychologistStudentCardPage.jsx
+    │   │   ├── Appointments/ (AppointmentsPage, PsychologistCalendar, ScheduleTab)
+    │   │   └── Chat/
     │   └── supervisor/          ← кабинет супервизора (использует CabinetLayout)
     │       ├── SupervisorLayout.jsx
     │       ├── SupervisorHome.jsx
-    │       └── EngagementsPage.jsx  ← страница назначения психологов
+    │       ├── EngagementsPage.jsx  ← назначения психологов
+    │       ├── MeetingTypesPage.jsx
+    │       ├── SchedulePage.jsx
+    │       ├── BookingPage.jsx
+    │       └── GroupSessionsPage.jsx
     │
     └── styles/
         ├── variables.css      ← CSS custom properties (colors, spacing)
@@ -352,11 +361,20 @@ src/data/
 | `/student/tasks` | `TasksPage` | — |
 | `/student/chat` | `ChatPage` | — |
 | `/student/calendar` | `CalendarPage` | — |
+| `/student/group-sessions` | `StudentGroupSessionsPage` | — |
 | `/student/settings` | `SettingsPage` | — |
 | `/psychologist` | `PsychologistLayout` (Outlet) | Auth + role: psychologist |
+| `/psychologist/students` | `PsychologistStudentsPage` | — |
+| `/psychologist/students/:studentId` | `PsychologistStudentCardPage` | — |
+| `/psychologist/appointments` | `PsychologistAppointmentsPage` | — |
+| `/psychologist/chat` | `PsychologistChatPage` | — |
 | `/psychologist/settings` | `CabinetSettingsPage` | — |
 | `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role: supervisor |
 | `/supervisor/engagements` | `EngagementsPage` | — |
+| `/supervisor/meeting-types` | `MeetingTypesPage` | — |
+| `/supervisor/schedule` | `SchedulePage` | — |
+| `/supervisor/booking` | `BookingPage` | — |
+| `/supervisor/group-sessions` | `GroupSessionsPage` | — |
 | `/supervisor/settings` | `CabinetSettingsPage` | — |
 | `/admin` | `AdminLayout` (Outlet) | Auth + role: admin |
 | `/admin/users` | `UsersPage` | — (наследует от `/admin`) |
@@ -690,11 +708,15 @@ const {
 
 Любая render-ошибка крэшит всё приложение.
 
-### 8.7 Кабинеты студента и психолога — частично в stub-состоянии
+### 8.7 Кабинеты студента, психолога и супервизора — текущий статус
 
-- `StudentHome` и `PsychologistHome` отображают только приветствие.
-- В кабинете психолога навигационные пункты «Клиенты», «Сессии», «Чат», «Материалы» — `disabled: true` (заглушки в навигации).
-- В кабинете супервизора пункты «Психологи», «Сессии супервизии», «Отчёты» — также заглушки.
+- `StudentHome` ещё остаётся частично витринным, но `/student/calendar`, `/student/chat`,
+  `/student/group-sessions`, `/student/settings` уже подключены к real API.
+- Кабинет психолога уже содержит студентов, карточку студента, чат, записи, календарь,
+  групповые занятия и read-only расписание/разовые изменения.
+- Кабинет супервизора уже содержит назначения, типы встреч, расписание, ручную запись
+  registered/walk-in клиентов и групповые занятия.
+- Оставшиеся заглушки/будущие разделы зависят от текущей навигации и должны проверяться по коду.
 
 ~~`ConsultantDashboard.jsx` и `DashboardLayout.jsx`~~ — удалены как мёртвый код.
 
@@ -740,9 +762,9 @@ const Home = lazy(() => import('../pages/home/Home'));
 // + <Suspense fallback={<PageSkeleton />}>
 ```
 
-### 9.7 Список назначенных клиентов в кабинете психолога
+### 9.7 ~~Список назначенных клиентов в кабинете психолога~~ — закрыто
 
-Реализовать страницу `/psychologist/clients` с серверным списком клиентов психолога (через новый эндпоинт). Hook по контракту server-side list.
+Реализованы `/psychologist/students` и `/psychologist/students/:studentId`.
 
 ### 9.8 Отображение психолога у студента
 

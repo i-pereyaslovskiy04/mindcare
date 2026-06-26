@@ -21,6 +21,8 @@
 | Выпадающий список | `Select` |
 | Множественный выбор | `MultiSelect` |
 | Выбор даты (только дата) | `DateInput` |
+| Выбор времени | `TimePicker` |
+| Выбор даты и времени | `DateTimeInput` |
 
 ---
 
@@ -243,9 +245,48 @@ Popover сам выбирает направление (вниз/вверх) и 
 (`popoverPosition.js` → `computePopoverPosition`); закрывается по Escape и клику вне.
 
 **Не использовать DateInput для:**
-- выбора времени / даты-времени → нужен будущий `DateTimePicker` / `TimeInput` (не реализованы)
-- записи на приём / выбора слота → нужен будущий `SlotPicker` (не реализован);
+- выбора времени / даты-времени → используй `TimePicker` / `DateTimeInput`
+- записи на приём / выбора свободного слота → нужен feature-specific slot picker;
   DateInput не является заменой слотам расписания
+
+---
+
+## TimePicker
+
+**Путь:** `src/components/UI/TimePicker/TimePicker.jsx`
+
+**Использовать для:**
+- выбора времени в формах расписания, перерывов, разовых изменений;
+- любых новых `HH:MM` полей, где нужен единый дизайн.
+
+Контракт:
+
+| Аспект | Значение |
+|---|---|
+| UI `value` | `HH:MM` или `''` |
+| Минуты | по умолчанию поминутно `00..59` |
+| Native input | не используется (`type="text"` + popover) |
+
+**Не использовать TimePicker для:**
+- выбора доступного appointment-слота студентом или supervisor'ом — это отдельная
+  feature-specific сетка слотов, потому что слоты приходят из backend-расчёта доступности.
+
+---
+
+## DateTimeInput
+
+**Путь:** `src/components/UI/DateTimeInput/DateTimeInput.jsx`
+
+Композиция `DateInput + TimePicker` для выбора даты и времени без native
+`datetime-local`. Используется, например, при создании групповых занятий.
+
+Контракт:
+
+| Аспект | Значение |
+|---|---|
+| UI `value` | `YYYY-MM-DDTHH:MM` или `''` |
+| Date part | через shared `DateInput` |
+| Time part | через shared `TimePicker` |
 
 ---
 

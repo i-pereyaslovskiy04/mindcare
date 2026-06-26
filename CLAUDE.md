@@ -199,7 +199,7 @@ npm run build
 | `tests/integration/test_system_conversation.py` | system conversation backend (Stage 29b) — 17 |
 | `tests/integration/test_engagement_system_messages.py` | system messages для engagement-событий (Stage 29d) — 11 |
 | `tests/integration/test_chat_presence.py` | approximate online/offline presence (Stage 30c) — 12 |
-| `tests/integration/test_appointments.py` | appointments system: booking validation, slot computation from MeetingType.duration+buffer, group-session slot blocking, recurring breaks (with effective_from/until period filtering), schedule-out-of-range, pending-cancel soft-delete, confirmed-cancel notify, multiple one-off blockers, group sessions, meeting-type role access, bulk schedule rules, optional meeting_type_id on working windows, break period tests, unified schedule create (rules+breaks one series), auto_extend requires effective_until, series soft-delete/restore (is_active) hides from active list & slots, soft-delete keeps appointments + future-appt warning, extend-by-month, supervisor manual booking (occupies slot, 409 on busy, system msg to psychologist, booking_source/created_by audit), auto_extend maintenance (extend+notify, dry-run), read-only frontend support endpoints for student meeting types, psychologist schedule, supervisor slots, and schedule v3 working-window behavior — 69 |
+| `tests/integration/test_appointments.py` | appointments system: booking validation, slot computation from MeetingType.duration+buffer, group-session slot blocking/lazy completion, recurring breaks (with effective_from/until period filtering), schedule-out-of-range, pending-cancel soft-delete, confirmed-cancel notify, multiple one-off blockers, group sessions, meeting-type role access, bulk schedule rules, optional meeting_type_id on working windows, break period tests, unified schedule create/update (rules+breaks one series), auto_extend requires effective_until, series soft-delete/restore (is_active) hides from active list & slots, soft-delete keeps appointments + future-appt warning, extend-by-month, supervisor manual booking (registered student or unregistered card, occupies slot, 409 on busy, system msg to psychologist, booking_source/created_by audit), auto_extend maintenance (extend+notify, dry-run), read-only frontend support endpoints for student meeting types, psychologist schedule/exceptions, supervisor slots, and schedule v3 working-window behavior — 112+ |
 
 ---
 
@@ -343,9 +343,10 @@ mindcare_api/
    read-only» отменено) — но безопасно: при реальной смене на staff/admin UI
    показывает блок legal basis и шлёт его поля; backend PATCH guard обязателен
    как defense-in-depth (не полагаться только на UI)
-✅ student НЕ selectable в admin edit-dropdown (Stage 31n-hotfix; студенты —
-   self-registration). Текущая роль student показывается через Select displayLabel,
-   но недоступна для выбора. student как target роли из UI не отправляется
+✅ student НЕ selectable в admin edit-dropdown (Stage 31n-hotfix). Студенты появляются
+   через self-registration ИЛИ через staff-created student flow (`POST /api/supervisor/students`);
+   текущая роль student показывается через Select displayLabel, но недоступна для выбора.
+   student как target роли из admin edit UI не отправляется
 ❌ Не делать роль read-only в admin edit и не слать role без legal basis при смене на staff
 ❌ Не писать «админ подтверждает согласие пользователя» — только «документированное
    основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
@@ -363,8 +364,16 @@ mindcare_api/
    существующие Appointment НЕ удаляются и продолжают занимать слоты. Перед
    деактивацией возвращается счётчик будущих записей в периоде (предупреждение)
 ✅ Ручная запись supervisor'ом (POST /api/supervisor/appointments) создаёт обычный
-   Appointment в pending_confirmation; требует активного engagement студент↔психолог;
-   психолог получает system-сообщение (event_key appointment_supervisor_new:{uuid})
+   Appointment в pending_confirmation; для зарегистрированного студента требует активного
+   engagement студент↔психолог. Для walk-in клиента можно использовать
+   unregistered_student_card_id; карточка хранит минимальные ПДн и может привязаться к
+   будущему аккаунту по normalized_email. Психолог получает system-сообщение
+   (event_key appointment_supervisor_new:{uuid})
+✅ Групповые занятия (`group_sessions`) создаёт supervisor; student записывается только
+   на `scheduled` + `booking_enabled=true`, без подтверждения психолога. При чтении списков
+   lazy-completion переводит начавшиеся/прошедшие `scheduled` в `completed` и выключает
+   `booking_enabled`. Student видит только `scheduled`; supervisor/psychologist видят
+   `scheduled`/`completed`/`cancelled`
 ✅ Автопродление расписаний — ТОЛЬКО maintenance (scripts/extend_schedules.py →
    service.auto_extend_schedules); НЕ из FastAPI lifespan. После продления —
    system-сообщение создавшему серию supervisor'у (created_by, soft-fail)
@@ -420,7 +429,9 @@ mindcare_api/
 | `c9a3f2e1d8b6` | schedule_rule_not_null_break_periods: schedule_rules.meeting_type_id→NOT NULL (FK→RESTRICT); schedule_breaks +effective_from (NOT NULL) +effective_until (nullable) |
 | `b2d4f6a8c1e3` | schedule_auto_extend_created_by: schedule_rules +auto_extend (BOOL NOT NULL default false) +created_by (FK users→SET NULL); только ADD COLUMN/FK, обратимо |
 | `d3e6f9a2b5c8` | appointments_booking_source_created_by: appointments +booking_source (default `student_self`) +created_by (FK users→SET NULL) для аудита студентской и supervisor-created записи |
-| `f1a4c7e0b9d2` | schedule_rule_meeting_type_optional: schedule_rules.meeting_type_id снова nullable; расписание v3 хранит рабочие окна психолога без привязки к типу встречи, а MeetingType выбирается при поиске/создании записи — **head** |
+| `f1a4c7e0b9d2` | schedule_rule_meeting_type_optional: schedule_rules.meeting_type_id снова nullable; расписание v3 хранит рабочие окна психолога без привязки к типу встречи, а MeetingType выбирается при поиске/создании записи |
+| `a1b2c3d4e5f6` | add_unregistered_student_cards: карточки walk-in клиентов без аккаунта; appointments.client_id nullable + unregistered_student_card_id; CHECK ровно один субъект записи |
+| `b7c8d9e0f1a2` | index_card_linked_user_id: индекс для привязки карточек незарегистрированных студентов к созданному/зарегистрированному аккаунту — **head** |
 
 **Ключевые таблицы:**
 
@@ -435,6 +446,7 @@ mindcare_api/
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
 | `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
 | `appointments` | Записи на консультации |
+| `unregistered_student_cards` | Карточки walk-in клиентов без аккаунта: минимальные ПДн, consent_source/created_by, archived, optional linked_user_id. Используются supervisor manual booking через `unregistered_student_card_id`; при регистрации/создании аккаунта могут привязаться по normalized_email |
 | `meeting_types` | Типы встреч; владеют `duration_minutes` + `buffer_minutes` (по ним строятся слоты), `description`, форматами, `is_group/is_active/is_bookable` |
 | `schedule_rules` | Рабочие окна психолога (только доступность; `meeting_type_id` опционален/legacy и НЕ ограничивает тип встречи в schedule v3, `period`, `series_id` для серии rules+breaks, `auto_extend`, `created_by`). Длительность/буфер — НЕ здесь, а в `meeting_types`. Soft-delete/restore расписания — через `is_active` на уровне серии (не трогает Appointment) |
 | `schedule_breaks` | Повторяющиеся перерывы по дню недели (например обед 13:00–14:00); вырезают пересекающиеся слоты. Перерыв, созданный вместе с расписанием, разделяет `series_id` и период с правилами |
@@ -574,7 +586,11 @@ src/components/UI/DateInput
 ✅ Badge — display-only статусы, роли и состояния: опубликовано, черновик, активен, заблокирован, роль пользователя.
 ✅ Tag — display-only теги контента: тема материала, тег новости, категория статьи.
 ✅ Select / MultiSelect — выбор одного или нескольких значений.
-✅ DateInput — выбор ТОЛЬКО даты (value YYYY-MM-DD, кастомный popover). Перед созданием локального календаря/date-поля проверить src/components/UI/DateInput. Не использовать нативный datetime-local/date в новых формах без причины. DateTimePicker/TimeInput/SlotPicker пока НЕ реализованы; для записи на приём/слотов DateInput не использовать (нужен будущий SlotPicker).
+✅ DateInput — выбор ТОЛЬКО даты (value YYYY-MM-DD, кастомный popover). Перед созданием локального календаря/date-поля проверить src/components/UI/DateInput. Не использовать нативный datetime-local/date в новых формах без причины.
+✅ TimePicker — shared выбор времени (`HH:MM`, поминутно 00..59), без native `type=time`.
+✅ DateTimeInput — shared дата+время на базе DateInput+TimePicker, без native `datetime-local`.
+   Используется для групповых занятий и похожих форм. Для выбора свободного слота записи
+   всё ещё использовать feature-specific slot UI, а не DateInput как замену слотам.
 ```
 
 Запрещено без отдельного обоснования:
@@ -926,9 +942,11 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
-**Student diary/tasks/calendar — accepted demo/mock (НЕ баг):**
-- `/student/diary`, `/student/tasks`, `/student/calendar` работают на hardcoded
-  mock-данных — это осознанная демо-витрина до отдельных этапов
+**Student diary/tasks — accepted demo/mock (НЕ баг):**
+- `/student/diary`, `/student/tasks` работают на hardcoded mock-данных — это осознанная
+  демо-витрина до отдельных этапов
+- `/student/calendar` уже подключён к real appointments API: тип встречи → формат →
+  дата → доступные слоты назначенного психолога; upcoming/history показывают реальные записи
 - `/student/chat` и `/psychologist/chat` уже работают с real `/api/chat`:
   единый Messenger (one-to-one поверх `therapy_engagements` + read-only system
   conversation), polling, read/unread через `read_at`, VK-like entry (mark-read
