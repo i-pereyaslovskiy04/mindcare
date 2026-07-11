@@ -70,3 +70,6 @@ mindcare_api/logs/
 # Версионные бэкапы изменяемых файлов (hook scripts/backup_hook.py).
 # Сам скрипт трекается в scripts/; gitignored только содержимое бэкапов.
 .backups/files/
+
+# Логи dev-режима (scripts/mindcare-mode.sh dev)
+.logs/
