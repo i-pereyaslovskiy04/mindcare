@@ -251,23 +251,6 @@ class ScheduleUpdate(BaseModel):
         return _validate_days_of_week(v)
 
 
-class ScheduleSeriesRead(BaseModel):
-    """Результат создания/чтения расписания-серии.
-
-    meeting_type_id — Optional: новые серии (schedule v3) рабочих окон не имеют
-    типа встречи (None); поле сохранено для обратной совместимости с legacy.
-    """
-    series_id: str
-    psychologist_id: int
-    meeting_type_id: Optional[int] = None
-    auto_extend: bool
-    effective_from: str
-    effective_until: Optional[str] = None
-    is_active: bool
-    rules: list[ScheduleRuleRead]
-    breaks: list[ScheduleBreakRead]
-
-
 class ScheduleImpactRead(BaseModel):
     """Предупреждение перед деактивацией: будущие записи в периоде серии."""
     series_id: str
@@ -540,9 +523,26 @@ class GroupSessionRegistrationRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── Psychologist read-only schedule ──────────────────────────────────────────
+# ── Schedule series / psychologist read-only schedule ────────────────────────
 # Размещено в конце файла: зависит от ScheduleRuleRead, ScheduleBreakRead и
 # MeetingTypeRead — объявлены выше, поэтому forward-reference не возникает.
+
+class ScheduleSeriesRead(BaseModel):
+    """Результат создания/чтения расписания-серии.
+
+    meeting_type_id — Optional: новые серии (schedule v3) рабочих окон не имеют
+    типа встречи (None); поле сохранено для обратной совместимости с legacy.
+    """
+    series_id: str
+    psychologist_id: int
+    meeting_type_id: Optional[int] = None
+    auto_extend: bool
+    effective_from: str
+    effective_until: Optional[str] = None
+    is_active: bool
+    rules: list[ScheduleRuleRead]
+    breaks: list[ScheduleBreakRead]
+
 
 class PsychologistScheduleRead(BaseModel):
     """Своё расписание психолога (read-only): активные окна, перерывы и типы.
