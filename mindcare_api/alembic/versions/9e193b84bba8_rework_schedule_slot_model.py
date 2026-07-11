@@ -133,10 +133,12 @@ def upgrade() -> None:
     )
 
     # ── schedule_exceptions: drop unique-per-date, enum → varchar ────────────
-    op.drop_constraint(
-        "schedule_exceptions_psychologist_id_exception_date_key",
-        "schedule_exceptions",
-        type_="unique",
+    # Уникальность есть только в БД из db/sql/full_schema.sql; в alembic-baseline
+    # (af13ad7a133c) её нет — поэтому DROP ... IF EXISTS.
+    op.execute(
+        "ALTER TABLE schedule_exceptions "
+        "DROP CONSTRAINT IF EXISTS "
+        "schedule_exceptions_psychologist_id_exception_date_key"
     )
     # exception_type был PG enum schedule_exception_type (owned by postgres,
     # ALTER TYPE недоступен под MindcareUser). ORM-модель давно объявляет
