@@ -73,3 +73,6 @@ mindcare_api/logs/
 
 # Логи dev-режима (scripts/mindcare-mode.sh dev)
 .logs/
+
+# --- Приватная папка проекта ---
+private/

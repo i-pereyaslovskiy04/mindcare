@@ -20,9 +20,14 @@
       // Списки палитр/режимов синхронизированы с src/features/theme/ThemeContext.jsx.
       (function () {
         try {
-          var palettes = ['coffee', 'nature', 'classic'];
+          var palettes = ['coffee', 'nature', 'classic', 'hc'];
           var p = localStorage.getItem('app-theme-palette');
-          if (palettes.indexOf(p) === -1) p = 'coffee';
+          if (palettes.indexOf(p) === -1) {
+            // Первый визит: учитываем системное требование контраста.
+            var wantsContrast =
+              window.matchMedia && window.matchMedia('(prefers-contrast: more)').matches;
+            p = wantsContrast ? 'hc' : 'coffee';
+          }
           var m = localStorage.getItem('app-theme-mode');
           if (m !== 'light' && m !== 'dark' && m !== 'system') m = 'system';
           var dark =

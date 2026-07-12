@@ -52,6 +52,7 @@ const PALETTE_OPTIONS = [
   { value: 'coffee', short: 'Кофе', label: 'Кофейная палитра' },
   { value: 'nature', short: 'Природа', label: 'Палитра «Природное спокойствие»' },
   { value: 'classic', short: 'Классика', label: 'Классическая (академическая) палитра' },
+  { value: 'hc', short: 'Контраст', label: 'Высококонтрастная тема (для слабовидящих)' },
 ];
 
 /**

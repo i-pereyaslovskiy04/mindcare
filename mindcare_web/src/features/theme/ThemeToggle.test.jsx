@@ -94,6 +94,22 @@ describe('ThemeToggle + ThemeProvider', () => {
     expect(localStorage.getItem('app-theme-palette')).toBe('classic');
   });
 
+  test('контрастная тема: hc-light, режим по-прежнему работает', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Высококонтрастная тема (для слабовидящих)' })
+    );
+    expect(document.documentElement.getAttribute('data-theme')).toBe('hc-light');
+    expect(localStorage.getItem('app-theme-palette')).toBe('hc');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('hc-dark');
+  });
+
   test('withPalette=false скрывает выбор палитры', () => {
     render(
       <ThemeProvider>

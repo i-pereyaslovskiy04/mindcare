@@ -1,0 +1,94 @@
+/*
+ * hc-dark.css — тёмная высококонтрастная тема (AAA ≥ 7:1).
+ * См. hc-light.css: hc — отдельная пара тем, палитра не применяется.
+ */
+
+:root[data-theme='hc-dark'] {
+  color-scheme: dark;
+
+  /* ── Легаси-палитра (инверсия по роли) ── */
+  --cream: #121212;
+  --warm-white: #0B0D0C;
+  --latte: #B3B3B3;
+  --coffee: #C8E6CF;
+  --espresso: #FFFFFF;
+  --mocha: #DFF3E4;
+  --milk: #000000;
+  --fog: #E5E5E5;
+  --sand: #1A1A1A;
+
+  /* ── Background colors ── */
+  --nav-bg: #0B0D0C;
+  --nav-border: #E5E5E5;
+  --footer-bg: #0B0D0C;
+  --footer-border: #E5E5E5;
+
+  /* ── Text colors ── */
+  --text-main: #FFFFFF;
+  --text-muted: #EDEDED;
+  --text-light: #D6D6D6;
+  --text-on-dark: #000000;
+
+  /* ── Status colors ── */
+  --error: #FFB4AB;
+  --error-bg: #2B0F0D;
+  --on-error: #000000;
+  --success: #9BE7B3;
+
+  /* ── Ролевые токены ── */
+  --on-primary: #000000;
+  --secondary: #E5E5E5;
+  --on-secondary: #000000;
+  --outline: #E5E5E5;
+
+  /* ── Софт-статусы ── */
+  --success-bg: #0F2417;
+  --success-border: #9BE7B3;
+  --error-border: #FFB4AB;
+  --warning: #FFD54F;
+  --warning-bg: #2B2408;
+  --warning-text: #FFD54F;
+  --info-bg: #101C2E;
+  --info-text: #AFD1FF;
+  --tag-bg: #1E1A33;
+  --tag-text: #D6C9FF;
+  --code-bg: #000000;
+  --code-text: #FFFFFF;
+  --danger: #FFB4AB;
+  --danger-hover: #FFC9C3;
+  --danger-active: #F09B92;
+  --danger-rgb: 255, 180, 171;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #121212;
+  --surface-glass: rgba(255, 255, 255, 0.12);
+  --surface-glass-hover: rgba(255, 255, 255, 0.2);
+  --scrim: rgba(0, 0, 0, 0.8);
+  --overlay-surface: #0B0D0C;
+
+  /* ── RGB-триплеты ── */
+  --coffee-rgb: 200, 230, 207;
+  --latte-rgb: 179, 179, 179;
+  --espresso-rgb: 255, 255, 255;
+  --milk-rgb: 0, 0, 0;
+  --text-light-rgb: 214, 214, 214;
+  --text-muted-rgb: 237, 237, 237;
+  --success-rgb: 155, 231, 179;
+  --error-rgb: 255, 180, 171;
+  --shadow-rgb: 0, 0, 0;
+
+  /* ── Индикатор сложности пароля ── */
+  --strength-weak: #FFB4AB;
+  --strength-medium: #FFD54F;
+  --strength-strong: #9BE7B3;
+
+  /* ── Фокус: 3px + offset ── */
+  --focus-ring-width: 3px;
+  --focus-ring-color: #FFD54F;
+  --focus-ring-offset: 2px;
+
+  /* ── Тени → рамки ── */
+  --shadow-sm: 0 0 0 1px #E5E5E5;
+  --shadow-md: 0 0 0 1px #E5E5E5;
+  --shadow-lg: 0 0 0 2px #E5E5E5;
+}

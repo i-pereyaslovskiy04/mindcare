@@ -1,0 +1,35 @@
+/*
+ * hc-rules.css — глобальные правила высококонтрастных тем.
+ *
+ * Действуют только при data-theme="hc-light" / "hc-dark". Компоненты
+ * ради них НЕ меняются: рамки, подчёркивание ссылок и усиленный фокус
+ * добавляются здесь поверх существующих CSS Modules.
+ *
+ * Импортируется ПОСЛЕ токенов hc-* (см. src/app/App.jsx).
+ */
+
+/* Видимая рамка у интерактивных элементов и полей — не только заливка. */
+:root[data-theme^='hc-'] button,
+:root[data-theme^='hc-'] input,
+:root[data-theme^='hc-'] select,
+:root[data-theme^='hc-'] textarea {
+  border: 2px solid var(--outline);
+}
+
+/* Ссылки в hc всегда подчёркнуты (смысл не кодируется только цветом). */
+:root[data-theme^='hc-'] a {
+  text-decoration: underline;
+}
+
+/* Усиленный фокус во всех темах hc. */
+:root[data-theme^='hc-'] :focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Декоративные градиенты в hc заменяются сплошной поверхностью:
+   белый текст на светло-зелёном градиенте не даёт AAA. */
+:root[data-theme^='hc-'] [class*='hero'],
+:root[data-theme^='hc-'] [class*='Hero'] {
+  background-image: none;
+}

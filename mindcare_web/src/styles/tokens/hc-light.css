@@ -1,0 +1,100 @@
+/*
+ * hc-light.css — светлая высококонтрастная тема (AAA ≥ 7:1).
+ *
+ * hc — ОТДЕЛЬНАЯ пара тем, а не палитра×режим: при выборе контраста
+ * палитра не применяется (см. ThemeContext: isContrast). Это 2 файла
+ * вместо 2×N палитр.
+ *
+ * Глобальные hc-правила (видимые рамки, подчёркнутые ссылки, усиленный фокус)
+ * живут в конце файла — компоненты для них не меняются.
+ */
+
+:root[data-theme='hc-light'] {
+  color-scheme: light;
+
+  /* ── Легаси-палитра (по роли) ── */
+  --cream: #F2F2F2;
+  --warm-white: #FFFFFF;
+  --latte: #4D4D4D;
+  --coffee: #1E4A2E;
+  --espresso: #000000;
+  --mocha: #123020;
+  --milk: #FFFFFF;
+  --fog: #1A1A1A;
+  --sand: #EBEBEB;
+
+  /* ── Background colors ── */
+  --nav-bg: #FFFFFF;
+  --nav-border: #1A1A1A;
+  --footer-bg: #F2F2F2;
+  --footer-border: #1A1A1A;
+
+  /* ── Text colors ── */
+  --text-main: #000000;
+  --text-muted: #1F1F1F;
+  --text-light: #333333;
+  --text-on-dark: #FFFFFF;
+
+  /* ── Status colors ── */
+  --error: #8B0000;
+  --error-bg: #FFECEC;
+  --on-error: #FFFFFF;
+  --success: #14532D;
+
+  /* ── Ролевые токены ── */
+  --on-primary: #FFFFFF;
+  --secondary: #1A1A1A;
+  --on-secondary: #FFFFFF;
+  --outline: #1A1A1A;
+
+  /* ── Софт-статусы ── */
+  --success-bg: #E6F2E9;
+  --success-border: #14532D;
+  --error-border: #8B0000;
+  --warning: #7A4E0B;
+  --warning-bg: #FFF6DC;
+  --warning-text: #5A3A08;
+  --info-bg: #E8EDF7;
+  --info-text: #10306B;
+  --tag-bg: #EDE9FE;
+  --tag-text: #3A1D8A;
+  --code-bg: #000000;
+  --code-text: #FFFFFF;
+  --danger: #8B0000;
+  --danger-hover: #6F0000;
+  --danger-active: #5A0000;
+  --danger-rgb: 139, 0, 0;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #FFFFFF;
+  --surface-glass: rgba(255, 255, 255, 0.9);
+  --surface-glass-hover: #FFFFFF;
+  --scrim: rgba(0, 0, 0, 0.7);
+  --overlay-surface: #FFFFFF;
+
+  /* ── RGB-триплеты ── */
+  --coffee-rgb: 30, 74, 46;
+  --latte-rgb: 77, 77, 77;
+  --espresso-rgb: 0, 0, 0;
+  --milk-rgb: 255, 255, 255;
+  --text-light-rgb: 51, 51, 51;
+  --text-muted-rgb: 31, 31, 31;
+  --success-rgb: 20, 83, 45;
+  --error-rgb: 139, 0, 0;
+  --shadow-rgb: 0, 0, 0;
+
+  /* ── Индикатор сложности пароля ── */
+  --strength-weak: #8B0000;
+  --strength-medium: #7A4E0B;
+  --strength-strong: #14532D;
+
+  /* ── Фокус: 3px + offset (ГОСТ/WCAG) ── */
+  --focus-ring-width: 3px;
+  --focus-ring-color: #B45309;
+  --focus-ring-offset: 2px;
+
+  /* ── Тени: в hc не несут смысла, роль границы берёт на себя рамка ── */
+  --shadow-sm: 0 0 0 1px #1A1A1A;
+  --shadow-md: 0 0 0 1px #1A1A1A;
+  --shadow-lg: 0 0 0 2px #1A1A1A;
+}

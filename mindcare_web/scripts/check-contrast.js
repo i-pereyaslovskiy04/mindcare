@@ -26,7 +26,13 @@ const THEMES = [
   'nature-dark',
   'classic-light',
   'classic-dark',
+  'hc-light',
+  'hc-dark',
 ];
+
+/** В hc-темах действует AAA (7:1) и никаких унаследованных исключений. */
+const AAA_MIN = 7.0;
+const isHighContrast = (theme) => theme.startsWith('hc-');
 
 /* [fg, bg, min, комментарий] */
 const PAIRS = [
@@ -105,8 +111,9 @@ let checks = 0;
 
 for (const theme of THEMES) {
   const vars = theme === BASE_THEME ? baseVars : { ...baseVars, ...loadTheme(theme) };
-  console.log(`\n=== ${theme} ===`);
-  for (const [fg, bg, min, note] of PAIRS) {
+  console.log(`\n=== ${theme}${isHighContrast(theme) ? ' (AAA 7:1)' : ''} ===`);
+  for (const [fg, bg, baseMin, note] of PAIRS) {
+    const min = isHighContrast(theme) ? AAA_MIN : baseMin;
     let line;
     try {
       const fgHex = resolveValue(vars, vars[fg] !== undefined ? `var(--${fg})` : `--${fg}?`);
