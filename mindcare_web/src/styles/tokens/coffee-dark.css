@@ -49,8 +49,8 @@
   /* surface/container/on-surface/outline наследуют var()-цепочки
      из coffee-light и резолвятся в тёмные значения автоматически */
   --on-primary: #2E2318;
-  --secondary: #A08462;
-  --on-secondary: #F5F0E8;
+  --secondary: #A68A69;
+  --on-secondary: #2E2318;
 
   /* ── Софт-статусы и вспомогательные роли (этап 4) ── */
   --success-bg: #223228;
@@ -64,10 +64,10 @@
   --tag-text: #C4B5FD;
   --code-bg: #11161C;
   --code-text: #C9D1D9;
-  --danger: #B4695F;
-  --danger-hover: #C07A70;
-  --danger-active: #A5584E;
-  --danger-rgb: 180, 105, 95;
+  --danger: #C97F73;
+  --danger-hover: #D39085;
+  --danger-active: #BB6E62;
+  --danger-rgb: 201, 127, 115;
 
   /* ── Поверхности-помощники ── */
   --surface-elevated: #241E19;

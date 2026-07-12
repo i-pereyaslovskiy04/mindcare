@@ -24,6 +24,7 @@ import MaterialsPage     from '../pages/materials/MaterialsPage';
 import MaterialsItemPage from '../pages/materials/MaterialsItemPage';
 import NotFound          from '../pages/not-found/NotFound';
 import HealthPage        from '../pages/health/HealthPage';
+import ThemePreviewPage  from '../pages/theme-preview/ThemePreviewPage';
 
 // ── Auth pages ────────────────────────────────────────────────────────────────
 import LoginPage    from '../features/auth/pages/LoginPage';
@@ -131,6 +132,9 @@ export default function AppRouter() {
       <Route path="/materials"     element={<MaterialsPage />} />
       <Route path="/materials/:id" element={<MaterialsItemPage />} />
       <Route path="/health"        element={<HealthPage />} />
+      {process.env.NODE_ENV !== 'production' && (
+        <Route path="/theme-preview" element={<ThemePreviewPage />} />
+      )}
 
       {/* Auth */}
       <Route path="/login"    element={<LoginPage />} />

@@ -56,10 +56,10 @@
   --tag-text: #C4B5FD;
   --code-bg: #11161C;
   --code-text: #C9D1D9;
-  --danger: #B4695F;
-  --danger-hover: #C07A70;
-  --danger-active: #A5584E;
-  --danger-rgb: 180, 105, 95;
+  --danger: #C97F73;
+  --danger-hover: #D39085;
+  --danger-active: #BB6E62;
+  --danger-rgb: 201, 127, 115;
 
   /* ── Поверхности-помощники ── */
   --surface-elevated: #1E2320;

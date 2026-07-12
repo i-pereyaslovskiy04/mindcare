@@ -15,7 +15,9 @@
   --cream: #F1EDE5;
   --warm-white: #FAF7F2;
   --latte: #B9C4BA;
-  --coffee: #6B8E7B;
+  /* primary затемнён с табличного #6B8E7B до #587867: белый on-primary
+     на #6B8E7B давал 3.63:1 — ниже AA 4.5 (см. npm run test:contrast) */
+  --coffee: #587867;
   --espresso: #2E3A36;
   --mocha: #4E6B5C;
   --milk: #EDE9DE;
@@ -69,7 +71,7 @@
   --scrim: rgba(30, 40, 36, 0.45);
 
   /* ── RGB-триплеты ── */
-  --coffee-rgb: 107, 142, 123;
+  --coffee-rgb: 88, 120, 103;
   --latte-rgb: 185, 196, 186;
   --espresso-rgb: 46, 58, 54;
   --milk-rgb: 237, 233, 222;
