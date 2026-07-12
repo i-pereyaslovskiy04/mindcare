@@ -1,0 +1,92 @@
+/*
+ * classic-dark.css — «Классическая», тёмный вариант (тёмно-синий графит).
+ *
+ * Легаси-алиасы инвертированы по роли, как в coffee-dark / nature-dark:
+ * espresso → светлый (доминирующая роль — текст), его пары milk / text-on-dark
+ * → тёмные; coffee/mocha → светло-синие акценты.
+ */
+
+:root[data-theme='classic-dark'] {
+  color-scheme: dark;
+
+  /* ── Легаси-палитра (инверсия по роли) ── */
+  --cream: #19212F;
+  --warm-white: #101620;
+  --latte: #3A465C;
+  --coffee: #8FB6E8;
+  --espresso: #E3E9F2;
+  --mocha: #A9C8EE;
+  --milk: #18202C;
+  --fog: #3E4A5E;
+  --sand: #222B3A;
+
+  /* ── Background colors ── */
+  --nav-bg: #151C27;
+  --nav-border: #2A3444;
+  --footer-bg: #151C27;
+  --footer-border: #2A3444;
+
+  /* ── Text colors ── */
+  --text-main: #E3E9F2;
+  --text-muted: #B5C0D0;
+  --text-light: #8794A6;
+  --text-on-dark: #14243B;
+
+  /* ── Status colors ── */
+  --error: #E8938C;
+  --error-bg: #3A2422;
+  --on-error: #3A1210;
+  --success: #7FBF95;
+
+  /* ── Ролевые токены ── */
+  --on-primary: #14243B;
+  --secondary: #48678E;
+  --on-secondary: #E3E9F2;
+  --outline: #8794A6;
+
+  /* ── Софт-статусы и вспомогательные роли ── */
+  --success-bg: #1E3125;
+  --success-border: #2F4A3A;
+  --error-border: #5A302E;
+  --warning: #E0A34D;
+  --warning-bg: #3A3117;
+  --warning-text: #E4C86B;
+  --info-bg: #1F2A3C;
+  --info-text: #A9C8EE;
+  --tag-bg: #272443;
+  --tag-text: #C4B5FD;
+  --code-bg: #0B111A;
+  --code-text: #C9D1DE;
+  --danger: #C97F73;
+  --danger-hover: #D39085;
+  --danger-active: #BB6E62;
+  --danger-rgb: 201, 127, 115;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #19212F;
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --surface-glass-hover: rgba(255, 255, 255, 0.09);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --overlay-surface: rgba(16, 22, 32, 0.93);
+
+  /* ── RGB-триплеты ── */
+  --coffee-rgb: 143, 182, 232;
+  --latte-rgb: 58, 70, 92;
+  --espresso-rgb: 227, 233, 242;
+  --milk-rgb: 24, 32, 44;
+  --text-light-rgb: 135, 148, 166;
+  --text-muted-rgb: 181, 192, 208;
+  --success-rgb: 127, 191, 149;
+  --error-rgb: 232, 147, 140;
+  --shadow-rgb: 0, 0, 0;
+
+  /* ── Индикатор сложности пароля ── */
+  --strength-weak: #E8938C;
+  --strength-medium: #E0A34D;
+  --strength-strong: #7FBF95;
+
+  /* ── Тени ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.55);
+}

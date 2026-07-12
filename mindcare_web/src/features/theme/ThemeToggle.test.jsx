@@ -81,6 +81,19 @@ describe('ThemeToggle + ThemeProvider', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('nature-dark');
   });
 
+  test('палитра «Классика» ставит classic-* и сохраняется', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Классическая (академическая) палитра' })
+    );
+    expect(document.documentElement.getAttribute('data-theme')).toBe('classic-light');
+    expect(localStorage.getItem('app-theme-palette')).toBe('classic');
+  });
+
   test('withPalette=false скрывает выбор палитры', () => {
     render(
       <ThemeProvider>

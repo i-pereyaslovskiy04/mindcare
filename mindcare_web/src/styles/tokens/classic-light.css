@@ -1,0 +1,93 @@
+/*
+ * classic-light.css — «Классическая» (академическая бело-синяя), светлый вариант.
+ *
+ * Чистый белый фон, графитовый текст, синий акцент доверия.
+ * Легаси-алиасы замаплены по роли (см. coffee-dark.css / nature-light.css):
+ * warm-white/cream/milk/sand — уровни поверхностей, coffee/mocha/espresso —
+ * акцентная/текстовая шкала, latte/fog — серо-голубые границы.
+ * Значения primary подобраны под AA (npm run test:contrast).
+ */
+
+:root[data-theme='classic-light'] {
+  color-scheme: light;
+
+  /* ── Легаси-палитра (по роли) ── */
+  --cream: #F4F6FA;
+  --warm-white: #FFFFFF;
+  --latte: #B9C4D6;
+  --coffee: #2B5A9E;
+  --espresso: #1B2B45;
+  --mocha: #24467A;
+  --milk: #EDF1F8;
+  --fog: #D3DAE6;
+  --sand: #E4EAF3;
+
+  /* ── Background colors ── */
+  --nav-bg: #EDF1F8;
+  --nav-border: #D3DAE6;
+  --footer-bg: #E4EAF3;
+  --footer-border: #C6D0E0;
+
+  /* ── Text colors ── */
+  --text-main: #1B2B45;
+  --text-muted: #4A5A73;
+  --text-light: #6B7A91;
+  --text-on-dark: #EDF1F8;
+
+  /* ── Status colors ── */
+  --error: #B3261E;
+  --error-bg: #FBEEEC;
+  --on-error: #FFFFFF;
+  --success: #2F7A46;
+
+  /* ── Ролевые токены (отличия от var()-цепочек) ── */
+  --secondary: #8AA4C8;
+  --on-secondary: #14243B;
+  --outline: #7C8AA1;
+
+  /* ── Софт-статусы и вспомогательные роли ── */
+  --success-bg: #E7F3EA;
+  --success-border: #B7DFC4;
+  --error-border: #FECACA;
+  --warning: #B5751C;
+  --warning-bg: #FEF6DE;
+  --warning-text: #7A4E0B;
+  --info-bg: #E4EAF3;
+  --info-text: #2B5A9E;
+  --tag-bg: #E9E6FA;
+  --tag-text: #4C33A8;
+  --code-bg: #1B2B45;
+  --code-text: #DDE5F0;
+  --danger: #9B4038;
+  --danger-hover: #8A3931;
+  --danger-active: #77312A;
+  --danger-rgb: 155, 64, 56;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #FFFFFF;
+  --surface-glass: rgba(255, 255, 255, 0.35);
+  --surface-glass-hover: rgba(255, 255, 255, 0.6);
+  --scrim: rgba(20, 34, 56, 0.45);
+  --overlay-surface: rgba(255, 255, 255, 0.93);
+
+  /* ── RGB-триплеты ── */
+  --coffee-rgb: 43, 90, 158;
+  --latte-rgb: 185, 196, 214;
+  --espresso-rgb: 27, 43, 69;
+  --milk-rgb: 237, 241, 248;
+  --text-light-rgb: 107, 122, 145;
+  --text-muted-rgb: 74, 90, 115;
+  --success-rgb: 47, 122, 70;
+  --error-rgb: 179, 38, 30;
+  --shadow-rgb: 27, 43, 69;
+
+  /* ── Индикатор сложности пароля ── */
+  --strength-weak: #C0392B;
+  --strength-medium: #B5751C;
+  --strength-strong: #2F7A46;
+
+  /* ── Тени ── */
+  --shadow-sm: 0 1px 3px rgba(27, 43, 69, 0.08);
+  --shadow-md: 0 4px 14px rgba(27, 43, 69, 0.10);
+  --shadow-lg: 0 14px 34px rgba(27, 43, 69, 0.16);
+}

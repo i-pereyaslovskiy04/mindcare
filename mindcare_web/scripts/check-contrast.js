@@ -19,7 +19,14 @@ const path = require('path');
 
 const TOKENS_DIR = path.join(__dirname, '..', 'src', 'styles', 'tokens');
 const BASE_THEME = 'coffee-light';
-const THEMES = ['coffee-light', 'coffee-dark', 'nature-light', 'nature-dark'];
+const THEMES = [
+  'coffee-light',
+  'coffee-dark',
+  'nature-light',
+  'nature-dark',
+  'classic-light',
+  'classic-dark',
+];
 
 /* [fg, bg, min, комментарий] */
 const PAIRS = [
