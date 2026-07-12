@@ -262,18 +262,24 @@ def get_profile(user_id: str) -> dict:
     return profile
 
 
-def update_profile(
-    user_id: str,
-    full_name: str,
-    phone: Optional[str],
-) -> dict:
-    """Обновляет разрешённые self-поля. ПДн (ФИО/телефон) не логируются."""
-    name = (full_name or "").strip()
-    if len(name) < 2:
-        raise AuthError("ФИО должно содержать минимум 2 символа", 422)
-    p = (phone or "").strip() or None  # пустой телефон → NULL
+def update_profile(user_id: str, fields: dict) -> dict:
+    """Обновляет разрешённые self-поля (PATCH-семантика: только переданные).
+    ПДн (ФИО/телефон) не логируются. Значения полей темы уже провалидированы
+    Literal-схемой (иначе 422).
+    """
+    updates = dict(fields)
+
+    if "full_name" in updates:
+        name = (updates["full_name"] or "").strip()
+        if len(name) < 2:
+            raise AuthError("ФИО должно содержать минимум 2 символа", 422)
+        updates["full_name"] = name
+
+    if "phone" in updates:
+        updates["phone"] = (updates["phone"] or "").strip() or None  # пустой → NULL
+
     try:
-        return storage.update_profile_atomic(user_id, name, p)
+        return storage.update_profile_atomic(user_id, updates)
     except storage.UserNotFoundError:
         raise AuthError("Пользователь не найден", 404)
 

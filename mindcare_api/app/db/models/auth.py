@@ -76,6 +76,9 @@ class User(Base):
     phone         = Column(String(50))
     password_hash = Column(String(255), nullable=False)
     avatar_url    = Column(String(500))
+    # Оформление UI. NULL = «не задано»: действует выбор устройства (localStorage).
+    ui_theme_palette = Column(String(20))
+    ui_theme_mode    = Column(String(10))
     is_active     = Column(Boolean, default=True)
     last_login    = Column(DateTime(timezone=True))
     created_at    = Column(DateTime(timezone=True), server_default=func.now())

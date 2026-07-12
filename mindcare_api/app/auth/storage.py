@@ -127,11 +127,13 @@ def find_user_by_id(user_id: str) -> Optional[dict]:
 
 def _profile_to_dict(user: User, db) -> dict:
     return {
-        "id":        str(user.id),
-        "email":     user.email,
-        "full_name": user.full_name,
-        "phone":     user.phone,
-        "role":      _get_primary_role(db, user.id),
+        "id":               str(user.id),
+        "email":            user.email,
+        "full_name":        user.full_name,
+        "phone":            user.phone,
+        "role":             _get_primary_role(db, user.id),
+        "ui_theme_palette": user.ui_theme_palette,
+        "ui_theme_mode":    user.ui_theme_mode,
     }
 
 
@@ -149,13 +151,17 @@ def get_profile(user_id: str) -> Optional[dict]:
         return _profile_to_dict(user, db) if user else None
 
 
-def update_profile_atomic(
-    user_id: str,
-    full_name: str,
-    phone: Optional[str],
-) -> dict:
-    """Атомарно обновляет разрешённые self-поля (full_name, phone) текущего
-    пользователя. Один SessionLocal + один commit."""
+ALLOWED_PROFILE_FIELDS = ("full_name", "phone", "ui_theme_palette", "ui_theme_mode")
+
+
+def update_profile_atomic(user_id: str, updates: dict) -> dict:
+    """Атомарно обновляет разрешённые self-поля текущего пользователя.
+    Один SessionLocal + один commit.
+
+    updates — только реально переданные поля (exclude_unset): отсутствие ключа
+    = не менять, значение None = сбросить. Ключи вне ALLOWED_PROFILE_FIELDS
+    игнорируются (defense-in-depth: схема их и так не пропустит).
+    """
     with SessionLocal() as db:
         user = (
             db.query(User)
@@ -167,8 +173,9 @@ def update_profile_atomic(
         )
         if user is None:
             raise UserNotFoundError("User not found")
-        user.full_name = full_name
-        user.phone = phone
+        for field, value in updates.items():
+            if field in ALLOWED_PROFILE_FIELDS:
+                setattr(user, field, value)
         user.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(user)

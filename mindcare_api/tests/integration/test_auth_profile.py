@@ -164,6 +164,107 @@ class TestSelfProfile:
         assert r2.status_code == 200, r2.text
         assert r2.json()["full_name"] == "Психолог Тестовый"
 
+    def test_10_theme_prefs_default_null(self, client):
+        tok, _, _ = _make_user(client, "student")
+        r = client.get("/api/auth/profile", headers=_auth(tok))
+        assert r.status_code == 200, r.text
+        # «Не задано» → тему определяет устройство (localStorage).
+        assert r.json()["ui_theme_palette"] is None
+        assert r.json()["ui_theme_mode"] is None
+
+    def test_11_theme_prefs_roundtrip(self, client):
+        tok, _, _ = _make_user(client, "student")
+        r = client.patch(
+            "/api/auth/profile",
+            json={
+                "full_name": "Тема Тестовая",
+                "phone": None,
+                "ui_theme_palette": "nature",
+                "ui_theme_mode": "dark",
+            },
+            headers=_auth(tok),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["ui_theme_palette"] == "nature"
+        assert r.json()["ui_theme_mode"] == "dark"
+
+        r2 = client.get("/api/auth/profile", headers=_auth(tok))
+        assert r2.json()["ui_theme_palette"] == "nature"
+        assert r2.json()["ui_theme_mode"] == "dark"
+
+    def test_12_invalid_theme_value_rejected(self, client):
+        tok, _, _ = _make_user(client, "student")
+        r = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Тема Тестовая", "phone": None,
+                  "ui_theme_palette": "neon"},
+            headers=_auth(tok),
+        )
+        assert r.status_code == 422, r.text
+
+        r2 = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Тема Тестовая", "phone": None,
+                  "ui_theme_mode": "sepia"},
+            headers=_auth(tok),
+        )
+        assert r2.status_code == 422, r2.text
+
+    def test_13_patch_without_theme_fields_keeps_them(self, client):
+        tok, _, _ = _make_user(client, "student")
+        client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Тема Сохранена", "phone": None,
+                  "ui_theme_palette": "classic", "ui_theme_mode": "light"},
+            headers=_auth(tok),
+        )
+        # PATCH без полей темы не должен их обнулять (unset ≠ None).
+        r = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Другое Имя", "phone": None},
+            headers=_auth(tok),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["ui_theme_palette"] == "classic"
+        assert r.json()["ui_theme_mode"] == "light"
+
+    def test_14_theme_can_be_reset_to_null(self, client):
+        tok, _, _ = _make_user(client, "student")
+        client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Тема Сброс", "phone": None,
+                  "ui_theme_palette": "coffee", "ui_theme_mode": "system"},
+            headers=_auth(tok),
+        )
+        # Явный null сбрасывает в «не задано».
+        r = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Тема Сброс", "phone": None,
+                  "ui_theme_palette": None, "ui_theme_mode": None},
+            headers=_auth(tok),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["ui_theme_palette"] is None
+        assert r.json()["ui_theme_mode"] is None
+
+    def test_15_theme_only_patch_keeps_name_and_phone(self, client):
+        tok, _, _ = _make_user(client, "student")
+        client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Имя Сохранено", "phone": "+7 (949) 555-00-11"},
+            headers=_auth(tok),
+        )
+        # PATCH только темы (без ФИО/телефона) не должен их обнулять.
+        r = client.patch(
+            "/api/auth/profile",
+            json={"ui_theme_mode": "dark"},
+            headers=_auth(tok),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["full_name"] == "Имя Сохранено"
+        assert r.json()["phone"] == "+7 (949) 555-00-11"
+        assert r.json()["ui_theme_mode"] == "dark"
+
     def test_09_admin_updates_only_own_profile(self, client):
         tok_admin, admin_id, _ = _make_user(client, "admin")
         _, other_id, other_email = _make_user(client, "student")

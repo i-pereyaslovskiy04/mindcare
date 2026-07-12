@@ -164,11 +164,11 @@ def update_profile(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
+    # PATCH-семантика: меняем только реально пришедшие поля (unset ≠ None).
     try:
         profile = service.update_profile(
             user_id=current_user["id"],
-            full_name=body.full_name,
-            phone=body.phone,
+            fields=body.model_dump(exclude_unset=True),
         )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)

@@ -32,16 +32,24 @@ export function me() {
   return apiFetch(`${BASE}/me`);
 }
 
-/** GET /api/auth/profile → { id, email, full_name, phone, role } */
+/**
+ * GET /api/auth/profile
+ * → { id, email, full_name, phone, role, ui_theme_palette, ui_theme_mode }
+ * Поля темы могут быть null — «не задано» (действует выбор устройства).
+ */
 export function getProfile() {
   return apiFetch(`${BASE}/profile`);
 }
 
-/** PATCH /api/auth/profile — обновляет self-поля (full_name, phone). */
-export function updateProfile({ full_name, phone }) {
+/**
+ * PATCH /api/auth/profile — частичное обновление self-полей.
+ * Отправляются только переданные ключи (backend: unset ≠ null).
+ * Допустимые: full_name, phone, ui_theme_palette, ui_theme_mode.
+ */
+export function updateProfile(fields) {
   return apiFetch(`${BASE}/profile`, {
     method: 'PATCH',
-    body: JSON.stringify({ full_name, phone }),
+    body: JSON.stringify(fields),
   });
 }
 

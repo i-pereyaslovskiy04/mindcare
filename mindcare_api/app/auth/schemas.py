@@ -35,6 +35,11 @@ class UserResponse(BaseModel):
     role: Role
 
 
+# Оформление UI. Списки синхронизированы с mindcare_web/src/features/theme/ThemeContext.jsx.
+ThemePalette = Literal["coffee", "nature", "classic", "hc"]
+ThemeMode = Literal["light", "dark", "system"]
+
+
 class ProfileRead(BaseModel):
     """Self-profile (нечувствительные поля текущего пользователя)."""
     id: str
@@ -42,14 +47,23 @@ class ProfileRead(BaseModel):
     full_name: str
     phone: Optional[str] = None
     role: Role
+    # None = «не задано»: тему определяет устройство (localStorage).
+    ui_theme_palette: Optional[ThemePalette] = None
+    ui_theme_mode: Optional[ThemeMode] = None
 
 
 class ProfileUpdate(BaseModel):
     """Self-update: только разрешённые поля. extra='forbid' → email/role/is_active
-    в body дают 422, а не молча игнорируются."""
+    в body дают 422, а не молча игнорируются.
+
+    Все поля опциональны (PATCH-семантика): не переданы → не меняются
+    (unset ≠ None). Явный null у phone/полей темы = сбросить значение.
+    """
     model_config = {"extra": "forbid"}
-    full_name: str
+    full_name: Optional[str] = None
     phone: Optional[str] = Field(default=None, max_length=50)
+    ui_theme_palette: Optional[ThemePalette] = None
+    ui_theme_mode: Optional[ThemeMode] = None
 
 
 class MessageResponse(BaseModel):
