@@ -68,6 +68,10 @@ export default function TestTakePage() {
     setInvalid((prev) => prev.filter((id) => id !== qid));
   }, []);
 
+  const answeredCount = (test?.questions ?? []).filter(
+    (q) => isAnswered(q.question_type, answers[q.id]),
+  ).length;
+
   const submit = async () => {
     const missing = test.questions
       .filter((q) => q.is_required && !isAnswered(q.question_type, answers[q.id]))
@@ -130,12 +134,18 @@ export default function TestTakePage() {
       <h1 className={styles.pageTitle}>{test.title}</h1>
       {test.description && <p className={styles.pageSub}>{test.description}</p>}
 
+      {/* Текстовый эквивалент прогресса (ГОСТ Р 52872-2019): не только полоса */}
+      <p className={styles.progress} role="status" aria-live="polite">
+        Отвечено {answeredCount} из {test.questions.length} вопросов
+      </p>
+
       <div className={styles.questions}>
         {test.questions.map((q, i) => (
           <div id={`q-${q.id}`} key={q.id}>
             <QuestionRenderer
               question={q}
               index={i}
+              total={test.questions.length}
               value={answers[q.id]}
               onChange={(v) => setAnswer(q.id, v)}
               invalid={invalid.includes(q.id)}

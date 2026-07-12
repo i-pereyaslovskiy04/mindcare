@@ -11,21 +11,31 @@ import styles from './QuestionRenderer.module.css';
  *   free_text       → string
  * onChange(nextValue) — обновляет ответ в родителе.
  */
-export default function QuestionRenderer({ question, index, value, onChange, invalid }) {
+export default function QuestionRenderer({ question, index, value, onChange, invalid, total }) {
   const { question_type: type, question_text, is_required, options, config } = question;
+  const titleId = `q-title-${question.id}`;
 
   return (
     <div className={[styles.card, invalid && styles.cardInvalid].filter(Boolean).join(' ')}>
       <div className={styles.head}>
-        <span className={styles.num}>{index + 1}</span>
-        <h3 className={styles.text}>
+        <span className={styles.num} aria-hidden="true">{index + 1}</span>
+        <h3 className={styles.text} id={titleId}>
+          {/* Текстовый эквивалент прогресса — не только визуальный номер (ГОСТ) */}
+          <span className={styles.counter}>
+            Вопрос {index + 1} из {total}.{' '}
+          </span>
           {question_text}
-          {is_required && <span className={styles.req} aria-hidden="true"> *</span>}
+          {is_required && (
+            <>
+              <span className={styles.req} aria-hidden="true"> *</span>
+              <span className="visually-hidden"> (обязательный вопрос)</span>
+            </>
+          )}
         </h3>
       </div>
 
       {type === 'single_choice' && (
-        <div className={styles.options} role="radiogroup">
+        <div className={styles.options} role="radiogroup" aria-labelledby={titleId}>
           {options.map((opt) => (
             <label key={opt.id} className={styles.option}>
               <input
@@ -42,7 +52,7 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
       )}
 
       {type === 'multiple_choice' && (
-        <div className={styles.options}>
+        <div className={styles.options} role="group" aria-labelledby={titleId}>
           {options.map((opt) => {
             const arr = Array.isArray(value) ? value : [];
             const checked = arr.includes(opt.id);
@@ -66,7 +76,12 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
       )}
 
       {type === 'scale' && (
-        <ScaleControl config={config} value={value} onChange={onChange} />
+        <ScaleControl
+          config={config}
+          value={value}
+          onChange={onChange}
+          labelledBy={titleId}
+        />
       )}
 
       {type === 'free_text' && (
@@ -75,6 +90,7 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
           rows={4}
           value={value || ''}
           placeholder="Ваш ответ…"
+          aria-labelledby={titleId}
           onChange={(e) => onChange(e.target.value)}
         />
       )}
@@ -82,7 +98,7 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
   );
 }
 
-function ScaleControl({ config, value, onChange }) {
+function ScaleControl({ config, value, onChange, labelledBy }) {
   const lo = Number.isInteger(config?.min) ? config.min : 0;
   const hi = Number.isInteger(config?.max) ? config.max : 10;
   const step = Number.isInteger(config?.step) && config.step > 0 ? config.step : 1;
@@ -97,6 +113,10 @@ function ScaleControl({ config, value, onChange }) {
         max={hi}
         step={step}
         value={current}
+        aria-labelledby={labelledBy}
+        aria-valuetext={
+          value == null ? 'не выбрано' : `${value} из ${hi}`
+        }
         onChange={(e) => onChange(Number(e.target.value))}
       />
       <div className={styles.scaleRow}>

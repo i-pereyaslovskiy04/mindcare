@@ -50,6 +50,14 @@
   margin-bottom: 24px;
 }
 
+/* Текстовый эквивалент прогресса (ГОСТ): «Отвечено N из M вопросов» */
+.progress {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
 .questions {
   display: flex;
   flex-direction: column;

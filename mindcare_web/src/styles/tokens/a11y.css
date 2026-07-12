@@ -159,20 +159,36 @@
 
 /* ── Правила режима (T5.3) ──────────────────────────────────────── */
 
-/* Ссылки всегда подчёркнуты; интерактив имеет видимую рамку. */
+/* Ссылки всегда подчёркнуты. */
 :root[data-a11y='on'] a {
   text-decoration: underline;
   color: var(--a11y-fg);
+  background: var(--a11y-bg);
 }
 
+/* Интерактив (включая ссылки-кнопки ButtonLink) — фон и текст схемы + рамка.
+   Заливка из брендовых классов (.primary → var(--espresso)) иначе даёт
+   тёмный текст на тёмной кнопке: цвет текста переопределён, а фон нет. */
 :root[data-a11y='on'] button,
 :root[data-a11y='on'] input,
 :root[data-a11y='on'] select,
-:root[data-a11y='on'] textarea {
+:root[data-a11y='on'] textarea,
+:root[data-a11y='on'] a[class*='btn'],
+:root[data-a11y='on'] a[class*='Btn'],
+:root[data-a11y='on'] a[class*='button'],
+:root[data-a11y='on'] a[class*='Button'] {
   border: 2px solid var(--a11y-fg);
   background: var(--a11y-bg);
   color: var(--a11y-fg);
   box-shadow: none;
+}
+
+/* Чекбоксы/радио/слайдеры — нативные, им фон схемы не нужен. */
+:root[data-a11y='on'] input[type='checkbox'],
+:root[data-a11y='on'] input[type='radio'],
+:root[data-a11y='on'] input[type='range'] {
+  border: none;
+  accent-color: var(--a11y-fg);
 }
 
 :root[data-a11y='on'] :focus-visible {

@@ -28,7 +28,10 @@
   gap: 6px;
 }
 
-.option {
+/* Префикс :root[data-a11y='on'] поднимает специфичность выше глобального
+   правила «все кнопки — фон схемы» из a11y.css, иначе выбранное состояние
+   не инвертируется. */
+:root[data-a11y='on'] .option {
   min-height: 32px;
   padding: 4px 10px;
   border: 2px solid var(--a11y-fg);
@@ -40,7 +43,7 @@
 }
 
 /* Выбранное состояние — инверсия (не только цвет: рамка сохраняется). */
-.optionActive {
+:root[data-a11y='on'] .optionActive {
   background: var(--a11y-fg);
   color: var(--a11y-bg);
 }
