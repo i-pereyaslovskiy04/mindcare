@@ -1,7 +1,9 @@
 /* Single canonical hero — used by About, Services, Materials */
 
 .hero {
-  background: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, var(--coffee) 100%);
+  /* см. Hero.module.css: сплошная подложка + градиент поверх (hc отключает градиент) */
+  background-color: var(--hero-bg);
+  background-image: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, var(--coffee) 100%);
   min-height: clamp(420px, 50vh, 700px);
   display: flex;
   align-items: center;
@@ -33,7 +35,7 @@
   letter-spacing: var(--ls-label);
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--latte);
+  color: var(--hero-accent);
   margin-bottom: 18px;
 }
 
@@ -42,7 +44,7 @@
   font-size: var(--fs-h1);
   font-weight: 300;
   line-height: var(--lh-h1);
-  color: var(--text-on-dark);
+  color: var(--hero-fg);
   margin-bottom: 20px;
 }
 
@@ -50,7 +52,7 @@
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   font-weight: 300;
-  color: var(--fog);
+  color: var(--hero-muted);
   max-width: 520px;
   margin: 0 auto;
 }

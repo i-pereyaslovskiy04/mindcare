@@ -95,6 +95,18 @@
   --strength-medium: #D4891A;
   --strength-strong: #5D8A5E;
 
+  /* ── Hero-баннер ──
+     Роль: сплошная подложка героя + пары текста НА НЕЙ. Декоративный градиент
+     рисуется поверх --hero-bg (background-image), поэтому если тема его
+     отключает (hc), остаётся читаемая сплошная подложка, а не прозрачный фон.
+     Дефолты ссылаются на легаси-токены → у coffee/nature/classic вид прежний. */
+  --hero-bg: var(--espresso);
+  --hero-fg: var(--text-on-dark);
+  --hero-muted: var(--fog);
+  --hero-accent: var(--latte);
+  --hero-accent-rgb: var(--latte-rgb);
+  --hero-on-accent: var(--hero-bg);
+
   /* ── Тени ── */
   --shadow-sm: 0 1px 3px rgba(46, 35, 24, 0.08);
   --shadow-md: 0 4px 14px rgba(46, 35, 24, 0.10);

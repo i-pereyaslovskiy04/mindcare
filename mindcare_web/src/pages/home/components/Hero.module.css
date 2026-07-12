@@ -1,5 +1,8 @@
 .hero {
-  background: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, var(--coffee) 100%);
+  /* Сплошная подложка + декоративный градиент поверх неё: если тема отключает
+     background-image (hc), герой остаётся читаемым, а не прозрачным. */
+  background-color: var(--hero-bg);
+  background-image: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, var(--coffee) 100%);
   min-height: clamp(420px, 50vh, 700px);
   display: flex;
   align-items: center;
@@ -28,7 +31,7 @@
 .heroLabel {
   font-size: var(--fs-tag);
   letter-spacing: var(--ls-label);
-  color: var(--latte);
+  color: var(--hero-accent);
   text-transform: uppercase;
   margin-bottom: 18px;
   font-weight: 600;
@@ -38,19 +41,19 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: var(--fs-h1);
   font-weight: 300;
-  color: var(--text-on-dark);
+  color: var(--hero-fg);
   line-height: var(--lh-h1);
   margin-bottom: 20px;
 }
 
 .heroTitleHighlight {
   font-style: italic;
-  color: var(--latte);
+  color: var(--hero-accent);
 }
 
 .heroSub {
   font-size: var(--fs-body);
-  color: var(--fog);
+  color: var(--hero-muted);
   line-height: var(--lh-body);
   font-weight: 300;
   max-width: 520px;
@@ -62,10 +65,10 @@
   align-items: center;
   margin-top: 32px;
   padding: 12px 28px;
-  border: 1.5px solid var(--latte);
+  border: 1.5px solid var(--hero-accent);
   border-radius: 8px;
   background: transparent;
-  color: var(--latte);
+  color: var(--hero-accent);
   font-size: var(--fs-ui);
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -74,12 +77,12 @@
 }
 
 .heroCta:hover {
-  background: var(--latte);
-  color: var(--espresso);
+  background: var(--hero-accent);
+  color: var(--hero-on-accent);
 }
 
 .heroCta:focus-visible {
-  outline: 2.5px solid var(--latte);
+  outline: 2.5px solid var(--hero-accent);
   outline-offset: 3px;
 }
 
@@ -90,9 +93,9 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: rgba(var(--milk-rgb), 0.08);
-  border: 1px solid rgba(var(--latte-rgb), 0.4);
-  color: var(--latte);
+  background: rgba(var(--hero-accent-rgb), 0.10);
+  border: 1px solid rgba(var(--hero-accent-rgb), 0.4);
+  color: var(--hero-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -103,12 +106,12 @@
 }
 
 .heroArrow:hover {
-  background: rgba(var(--milk-rgb), 0.16);
+  background: rgba(var(--hero-accent-rgb), 0.2);
   transform: translateY(-50%) scale(1.08);
 }
 
 .heroArrow:focus-visible {
-  outline: 2px solid var(--latte);
+  outline: 2px solid var(--hero-accent);
   outline-offset: 3px;
 }
 
@@ -152,14 +155,14 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgba(var(--latte-rgb), 0.4);
+  background: rgba(var(--hero-accent-rgb), 0.4);
   display: block;
   cursor: pointer;
   transition: width 0.3s ease, background 0.3s ease, border-radius 0.3s ease;
 }
 
 .heroDot.active {
-  background: var(--latte);
+  background: var(--hero-accent);
   width: 20px;
   border-radius: 4px;
 }

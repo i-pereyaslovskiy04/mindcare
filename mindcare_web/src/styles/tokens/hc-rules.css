@@ -27,9 +27,14 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-/* Декоративные градиенты в hc заменяются сплошной поверхностью:
-   белый текст на светло-зелёном градиенте не даёт AAA. */
+/* Декоративные градиенты героя в hc убираются: белый текст на светло-зелёном
+   градиенте не даёт AAA. Под градиентом лежит сплошная подложка --hero-bg
+   (см. Hero.module.css / PageHero.module.css), поэтому герой остаётся
+   читаемым: --hero-fg / --hero-muted / --hero-accent заданы под неё в
+   hc-light.css и hc-dark.css. */
 :root[data-theme^='hc-'] [class*='hero'],
-:root[data-theme^='hc-'] [class*='Hero'] {
+:root[data-theme^='hc-'] [class*='Hero'],
+:root[data-theme^='hc-'] [class*='hero']::before,
+:root[data-theme^='hc-'] [class*='Hero']::before {
   background-image: none;
 }

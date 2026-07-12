@@ -83,6 +83,14 @@
   --error-rgb: 139, 0, 0;
   --shadow-rgb: 0, 0, 0;
 
+  /* ── Hero-баннер: градиент в hc отключён (hc-rules), остаётся сплошной чёрный ── */
+  --hero-bg: #000000;
+  --hero-fg: #FFFFFF;
+  --hero-muted: #E5E5E5;
+  --hero-accent: #C8E6CF;
+  --hero-accent-rgb: 200, 230, 207;
+  --hero-on-accent: #000000;
+
   /* ── Индикатор сложности пароля ── */
   --strength-weak: #8B0000;
   --strength-medium: #7A4E0B;

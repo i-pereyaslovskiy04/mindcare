@@ -73,6 +73,9 @@ const PAIRS = [
   ['code-text', 'code-bg', 4.5, 'блок кода'],
   ['warm-white', 'danger', 4.5, 'Button.danger: warm-white на danger'],
   ['coffee', 'warm-white', 3.0, 'акцент/крупный текст (3.0 — только coffee)'],
+  ['hero-fg', 'hero-bg', 4.5, 'заголовок героя на подложке'],
+  ['hero-muted', 'hero-bg', 4.5, 'подзаголовок героя на подложке'],
+  ['hero-accent', 'hero-bg', 3.0, 'акцент героя (3.0 — только coffee)'],
 ];
 
 function parseVars(rawCss) {
