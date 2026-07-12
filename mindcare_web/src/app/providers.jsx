@@ -8,15 +8,18 @@
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../features/auth/AuthContext';
 import { ThemeProvider } from '../features/theme/ThemeContext';
+import { A11yProvider } from '../features/a11y/A11yContext';
 
 export default function Providers({ children }) {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
-      </BrowserRouter>
+      <A11yProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </BrowserRouter>
+      </A11yProvider>
     </ThemeProvider>
   );
 }

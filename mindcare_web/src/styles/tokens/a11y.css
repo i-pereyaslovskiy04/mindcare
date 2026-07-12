@@ -1,0 +1,230 @@
+/*
+ * a11y.css — режим для слабовидящих (ГОСТ Р 52872-2019).
+ *
+ * Включается атрибутами на <html> (см. features/a11y/A11yContext.jsx):
+ *   data-a11y="on"
+ *   data-a11y-scheme="bw | wb | blue | beige"   — цветовая схема
+ *   style="--a11y-font-scale: 1 | 1.5 | 2"      — размер шрифта A / A+ / A++
+ *   data-a11y-spacing="normal | medium | large" — межбуквенный интервал
+ *   data-a11y-leading="1.5 | 2"                 — межстрочный интервал
+ *   data-a11y-font="sans | serif"
+ *   data-a11y-images="show | hide | gray"
+ *
+ * Импортируется ПОСЛЕ всех файлов тем: схема переопределяет их токены
+ * (равная специфичность 0-2-0 → выигрывает более поздний файл).
+ * Брендовые цвета в режиме не используются.
+ */
+
+/* ── Цветовые схемы (ГОСТ) ───────────────────────────────────────────
+   Каждая схема — это фон + текст; остальные токены выводятся из них,
+   чтобы существующие компоненты работали без правок. */
+
+:root[data-a11y='on'][data-a11y-scheme='bw'] {
+  color-scheme: light;
+  --a11y-bg: #FFFFFF;
+  --a11y-fg: #000000;
+}
+
+:root[data-a11y='on'][data-a11y-scheme='wb'] {
+  color-scheme: dark;
+  --a11y-bg: #000000;
+  --a11y-fg: #FFFFFF;
+}
+
+:root[data-a11y='on'][data-a11y-scheme='blue'] {
+  color-scheme: light;
+  --a11y-bg: #9DD1FF;
+  --a11y-fg: #063462;
+}
+
+:root[data-a11y='on'][data-a11y-scheme='beige'] {
+  color-scheme: light;
+  --a11y-bg: #F7F3D6;
+  --a11y-fg: #4D4B31;
+}
+
+/* Все цветовые токены сводятся к паре фон/текст выбранной схемы. */
+:root[data-a11y='on'] {
+  --cream: var(--a11y-bg);
+  --warm-white: var(--a11y-bg);
+  --milk: var(--a11y-bg);
+  --sand: var(--a11y-bg);
+  --surface: var(--a11y-bg);
+  --surface-container: var(--a11y-bg);
+  --surface-container-high: var(--a11y-bg);
+  --surface-elevated: var(--a11y-bg);
+  --overlay-surface: var(--a11y-bg);
+  --nav-bg: var(--a11y-bg);
+  --footer-bg: var(--a11y-bg);
+  --surface-glass: var(--a11y-bg);
+  --surface-glass-hover: var(--a11y-bg);
+
+  --espresso: var(--a11y-fg);
+  --coffee: var(--a11y-fg);
+  --mocha: var(--a11y-fg);
+  --latte: var(--a11y-fg);
+  --fog: var(--a11y-fg);
+  --text-main: var(--a11y-fg);
+  --text-muted: var(--a11y-fg);
+  --text-light: var(--a11y-fg);
+  --text-on-dark: var(--a11y-bg);
+  --on-surface: var(--a11y-fg);
+  --on-surface-variant: var(--a11y-fg);
+  --primary: var(--a11y-fg);
+  --on-primary: var(--a11y-bg);
+  --secondary: var(--a11y-fg);
+  --on-secondary: var(--a11y-bg);
+  --outline: var(--a11y-fg);
+  --nav-border: var(--a11y-fg);
+  --footer-border: var(--a11y-fg);
+
+  /* Статусы: смысл дублируется текстом/иконкой, цвет — только фон/текст схемы */
+  --error: var(--a11y-fg);
+  --error-bg: var(--a11y-bg);
+  --error-border: var(--a11y-fg);
+  --on-error: var(--a11y-bg);
+  --success: var(--a11y-fg);
+  --success-bg: var(--a11y-bg);
+  --success-border: var(--a11y-fg);
+  --warning: var(--a11y-fg);
+  --warning-bg: var(--a11y-bg);
+  --warning-text: var(--a11y-fg);
+  --info-bg: var(--a11y-bg);
+  --info-text: var(--a11y-fg);
+  --tag-bg: var(--a11y-bg);
+  --tag-text: var(--a11y-fg);
+  --code-bg: var(--a11y-fg);
+  --code-text: var(--a11y-bg);
+  --danger: var(--a11y-fg);
+  --danger-hover: var(--a11y-fg);
+  --danger-active: var(--a11y-fg);
+  --strength-weak: var(--a11y-fg);
+  --strength-medium: var(--a11y-fg);
+  --strength-strong: var(--a11y-fg);
+
+  /* Тени не несут смысла — заменяются рамкой */
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --scrim: rgba(0, 0, 0, 0.75);
+
+  --focus-ring-width: 3px;
+  --focus-ring-color: var(--a11y-fg);
+  --focus-ring-offset: 2px;
+
+  /* Масштаб шрифта: 100 / 150 / 200 % (A / A+ / A++). zoom масштабирует и
+     px-размеры существующих компонентов — иначе 200% не достигается. */
+  --a11y-font-scale: 1;
+  zoom: var(--a11y-font-scale);
+
+  background: var(--a11y-bg);
+  color: var(--a11y-fg);
+}
+
+/* ── Типографика режима ─────────────────────────────────────────── */
+
+:root[data-a11y='on'] body {
+  background: var(--a11y-bg);
+  color: var(--a11y-fg);
+  line-height: 1.5;
+}
+
+:root[data-a11y='on'][data-a11y-font='serif'] body,
+:root[data-a11y='on'][data-a11y-font='serif'] body * {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+:root[data-a11y='on'][data-a11y-font='sans'] body,
+:root[data-a11y='on'][data-a11y-font='sans'] body * {
+  font-family: Arial, 'Helvetica Neue', sans-serif;
+}
+
+:root[data-a11y='on'][data-a11y-spacing='medium'] body {
+  letter-spacing: 0.05em;
+}
+
+:root[data-a11y='on'][data-a11y-spacing='large'] body {
+  letter-spacing: 0.1em;
+}
+
+:root[data-a11y='on'][data-a11y-leading='2'] body,
+:root[data-a11y='on'][data-a11y-leading='2'] body * {
+  line-height: 2;
+}
+
+:root[data-a11y='on'][data-a11y-leading='1.5'] body,
+:root[data-a11y='on'][data-a11y-leading='1.5'] body * {
+  line-height: 1.5;
+}
+
+/* ── Правила режима (T5.3) ──────────────────────────────────────── */
+
+/* Ссылки всегда подчёркнуты; интерактив имеет видимую рамку. */
+:root[data-a11y='on'] a {
+  text-decoration: underline;
+  color: var(--a11y-fg);
+}
+
+:root[data-a11y='on'] button,
+:root[data-a11y='on'] input,
+:root[data-a11y='on'] select,
+:root[data-a11y='on'] textarea {
+  border: 2px solid var(--a11y-fg);
+  background: var(--a11y-bg);
+  color: var(--a11y-fg);
+  box-shadow: none;
+}
+
+:root[data-a11y='on'] :focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Декоративное убирается: фоновые изображения, градиенты, анимации. */
+:root[data-a11y='on'] *,
+:root[data-a11y='on'] *::before,
+:root[data-a11y='on'] *::after {
+  background-image: none !important;
+  animation: none !important;
+  transition: none !important;
+  text-shadow: none !important;
+}
+
+/* Упрощённая одноколоночная сетка, ширина текста ≤ 80ch. */
+:root[data-a11y='on'] main,
+:root[data-a11y='on'] .container {
+  max-width: 80ch;
+  margin: 0 auto;
+}
+
+:root[data-a11y='on'] main [class*='grid'],
+:root[data-a11y='on'] main [class*='Grid'],
+:root[data-a11y='on'] main [class*='cards'],
+:root[data-a11y='on'] main [class*='columns'] {
+  display: block !important;
+}
+
+/* Изображения: показать / скрыть (остаётся alt в рамке) / оттенки серого. */
+:root[data-a11y='on'][data-a11y-images='gray'] img,
+:root[data-a11y='on'][data-a11y-images='gray'] svg,
+:root[data-a11y='on'][data-a11y-images='gray'] video {
+  filter: grayscale(1);
+}
+
+/* hide: src снимается в A11yContext (JS) → браузер рендерит alt-текст;
+   CSS даёт ему рамку, чтобы alt читался как отдельный блок. */
+:root[data-a11y='on'][data-a11y-images='hide'] img {
+  width: auto !important;
+  height: auto !important;
+  max-width: 100%;
+  border: 2px dashed var(--a11y-fg);
+  padding: 8px;
+  color: var(--a11y-fg);
+  font-style: italic;
+}
+
+:root[data-a11y='on'][data-a11y-images='hide'] svg[aria-hidden='true'],
+:root[data-a11y='on'][data-a11y-images='hide'] [class*='decor'],
+:root[data-a11y='on'][data-a11y-images='hide'] [class*='illustration'] {
+  display: none !important;
+}

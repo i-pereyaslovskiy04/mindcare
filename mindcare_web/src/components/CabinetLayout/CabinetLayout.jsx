@@ -3,6 +3,8 @@ import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
 import Icon from '../Icon/Icon';
 import ThemeToggle from '../../features/theme/ThemeToggle';
+import A11yToggle from '../../features/a11y/A11yToggle';
+import A11yPanel from '../../features/a11y/A11yPanel';
 import { getInitials } from '../../shared/lib/utils';
 import styles from './CabinetLayout.module.css';
 
@@ -125,6 +127,7 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
               <Icon name="search" size={14} />
               <input type="text" placeholder="Поиск по материалам, записям…" readOnly />
             </div>
+            <A11yToggle />
             <ThemeToggle />
             <button
               className={`${styles.iconBtn} ${styles.iconBtnOptional}`}
@@ -146,6 +149,9 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
             </button>
           </div>
         </div>
+
+        {/* Панель настроек ГОСТ — под шапкой кабинета, видна только в режиме */}
+        <A11yPanel />
 
         <div className={styles.content}>
           <div className={styles.contentInner}>

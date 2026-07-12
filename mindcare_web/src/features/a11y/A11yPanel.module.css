@@ -1,0 +1,64 @@
+/* Панель ГОСТ: только фон/текст выбранной схемы, без брендовых цветов. */
+
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 24px;
+  padding: 12px 16px;
+  border-bottom: 2px solid var(--a11y-fg);
+  background: var(--a11y-bg);
+  color: var(--a11y-fg);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legend {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.option {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 2px solid var(--a11y-fg);
+  background: var(--a11y-bg);
+  color: var(--a11y-fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Выбранное состояние — инверсия (не только цвет: рамка сохраняется). */
+.optionActive {
+  background: var(--a11y-fg);
+  color: var(--a11y-bg);
+}
+
+.option:focus-visible,
+.reset:focus-visible {
+  outline: 3px solid var(--a11y-fg);
+  outline-offset: 2px;
+}
+
+.reset {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 2px solid var(--a11y-fg);
+  background: var(--a11y-bg);
+  color: var(--a11y-fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}

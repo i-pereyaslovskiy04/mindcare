@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getRoleHome } from '../../shared/lib/routes';
 import ThemeToggle from '../../features/theme/ThemeToggle';
+import A11yToggle from '../../features/a11y/A11yToggle';
+import A11yPanel from '../../features/a11y/A11yPanel';
 import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
@@ -77,6 +79,7 @@ export default function Navbar({ onOpenAuth }) {
 
         {/* Right side: user icon (auth-aware) + burger (mobile only) */}
         <div className={styles.navRight}>
+          <A11yToggle />
           <ThemeToggle className={styles.navThemeToggle} />
           {!loading && (
             isAuthenticated ? (
@@ -146,6 +149,9 @@ export default function Navbar({ onOpenAuth }) {
           )
         )}
       </div>
+
+      {/* Панель настроек ГОСТ — закреплена под шапкой, видна только в режиме */}
+      <A11yPanel />
     </nav>
   );
 }

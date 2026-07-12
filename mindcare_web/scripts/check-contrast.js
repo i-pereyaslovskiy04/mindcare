@@ -136,6 +136,44 @@ for (const theme of THEMES) {
   }
 }
 
+/* ── Схемы режима для слабовидящих (ГОСТ Р 52872-2019) ──────────────────
+   В a11y.css все токены сводятся к паре --a11y-bg / --a11y-fg, поэтому
+   достаточно проверить сами схемы: текст на фоне, порог AAA. */
+
+const a11yCss = fs.readFileSync(path.join(TOKENS_DIR, 'a11y.css'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
+
+const A11Y_SCHEME_NAMES = {
+  bw: 'Ч/Б',
+  wb: 'Б/Ч',
+  blue: 'синяя',
+  beige: 'бежевая',
+};
+
+console.log('\n=== a11y / ГОСТ Р 52872-2019 (AAA 7:1) ===');
+for (const [key, title] of Object.entries(A11Y_SCHEME_NAMES)) {
+  const block = a11yCss.match(
+    new RegExp(`data-a11y-scheme='${key}'\\][^{]*\\{([^}]*)\\}`)
+  );
+  let line;
+  try {
+    if (!block) throw new Error('схема не найдена в a11y.css');
+    const vars = parseVars(block[1]);
+    const bg = hexToRgb(vars['a11y-bg']);
+    const fg = hexToRgb(vars['a11y-fg']);
+    if (!bg || !fg) throw new Error('не hex-цвет схемы');
+    const ratio = contrast(fg, bg);
+    checks += 1;
+    const ok = ratio >= AAA_MIN;
+    if (!ok) failures += 1;
+    line = `${ok ? '  ok ' : 'FAIL '} схема «${title}»: ${ratio.toFixed(2)} (мин ${AAA_MIN})`;
+  } catch (err) {
+    failures += 1;
+    line = `FAIL схема «${title}»: ${err.message}`;
+  }
+  console.log(line);
+}
+
 console.log(`\nПроверок: ${checks}, нарушений: ${failures}`);
 if (failures > 0) {
   console.error('Контраст ниже порога — исправьте значения токенов.');

@@ -8,6 +8,7 @@ import '../styles/tokens/classic-dark.css';
 import '../styles/tokens/hc-light.css';
 import '../styles/tokens/hc-dark.css';
 import '../styles/tokens/hc-rules.css';
+import '../styles/tokens/a11y.css';
 import '../styles/tokens/base.css';
 import '../styles/global.css';
 import Providers from './providers';
