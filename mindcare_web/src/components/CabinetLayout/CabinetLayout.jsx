@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
 import Icon from '../Icon/Icon';
+import ThemeToggle from '../../features/theme/ThemeToggle';
 import { getInitials } from '../../shared/lib/utils';
 import styles from './CabinetLayout.module.css';
 
@@ -124,6 +125,7 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
               <Icon name="search" size={14} />
               <input type="text" placeholder="Поиск по материалам, записям…" readOnly />
             </div>
+            <ThemeToggle />
             <button
               className={`${styles.iconBtn} ${styles.iconBtnOptional}`}
               aria-label="Уведомления"

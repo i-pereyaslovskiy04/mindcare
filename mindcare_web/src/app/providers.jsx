@@ -7,13 +7,16 @@
 
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../features/auth/AuthContext';
+import { ThemeProvider } from '../features/theme/ThemeContext';
 
 export default function Providers({ children }) {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        {children}
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

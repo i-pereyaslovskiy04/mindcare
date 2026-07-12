@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getRoleHome } from '../../shared/lib/routes';
+import ThemeToggle from '../../features/theme/ThemeToggle';
 import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
@@ -76,6 +77,7 @@ export default function Navbar({ onOpenAuth }) {
 
         {/* Right side: user icon (auth-aware) + burger (mobile only) */}
         <div className={styles.navRight}>
+          <ThemeToggle className={styles.navThemeToggle} />
           {!loading && (
             isAuthenticated ? (
               <Link
@@ -124,6 +126,10 @@ export default function Navbar({ onOpenAuth }) {
             </li>
           ))}
         </ul>
+        <div className={styles.mobileThemeRow}>
+          <span className={styles.mobileThemeLabel}>Тема</span>
+          <ThemeToggle />
+        </div>
         {!loading && (
           isAuthenticated ? (
             <Link

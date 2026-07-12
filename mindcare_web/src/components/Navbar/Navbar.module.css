@@ -184,6 +184,20 @@
   background: var(--mocha);
 }
 
+/* Theme toggle row inside mobile drawer */
+.mobileThemeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mobileThemeLabel {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
 /* ─── Breakpoints ───────────────────────────────── */
 
 /* Tablet & mobile: show burger, hide desktop nav */
@@ -199,6 +213,11 @@
 
   .navBurger {
     display: flex;
+  }
+
+  /* On mobile the toggle lives inside the drawer (mobileThemeRow) */
+  .navThemeToggle {
+    display: none;
   }
 
   .mobileMenu {

@@ -1,0 +1,59 @@
+/*
+ * coffee-dark.css — «Кофейная», тёмный вариант текущего дизайна.
+ *
+ * Легаси-алиасы инвертированы ПО РОЛИ, не по имени (аудит usage 2026-07-12):
+ *  - warm-white/cream/sand/milk — фоны → тёмные тёплые поверхности;
+ *  - espresso (200 из 271 — цвет текста) → светлый; его пара text-on-dark
+ *    и milk-как-текст на espresso-фонах → тёмные (пары сохраняют контраст:
+ *    Button.primary = espresso-фон + milk-текст остаётся читаемым);
+ *  - coffee/mocha — акценты → светлые золотисто-кофейные;
+ *  - latte/fog — преимущественно границы → приглушённые тёмные.
+ *
+ * Значения — стартовое предложение (AA соблюдён), допустима корректировка
+ * после визуальной проверки.
+ */
+
+:root[data-theme='coffee-dark'] {
+  color-scheme: dark;
+
+  /* ── Легаси-палитра (инверсия по роли) ── */
+  --cream: #241E19;
+  --warm-white: #1A1512;
+  --latte: #4E4336;
+  --coffee: #C9AE85;
+  --espresso: #EDE4D3;
+  --mocha: #D8BF97;
+  --milk: #2E2419;
+  --fog: #4A4038;
+  --sand: #2E2620;
+
+  /* ── Background colors ── */
+  --nav-bg: #211B16;
+  --nav-border: #352C24;
+  --footer-bg: #211B16;
+  --footer-border: #352C24;
+
+  /* ── Text colors ── */
+  --text-main: #EDE4D3;
+  --text-muted: #C4B5A0;
+  --text-light: #9A8875;
+  --text-on-dark: #2E2318;
+
+  /* ── Status colors ── */
+  --error: #E8938C;
+  --error-bg: #3A2422;
+  --on-error: #3A1210;
+  --success: #8FBA90;
+
+  /* ── Ролевые токены ── */
+  /* surface/container/on-surface/outline наследуют var()-цепочки
+     из coffee-light и резолвятся в тёмные значения автоматически */
+  --on-primary: #2E2318;
+  --secondary: #A08462;
+  --on-secondary: #F5F0E8;
+
+  /* ── Тени ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
