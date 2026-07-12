@@ -31,7 +31,8 @@
   /* ── Text colors ── */
   --text-main: #1B2B45;
   --text-muted: #4A5A73;
-  --text-light: #6B7A91;
+  /* text-light затемнён против исходного #6B7A91 ради AA 4.5:1 */
+  --text-light: #616E85;
   --text-on-dark: #EDF1F8;
 
   /* ── Status colors ── */
@@ -75,7 +76,7 @@
   --latte-rgb: 185, 196, 214;
   --espresso-rgb: 27, 43, 69;
   --milk-rgb: 237, 241, 248;
-  --text-light-rgb: 107, 122, 145;
+  --text-light-rgb: 97, 110, 133;
   --text-muted-rgb: 74, 90, 115;
   --success-rgb: 47, 122, 70;
   --error-rgb: 179, 38, 30;

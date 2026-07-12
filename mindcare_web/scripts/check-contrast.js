@@ -9,9 +9,10 @@
  * Запуск: npm run test:contrast
  * Выход 1 — если хоть одна пара ниже порога.
  *
- * Пороги: 4.5 (AA, обычный текст); 3.0 — задокументированные исключения:
- * decorative/large-text роли и унаследованные пары исходного дизайна
- * (coffee-light менять нельзя — нулевая визуальная регрессия).
+ * Пороги (см. thresholdFor): AA 4.5 — базовый; AAA 7.0 — hc-темы и схемы ГОСТ;
+ * 3.0 — только для кофейной палитры: это пары ИСХОДНОГО дизайна, доводить их
+ * до AA = видимо изменить текущий сайт (нулевая визуальная регрессия).
+ * Все остальные палитры (nature, classic) обязаны держать AA.
  */
 
 const fs = require('fs');
@@ -32,7 +33,21 @@ const THEMES = [
 
 /** В hc-темах действует AAA (7:1) и никаких унаследованных исключений. */
 const AAA_MIN = 7.0;
+const AA_MIN = 4.5;
 const isHighContrast = (theme) => theme.startsWith('hc-');
+
+/**
+ * Пороги ниже AA (3.0 в PAIRS) — это унаследованные пары ИСХОДНОГО кофейного
+ * дизайна: доводить их до 4.5 означало бы видимо изменить текущий сайт.
+ * Все остальные темы (nature, classic, hc) обязаны держать минимум AA.
+ */
+const isLegacyPalette = (theme) => theme.startsWith('coffee-');
+
+function thresholdFor(theme, baseMin) {
+  if (isHighContrast(theme)) return AAA_MIN;
+  if (isLegacyPalette(theme)) return baseMin;
+  return Math.max(baseMin, AA_MIN);
+}
 
 /* [fg, bg, min, комментарий] */
 const PAIRS = [
@@ -42,7 +57,7 @@ const PAIRS = [
   ['text-main', 'milk', 4.5, 'основной текст / контейнер milk'],
   ['text-muted', 'warm-white', 4.5, 'второстепенный текст / фон'],
   ['text-muted', 'cream', 4.5, 'второстепенный текст / alt-фон'],
-  ['text-light', 'warm-white', 3.0, 'приглушённые подписи (унаследовано из исходного дизайна)'],
+  ['text-light', 'warm-white', 3.0, 'приглушённые подписи (3.0 — только coffee)'],
   ['on-surface', 'surface', 4.5, 'ролевая пара M3'],
   ['on-surface-variant', 'surface', 4.5, 'ролевая пара M3'],
   ['on-primary', 'primary', 4.5, 'текст на акцентной кнопке'],
@@ -51,13 +66,13 @@ const PAIRS = [
   ['text-on-dark', 'espresso', 4.5, 'текст на тёмных карточках'],
   ['error', 'error-bg', 4.5, 'текст ошибки на её фоне'],
   ['on-error', 'error', 4.5, 'текст на error-фоне'],
-  ['success', 'success-bg', 3.0, 'success-badge (унаследовано из исходного дизайна)'],
+  ['success', 'success-bg', 3.0, 'success-badge (3.0 — только coffee)'],
   ['warning-text', 'warning-bg', 4.5, 'warning-плашка'],
   ['info-text', 'info-bg', 4.5, 'info-badge'],
   ['tag-text', 'tag-bg', 4.5, 'тег контента'],
   ['code-text', 'code-bg', 4.5, 'блок кода'],
   ['warm-white', 'danger', 4.5, 'Button.danger: warm-white на danger'],
-  ['coffee', 'warm-white', 3.0, 'акцент/крупный текст (унаследовано)'],
+  ['coffee', 'warm-white', 3.0, 'акцент/крупный текст (3.0 — только coffee)'],
 ];
 
 function parseVars(rawCss) {
@@ -111,9 +126,14 @@ let checks = 0;
 
 for (const theme of THEMES) {
   const vars = theme === BASE_THEME ? baseVars : { ...baseVars, ...loadTheme(theme) };
-  console.log(`\n=== ${theme}${isHighContrast(theme) ? ' (AAA 7:1)' : ''} ===`);
+  const label = isHighContrast(theme)
+    ? ' (AAA 7:1)'
+    : isLegacyPalette(theme)
+      ? ' (AA + унаследованные исключения)'
+      : ' (AA 4.5:1)';
+  console.log(`\n=== ${theme}${label} ===`);
   for (const [fg, bg, baseMin, note] of PAIRS) {
-    const min = isHighContrast(theme) ? AAA_MIN : baseMin;
+    const min = thresholdFor(theme, baseMin);
     let line;
     try {
       const fgHex = resolveValue(vars, vars[fg] !== undefined ? `var(--${fg})` : `--${fg}?`);
