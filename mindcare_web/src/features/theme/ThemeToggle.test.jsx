@@ -68,30 +68,73 @@ describe('ThemeToggle + ThemeProvider', () => {
     );
   });
 
-  test('выбор палитры «Природная» ставит nature-* и сохраняется', () => {
+  test('палитры скрыты в выпадающем меню, пока оно не открыто', () => {
     render(
       <ThemeProvider>
         <ThemeToggle />
       </ThemeProvider>
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Палитра «Природное спокойствие»' }));
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: 'Цветовая тема: Кофе' });
+    expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(trigger);
+    const listbox = screen.getByRole('listbox', { name: 'Цветовая тема' });
+    expect(within(listbox).getAllByRole('option')).toHaveLength(4);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('выбор палитры «Природная» ставит nature-*, закрывает меню и сохраняется', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Цветовая тема: Кофе' }));
+    fireEvent.mouseDown(
+      screen.getByRole('option', { name: 'Палитра «Природное спокойствие»' })
+    );
+
     expect(document.documentElement.getAttribute('data-theme')).toBe('nature-light');
     expect(localStorage.getItem('app-theme-palette')).toBe('nature');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Цветовая тема: Природа' })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
     expect(document.documentElement.getAttribute('data-theme')).toBe('nature-dark');
   });
 
-  test('палитра «Классика» ставит classic-* и сохраняется', () => {
+  test('палитра «Классика» выбирается с клавиатуры (стрелки + Enter)', () => {
     render(
       <ThemeProvider>
         <ThemeToggle />
       </ThemeProvider>
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Классическая (академическая) палитра' })
-    );
+    const trigger = screen.getByRole('button', { name: 'Цветовая тема: Кофе' });
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // открывает меню на «Кофе»
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // Природа
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // Классика
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+
     expect(document.documentElement.getAttribute('data-theme')).toBe('classic-light');
     expect(localStorage.getItem('app-theme-palette')).toBe('classic');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  test('Escape закрывает меню без смены палитры', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'Цветовая тема: Кофе' });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
   });
 
   test('контрастная тема: hc-light, режим по-прежнему работает', () => {
@@ -100,8 +143,9 @@ describe('ThemeToggle + ThemeProvider', () => {
         <ThemeToggle />
       </ThemeProvider>
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Высококонтрастная тема (для слабовидящих)' })
+    fireEvent.click(screen.getByRole('button', { name: 'Цветовая тема: Кофе' }));
+    fireEvent.mouseDown(
+      screen.getByRole('option', { name: 'Высококонтрастная тема (для слабовидящих)' })
     );
     expect(document.documentElement.getAttribute('data-theme')).toBe('hc-light');
     expect(localStorage.getItem('app-theme-palette')).toBe('hc');
@@ -117,7 +161,7 @@ describe('ThemeToggle + ThemeProvider', () => {
       </ThemeProvider>
     );
     expect(
-      screen.queryByRole('group', { name: 'Цветовая палитра' })
+      screen.queryByRole('button', { name: /Цветовая тема/ })
     ).not.toBeInTheDocument();
   });
 

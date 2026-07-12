@@ -84,7 +84,8 @@ describe('ThemeProvider ↔ профиль пользователя', () => {
       expect(authApi.updateProfile).toHaveBeenCalledWith({ ui_theme_mode: 'dark' })
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Кофейная палитра' }));
+    fireEvent.click(screen.getByRole('button', { name: /Цветовая тема/ }));
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Кофейная палитра' }));
     await waitFor(() =>
       expect(authApi.updateProfile).toHaveBeenCalledWith({ ui_theme_palette: 'coffee' })
     );
