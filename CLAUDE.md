@@ -674,6 +674,40 @@ mindcare_web/src/
 
 ---
 
+### Frontend: темы и доступность
+
+Система тем на дизайн-токенах. Подробности:
+[`docs/MODULES/theme_implementation_plan.md`](docs/MODULES/theme_implementation_plan.md),
+[`docs/MODULES/theme_gost_checklist.md`](docs/MODULES/theme_gost_checklist.md).
+
+```
+✅ Цвета — ТОЛЬКО через CSS-переменные из src/styles/tokens/ (per-theme файлы,
+   ключ — data-theme на <html>). Ни одного raw hex/rgba в компонентах
+✅ Палитры: coffee (по умолчанию, текущий дизайн), nature, classic, hc (AAA);
+   режимы: light / dark / system (следит за prefers-color-scheme вживую).
+   Итог: data-theme="{palette}-{light|dark}"
+✅ Новый код пишется на ролевых токенах (--surface, --primary, --on-surface,
+   --outline, --error/--success/--warning, --shadow-*); легаси-имена
+   (--coffee, --espresso, --milk…) — алиасы, переопределяются темой ПО РОЛИ
+✅ Полупрозрачность — rgba(var(--x-rgb), a) (есть --coffee-rgb, --espresso-rgb,
+   --shadow-rgb, --error-rgb, --success-rgb, --milk-rgb, --latte-rgb, --text-*-rgb)
+✅ Тема авторизованного хранится в профиле (users.ui_theme_palette/ui_theme_mode,
+   PATCH /api/auth/profile — частичный, unset ≠ null); приоритет источников:
+   явный выбор в сессии > профиль > localStorage > default; запись — soft-fail
+✅ Новая палитра = 2 css-файла токенов + PALETTES + PALETTE_OPTIONS + список в
+   анти-FOUC скрипте public/index.html + THEMES в scripts/check-contrast.js +
+   ThemePalette в app/auth/schemas.py. Компоненты НЕ меняются
+✅ Перед коммитом frontend-изменений с цветами: npm run test:contrast (WCAG AA;
+   для hc и схем ГОСТ — AAA 7:1)
+✅ Режим для слабовидящих (ГОСТ Р 52872-2019) — отдельный режим, НЕ палитра:
+   src/features/a11y/ (A11yContext/A11yToggle/A11yPanel) + styles/tokens/a11y.css;
+   в нём все токены сведены к паре --a11y-bg/--a11y-fg
+❌ Не добавлять hex/rgba в компоненты; исключения (brand-цвета соцсетей,
+   декоративные градиенты обложек, тёмный вьювер медиа) — только с комментарием
+❌ Не смешивать A11yContext и ThemeContext — это разные механизмы
+❌ Не удалять и не переименовывать легаси-имена токенов (миграция постепенная)
+```
+
 ### Frontend: UI governance
 
 Полные правила shared UI и аудитов описаны в:
