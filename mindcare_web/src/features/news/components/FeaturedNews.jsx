@@ -3,9 +3,9 @@ import styles from './NewsSection.module.css';
 import { ArrowRightIcon } from '../../../components/icons';
 
 const PlaceholderImage = () => (
-  <svg width="60" height="60" viewBox="0 0 60 60" fill="none" aria-hidden="true">
-    <circle cx="30" cy="22" r="12" stroke="#8B6F47" strokeWidth="1.5" fill="none" />
-    <path d="M8 54c0-12.15 9.85-22 22-22s22 9.85 22 22" stroke="#8B6F47" strokeWidth="1.5" fill="none" />
+  <svg width="60" height="60" viewBox="0 0 60 60" fill="none" aria-hidden="true" style={{ color: 'var(--coffee)' }}>
+    <circle cx="30" cy="22" r="12" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    <path d="M8 54c0-12.15 9.85-22 22-22s22 9.85 22 22" stroke="currentColor" strokeWidth="1.5" fill="none" />
   </svg>
 );
 

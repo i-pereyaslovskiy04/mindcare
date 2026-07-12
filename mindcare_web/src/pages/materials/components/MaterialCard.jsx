@@ -3,12 +3,12 @@ import Tag from '../../../components/UI/Tag/Tag';
 import styles from './MaterialCard.module.css';
 
 const PlaceholderIcon = () => (
-  <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-    <rect x="6" y="10" width="36" height="28" rx="4" stroke="#C9B99A" strokeWidth="1.5" fill="none" />
-    <circle cx="17" cy="20" r="4" stroke="#C9B99A" strokeWidth="1.5" fill="none" />
+  <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true" style={{ color: 'var(--latte)' }}>
+    <rect x="6" y="10" width="36" height="28" rx="4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    <circle cx="17" cy="20" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" />
     <path
       d="M6 32l10-8 8 8 6-5 12 9"
-      stroke="#C9B99A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
     />
   </svg>
 );

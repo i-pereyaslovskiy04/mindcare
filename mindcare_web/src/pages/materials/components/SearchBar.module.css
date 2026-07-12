@@ -23,14 +23,14 @@
   background: var(--warm-white);
   border: 1px solid var(--nav-border);
   border-radius: 14px;
-  box-shadow: 0 2px 12px rgba(42, 26, 16, 0.07);
+  box-shadow: 0 2px 12px rgba(var(--espresso-rgb), 0.07);
   min-height: clamp(48px, 4.9vw, 54px);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .inputWrap:focus-within {
   border-color: var(--latte);
-  box-shadow: 0 2px 16px rgba(42, 26, 16, 0.1);
+  box-shadow: 0 2px 16px rgba(var(--shadow-rgb), 0.1);
 }
 
 .searchIcon {
@@ -77,7 +77,7 @@
 }
 
 .clearInputBtn:hover {
-  background: rgba(42, 26, 16, 0.07);
+  background: rgba(var(--espresso-rgb), 0.07);
   color: var(--text-muted);
 }
 
@@ -96,7 +96,7 @@
   border-radius: 14px;
   border: 1px solid var(--nav-border);
   background: var(--warm-white);
-  box-shadow: 0 2px 12px rgba(42, 26, 16, 0.07);
+  box-shadow: 0 2px 12px rgba(var(--espresso-rgb), 0.07);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,7 +109,7 @@
 
 .filterBtn:hover {
   border-color: var(--latte);
-  box-shadow: 0 2px 16px rgba(42, 26, 16, 0.1);
+  box-shadow: 0 2px 16px rgba(var(--shadow-rgb), 0.1);
   color: var(--text-main);
 }
 
@@ -188,7 +188,7 @@
 
 .chipRemove:hover {
   color: var(--error);
-  background: rgba(185, 64, 64, 0.1);
+  background: rgba(var(--error-rgb), 0.1);
 }
 
 /* ── Mobile ≤ 560px: chips scroll horizontally ──────── */

@@ -10,10 +10,10 @@
 .card {
   width: 100%;
   max-width: 420px;
-  background: #ffffff;
+  background: var(--surface-elevated);
   border-radius: 16px;
   border: 1px solid var(--nav-border);
-  box-shadow: 0 4px 24px rgba(46, 35, 24, 0.08);
+  box-shadow: 0 4px 24px rgba(var(--shadow-rgb), 0.08);
   overflow: hidden;
 }
 
@@ -48,7 +48,7 @@
   color: var(--coffee);
   text-decoration: none;
   font-weight: 600;
-  border-bottom: 1px solid rgba(139, 111, 71, 0.35);
+  border-bottom: 1px solid rgba(var(--coffee-rgb), 0.35);
 }
 
 .link:hover {

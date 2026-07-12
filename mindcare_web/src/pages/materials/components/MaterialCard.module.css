@@ -9,7 +9,7 @@
 }
 
 .card:hover {
-  box-shadow: 0 8px 32px rgba(42, 26, 16, 0.12);
+  box-shadow: 0 8px 32px rgba(var(--shadow-rgb), 0.12);
   transform: translateY(-3px);
 }
 

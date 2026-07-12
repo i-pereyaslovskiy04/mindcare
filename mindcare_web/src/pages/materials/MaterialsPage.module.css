@@ -1,5 +1,5 @@
 .error {
-  color: var(--error, #c0392b);
+  color: var(--error);
   margin-bottom: 16px;
   font-size: var(--fs-ui);
 }

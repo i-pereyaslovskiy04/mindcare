@@ -3,10 +3,10 @@ import styles from './NewsSection.module.css';
 import { ArrowRightIcon } from '../../../components/icons';
 
 const ThumbIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" style={{ color: 'var(--coffee)' }}>
     <path
       d="M2 9h14M9 2l7 7-7 7"
-      stroke="#8B6F47"
+      stroke="currentColor"
       strokeWidth="1.3"
       strokeLinecap="round"
     />

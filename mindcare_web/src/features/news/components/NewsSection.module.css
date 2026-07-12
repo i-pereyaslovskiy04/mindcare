@@ -66,7 +66,7 @@
 
 .newsFeatured:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 18px rgba(74, 55, 40, 0.1), 0 18px 36px rgba(74, 55, 40, 0.07);
+  box-shadow: 0 6px 18px rgba(var(--shadow-rgb), 0.1), 0 18px 36px rgba(var(--shadow-rgb), 0.07);
 }
 
 .newsFeatured:active {
@@ -101,7 +101,7 @@
 }
 
 .newsFeatured:hover .newsBody {
-  background: #5C4232;
+  background: var(--mocha);
 }
 
 .newsFeatured:hover .newsH {
@@ -109,7 +109,7 @@
 }
 
 .newsFeatured:hover .newsDesc {
-  color: rgba(217, 207, 192, 0.92);
+  color: rgba(var(--milk-rgb), 0.92);
 }
 
 .newsFeatured:hover .newsReadMore {
@@ -139,7 +139,7 @@
 
 .newsCardSm:hover {
   transform: translateY(-3px);
-  box-shadow: 0 4px 12px rgba(74, 55, 40, 0.09), 0 12px 28px rgba(74, 55, 40, 0.06);
+  box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.09), 0 12px 28px rgba(var(--shadow-rgb), 0.06);
 }
 
 .newsCardSm:active {
@@ -174,7 +174,7 @@
 }
 
 .newsCardSm:hover .newsBodySm {
-  background: #7B6142;
+  background: var(--coffee);
 }
 
 .newsCardSm:hover .newsH {
@@ -327,7 +327,7 @@
   transform: translateX(5px);
   background: var(--sand);
   border-color: var(--coffee);
-  box-shadow: 3px 3px 16px rgba(74, 55, 40, 0.08);
+  box-shadow: 3px 3px 16px rgba(var(--shadow-rgb), 0.08);
 }
 
 .newsListItem:active {
@@ -531,7 +531,7 @@
 
 .newsFeaturedOverlay:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 18px rgba(74, 55, 40, 0.12), 0 18px 36px rgba(74, 55, 40, 0.09);
+  box-shadow: 0 6px 18px rgba(var(--shadow-rgb), 0.12), 0 18px 36px rgba(var(--shadow-rgb), 0.09);
 }
 
 .newsFeaturedOverlay:active  { transform: translateY(-1px); }
@@ -541,6 +541,11 @@
   outline-offset: 3px;
   border-radius: 14px;
 }
+
+/* ── Overlay-вариант (текст поверх фотографии) ────────────────────
+   Цвета ниже (rgba(58,44,31,…), кремовый текст, белые рамки) —
+   осознанное исключение из токенов: тёмный градиент и светлый текст
+   поверх фото должны выглядеть одинаково во всех темах. */
 
 /* Warm tint over the entire image */
 .newsFeaturedOverlay::before {
@@ -592,7 +597,7 @@
 
 .newsCardSmOverlay:hover {
   transform: translateY(-3px);
-  box-shadow: 0 4px 12px rgba(74, 55, 40, 0.10), 0 12px 28px rgba(74, 55, 40, 0.07);
+  box-shadow: 0 4px 12px rgba(74, 55, 40, 0.10), 0 12px 28px rgba(var(--shadow-rgb), 0.07);
 }
 
 .newsCardSmOverlay:active  { transform: translateY(-1px); }

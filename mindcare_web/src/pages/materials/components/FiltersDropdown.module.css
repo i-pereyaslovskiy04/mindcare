@@ -12,7 +12,7 @@
   background: var(--warm-white);
   border: 1px solid var(--nav-border);
   border-radius: 16px;
-  box-shadow: 0 8px 28px rgba(42, 26, 16, 0.13);
+  box-shadow: 0 8px 28px rgba(var(--shadow-rgb), 0.13);
   z-index: 500;
   animation: dropIn 0.14s ease both;
 }
@@ -55,7 +55,7 @@
 }
 
 .closeBtn:hover {
-  background: rgba(42, 26, 16, 0.06);
+  background: rgba(var(--espresso-rgb), 0.06);
   color: var(--text-muted);
 }
 
@@ -156,6 +156,6 @@
 }
 
 .clearBtn:hover {
-  background: rgba(42, 26, 16, 0.04);
+  background: rgba(var(--espresso-rgb), 0.04);
   border-color: var(--latte);
 }

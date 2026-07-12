@@ -83,7 +83,15 @@
   --espresso-rgb: 74, 55, 40;
   --milk-rgb: 237, 228, 211;
   --text-light-rgb: 138, 114, 96;
+  --text-muted-rgb: 92, 77, 60;
+  --success-rgb: 93, 138, 94;
+  --error-rgb: 185, 64, 64;
   --shadow-rgb: 74, 55, 40;
+
+  /* ── Индикатор сложности пароля ── */
+  --strength-weak: #C0392B;
+  --strength-medium: #D4891A;
+  --strength-strong: #5D8A5E;
 
   /* ── Тени ── */
   --shadow-sm: 0 1px 3px rgba(46, 35, 24, 0.08);

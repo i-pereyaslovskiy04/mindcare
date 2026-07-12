@@ -11,11 +11,14 @@
 }
 
 .card:hover {
-  box-shadow: 0 8px 32px rgba(42, 26, 16, 0.12);
+  box-shadow: 0 8px 32px rgba(var(--shadow-rgb), 0.12);
   transform: translateY(-3px);
 }
 
-/* ── Card visual (top gradient band) ─── */
+/* ── Card visual (top gradient band) ───
+   accent1–5 и rgba(255,255,255,…) ниже — осознанное исключение из токенов:
+   декоративные тёмные градиенты-обложки с белой графикой поверх; одинаково
+   работают в светлых и тёмных темах (см. docs/UI_TECH_DEBT / theme plan) */
 
 .cardVisual {
   position: relative;

@@ -4,10 +4,10 @@ export default function StepSuccess({ onClose }) {
   return (
     <div className={styles.panel}>
       <div className={styles.successIcon} aria-hidden="true">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--success)' }}>
           <path
             d="M5 12l5 5 9-9"
-            stroke="#5D8A5E"
+            stroke="currentColor"
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"

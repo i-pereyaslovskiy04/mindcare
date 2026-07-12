@@ -15,6 +15,8 @@ function formatDate(iso) {
   });
 }
 
+// Hex в градиентах ниже — осознанное исключение из токенов: декоративная
+// SVG-заглушка обложки (stopColor не поддерживает var()), едина для всех тем.
 const HeroPlaceholder = () => (
   <svg
     viewBox="0 0 900 460"

@@ -21,7 +21,7 @@ const getPasswordStrength = (pass) => {
 };
 
 const STRENGTH_LABELS = ['', 'Слабый', 'Средний', 'Надёжный'];
-const STRENGTH_COLORS = ['', '#C0392B', '#D4891A', '#5D8A5E'];
+const STRENGTH_COLORS = ['', 'var(--strength-weak)', 'var(--strength-medium)', 'var(--strength-strong)'];
 const STRENGTH_CLASSES = ['', 'w', 'm', 's'];
 const RESEND_COOLDOWN = 60;
 

@@ -1,5 +1,5 @@
 .hero {
-  background: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, #7A5C40 100%);
+  background: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, var(--coffee) 100%);
   min-height: clamp(420px, 50vh, 700px);
   display: flex;
   align-items: center;
@@ -12,8 +12,8 @@
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(ellipse at 20% 50%, rgba(201, 185, 154, 0.12) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(255, 245, 230, 0.06) 0%, transparent 50%);
+  background-image: radial-gradient(ellipse at 20% 50%, rgba(var(--latte-rgb), 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(var(--milk-rgb), 0.06) 0%, transparent 50%);
   pointer-events: none;
 }
 
@@ -90,8 +90,8 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(201, 185, 154, 0.4);
+  background: rgba(var(--milk-rgb), 0.08);
+  border: 1px solid rgba(var(--latte-rgb), 0.4);
   color: var(--latte);
   display: flex;
   align-items: center;
@@ -103,7 +103,7 @@
 }
 
 .heroArrow:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(var(--milk-rgb), 0.16);
   transform: translateY(-50%) scale(1.08);
 }
 
@@ -152,7 +152,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgba(201, 185, 154, 0.4);
+  background: rgba(var(--latte-rgb), 0.4);
   display: block;
   cursor: pointer;
   transition: width 0.3s ease, background 0.3s ease, border-radius 0.3s ease;
