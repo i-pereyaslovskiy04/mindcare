@@ -1,0 +1,61 @@
+/*
+ * coffee-light.css — «Кофейная», светлый вариант. Тема по умолчанию.
+ *
+ * Значения легаси-палитры перенесены из variables.css БЕЗ изменений:
+ * визуально сайт в этой теме идентичен состоянию до внедрения тем.
+ *
+ * Роль селекторов: `:root` — дефолт (работает и без data-theme, в т.ч. в тестах),
+ * `:root[data-theme="coffee-light"]` — явный выбор. Другие темы переопределяют
+ * токены через :root[data-theme="…"] (специфичность 0-2-0 > 0-1-0).
+ */
+
+:root,
+:root[data-theme='coffee-light'] {
+  color-scheme: light;
+
+  /* ── Легаси-палитра (алиасы; значения = исходный дизайн) ── */
+  --cream: #F5F0E8;
+  --warm-white: #FAF7F2;
+  --latte: #C9B99A;
+  --coffee: #8B6F47;
+  --espresso: #4A3728;
+  --mocha: #6B4F35;
+  --milk: #EDE4D3;
+  --fog: #D9CFC0;
+  --sand: #E8DFD0;
+
+  /* ── Background colors ── */
+  --nav-bg: #EDE4D6;
+  --nav-border: #D8CDBF;
+  --footer-bg: #E4D9CA;
+  --footer-border: #D0C4B2;
+
+  /* ── Text colors ── */
+  --text-main: #2E2318;
+  --text-muted: #5C4D3C;
+  --text-light: #8A7260;
+  --text-on-dark: #EDE4D3;
+
+  /* ── Status colors ── */
+  --error: #B94040;
+  --error-bg: #FDF0EE;
+  --on-error: #FFFFFF;
+  --success: #5D8A5E;
+
+  /* ── Ролевые токены (источник истины для нового кода) ── */
+  --surface: var(--warm-white);
+  --surface-container: var(--milk);
+  --surface-container-high: var(--sand);
+  --primary: var(--coffee);
+  --on-primary: #FFFFFF;
+  --secondary: var(--latte);
+  --on-secondary: var(--espresso);
+  --on-surface: var(--text-main);
+  --on-surface-variant: var(--text-muted);
+  --outline: var(--fog);
+
+  /* ── Тени ── */
+  --shadow-sm: 0 1px 3px rgba(46, 35, 24, 0.08);
+  --shadow-md: 0 4px 14px rgba(46, 35, 24, 0.10);
+  --shadow-lg: 0 14px 34px rgba(46, 35, 24, 0.16);
+}
