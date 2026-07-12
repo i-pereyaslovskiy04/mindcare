@@ -10,7 +10,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-export const PALETTES = ['coffee']; // + 'nature' на этапе 3
+export const PALETTES = ['coffee', 'nature'];
 export const MODES = ['light', 'dark', 'system'];
 
 const STORAGE_PALETTE = 'app-theme-palette';

@@ -68,6 +68,30 @@ describe('ThemeToggle + ThemeProvider', () => {
     );
   });
 
+  test('выбор палитры «Природная» ставит nature-* и сохраняется', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Палитра «Природное спокойствие»' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('nature-light');
+    expect(localStorage.getItem('app-theme-palette')).toBe('nature');
+    fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('nature-dark');
+  });
+
+  test('withPalette=false скрывает выбор палитры', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle withPalette={false} />
+      </ThemeProvider>
+    );
+    expect(
+      screen.queryByRole('group', { name: 'Цветовая палитра' })
+    ).not.toBeInTheDocument();
+  });
+
   test('переключение обратно на «Светлая» работает', () => {
     render(
       <ThemeProvider>

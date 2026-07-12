@@ -1,3 +1,9 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .group {
   display: inline-flex;
   align-items: center;
@@ -28,6 +34,14 @@
 .option:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: 1px;
+}
+
+.optionText {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .optionActive,

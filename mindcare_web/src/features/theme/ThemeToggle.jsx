@@ -48,38 +48,67 @@ const MODE_OPTIONS = [
   { value: 'system', label: 'Системная тема (как в настройках устройства)', Icon: SystemIcon },
 ];
 
-export default function ThemeToggle({ className }) {
+const PALETTE_OPTIONS = [
+  { value: 'coffee', short: 'Кофе', label: 'Кофейная палитра' },
+  { value: 'nature', short: 'Природа', label: 'Палитра «Природное спокойствие»' },
+];
+
+/**
+ * withPalette — показывать ли выбор палитры (по умолчанию да);
+ * в тесных местах можно отключить и оставить только режим.
+ */
+export default function ThemeToggle({ className, withPalette = true }) {
   const ctx = useContext(ThemeContext);
   if (!ctx) return null;
 
-  const { mode, setMode, resolvedMode } = ctx;
+  const { mode, setMode, resolvedMode, palette, setPalette } = ctx;
 
   return (
-    <div
-      className={[styles.group, className].filter(Boolean).join(' ')}
-      role="group"
-      aria-label="Режим темы оформления"
-    >
-      {MODE_OPTIONS.map(({ value, label, Icon }) => {
-        const isActive = mode === value;
-        const title =
-          value === 'system'
-            ? `${label} — сейчас: ${resolvedMode === 'dark' ? 'тёмная' : 'светлая'}`
-            : label;
-        return (
-          <button
-            key={value}
-            type="button"
-            className={`${styles.option} ${isActive ? styles.optionActive : ''}`}
-            aria-pressed={isActive}
-            aria-label={title}
-            title={title}
-            onClick={() => setMode(value)}
-          >
-            <Icon />
-          </button>
-        );
-      })}
+    <div className={[styles.wrap, className].filter(Boolean).join(' ')}>
+      <div className={styles.group} role="group" aria-label="Режим темы оформления">
+        {MODE_OPTIONS.map(({ value, label, Icon }) => {
+          const isActive = mode === value;
+          const title =
+            value === 'system'
+              ? `${label} — сейчас: ${resolvedMode === 'dark' ? 'тёмная' : 'светлая'}`
+              : label;
+          return (
+            <button
+              key={value}
+              type="button"
+              className={`${styles.option} ${isActive ? styles.optionActive : ''}`}
+              aria-pressed={isActive}
+              aria-label={title}
+              title={title}
+              onClick={() => setMode(value)}
+            >
+              <Icon />
+            </button>
+          );
+        })}
+      </div>
+      {withPalette && (
+        <div className={styles.group} role="group" aria-label="Цветовая палитра">
+          {PALETTE_OPTIONS.map(({ value, short, label }) => {
+            const isActive = palette === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`${styles.option} ${styles.optionText} ${
+                  isActive ? styles.optionActive : ''
+                }`}
+                aria-pressed={isActive}
+                aria-label={label}
+                title={label}
+                onClick={() => setPalette(value)}
+              >
+                {short}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

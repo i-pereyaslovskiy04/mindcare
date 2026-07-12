@@ -1,0 +1,51 @@
+/*
+ * nature-dark.css — «Природное спокойствие», тёмный вариант.
+ *
+ * Ролевые значения — из утверждённой таблицы промпта. Легаси-алиасы
+ * инвертированы по роли, зеркально coffee-dark.css: espresso → светлый
+ * (доминирующая роль — текст), его пары milk / text-on-dark → тёмные.
+ */
+
+:root[data-theme='nature-dark'] {
+  color-scheme: dark;
+
+  /* ── Легаси-палитра (инверсия по роли) ── */
+  --cream: #1E2320;
+  --warm-white: #131715;
+  --latte: #3C453F;
+  --coffee: #A6CBB0;
+  --espresso: #E2E5E1;
+  --mocha: #C1DCC9;
+  --milk: #212824;
+  --fog: #434B45;
+  --sand: #282E2A;
+
+  /* ── Background colors ── */
+  --nav-bg: #191E1B;
+  --nav-border: #2C332E;
+  --footer-bg: #191E1B;
+  --footer-border: #2C332E;
+
+  /* ── Text colors ── */
+  --text-main: #E2E5E1;
+  --text-muted: #BFC7C0;
+  --text-light: #909A92;
+  --text-on-dark: #1C2420;
+
+  /* ── Status colors ── */
+  --error: #F2B8B5;
+  --error-bg: #3B2523;
+  --on-error: #601410;
+  --success: #8FBA90;
+
+  /* ── Ролевые токены (отличия от var()-цепочек) ── */
+  --on-primary: #10281A;
+  --secondary: #E5B29E;
+  --on-secondary: #3A1E12;
+  --outline: #89918B;
+
+  /* ── Тени ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
