@@ -27,9 +27,9 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--coffee, #7c5c42);
-  background: var(--cream, #faf7f4);
-  border: 1px solid var(--nav-border, #ede8e3);
+  color: var(--coffee);
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
   border-radius: 20px;
   padding: 2px 10px;
   margin-bottom: 8px;
@@ -39,7 +39,7 @@
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--espresso, #3b2a1a);
+  color: var(--espresso);
   margin: 0;
   line-height: 1.15;
 }
@@ -49,11 +49,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--warm-white, #fdfaf7);
-  border: 1px solid var(--nav-border, #ede8e3);
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
   border-radius: 10px;
   padding: 8px 14px;
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
   min-width: 240px;
 }
 
@@ -62,13 +62,13 @@
   background: transparent;
   font-family: 'Nunito', sans-serif;
   font-size: 0.88rem;
-  color: var(--espresso, #3b2a1a);
+  color: var(--espresso);
   outline: none;
   width: 100%;
 }
 
 .searchInput::placeholder {
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
 }
 
 /* Notice banner */
@@ -81,14 +81,14 @@
 }
 
 .notice_success {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
   color: var(--success);
 }
 
 .notice_error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
   color: var(--error);
 }
 
@@ -100,15 +100,15 @@
   justify-content: center;
   gap: 12px;
   padding: 60px 20px;
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid var(--nav-border, #ede8e3);
-  border-top-color: var(--coffee, #7c5c42);
+  border: 3px solid var(--nav-border);
+  border-top-color: var(--coffee);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -116,14 +116,14 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .errorText { color: var(--error); text-align: center; }
-.emptyText { color: var(--text-muted, #9a8e86); }
+.emptyText { color: var(--text-muted); }
 
 /* Table */
 .tableWrap {
   overflow-x: auto;
   border-radius: 12px;
-  border: 1px solid var(--nav-border, #ede8e3);
-  background: var(--warm-white, #fdfaf7);
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
 }
 
 .table {
@@ -138,21 +138,21 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-muted, #9a8e86);
-  background: var(--cream, #faf7f4);
-  border-bottom: 1px solid var(--nav-border, #ede8e3);
+  color: var(--text-muted);
+  background: var(--cream);
+  border-bottom: 1px solid var(--nav-border);
   font-weight: 700;
   white-space: nowrap;
 }
 
 .table tbody tr {
-  border-bottom: 1px solid var(--nav-border, #ede8e3);
+  border-bottom: 1px solid var(--nav-border);
   transition: background 0.12s;
 }
 
 .table tbody tr:last-child { border-bottom: none; }
 
-.table tbody tr:hover { background: var(--cream, #faf7f4); }
+.table tbody tr:hover { background: var(--cream); }
 
 .table td {
   padding: 14px 16px;
@@ -173,8 +173,8 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--coffee, #7c5c42), var(--mocha, #6b4f35));
-  color: var(--milk, #fdf6ed);
+  background: linear-gradient(135deg, var(--coffee), var(--mocha));
+  color: var(--milk);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,18 +185,18 @@
 
 .fullName {
   font-weight: 600;
-  color: var(--espresso, #3b2a1a);
+  color: var(--espresso);
 }
 
 .email {
   font-size: 0.78rem;
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
   margin-top: 1px;
 }
 
 .noPsy {
   font-size: 0.82rem;
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -219,7 +219,7 @@
 
 .pageInfo {
   font-size: 0.85rem;
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
   min-width: 60px;
   text-align: center;
 }
@@ -227,7 +227,7 @@
 .totalHint {
   text-align: right;
   font-size: 0.78rem;
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
   margin-top: 10px;
 }
 

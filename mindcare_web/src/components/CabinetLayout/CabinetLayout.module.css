@@ -89,7 +89,7 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--coffee), var(--mocha, #6B4F35));
+  background: linear-gradient(135deg, var(--coffee), var(--mocha));
   color: var(--milk);
   display: flex;
   align-items: center;
@@ -98,7 +98,7 @@
   font-size: 17px;
   font-weight: 500;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.18);
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.18);
 }
 .userInfo {
   overflow: hidden;
@@ -127,7 +127,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--success, #5D8A5E);
+  background: var(--success);
   flex-shrink: 0;
 }
 
@@ -164,7 +164,7 @@
   position: relative;
 }
 .navItem:hover {
-  background: rgba(139, 111, 71, 0.08);
+  background: rgba(var(--coffee-rgb), 0.08);
   color: var(--espresso);
 }
 .navItem.active {
@@ -188,7 +188,7 @@
   font-size: 10px;
   letter-spacing: 0.06em;
   color: var(--text-light);
-  background: var(--sand, #E8DFD0);
+  background: var(--sand);
   padding: 2px 7px;
   border-radius: 8px;
   font-weight: 700;
@@ -319,7 +319,7 @@
   flex-shrink: 0;
 }
 .iconBtn:hover {
-  background: var(--sand, #E8DFD0);
+  background: var(--sand);
   border-color: var(--latte);
 }
 .dot {
@@ -329,7 +329,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--error, #B94040);
+  background: var(--error);
   border: 1.5px solid var(--warm-white);
 }
 
@@ -372,7 +372,7 @@
   transition: background 0.15s, border-color 0.15s;
 }
 .mobileMenuButton:hover {
-  background: var(--sand, #E8DFD0);
+  background: var(--sand);
   border-color: var(--latte);
 }
 
@@ -380,7 +380,7 @@
 .mobileBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(46, 35, 24, 0.45);
+  background: var(--scrim);
   z-index: 90;
 }
 .mobileDrawer {
@@ -395,7 +395,7 @@
   flex-direction: column;
   overflow-y: auto;
   z-index: 100;
-  box-shadow: 0 8px 30px rgba(74, 55, 40, 0.28);
+  box-shadow: 0 8px 30px rgba(var(--shadow-rgb), 0.28);
 }
 /* Drawer — отдельный fixed-элемент вне .app, общий .app::after до него не
    достаёт, поэтому brand'у возвращаем собственный нижний разделитель. */
@@ -420,7 +420,7 @@
   transition: background 0.15s, color 0.15s;
 }
 .drawerClose:hover {
-  background: var(--sand, #E8DFD0);
+  background: var(--sand);
   color: var(--espresso);
 }
 

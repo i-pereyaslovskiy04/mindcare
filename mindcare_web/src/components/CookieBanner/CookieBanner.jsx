@@ -3,11 +3,18 @@ import Button from '../UI/Button/Button';
 import styles from './CookieBanner.module.css';
 
 const CookieIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-    <circle cx="9" cy="9" r="7.5" stroke="rgba(201,185,154,0.65)" strokeWidth="1.3" fill="none" />
-    <circle cx="6" cy="7" r="1" fill="rgba(201,185,154,0.65)" />
-    <circle cx="11" cy="6" r="0.8" fill="rgba(201,185,154,0.65)" />
-    <circle cx="10" cy="12" r="1" fill="rgba(201,185,154,0.65)" />
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    aria-hidden="true"
+    style={{ color: 'rgba(var(--latte-rgb), 0.65)' }}
+  >
+    <circle cx="9" cy="9" r="7.5" stroke="currentColor" strokeWidth="1.3" fill="none" />
+    <circle cx="6" cy="7" r="1" fill="currentColor" />
+    <circle cx="11" cy="6" r="0.8" fill="currentColor" />
+    <circle cx="10" cy="12" r="1" fill="currentColor" />
   </svg>
 );
 

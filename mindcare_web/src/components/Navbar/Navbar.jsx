@@ -14,10 +14,10 @@ const NAV_LINKS = [
 
 const UserIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-    <circle cx="9" cy="6.5" r="3.5" stroke="rgba(139,111,71,0.65)" strokeWidth="1.4" fill="none" />
+    <circle cx="9" cy="6.5" r="3.5" stroke="currentColor" strokeWidth="1.4" fill="none" />
     <path
       d="M2 17c0-3.866 3.134-7 7-7s7 3.134 7 7"
-      stroke="rgba(139,111,71,0.65)"
+      stroke="currentColor"
       strokeWidth="1.4"
       fill="none"
     />

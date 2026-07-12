@@ -66,23 +66,23 @@
 /* ── danger ── */
 
 .danger {
-  background: #8F4E45;
+  background: var(--danger);
   color: var(--warm-white);
-  border: 1px solid rgba(111, 57, 52, 0.34);
+  border: 1px solid rgba(var(--danger-rgb), 0.34);
 }
 
 .danger:hover:not(:disabled) {
-  background: #7F433D;
-  border-color: rgba(111, 57, 52, 0.42);
+  background: var(--danger-hover);
+  border-color: rgba(var(--danger-rgb), 0.42);
 }
 
 .danger:active:not(:disabled) {
-  background: #6F3934;
-  border-color: rgba(111, 57, 52, 0.5);
+  background: var(--danger-active);
+  border-color: rgba(var(--danger-rgb), 0.5);
 }
 
 .danger:focus-visible {
-  outline-color: #7F433D;
+  outline-color: var(--danger-hover);
 }
 
 /* ── ghost ── */

@@ -1,9 +1,9 @@
 .footer {
   font-family: 'Nunito', sans-serif;
-  background: #E4D9CA;
-  color: #5C4D3C;
+  background: var(--footer-bg);
+  color: var(--text-muted);
   width: 100%;
-  border-top: 1px solid #D0C4B2;
+  border-top: 1px solid var(--footer-border);
 }
 
 .footerTop {
@@ -11,7 +11,7 @@
   grid-template-columns: 1.6fr 1fr 1fr;
   gap: 48px;
   padding-bottom: 48px;
-  border-bottom: 1px solid #D0C4B2;
+  border-bottom: 1px solid var(--footer-border);
   padding-top: 56px;
 }
 
@@ -19,7 +19,7 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: 26px;
   font-weight: 300;
-  color: #4A3728;
+  color: var(--espresso);
   line-height: 1.2;
   margin-bottom: 14px;
   letter-spacing: 0.02em;
@@ -27,37 +27,37 @@
 
 .brandNameHighlight {
   font-style: italic;
-  color: #8B6F47;
+  color: var(--coffee);
 }
 
 .brandDesc {
   font-size: 14px;
   font-weight: 300;
   line-height: 1.75;
-  color: #5C4D3C;
+  color: var(--text-muted);
   max-width: 260px;
   margin-bottom: 16px;
 }
 
 .mailLink {
   font-size: 14px;
-  color: #8B6F47;
+  color: var(--coffee);
   font-weight: 500;
   text-decoration: none;
-  border-bottom: 1px solid rgba(139, 111, 71, 0.35);
+  border-bottom: 1px solid rgba(var(--coffee-rgb), 0.35);
   padding-bottom: 1px;
   transition: color 0.15s;
 }
 
 .mailLink:hover {
-  color: #4A3728;
+  color: var(--espresso);
 }
 
 .colLabel {
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #8B6F47;
+  color: var(--coffee);
   font-weight: 700;
   margin-bottom: 18px;
 }
@@ -74,13 +74,13 @@
 .navList a {
   text-decoration: none;
   font-size: 14px;
-  color: #5C4D3C;
+  color: var(--text-muted);
   font-weight: 400;
   transition: color 0.15s;
 }
 
 .navList a:hover {
-  color: #4A3728;
+  color: var(--espresso);
 }
 
 .socials {
@@ -96,20 +96,21 @@
   text-decoration: none;
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(139, 111, 71, 0.15);
-  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(var(--coffee-rgb), 0.15);
+  background: var(--surface-glass);
   transition: background 0.15s;
 }
 
 .socRow:hover {
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--surface-glass-hover);
 }
 
 .socIcon {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: rgba(139, 111, 71, 0.1);
+  background: rgba(var(--coffee-rgb), 0.1);
+  color: rgba(var(--coffee-rgb), 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -118,7 +119,7 @@
 
 .socName {
   font-size: 13px;
-  color: #5C4D3C;
+  color: var(--text-muted);
   font-weight: 400;
 }
 
@@ -133,7 +134,7 @@
 
 .copy {
   font-size: 12px;
-  color: #8A7260;
+  color: var(--text-light);
   font-weight: 400;
   line-height: 1.5;
 }
@@ -149,21 +150,21 @@
 .legalLinks a + a::before {
   content: '·';
   margin-right: 24px;
-  color: rgba(138, 114, 96, 0.4);
+  color: rgba(var(--text-light-rgb), 0.4);
   pointer-events: none;
 }
 
 .legalLink {
   font-size: 12px;
-  color: #8A7260;
+  color: var(--text-light);
   text-decoration: none;
-  border-bottom: 1px solid rgba(138, 114, 96, 0.3);
+  border-bottom: 1px solid rgba(var(--text-light-rgb), 0.3);
   padding-bottom: 1px;
   transition: color 0.15s;
 }
 
 .legalLink:hover {
-  color: #4A3728;
+  color: var(--espresso);
 }
 
 /* Tablet: brand full-width, nav + socials in two columns */

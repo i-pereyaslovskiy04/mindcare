@@ -250,7 +250,7 @@
 .checkboxChecked {
   background: var(--mocha);
   border-color: var(--mocha);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* ══════════════════════════════════════════════════════

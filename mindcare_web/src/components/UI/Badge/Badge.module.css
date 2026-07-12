@@ -9,7 +9,7 @@
 }
 
 /* ── Status tones ── */
-.success { background: #e6f2e6;          color: var(--success);     }
+.success { background: var(--success-bg);          color: var(--success);     }
 .warning { background: var(--sand);      color: var(--mocha);       }
 .error   { background: var(--error-bg);  color: var(--error);       }
 .neutral { background: var(--fog);       color: var(--text-light);  }
@@ -19,10 +19,10 @@
 .roleStudent     { background: var(--milk);  color: var(--espresso);  }
 
 /* role-psychologist: same visual as success for now — candidate for own token */
-.rolePsychologist{ background: #e6f2e6;      color: var(--success);   }
+.rolePsychologist{ background: var(--success-bg);      color: var(--success);   }
 
 /* role-admin: same visual as warning for now — candidate for own token */
 .roleAdmin       { background: var(--sand);  color: var(--mocha);     }
 
 /* role-supervisor: hardcoded hex from original UsersTable — candidate for CSS variable */
-.roleSupervisor  { background: #e8ecf5;      color: #4a5a8a;          }
+.roleSupervisor  { background: var(--info-bg); color: var(--info-text); }

@@ -45,6 +45,37 @@
   --on-secondary: #3A1E12;
   --outline: #7E8781;
 
+  /* ── Софт-статусы и вспомогательные роли (этап 4) ── */
+  --success-bg: #E6F2E6;
+  --success-border: #BBF7D0;
+  --error-border: #FECACA;
+  --warning-bg: #FEF9C3;
+  --warning-text: #854D0E;
+  --info-bg: #E8ECF5;
+  --info-text: #4A5A8A;
+  --tag-bg: #EDE9FE;
+  --tag-text: #5B21B6;
+  --code-bg: #1F2937;
+  --code-text: #E5E7EB;
+  --danger: #8F4E45;
+  --danger-hover: #7F433D;
+  --danger-active: #6F3934;
+  --danger-rgb: 111, 57, 52;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #FFFFFF;
+  --surface-glass: rgba(255, 255, 255, 0.3);
+  --surface-glass-hover: rgba(255, 255, 255, 0.55);
+  --scrim: rgba(30, 40, 36, 0.45);
+
+  /* ── RGB-триплеты ── */
+  --coffee-rgb: 107, 142, 123;
+  --latte-rgb: 185, 196, 186;
+  --espresso-rgb: 46, 58, 54;
+  --milk-rgb: 237, 233, 222;
+  --text-light-rgb: 117, 128, 122;
+  --shadow-rgb: 46, 58, 54;
+
   /* ── Тени ── */
   --shadow-sm: 0 1px 3px rgba(46, 58, 54, 0.08);
   --shadow-md: 0 4px 14px rgba(46, 58, 54, 0.10);

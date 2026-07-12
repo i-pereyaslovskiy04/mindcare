@@ -72,7 +72,7 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--coffee), var(--mocha, #6B4F35));
+  background: linear-gradient(135deg, var(--coffee), var(--mocha));
   color: var(--milk);
   display: flex;
   align-items: center;
@@ -163,9 +163,9 @@
 
 .formSuccess {
   font-size: 13px;
-  color: #3a7a4a;
-  background: rgba(58, 122, 74, 0.07);
-  border: 1px solid rgba(58, 122, 74, 0.2);
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
   border-radius: 8px;
   padding: 9px 12px;
   margin-bottom: 10px;

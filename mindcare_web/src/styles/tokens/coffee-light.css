@@ -54,6 +54,37 @@
   --on-surface-variant: var(--text-muted);
   --outline: var(--fog);
 
+  /* ── Софт-статусы и вспомогательные роли (этап 4) ── */
+  --success-bg: #E6F2E6;
+  --success-border: #BBF7D0;
+  --error-border: #FECACA;
+  --warning-bg: #FEF9C3;
+  --warning-text: #854D0E;
+  --info-bg: #E8ECF5;
+  --info-text: #4A5A8A;
+  --tag-bg: #EDE9FE;
+  --tag-text: #5B21B6;
+  --code-bg: #1F2937;
+  --code-text: #E5E7EB;
+  --danger: #8F4E45;
+  --danger-hover: #7F433D;
+  --danger-active: #6F3934;
+  --danger-rgb: 111, 57, 52;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #FFFFFF;
+  --surface-glass: rgba(255, 255, 255, 0.3);
+  --surface-glass-hover: rgba(255, 255, 255, 0.55);
+  --scrim: rgba(46, 35, 24, 0.45);
+
+  /* ── RGB-триплеты для rgba(var(--x-rgb), a) ── */
+  --coffee-rgb: 139, 111, 71;
+  --latte-rgb: 201, 185, 154;
+  --espresso-rgb: 74, 55, 40;
+  --milk-rgb: 237, 228, 211;
+  --text-light-rgb: 138, 114, 96;
+  --shadow-rgb: 74, 55, 40;
+
   /* ── Тени ── */
   --shadow-sm: 0 1px 3px rgba(46, 35, 24, 0.08);
   --shadow-md: 0 4px 14px rgba(46, 35, 24, 0.10);

@@ -1,7 +1,7 @@
 /* Single canonical hero — used by About, Services, Materials */
 
 .hero {
-  background: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, #7A5C40 100%);
+  background: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, var(--coffee) 100%);
   min-height: clamp(420px, 50vh, 700px);
   display: flex;
   align-items: center;

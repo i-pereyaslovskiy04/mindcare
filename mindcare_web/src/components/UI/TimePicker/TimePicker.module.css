@@ -24,7 +24,7 @@
 
 .control:focus-within { border-color: var(--coffee); }
 .controlOpen { border-color: var(--coffee); }
-.controlError { border-color: var(--error, #c0392b); }
+.controlError { border-color: var(--error); }
 
 .input {
   flex: 1 1 auto;
@@ -61,7 +61,7 @@
 
 .error {
   font-size: 0.78rem;
-  color: var(--error, #c0392b);
+  color: var(--error);
 }
 
 /* ── Popover panel (portal, position: fixed) ─────────────────────────── */
