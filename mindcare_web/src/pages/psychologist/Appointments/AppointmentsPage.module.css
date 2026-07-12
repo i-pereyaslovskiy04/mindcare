@@ -99,7 +99,7 @@
 }
 
 .card {
-  background: #fff;
+  background: var(--surface-elevated);
   border: 1px solid var(--nav-border);
   border-radius: 12px;
   padding: 16px 20px;
@@ -202,7 +202,7 @@
 
 .actionError {
   font-size: var(--fs-sub);
-  color: var(--error, #c0392b);
+  color: var(--error);
   padding: 4px 0;
 }
 

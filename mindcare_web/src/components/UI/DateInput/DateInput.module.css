@@ -103,7 +103,7 @@
   background: var(--warm-white);
   border: 1px solid var(--nav-border);
   border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(74, 55, 40, 0.18);
+  box-shadow: 0 12px 32px rgba(var(--shadow-rgb), 0.18);
 }
 
 .panelDown {

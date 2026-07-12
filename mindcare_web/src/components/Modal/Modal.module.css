@@ -1,7 +1,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(46, 35, 24, 0.52);
+  background: var(--scrim);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
   display: flex;
@@ -25,9 +25,9 @@
   width: 100%;
   max-width: 440px;
   box-shadow:
-    0 2px 4px rgba(46, 35, 24, 0.04),
-    0 12px 32px rgba(46, 35, 24, 0.14),
-    0 40px 80px rgba(46, 35, 24, 0.1);
+    0 2px 4px rgba(var(--shadow-rgb), 0.04),
+    0 12px 32px rgba(var(--shadow-rgb), 0.14),
+    0 40px 80px rgba(var(--shadow-rgb), 0.1);
   transform: translateY(18px) scale(0.98);
   transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
   max-height: 92vh;

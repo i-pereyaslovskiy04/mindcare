@@ -8,7 +8,7 @@
   border-radius: 16px;
   border: 1px solid var(--nav-border);
   background: var(--warm-white);
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
 }
 
 .table {
@@ -76,7 +76,7 @@
 .slug {
   font-family: monospace;
   font-size: 12px;
-  background: var(--fog, #f3f4f6);
+  background: var(--fog);
   padding: 2px 6px;
   border-radius: 4px;
   color: var(--text-muted);

@@ -49,7 +49,7 @@
   border-radius: 16px;
   border: 1px solid var(--nav-border);
   background: var(--warm-white);
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
 }
 
 .table {
@@ -93,7 +93,7 @@
 .errorCell {
   text-align: center;
   padding: 32px 16px;
-  color: var(--error, #c0392b);
+  color: var(--error);
 }
 
 .actionsCell {
@@ -136,8 +136,8 @@
 
 .formInput:focus { outline: none; border-color: var(--coffee); }
 
-.saveErr { font-size: var(--fs-sub); color: var(--error, #c0392b); }
-.okMsg   { font-size: var(--fs-sub); color: var(--success, #2e7d32); }
+.saveErr { font-size: var(--fs-sub); color: var(--error); }
+.okMsg   { font-size: var(--fs-sub); color: var(--success); }
 
 .modalActions {
   display: flex;
@@ -161,7 +161,7 @@
   border: 1px solid var(--nav-border);
   border-radius: 14px;
   background: var(--warm-white);
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04);
 }
 
 .seriesCardOff { opacity: 0.7; background: var(--cream); }
@@ -220,7 +220,7 @@
   border: 1px solid var(--nav-border);
   border-radius: 12px;
   background: var(--warm-white);
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04);
 }
 
 .excDate { font-weight: 600; color: var(--text-main); }

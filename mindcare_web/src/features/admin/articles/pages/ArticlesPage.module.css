@@ -28,12 +28,12 @@
 }
 
 .overlay {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+  position: fixed; inset: 0; background: var(--scrim);
   display: flex; align-items: center; justify-content: center; z-index: 3000;
 }
 .dialog {
-  background: #fff; border-radius: 12px; padding: 24px; max-width: 420px; width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  background: var(--surface-elevated); border-radius: 12px; padding: 24px; max-width: 420px; width: 90%;
+  box-shadow: 0 20px 60px rgba(var(--shadow-rgb), 0.18);
 }
 .dialogTitle  { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
 .dialogBody   { font-size: 14px; color: var(--text-muted); margin: 0 0 16px; }

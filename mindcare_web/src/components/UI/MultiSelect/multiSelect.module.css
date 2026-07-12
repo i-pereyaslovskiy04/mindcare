@@ -19,12 +19,12 @@
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   transition: border-color 0.15s ease, border-radius 0.12s ease, box-shadow 0.15s ease;
-  box-shadow: 0 1px 3px rgba(42, 26, 16, 0.05);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.05);
 }
 
 .trigger:hover {
   border-color: var(--latte);
-  box-shadow: 0 2px 6px rgba(42, 26, 16, 0.08);
+  box-shadow: 0 2px 6px rgba(var(--shadow-rgb), 0.08);
 }
 
 .wrapOpen .trigger {
@@ -99,7 +99,7 @@
 
 .tagRemove:hover {
   color: var(--error);
-  background-color: rgba(185, 64, 64, 0.1);
+  background-color: rgba(var(--error-rgb), 0.1);
 }
 
 /* ── Chevron ─────────────────────────────────────────── */
@@ -132,7 +132,7 @@
   border: 1px solid var(--nav-border);
   border-top: none;
   border-radius: 0 0 12px 12px;
-  box-shadow: 0 8px 20px rgba(42, 26, 16, 0.1);
+  box-shadow: 0 8px 20px rgba(var(--shadow-rgb), 0.1);
   overflow: hidden;
   opacity: 0;
   transform: translateY(-6px);
@@ -217,7 +217,7 @@
   transition: background-color 0.1s;
 }
 
-.item:hover { background: rgba(42, 26, 16, 0.06); }
+.item:hover { background: rgba(var(--espresso-rgb), 0.06); }
 
 .itemActive {
   color: var(--mocha);
@@ -282,7 +282,7 @@
 }
 
 .wrapFlat .trigger:hover {
-  background: rgba(42, 26, 16, 0.04);
+  background: rgba(var(--espresso-rgb), 0.04);
   box-shadow: none;
   border: none;
 }
@@ -304,7 +304,7 @@
 
 /* Open: tint the active segment, no border changes */
 .wrapFlat.wrapOpen .trigger {
-  background: rgba(42, 26, 16, 0.04);
+  background: rgba(var(--espresso-rgb), 0.04);
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -319,7 +319,7 @@
   border: 1px solid var(--nav-border);
   border-top: none;
   border-radius: 0 0 14px 14px;
-  box-shadow: 0 8px 24px rgba(42, 26, 16, 0.12);
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.12);
 }
 
 .wrapFlat .panelOpen {

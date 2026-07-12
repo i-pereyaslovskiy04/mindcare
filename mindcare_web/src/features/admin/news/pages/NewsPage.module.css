@@ -65,7 +65,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -73,12 +73,12 @@
 }
 
 .dialog {
-  background: #fff;
+  background: var(--surface-elevated);
   border-radius: 12px;
   padding: 24px;
   max-width: 420px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 20px 60px rgba(var(--shadow-rgb), 0.18);
 }
 
 .dialogTitle {

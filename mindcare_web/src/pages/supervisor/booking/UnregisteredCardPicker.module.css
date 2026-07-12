@@ -21,7 +21,7 @@
 .search:focus { outline: none; border-color: var(--coffee); }
 
 .hint { font-size: var(--fs-sub); color: var(--text-muted); }
-.err  { font-size: var(--fs-sub); color: var(--error, #c0392b); }
+.err  { font-size: var(--fs-sub); color: var(--error); }
 
 .list {
   list-style: none;

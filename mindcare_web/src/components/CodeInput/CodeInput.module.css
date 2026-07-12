@@ -24,7 +24,7 @@
 .otpBox:focus {
   border-color: var(--coffee);
   background: var(--warm-white);
-  box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--coffee-rgb), 0.1);
 }
 
 .otpFilled {

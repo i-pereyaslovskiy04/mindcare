@@ -65,7 +65,7 @@
 .label {
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-main, #2c2218);
+  color: var(--text-main);
 }
 
 .textarea {
@@ -94,7 +94,7 @@
 
 .psyLoading {
   font-size: 0.82rem;
-  color: var(--text-muted, #9a8e86);
+  color: var(--text-muted);
   padding: 8px 0;
 }
 
@@ -102,7 +102,7 @@
 .error {
   padding: 10px 14px;
   background: var(--error-bg);
-  border: 1px solid rgba(185, 64, 64, 0.25);
+  border: 1px solid rgba(var(--error-rgb), 0.25);
   border-radius: 10px;
   font-size: 0.85rem;
   color: var(--error);

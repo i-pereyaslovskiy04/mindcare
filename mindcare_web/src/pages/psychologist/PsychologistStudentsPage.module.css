@@ -109,7 +109,7 @@
   border: 1px solid var(--nav-border);
   border-radius: 14px;
   padding: 14px 22px;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.03);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.03);
 }
 
 .summaryNum {
@@ -215,8 +215,8 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: var(--error-bg, #fdf0ee);
-  border: 1px solid rgba(185, 64, 64, 0.2);
+  background: var(--error-bg);
+  border: 1px solid rgba(var(--error-rgb), 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -288,13 +288,13 @@
   padding: 22px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 4px 12px rgba(74, 55, 40, 0.06);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 4px 12px rgba(var(--shadow-rgb), 0.06);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .card:hover {
   border-color: var(--latte);
-  box-shadow: 0 2px 4px rgba(74, 55, 40, 0.06), 0 8px 20px rgba(74, 55, 40, 0.10);
+  box-shadow: 0 2px 4px rgba(var(--shadow-rgb), 0.06), 0 8px 20px rgba(var(--shadow-rgb), 0.10);
 }
 
 .cardTop {
@@ -308,7 +308,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--coffee), var(--mocha, #6B4F35));
+  background: linear-gradient(135deg, var(--coffee), var(--mocha));
   color: var(--milk);
   display: flex;
   align-items: center;
@@ -317,7 +317,7 @@
   font-size: 18px;
   font-weight: 500;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.18);
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.18);
 }
 
 .cardInfo {

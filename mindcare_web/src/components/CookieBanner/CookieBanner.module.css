@@ -36,7 +36,7 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(201, 185, 154, 0.1);
+  background: rgba(var(--latte-rgb), 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,7 +55,7 @@
 .cookieText a {
   color: var(--latte);
   text-decoration: none;
-  border-bottom: 1px solid rgba(201, 185, 154, 0.4);
+  border-bottom: 1px solid rgba(var(--latte-rgb), 0.4);
   font-weight: 500;
 }
 

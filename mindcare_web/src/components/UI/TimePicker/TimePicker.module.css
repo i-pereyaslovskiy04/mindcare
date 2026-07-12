@@ -71,7 +71,7 @@
   background: var(--warm-white);
   border: 1px solid var(--nav-border);
   border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(74, 55, 40, 0.18);
+  box-shadow: 0 8px 28px rgba(var(--shadow-rgb), 0.18);
   padding: 8px;
   min-width: 168px;
 }

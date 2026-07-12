@@ -94,7 +94,7 @@
   font-size: 17px;
   font-weight: 500;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.18);
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.18);
 }
 
 .userInfo {
@@ -168,7 +168,7 @@
 }
 
 .navItem:hover {
-  background: rgba(139, 111, 71, 0.08);
+  background: rgba(var(--coffee-rgb), 0.08);
   color: var(--espresso);
 }
 
