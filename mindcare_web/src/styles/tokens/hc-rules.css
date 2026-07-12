@@ -31,10 +31,12 @@
    градиенте не даёт AAA. Под градиентом лежит сплошная подложка --hero-bg
    (см. Hero.module.css / PageHero.module.css), поэтому герой остаётся
    читаемым: --hero-fg / --hero-muted / --hero-accent заданы под неё в
-   hc-light.css и hc-dark.css. */
-:root[data-theme^='hc-'] [class*='hero'],
-:root[data-theme^='hc-'] [class*='Hero'],
-:root[data-theme^='hc-'] [class*='hero']::before,
-:root[data-theme^='hc-'] [class*='Hero']::before {
+   hc-light.css и hc-dark.css.
+   Селектор — по маркер-атрибуту data-hero-banner на корне баннера, НЕ по
+   подстроке класса: [class*='hero'] ловил и несвязанные локальные классы
+   вида .heroAvatar/.heroCard (карточка студента и т.п.), где под градиентом
+   нет запасного фона — текст/иконка становились невидимы. */
+:root[data-theme^='hc-'] [data-hero-banner],
+:root[data-theme^='hc-'] [data-hero-banner]::before {
   background-image: none;
 }

@@ -65,6 +65,7 @@ export default function Hero() {
   return (
     <div
       className={styles.hero}
+      data-hero-banner
       onMouseEnter={stop}
       onMouseLeave={start}
     >

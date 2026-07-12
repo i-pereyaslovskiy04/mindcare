@@ -2,7 +2,7 @@ import styles from './PageHero.module.css';
 
 export default function PageHero({ eyebrow, title, sub }) {
   return (
-    <section className={styles.hero}>
+    <section className={styles.hero} data-hero-banner>
       <div className={styles.inner}>
         {eyebrow && <p className={styles.eyebrow}>{eyebrow}</p>}
         <h1 className={styles.title}>{title}</h1>
