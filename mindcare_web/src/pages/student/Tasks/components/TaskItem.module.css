@@ -98,9 +98,9 @@
   flex-shrink: 0;
 }
 
-.badgeDone     { background: rgba(93, 138, 94, 0.14); color: var(--success); }
-.badgeUrgent   { background: rgba(212, 137, 26, 0.12); color: var(--warn); }
-.badgeProgress { background: rgba(139, 111, 71, 0.14); color: var(--coffee); }
+.badgeDone     { background: rgba(var(--success-rgb), 0.14); color: var(--success); }
+.badgeUrgent   { background: var(--warning-bg);            color: var(--warning-text); }
+.badgeProgress { background: rgba(var(--coffee-rgb), 0.14); color: var(--coffee); }
 
 /* ---- description ---- */
 .desc {

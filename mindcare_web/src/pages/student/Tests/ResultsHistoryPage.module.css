@@ -45,7 +45,7 @@
 
 .pageTitle em { font-style: italic; color: var(--coffee); }
 
-.error { color: var(--danger, #c0563f); font-size: 14px; }
+.error { color: var(--danger); font-size: 14px; }
 .empty { color: var(--text-muted); font-size: 14px; }
 
 .list {
@@ -70,7 +70,7 @@
 
 .row:hover {
   border-color: var(--latte);
-  box-shadow: 0 4px 14px rgba(74, 55, 40, 0.08);
+  box-shadow: 0 4px 14px rgba(var(--shadow-rgb), 0.08);
 }
 
 .rowMain {

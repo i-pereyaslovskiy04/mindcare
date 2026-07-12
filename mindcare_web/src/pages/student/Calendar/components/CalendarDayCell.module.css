@@ -40,7 +40,7 @@
 .today {
   border-color: var(--coffee);
   background: var(--warm-white);
-  box-shadow: 0 0 0 2px rgba(139, 111, 71, 0.12);
+  box-shadow: 0 0 0 2px rgba(var(--coffee-rgb), 0.12);
 }
 
 .today .num {

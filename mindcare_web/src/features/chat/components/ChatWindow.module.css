@@ -407,7 +407,7 @@
   font-family: inherit;
   white-space: nowrap;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.18);
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.18);
 }
 
 .sendBtn:hover:not(:disabled) {

@@ -3,13 +3,13 @@
   border: 1px solid var(--nav-border);
   border-radius: 16px;
   padding: 22px 24px;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 4px 12px rgba(74, 55, 40, 0.05);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 4px 12px rgba(var(--shadow-rgb), 0.05);
   scroll-margin-top: 90px;
 }
 
 .cardInvalid {
-  border-color: var(--danger, #c0563f);
-  box-shadow: 0 0 0 3px rgba(192, 86, 63, 0.12);
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(var(--danger-rgb), 0.12);
 }
 
 .head {
@@ -129,5 +129,5 @@
 .textarea:focus {
   outline: none;
   border-color: var(--latte);
-  box-shadow: 0 0 0 3px rgba(74, 55, 40, 0.08);
+  box-shadow: 0 0 0 3px rgba(var(--coffee-rgb), 0.08);
 }

@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.08), 0 8px 24px rgba(74, 55, 40, 0.14);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.08), 0 8px 24px rgba(var(--shadow-rgb), 0.14);
 }
 
 .header {
@@ -62,7 +62,7 @@
   width: 100%;
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(90deg, #C0392B 0%, #D4891A 35%, var(--latte) 65%, var(--success) 100%);
+  background: linear-gradient(90deg, var(--strength-weak) 0%, var(--strength-medium) 35%, var(--latte) 65%, var(--success) 100%);
   outline: none;
   cursor: pointer;
   display: block;
@@ -76,7 +76,7 @@
   background: var(--warm-white);
   border: 2.5px solid var(--espresso);
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(74, 55, 40, 0.25);
+  box-shadow: 0 2px 6px rgba(var(--shadow-rgb), 0.25);
   transition: transform 0.12s;
 }
 

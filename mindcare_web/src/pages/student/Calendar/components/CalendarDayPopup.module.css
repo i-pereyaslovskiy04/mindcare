@@ -2,10 +2,10 @@
   position: absolute;
   z-index: 51;
   width: 280px;
-  background: #fff;
+  background: var(--surface-elevated);
   border: 1px solid var(--nav-border);
   border-radius: 12px;
-  box-shadow: 0 8px 28px rgba(74,55,40,0.16), 0 2px 8px rgba(74,55,40,0.08);
+  box-shadow: 0 8px 28px rgba(var(--shadow-rgb), 0.16), 0 2px 8px rgba(var(--shadow-rgb), 0.08);
   padding: 16px 20px;
   animation: popIn 0.18s ease;
 }
@@ -23,7 +23,7 @@
   margin-left: -6px;
   width: 12px;
   height: 12px;
-  background: #fff;
+  background: var(--surface-elevated);
   border-top: 1px solid var(--nav-border);
   border-left: 1px solid var(--nav-border);
   transform: rotate(45deg);

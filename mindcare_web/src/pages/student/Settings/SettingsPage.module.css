@@ -52,7 +52,7 @@
   border: 1px solid var(--nav-border);
   border-radius: 16px;
   padding: 22px;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
 }
 
 /* ---- section title ---- */
@@ -76,7 +76,7 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--coffee), var(--mocha, #6B4F35));
+  background: linear-gradient(135deg, var(--coffee), var(--mocha));
   color: var(--milk);
   display: flex;
   align-items: center;
@@ -85,7 +85,7 @@
   font-size: 24px;
   font-weight: 500;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.18);
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.18);
 }
 
 .profileName {
@@ -133,7 +133,7 @@
 .input:focus {
   border-color: var(--coffee);
   background: var(--warm-white);
-  box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.08);
+  box-shadow: 0 0 0 3px rgba(var(--coffee-rgb), 0.08);
 }
 
 /* ---- social networks ---- */
@@ -189,9 +189,9 @@
 }
 
 .socialDel:hover {
-  background: rgba(185, 64, 64, 0.08);
+  background: rgba(var(--error-rgb), 0.08);
   color: var(--error);
-  border-color: rgba(185, 64, 64, 0.25);
+  border-color: rgba(var(--error-rgb), 0.25);
 }
 
 .empty {
@@ -229,7 +229,7 @@
 /* ---- crisis card ---- */
 .cardCrisis {
   background: var(--cream);
-  border-color: rgba(185, 64, 64, 0.18);
+  border-color: rgba(var(--error-rgb), 0.18);
 }
 
 .crisisInner {
@@ -242,7 +242,7 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(185, 64, 64, 0.12);
+  background: rgba(var(--error-rgb), 0.12);
   color: var(--error);
   display: flex;
   align-items: center;
@@ -271,7 +271,7 @@
 }
 
 .btnCrisis {
-  border-color: rgba(185, 64, 64, 0.3) !important;
+  border-color: rgba(var(--error-rgb), 0.3) !important;
   color: var(--error) !important;
 }
 
@@ -308,8 +308,8 @@
 .formError {
   font-size: 13px;
   color: var(--error);
-  background: rgba(185, 64, 64, 0.07);
-  border: 1px solid rgba(185, 64, 64, 0.2);
+  background: var(--error-bg);
+  border: 1px solid rgba(var(--error-rgb), 0.2);
   border-radius: 8px;
   padding: 9px 12px;
   margin-bottom: 10px;
@@ -318,9 +318,9 @@
 
 .formSuccess {
   font-size: 13px;
-  color: #3a7a4a;
-  background: rgba(58, 122, 74, 0.07);
-  border: 1px solid rgba(58, 122, 74, 0.2);
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
   border-radius: 8px;
   padding: 9px 12px;
   margin-bottom: 10px;

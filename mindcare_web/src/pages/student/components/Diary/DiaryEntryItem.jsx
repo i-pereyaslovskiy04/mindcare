@@ -27,8 +27,8 @@ function formatDate(iso) {
 
 function getMoodColor(v) {
   if (v <= 3) return 'var(--error)';
-  if (v <= 5) return '#D4891A';
-  if (v <= 7) return '#8B6F47';
+  if (v <= 5) return 'var(--strength-medium)';
+  if (v <= 7) return 'var(--coffee)';
   return 'var(--success)';
 }
 

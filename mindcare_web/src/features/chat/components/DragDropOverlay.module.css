@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(250, 245, 238, 0.93); /* warm-white с прозрачностью */
+  background: var(--overlay-surface);
   border: 2px dashed var(--latte);
   box-sizing: border-box;
 }

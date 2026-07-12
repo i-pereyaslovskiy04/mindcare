@@ -180,7 +180,7 @@
 }
 
 .summaryTile {
-  background: var(--cream, #faf7f2);
+  background: var(--cream);
   border-radius: 8px;
   padding: 14px 16px;
   min-height: 76px;
@@ -245,7 +245,7 @@
   padding: 5px 11px;
   border-radius: 20px;
   font-size: 12px;
-  background: var(--cream, #faf7f2);
+  background: var(--cream);
   border: 1px solid var(--nav-border);
   white-space: nowrap;
   cursor: default;
@@ -253,8 +253,8 @@
 }
 
 .markChip:hover {
-  background: var(--sand, #ede8df);
-  border-color: var(--latte, #c4aa88);
+  background: var(--sand);
+  border-color: var(--latte);
 }
 
 .markDate {

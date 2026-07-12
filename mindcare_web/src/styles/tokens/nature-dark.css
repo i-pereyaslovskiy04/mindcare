@@ -66,6 +66,7 @@
   --surface-glass: rgba(255, 255, 255, 0.05);
   --surface-glass-hover: rgba(255, 255, 255, 0.09);
   --scrim: rgba(0, 0, 0, 0.6);
+  --overlay-surface: rgba(19, 23, 21, 0.93);
 
   /* ── RGB-триплеты ── */
   --coffee-rgb: 166, 203, 176;

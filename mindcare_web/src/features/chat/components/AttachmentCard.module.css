@@ -6,15 +6,15 @@
   gap: 8px;
   padding: 6px 8px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(var(--espresso-rgb), 0.06);
   min-width: 0;
   max-width: 280px;
 }
 
 /* Outgoing bubble: класс добавляется через prop (не :global — CSS Modules хэширует имя). */
 .cardOutgoing {
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(var(--milk-rgb), 0.18);
+  border: 1px solid rgba(var(--milk-rgb), 0.15);
 }
 
 .fileIcon {
@@ -59,7 +59,7 @@
 }
 
 .cardOutgoing .size {
-  color: rgba(237, 228, 211, 0.72);
+  color: rgba(var(--milk-rgb), 0.72);
 }
 
 .error {
@@ -69,7 +69,7 @@
 }
 
 .cardOutgoing .error {
-  color: #ffb3b3;
+  color: var(--error);
 }
 
 .previewBtn {
@@ -89,7 +89,7 @@
 }
 
 .previewBtn:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(var(--espresso-rgb), 0.08);
 }
 
 .previewBtn:focus-visible {
@@ -102,7 +102,7 @@
 }
 
 .cardOutgoing .previewBtn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(var(--milk-rgb), 0.18);
 }
 
 .cardOutgoing .previewBtn:focus-visible {
@@ -126,7 +126,7 @@
 }
 
 .downloadBtn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(var(--espresso-rgb), 0.08);
 }
 
 .downloadBtn:focus-visible {
@@ -144,7 +144,7 @@
 }
 
 .cardOutgoing .downloadBtn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(var(--milk-rgb), 0.18);
 }
 
 .cardOutgoing .downloadBtn:focus-visible {

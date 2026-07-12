@@ -20,7 +20,7 @@
 
 .calendarBox {
   position: relative;
-  background: #fff;
+  background: var(--surface-elevated);
   border: 1px solid var(--nav-border);
   border-radius: 14px;
   padding: 20px;
@@ -163,13 +163,13 @@
 
 .bookError {
   font-size: var(--fs-sub);
-  color: var(--error, #c0392b);
+  color: var(--error);
   padding: 4px 0;
 }
 
 .bookSuccess {
   font-size: var(--fs-sub);
-  color: var(--success, #2e7d32);
+  color: var(--success);
   padding: 4px 0;
 }
 

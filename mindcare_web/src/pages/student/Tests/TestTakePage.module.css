@@ -58,7 +58,7 @@
 }
 
 .muted { color: var(--text-muted); font-size: 14px; }
-.error { color: var(--danger, #c0563f); font-size: 14px; margin: 4px 0; }
+.error { color: var(--danger); font-size: 14px; margin: 4px 0; }
 
 .submitRow {
   display: flex;

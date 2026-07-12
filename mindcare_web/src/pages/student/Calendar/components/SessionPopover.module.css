@@ -8,10 +8,10 @@
   position: absolute;
   z-index: 11;
   width: 320px;
-  background: #fff;
+  background: var(--surface-elevated);
   border: 1px solid var(--nav-border);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(74, 55, 40, 0.14);
+  box-shadow: 0 8px 32px rgba(var(--shadow-rgb), 0.14);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -23,7 +23,7 @@
   top: -7px;
   width: 13px;
   height: 13px;
-  background: #fff;
+  background: var(--surface-elevated);
   border-left: 1px solid var(--nav-border);
   border-top: 1px solid var(--nav-border);
   transform: rotate(45deg);

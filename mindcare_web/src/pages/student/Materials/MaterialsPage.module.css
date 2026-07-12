@@ -80,12 +80,12 @@
 .chipActive {
   background: var(--coffee);
   border-color: var(--coffee);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .chipActive:hover {
   opacity: 0.9;
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--coffee);
 }
 
@@ -111,14 +111,14 @@
   border: 1px solid var(--nav-border);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 4px 12px rgba(74, 55, 40, 0.05);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 4px 12px rgba(var(--shadow-rgb), 0.05);
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.15s;
 }
 
 .articleCard:hover {
   transform: translateY(-3px);
-  box-shadow: 0 4px 8px rgba(74, 55, 40, 0.08), 0 12px 24px rgba(74, 55, 40, 0.1);
+  box-shadow: 0 4px 8px rgba(var(--shadow-rgb), 0.08), 0 12px 24px rgba(var(--shadow-rgb), 0.1);
   border-color: var(--latte);
 }
 
@@ -140,7 +140,7 @@
   height: 28px;
   border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--overlay-surface);
   display: flex;
   align-items: center;
   justify-content: center;
