@@ -2,6 +2,9 @@ import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../auth/AuthContext';
 import Icon from '../../components/Icon/Icon';
 import Button from '../../components/UI/Button/Button';
+import ThemeToggle from '../theme/ThemeToggle';
+import A11yToggle from '../a11y/A11yToggle';
+import A11yPanel from '../a11y/A11yPanel';
 import { getInitials } from '../../shared/lib/utils';
 import styles from './AdminLayout.module.css';
 
@@ -161,6 +164,8 @@ export default function AdminLayout() {
             Администратор / <span>{crumb}</span>
           </div>
           <div className={styles.actions}>
+            <A11yToggle />
+            <ThemeToggle />
             <Button
               type="button"
               variant="icon"
@@ -172,6 +177,9 @@ export default function AdminLayout() {
             </Button>
           </div>
         </div>
+
+        {/* Панель настроек ГОСТ — под шапкой, видна только в режиме */}
+        <A11yPanel />
 
         <div className={styles.content}>
           <div className={styles.contentInner}>
