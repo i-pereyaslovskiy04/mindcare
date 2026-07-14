@@ -373,3 +373,24 @@
     padding: 20px 16px 40px;
   }
 }
+
+/* Мобильная шапка админки: рядом с icon-rail места мало — сжимаем отступы и
+   обрезаем breadcrumb, чтобы он не выталкивал кнопки оформления и выхода. */
+@media (max-width: 600px) {
+  .topbar {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .crumbs {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .actions {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+}

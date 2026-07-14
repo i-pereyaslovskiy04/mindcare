@@ -109,6 +109,107 @@
   box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.14);
 }
 
+/* ---- compact: одна иконка-кнопка в шапке кабинета ---- */
+
+/* Размер и форма совпадают с .iconBtn кабинета (36×36, radius 10) —
+   шапка остаётся одной ровной линией иконок. */
+.iconTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.iconTrigger:hover,
+.iconTriggerOpen {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.iconTrigger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.sheet {
+  position: fixed;
+  z-index: 2100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  max-width: calc(100vw - 24px);
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.14);
+}
+
+.sheetTitle {
+  padding: 2px 4px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sheetModes {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.sheetMode {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 6px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sheetMode:hover {
+  background: var(--cream);
+  color: var(--text-main);
+}
+
+.sheetMode:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.sheetModeActive,
+.sheetModeActive:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+.sheetList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .menuOption {
   display: flex;
   align-items: center;
@@ -121,7 +222,8 @@
   cursor: pointer;
 }
 
-.menuOptionActive {
+.menuOptionActive,
+.menuOption:hover {
   background: var(--milk);
 }
 

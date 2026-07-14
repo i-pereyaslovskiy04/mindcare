@@ -102,12 +102,12 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
   );
 
   return (
-    <div className={styles.app}>
+    <div className={styles.app} data-cabinet-shell>
       {/* ── SIDEBAR (desktop) ────────────────────────────────────── */}
       <aside className={styles.sidebar}>{sidebarInner}</aside>
 
       {/* ── MAIN ─────────────────────────────────────────────────── */}
-      <main className={styles.main}>
+      <main className={styles.main} data-cabinet-main>
         <div className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <button
@@ -127,8 +127,8 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
               <Icon name="search" size={14} />
               <input type="text" placeholder="Поиск по материалам, записям…" readOnly />
             </div>
-            <A11yToggle />
-            <ThemeToggle />
+            <A11yToggle compact />
+            <ThemeToggle compact />
             <button
               className={`${styles.iconBtn} ${styles.iconBtnOptional}`}
               aria-label="Уведомления"
@@ -153,7 +153,7 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
         {/* Панель настроек ГОСТ — под шапкой кабинета, видна только в режиме */}
         <A11yPanel />
 
-        <div className={styles.content}>
+        <div className={styles.content} data-cabinet-content>
           <div className={styles.contentInner}>
             <Outlet />
           </div>

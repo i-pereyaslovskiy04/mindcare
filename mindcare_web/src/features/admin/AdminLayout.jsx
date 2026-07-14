@@ -26,7 +26,7 @@ export default function AdminLayout() {
   const crumb = CRUMB_LABELS[pathname] ?? 'Панель';
 
   return (
-    <div className={styles.app}>
+    <div className={styles.app} data-cabinet-shell>
       <aside className={styles.sidebar}>
 
         <div className={styles.brand}>
@@ -158,14 +158,14 @@ export default function AdminLayout() {
 
       </aside>
 
-      <main className={styles.main}>
+      <main className={styles.main} data-cabinet-main>
         <div className={styles.topbar}>
           <div className={styles.crumbs}>
             Администратор / <span>{crumb}</span>
           </div>
           <div className={styles.actions}>
-            <A11yToggle />
-            <ThemeToggle />
+            <A11yToggle compact />
+            <ThemeToggle compact />
             <Button
               type="button"
               variant="icon"
@@ -181,7 +181,7 @@ export default function AdminLayout() {
         {/* Панель настроек ГОСТ — под шапкой, видна только в режиме */}
         <A11yPanel />
 
-        <div className={styles.content}>
+        <div className={styles.content} data-cabinet-content>
           <div className={styles.contentInner}>
             <Outlet />
           </div>

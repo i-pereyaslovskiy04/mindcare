@@ -165,6 +165,63 @@ describe('ThemeToggle + ThemeProvider', () => {
     ).not.toBeInTheDocument();
   });
 
+  test('compact: в шапке одна иконка-кнопка, режим и палитра скрыты до открытия', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle compact />
+      </ThemeProvider>
+    );
+
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByRole('group', { name: 'Режим темы оформления' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: 'Оформление: Кофе' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(trigger);
+
+    const panel = screen.getByRole('dialog', { name: 'Оформление' });
+    expect(
+      within(panel).getAllByRole('button', { name: /тема/i }).length
+    ).toBeGreaterThanOrEqual(3);
+    expect(within(panel).getAllByRole('option')).toHaveLength(4);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('compact: режим и палитра выбираются из панели, панель остаётся открытой', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle compact />
+      </ThemeProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Оформление: Кофе' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-dark');
+
+    fireEvent.mouseDown(
+      screen.getByRole('option', { name: 'Палитра «Природное спокойствие»' })
+    );
+    expect(document.documentElement.getAttribute('data-theme')).toBe('nature-dark');
+    expect(screen.getByRole('dialog', { name: 'Оформление' })).toBeInTheDocument();
+  });
+
+  test('compact: Escape закрывает панель', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle compact />
+      </ThemeProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Оформление: Кофе' }));
+    expect(screen.getByRole('dialog', { name: 'Оформление' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
+  });
+
   test('переключение обратно на «Светлая» работает', () => {
     render(
       <ThemeProvider>

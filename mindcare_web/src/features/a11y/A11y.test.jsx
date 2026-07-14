@@ -171,6 +171,24 @@ describe('A11y (ГОСТ) режим', () => {
     expect(root().style.getPropertyValue('--a11y-font-scale')).toBe('1');
   });
 
+  test('compact: кнопка без подписи, доступное имя и состояние сохраняются', () => {
+    render(
+      <A11yProvider>
+        <A11yToggle compact />
+      </A11yProvider>
+    );
+
+    const btn = screen.getByRole('button', { name: 'Версия для слабовидящих' });
+    expect(btn).toHaveTextContent('');
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(btn);
+    expect(root().getAttribute('data-a11y')).toBe('on');
+    expect(
+      screen.getByRole('button', { name: 'Обычная версия сайта' })
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('все контролы панели — button с aria-pressed (клавиатурная доступность)', () => {
     renderA11y();
     fireEvent.click(screen.getByRole('button', { name: 'Версия для слабовидящих' }));

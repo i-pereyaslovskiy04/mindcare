@@ -20,25 +20,35 @@ const EyeIcon = () => (
   </svg>
 );
 
-export default function A11yToggle({ className }) {
+/**
+ * compact — только иконка (шапка кабинета/админки, где нет места на подпись).
+ * Доступное имя даёт aria-label, состояние — aria-pressed.
+ */
+export default function A11yToggle({ className, compact = false }) {
   const ctx = useContext(A11yContext);
   if (!ctx) return null;
 
   const { settings, enable, disable } = ctx;
   const on = settings.enabled;
+  const label = on ? 'Обычная версия сайта' : 'Версия для слабовидящих';
 
   return (
     <button
       type="button"
-      className={[styles.btn, className].filter(Boolean).join(' ')}
+      className={[compact ? styles.iconBtn : styles.btn, on && styles.on, className]
+        .filter(Boolean)
+        .join(' ')}
       aria-pressed={on}
-      aria-label={on ? 'Обычная версия сайта' : 'Версия для слабовидящих'}
+      aria-label={label}
+      title={label}
       onClick={on ? disable : enable}
     >
       <EyeIcon />
-      <span className={styles.label}>
-        {on ? 'Обычная версия' : 'Версия для слабовидящих'}
-      </span>
+      {!compact && (
+        <span className={styles.label}>
+          {on ? 'Обычная версия' : 'Версия для слабовидящих'}
+        </span>
+      )}
     </button>
   );
 }

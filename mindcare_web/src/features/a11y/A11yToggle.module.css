@@ -24,6 +24,40 @@
   outline-offset: 2px;
 }
 
+/* compact: только иконка. Размер и форма совпадают с .iconBtn кабинета
+   (36×36, radius 10) — шапка остаётся одной ровной линией иконок. */
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.iconBtn:hover {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.iconBtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* Включённый режим — залитая кнопка (состояние видно, а не только по aria). */
+.iconBtn.on,
+.iconBtn.on:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
 /* На узких экранах остаётся только иконка — текст скрыт визуально,
    доступное имя даёт aria-label. */
 @media (max-width: 900px) {

@@ -1,6 +1,9 @@
 /* Панель ГОСТ: только фон/текст выбранной схемы, без брендовых цветов. */
 
+/* flex: 0 0 auto — панель стоит внутри flex-колонки кабинета (.main);
+   без этого она сжималась по высоте и её нижние группы обрезались. */
 .panel {
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -9,6 +12,24 @@
   border-bottom: 2px solid var(--a11y-fg);
   background: var(--a11y-bg);
   color: var(--a11y-fg);
+}
+
+/* На мобильной ширине шесть групп в ряд не помещаются: колонка на всю ширину,
+   группы переносятся, длинные подписи кнопок не выталкивают панель за экран. */
+@media (max-width: 700px) {
+  .panel {
+    gap: 10px 12px;
+    padding: 10px 12px;
+  }
+
+  .group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .options {
+    width: 100%;
+  }
 }
 
 .group {

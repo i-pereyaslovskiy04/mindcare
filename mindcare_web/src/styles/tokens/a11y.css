@@ -23,24 +23,32 @@
   color-scheme: light;
   --a11y-bg: #FFFFFF;
   --a11y-fg: #000000;
+  --a11y-bg-rgb: 255, 255, 255;
+  --a11y-fg-rgb: 0, 0, 0;
 }
 
 :root[data-a11y='on'][data-a11y-scheme='wb'] {
   color-scheme: dark;
   --a11y-bg: #000000;
   --a11y-fg: #FFFFFF;
+  --a11y-bg-rgb: 0, 0, 0;
+  --a11y-fg-rgb: 255, 255, 255;
 }
 
 :root[data-a11y='on'][data-a11y-scheme='blue'] {
   color-scheme: light;
   --a11y-bg: #9DD1FF;
   --a11y-fg: #063462;
+  --a11y-bg-rgb: 157, 209, 255;
+  --a11y-fg-rgb: 6, 52, 98;
 }
 
 :root[data-a11y='on'][data-a11y-scheme='beige'] {
   color-scheme: light;
   --a11y-bg: #F7F3D6;
   --a11y-fg: #4D4B31;
+  --a11y-bg-rgb: 247, 243, 214;
+  --a11y-fg-rgb: 77, 75, 49;
 }
 
 /* Все цветовые токены сводятся к паре фон/текст выбранной схемы. */
@@ -101,6 +109,18 @@
   --strength-weak: var(--a11y-fg);
   --strength-medium: var(--a11y-fg);
   --strength-strong: var(--a11y-fg);
+
+  /* Герой/баннер (Hero, PageHero): свои токены, которые НЕ выводятся из
+     --espresso/--text-on-dark корректно. Без этого блока подложка героя
+     оставалась тёмной (--hero-bg: var(--espresso) → --a11y-fg), а надписи
+     и подзаголовок брали --hero-accent/--hero-muted (тоже → --a11y-fg) —
+     текст сливался с фоном. В режиме герой — обычный блок схемы. */
+  --hero-bg: var(--a11y-bg);
+  --hero-fg: var(--a11y-fg);
+  --hero-muted: var(--a11y-fg);
+  --hero-accent: var(--a11y-fg);
+  --hero-accent-rgb: var(--a11y-fg-rgb);
+  --hero-on-accent: var(--a11y-bg);
 
   /* Тени не несут смысла — заменяются рамкой */
   --shadow-sm: none;
@@ -206,11 +226,52 @@
   text-shadow: none !important;
 }
 
-/* Упрощённая одноколоночная сетка, ширина текста ≤ 80ch. */
-:root[data-a11y='on'] main,
+/* Упрощённая одноколоночная сетка, ширина текста ≤ 80ch.
+   Оболочка кабинета/админки (<main data-cabinet-main>) исключена: это не
+   колонка текста, а каркас страницы (шапка + скроллируемая область). Клемп
+   80ch сжимал весь кабинет в узкую полосу — таблицы, формы и расписание
+   переставали помещаться. Ширину контента внутри кабинета задают его
+   собственные контейнеры. */
+:root[data-a11y='on'] main:not([data-cabinet-main]),
 :root[data-a11y='on'] .container {
   max-width: 80ch;
   margin: 0 auto;
+}
+
+/* Каркас кабинета рассчитан на height: 100vh + overflow: hidden (шапка
+   зафиксирована, скроллится только область контента). В режиме масштаб задан
+   через zoom: при A+ / A++ содержимое перестаёт помещаться в 100vh и обрезается,
+   а панель настроек ГОСТ схлопывается как flex-элемент. Поэтому в режиме
+   кабинет растёт по содержимому и скроллится страницей целиком. */
+:root[data-a11y='on'] [data-cabinet-shell],
+:root[data-a11y='on'] [data-cabinet-main] {
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: visible;
+}
+
+:root[data-a11y='on'] [data-cabinet-shell] {
+  min-height: 100vh;
+}
+
+/* Область контента: растёт по высоте вместе со страницей, но широкие таблицы
+   прокручиваются внутри неё, а не растягивают документ вбок (иначе шапка с
+   кнопками уезжает за правый край экрана). min-width: 0 нужен, чтобы flex/grid
+   не расширяли оболочку под ширину таблицы. */
+:root[data-a11y='on'] [data-cabinet-content] {
+  height: auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/* Сайдбар кабинета: те же height: 100% / overflow: hidden — при увеличенном
+   шрифте пункты меню обрезались снизу. */
+:root[data-a11y='on'] [data-cabinet-shell] > aside,
+:root[data-a11y='on'] [data-cabinet-shell] > aside nav {
+  height: auto;
+  overflow: visible;
 }
 
 :root[data-a11y='on'] main [class*='grid'],
