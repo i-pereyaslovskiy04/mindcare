@@ -80,7 +80,7 @@ export default function Navbar({ onOpenAuth }) {
         {/* Right side: user icon (auth-aware) + burger (mobile only) */}
         <div className={styles.navRight}>
           <A11yToggle />
-          <ThemeToggle className={styles.navThemeToggle} />
+          <ThemeToggle compact className={styles.navThemeToggle} />
           {!loading && (
             isAuthenticated ? (
               <Link
@@ -129,10 +129,6 @@ export default function Navbar({ onOpenAuth }) {
             </li>
           ))}
         </ul>
-        <div className={styles.mobileThemeRow}>
-          <span className={styles.mobileThemeLabel}>Тема</span>
-          <ThemeToggle />
-        </div>
         {!loading && (
           isAuthenticated ? (
             <Link

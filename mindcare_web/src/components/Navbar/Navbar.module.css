@@ -185,18 +185,22 @@
   background: var(--mocha);
 }
 
-/* Theme toggle row inside mobile drawer */
-.mobileThemeRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+/* Иконка-палитра (ThemeToggle compact) в шапке: форма как у остальных
+   круглых кнопок навбара (пользователь, бургер), а не как в кабинете.
+   Селектор по кнопке внутри контейнера — иначе квадратный вид из
+   ThemeToggle.module.css выигрывал бы при равной специфичности. */
+.navThemeToggle button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--nav-border);
+  background: transparent;
+  color: var(--coffee);
 }
 
-.mobileThemeLabel {
-  font-size: 14px;
-  color: var(--text-muted);
+.navThemeToggle button:hover {
+  background: var(--sand);
+  border-color: var(--latte);
 }
 
 /* ─── Breakpoints ───────────────────────────────── */
@@ -214,11 +218,6 @@
 
   .navBurger {
     display: flex;
-  }
-
-  /* On mobile the toggle lives inside the drawer (mobileThemeRow) */
-  .navThemeToggle {
-    display: none;
   }
 
   .mobileMenu {
