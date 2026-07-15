@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from typing import Optional, Literal
 
 from app.auth import audit
-from app.auth.deps import require_role, get_current_user
+from app.auth.deps import require_role, get_current_user, resolve_role_or_403
 from app.users import service
 from app.users.schemas import (
     AdminUserListQuery,
@@ -117,6 +117,9 @@ def update_user(
             uuid,
             body,
             actor_id=int(current_user["id"]),
+            actor_role=resolve_role_or_403(
+                current_user, allowed={"admin"}, preferred="admin",
+            ),
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
         )

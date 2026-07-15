@@ -24,7 +24,8 @@ from app.db.session import SessionLocal
 from app.db.models import (
     Appointment, ChatAttachment, ChatConversation, ChatMessage, ConsentRecord,
     DiaryEntry, GroupSession, GroupSessionRegistration, MeetingType,
-    OtpVerification, TherapyEngagement, UnregisteredStudentCard, User,
+    OtpVerification, Role, TherapyEngagement, UnregisteredStudentCard, User,
+    UserRole,
 )
 
 
@@ -231,3 +232,68 @@ def create_test_user(email: str, password: str = "SecurePass42!") -> dict:
         "hashed_password": pw_hash,
         "role":            "student",
     })
+
+
+# ─── Multi-role helpers (ADR-018) ─────────────────────────────────────────────
+
+def add_user_role(user_id: int, role_name: str, expires_at=None) -> None:
+    """
+    Добавляет пользователю активную (или просроченную, если expires_at в прошлом)
+    роль напрямую в user_roles. Идемпотентно по (user_id, role_id).
+    """
+    with SessionLocal() as db:
+        role = db.query(Role).filter(Role.name == role_name).first()
+        if role is None:
+            raise RuntimeError(f"Роль {role_name} не сидирована в тестовой БД")
+        existing = (
+            db.query(UserRole)
+            .filter(UserRole.user_id == user_id, UserRole.role_id == role.id)
+            .first()
+        )
+        if existing is not None:
+            existing.expires_at = expires_at
+        else:
+            db.add(UserRole(
+                user_id=user_id, role_id=role.id, expires_at=expires_at,
+            ))
+        db.commit()
+
+
+def remove_all_user_roles(user_id: int) -> None:
+    """Снимает все роли пользователя (для сценария 'нет активных ролей')."""
+    with SessionLocal() as db:
+        db.query(UserRole).filter(
+            UserRole.user_id == user_id
+        ).delete(synchronize_session=False)
+        db.commit()
+
+
+def create_multi_role_user(
+    client,
+    roles: list[str],
+    password: str = "SecurePass42!",
+) -> tuple[str, int, str]:
+    """
+    Создаёт пользователя с несколькими активными ролями и логинит его.
+
+    Возвращает (session_token, user_id, email). Первая роль назначается через
+    save_user, остальные добираются прямым insert в user_roles.
+    """
+    email = f"integ_multirole_{uuid.uuid4().hex[:10]}@example.com"
+    primary = roles[0] if roles else "student"
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    user = auth_storage.save_user({
+        "name":            f"MultiRole {uuid.uuid4().hex[:6]}",
+        "email":           email,
+        "hashed_password": pw_hash,
+        "role":            primary,
+    })
+    user_id = int(user["id"])
+    for role_name in roles[1:]:
+        add_user_role(user_id, role_name)
+
+    r = client.post(
+        "/api/auth/login", json={"email": email, "password": password},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["session_token"], user_id, email

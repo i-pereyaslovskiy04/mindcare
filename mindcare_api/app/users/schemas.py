@@ -5,7 +5,7 @@ Pydantic-схемы для модуля управления пользоват�
 
 from datetime import datetime
 from typing import Optional, Literal
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class AdminUserListQuery(BaseModel):
@@ -28,7 +28,9 @@ class AdminUserListItem(BaseModel):
     uuid: str
     email: str
     full_name: str
-    role: str
+    roles: list[str] = Field(default_factory=list)
+    # None у пользователя без активных ролей — НЕ маскируется как "student".
+    role: Optional[str] = None
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
@@ -57,10 +59,28 @@ class AdminUserCreate(BaseModel):
 
     email: EmailStr = Field(description="Email нового пользователя")
     full_name: str = Field(min_length=2, description="ФИО пользователя")
-    role: Literal["psychologist", "admin", "supervisor"] = Field(
-        description="Роль нового пользователя. student регистрируется сам."
+    role: Optional[Literal["psychologist", "admin", "supervisor"]] = Field(
+        default=None,
+        description="Legacy single-role. student регистрируется сам. "
+                    "Взаимоисключимо с roles[]; укажите ровно одно.",
+    )
+    roles: Optional[list[Literal["psychologist", "supervisor", "admin"]]] = Field(
+        default=None,
+        description="Multi-role создание: набор служебных ролей. student здесь "
+                    "не принимается. Взаимоисключимо с role; укажите ровно одно.",
     )
     phone: Optional[str] = Field(default=None, description="Телефон (необязательно)")
+
+    @model_validator(mode="after")
+    def _role_or_roles(self):
+        if (self.role is None) == (self.roles is None):
+            raise ValueError(
+                "Укажите ровно одно из role (legacy single) или roles[] (набор "
+                "служебных ролей)"
+            )
+        if self.roles is not None and len(self.roles) == 0:
+            raise ValueError("roles[] не может быть пустым")
+        return self
 
     legal_basis_confirmed: bool = Field(
         description="Подтверждение наличия документированного основания "
@@ -72,9 +92,9 @@ class AdminUserCreate(BaseModel):
         default="service_duty",
         description="Тип документированного основания",
     )
-    basis_reference: Optional[str] = Field(
-        default=None, max_length=255,
-        description="Документ-основание: «Приказ №…», «Договор №…»",
+    basis_reference: str = Field(
+        max_length=255,
+        description="Документ-основание: «Приказ №…», «Договор №…» (обязателен)",
     )
     legal_basis_comment: Optional[str] = Field(
         default=None, description="Комментарий к основанию (необязательно)",
@@ -90,6 +110,17 @@ class AdminUserCreate(BaseModel):
             )
         return v
 
+    @field_validator("basis_reference")
+    @classmethod
+    def _basis_reference_required(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError(
+                "Необходимо указать basis_reference (документ-основание) "
+                "для создания служебной учётной записи"
+            )
+        return stripped
+
 
 class AdminUserCreateResponse(BaseModel):
     """Ответ POST /api/admin/users."""
@@ -97,6 +128,7 @@ class AdminUserCreateResponse(BaseModel):
     uuid: str
     email: str
     full_name: str
+    roles: list[str] = Field(default_factory=list)
     role: str
     is_active: bool
     created_at: datetime
@@ -118,8 +150,25 @@ class AdminUserUpdate(BaseModel):
     phone: Optional[str] = Field(default=None, description="Телефон")
     is_active: Optional[bool] = Field(default=None, description="Активность аккаунта")
     role: Optional[Literal["student", "psychologist", "admin", "supervisor"]] = Field(
-        default=None, description="Новая роль пользователя"
+        default=None,
+        description="Legacy single-role adapter. Multi-role пользователь → 409, "
+                    "используйте roles[]. student — только no-op.",
     )
+    roles: Optional[list[Literal["psychologist", "supervisor", "admin"]]] = Field(
+        default=None,
+        description="Set-based staff-role management: целевой набор служебных "
+                    "ролей. student read-only и здесь не принимается. Взаимо"
+                    "исключимо с role.",
+    )
+
+    @model_validator(mode="after")
+    def _role_xor_roles(self):
+        if self.role is not None and self.roles is not None:
+            raise ValueError(
+                "Укажите либо role (legacy single), либо roles[] (set-based), "
+                "но не оба"
+            )
+        return self
 
     # Legal basis — требуется только при смене роли на служебную (см. service/storage).
     legal_basis_confirmed: Optional[bool] = Field(
@@ -145,7 +194,9 @@ class AdminUserRead(BaseModel):
     email: str
     full_name: str
     phone: Optional[str] = None
-    role: str
+    roles: list[str] = Field(default_factory=list)
+    # None у пользователя без активных ролей — НЕ маскируется как "student".
+    role: Optional[str] = None
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
