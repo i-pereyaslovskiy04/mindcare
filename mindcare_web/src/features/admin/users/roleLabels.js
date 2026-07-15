@@ -1,21 +1,13 @@
 /**
  * Общие подписи и тон Badge для ролей пользователей.
- * Переиспользуются в UsersTable, UserEditModal (Select роли) и UserCreateModal.
+ * Переиспользуются в UsersTable, UserEditModal (StaffRolesCheckboxes) и UserCreateModal.
+ *
+ * ROLE_LABELS / ROLE_BADGE_TONES — реэкспорт единого canonical источника
+ * (shared/lib/roles.js), чтобы не держать вторую копию объектов (ADR-018).
  */
+import { ROLE_LABELS, ROLE_BADGE_TONES } from '../../../shared/lib/roles';
 
-export const ROLE_LABELS = {
-  student:      'Студент',
-  psychologist: 'Психолог',
-  admin:        'Администратор',
-  supervisor:   'Супервизор',
-};
-
-export const ROLE_BADGE_TONES = {
-  student:      'role-student',
-  psychologist: 'role-psychologist',
-  admin:        'role-admin',
-  supervisor:   'role-supervisor',
-};
+export { ROLE_LABELS, ROLE_BADGE_TONES };
 
 /**
  * Роли, требующие документированного основания (legal basis) при назначении —
@@ -49,4 +41,15 @@ export const CREATE_ROLE_OPTIONS = [
   { value: 'supervisor',   label: ROLE_LABELS.supervisor },
   { value: 'psychologist', label: ROLE_LABELS.psychologist },
   { value: 'admin',        label: ROLE_LABELS.admin },
+];
+
+/**
+ * Опции staff-ролей для multi-role checkbox-контрола (create/edit).
+ * Порядок — по приоритету (admin > supervisor > psychologist). `student` НЕ
+ * входит: он не назначается через admin role control.
+ */
+export const STAFF_ROLE_OPTIONS = [
+  { value: 'admin',        label: ROLE_LABELS.admin },
+  { value: 'supervisor',   label: ROLE_LABELS.supervisor },
+  { value: 'psychologist', label: ROLE_LABELS.psychologist },
 ];

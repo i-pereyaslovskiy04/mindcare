@@ -4,17 +4,18 @@ import { useUserForm } from '../hooks/useUserForm';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
-import { CREATE_ROLE_OPTIONS } from '../roleLabels';
+import StaffRolesCheckboxes from './StaffRolesCheckboxes';
 import { BASIS_TYPE_OPTIONS, CREATE_LEGAL_BASIS_LABEL } from '../legalBasis';
 import styles from './UserCreateModal.module.css';
 
-const ROLE_OPTIONS = CREATE_ROLE_OPTIONS;
 const LEGAL_BASIS_LABEL = CREATE_LEGAL_BASIS_LABEL;
 
 export default function UserCreateModal({ open, onClose, onCreated }) {
   const [createdUser, setCreatedUser] = useState(null);
 
-  const { values, errors, submitting, handleChange, handleSubmit, reset } = useUserForm({
+  const {
+    values, errors, submitting, handleChange, handleSubmit, toggleRole, reset,
+  } = useUserForm({
     mode: 'create',
     onSuccess: (result) => setCreatedUser(result),
   });
@@ -36,6 +37,7 @@ export default function UserCreateModal({ open, onClose, onCreated }) {
           errors={errors}
           submitting={submitting}
           onChange={handleChange}
+          onToggleRole={toggleRole}
           onSubmit={handleSubmit}
           onCancel={handleClose}
         />
@@ -44,7 +46,11 @@ export default function UserCreateModal({ open, onClose, onCreated }) {
   );
 }
 
-function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }) {
+function CreateForm({ values, errors, submitting, onChange, onToggleRole, onSubmit, onCancel }) {
+  const canSubmit =
+    values.legal_basis_confirmed &&
+    values.roles.length > 0 &&
+    Boolean(values.basis_reference?.trim());
   return (
     <div className={styles.body}>
       <h2 className={styles.title}>Новый пользователь</h2>
@@ -85,13 +91,11 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label}>Роль</label>
-          <Select
-            value={values.role}
-            options={ROLE_OPTIONS}
-            onChange={(val) => onChange({ target: { name: 'role', value: val } })}
-            error={errors.role}
-            panelZIndex={2300}
+          <StaffRolesCheckboxes
+            value={values.roles}
+            onToggle={onToggleRole}
+            error={errors.roles}
+            idPrefix="ucm-role"
           />
         </div>
 
@@ -108,11 +112,11 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="ucm-basis_reference">
-            Документ-основание (необязательно)
+            Документ-основание
           </label>
           <input
             id="ucm-basis_reference"
-            className={styles.input}
+            className={`${styles.input} ${errors.basis_reference ? styles.inputError : ''}`}
             type="text"
             name="basis_reference"
             value={values.basis_reference}
@@ -121,6 +125,9 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
             autoComplete="off"
             maxLength={255}
           />
+          {errors.basis_reference && (
+            <span className={styles.hint} role="alert">{errors.basis_reference}</span>
+          )}
         </div>
 
         <div className={styles.field}>
@@ -169,7 +176,7 @@ function CreateForm({ values, errors, submitting, onChange, onSubmit, onCancel }
           <Button
             variant="primary"
             type="submit"
-            disabled={submitting || !values.legal_basis_confirmed}
+            disabled={submitting || !canSubmit}
           >
             {submitting ? 'Создаём…' : 'Создать'}
           </Button>

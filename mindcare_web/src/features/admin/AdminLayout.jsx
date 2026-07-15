@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../auth/AuthContext';
+import CabinetSwitcher from '../auth/CabinetSwitcher';
 import Icon from '../../components/Icon/Icon';
 import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
+import { normalizeRoles } from '../../shared/lib/roles';
 import styles from './AdminLayout.module.css';
 
 const CRUMB_LABELS = {
@@ -18,9 +21,16 @@ const CRUMB_LABELS = {
 
 export default function AdminLayout() {
   const { pathname } = useLocation();
-  const { user } = useAuth();
+  const { user, activeRole, setActiveRole } = useAuth();
   const logout = useLogout();
   const crumb = CRUMB_LABELS[pathname] ?? 'Панель';
+
+  // Синхронизируем activeRole с открытым admin-кабинетом (прямой URL/reload).
+  useEffect(() => {
+    if (activeRole !== 'admin' && normalizeRoles(user).includes('admin')) {
+      setActiveRole('admin');
+    }
+  }, [activeRole, user, setActiveRole]);
 
   return (
     <div className={styles.app}>
@@ -39,8 +49,7 @@ export default function AdminLayout() {
           <div className={styles.userInfo}>
             <div className={styles.userName}>{user?.name ?? 'Администратор'}</div>
             <div className={styles.userRole}>
-              <span className={styles.roleDot} />
-              Администратор
+              <CabinetSwitcher currentRole="admin" />
             </div>
           </div>
         </div>
@@ -161,6 +170,11 @@ export default function AdminLayout() {
             Администратор / <span>{crumb}</span>
           </div>
           <div className={styles.actions}>
+            {/* Дублирует switcher из sidebar .userInfo, но видим только
+                когда sidebar свёрнут в icon-rail (<=980px). */}
+            <div className={styles.topbarSwitcher}>
+              <CabinetSwitcher currentRole="admin" />
+            </div>
             <Button
               type="button"
               variant="icon"

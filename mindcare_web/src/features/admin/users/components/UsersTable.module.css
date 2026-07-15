@@ -83,6 +83,12 @@
   color: var(--text-muted);
 }
 
+.roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 .date {
   color: var(--text-light);
   white-space: nowrap;

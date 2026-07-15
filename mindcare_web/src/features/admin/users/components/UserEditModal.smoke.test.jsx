@@ -14,6 +14,7 @@ beforeEach(() => {
   api.getUser.mockResolvedValue({
     full_name: 'Студент Тестов',
     phone: '',
+    roles: ['student'],
     role: 'student',
     is_active: true,
   });
@@ -32,46 +33,48 @@ function renderModal() {
   );
 }
 
-test('role field is rendered and current student role is shown (not selectable)', async () => {
+test('staff role checkboxes are rendered; student shown read-only (no student checkbox)', async () => {
   renderModal();
 
-  // дождаться загрузки пользователя
-  expect(await screen.findByText('Роль пользователя')).toBeInTheDocument();
-  // текущая роль student отображается как значение через displayLabel
-  expect(screen.getByRole('button', { name: /Студент/ })).toBeInTheDocument();
+  expect(await screen.findByText('Роли пользователя')).toBeInTheDocument();
+  // staff-роли — чекбоксы
+  expect(screen.getByRole('checkbox', { name: 'Психолог' })).toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Супервизор' })).toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Администратор' })).toBeInTheDocument();
+  // student НЕ чекбокс — только read-only badge
+  expect(screen.queryByRole('checkbox', { name: 'Студент' })).toBeNull();
+  expect(screen.getByText('Студент')).toBeInTheDocument();
 });
 
-test('role field appears before phone field in DOM order', async () => {
+test('student-only: staff checkboxes are disabled with an explanation, no legal basis reveal', async () => {
   renderModal();
-  const roleLabel = await screen.findByText('Роль пользователя');
-  const phoneLabel = screen.getByText('Телефон');
-  // Node.DOCUMENT_POSITION_FOLLOWING (4) => phoneLabel идёт ПОСЛЕ roleLabel
-  expect(roleLabel.compareDocumentPosition(phoneLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const psy = await screen.findByRole('checkbox', { name: 'Психолог' });
+
+  // backend разрешает добавление staff-роли только тому, у кого она уже есть —
+  // student-only пользователь не может назначить первую staff-роль через edit.
+  expect(psy).toBeDisabled();
+  expect(screen.getByText(/Назначение служебной роли доступно только/)).toBeInTheDocument();
+
+  fireEvent.click(psy);
+  expect(screen.queryByText('Документ-основание')).toBeNull();
+  expect(api.updateUser).not.toHaveBeenCalled();
 });
 
-test('dropdown offers staff roles and NOT student', async () => {
+test('user with an existing staff role: checking another staff role reveals the legal basis block', async () => {
+  api.getUser.mockResolvedValueOnce({
+    full_name: 'Психолог Иванов', phone: '',
+    roles: ['psychologist'], is_active: true,
+  });
   renderModal();
-  const control = await screen.findByRole('button', { name: /Студент/ });
-  fireEvent.click(control);
+  const sup = await screen.findByRole('checkbox', { name: 'Супервизор' });
 
-  const options = await screen.findAllByRole('option');
-  const labels = options.map((o) => o.textContent);
-  expect(labels).toEqual(expect.arrayContaining(['Психолог', 'Супервизор', 'Администратор']));
-  expect(screen.queryByRole('option', { name: 'Студент' })).toBeNull();
-});
+  // до выбора — legal basis скрыт, чекбоксы доступны (уже есть staff-роль)
+  expect(screen.queryByText('Документ-основание')).toBeNull();
+  expect(sup).not.toBeDisabled();
 
-test('selecting a staff role reveals the legal basis block', async () => {
-  renderModal();
-  const control = await screen.findByRole('button', { name: /Студент/ });
-  fireEvent.click(control);
-
-  const psychologist = await screen.findByRole('option', { name: 'Психолог' });
-  // Select использует onMouseDown для выбора опции
-  fireEvent.mouseDown(psychologist);
+  fireEvent.click(sup);
 
   await waitFor(() => {
     expect(screen.getByText('Документ-основание')).toBeInTheDocument();
   });
-  expect(screen.getByText(/документированного основания для назначения этой роли/i))
-    .toBeInTheDocument();
 });
