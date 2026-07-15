@@ -45,10 +45,11 @@ const CRUMB_LABELS = {
 };
 
 export default function StudentLayout() {
-  const messagesBadge = useMessagesBadge();
+  const messagesBadge = useMessagesBadge('student');
   const navSections = useMemo(() => buildNavSections(messagesBadge), [messagesBadge]);
   return (
     <CabinetLayout
+      cabinetRole="student"
       navSections={navSections}
       crumbLabels={CRUMB_LABELS}
     />

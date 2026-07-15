@@ -26,8 +26,10 @@ import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { configureClient } from '../../api/client';
 import * as authApi from '../../api/auth.api';
+import { normalizeRoles } from '../../shared/lib/roles';
 
 const SESSION_KEY = 'mindcare_session';
+const ACTIVE_ROLE_KEY = 'mindcare_active_role';
 
 function getStoredToken() {
   return localStorage.getItem(SESSION_KEY);
@@ -38,12 +40,35 @@ function setStoredToken(token) {
 function clearStoredToken() {
   localStorage.removeItem(SESSION_KEY);
 }
+function getStoredActiveRole() {
+  return localStorage.getItem(ACTIVE_ROLE_KEY);
+}
+function setStoredActiveRole(role) {
+  localStorage.setItem(ACTIVE_ROLE_KEY, role);
+}
+function clearStoredActiveRole() {
+  localStorage.removeItem(ACTIVE_ROLE_KEY);
+}
+
+/**
+ * Единая нормализация auth-user (ADR-018): гарантирует `roles: Role[]` как
+ * источник истины. Явный backend `roles` (даже []) сохраняется; legacy `role`
+ * даёт fallback `[role]` только при полном отсутствии поля `roles`.
+ */
+function normalizeUser(raw) {
+  if (!raw) return null;
+  return { ...raw, roles: normalizeRoles(raw) };
+}
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
+  // activeRole — UI-hint выбранного кабинета (не право доступа). Ленивая
+  // инициализация из localStorage, чтобы валидный сохранённый кабинет был
+  // доступен на первом рендере после loading=false (без вспышки RoleChooser).
+  const [activeRole, setActiveRoleState] = useState(() => getStoredActiveRole());
   const tokenRef              = useRef(null);
   const navigate              = useNavigate();
 
@@ -66,10 +91,16 @@ export function AuthProvider({ children }) {
     clearStoredToken();
   };
 
+  const _clearActiveRole = () => {
+    setActiveRoleState(null);
+    clearStoredActiveRole();
+  };
+
   // ── Session-expired event (fired by apiFetch on 401) ─────────────────────
 
   const _clearSession = useCallback(() => {
     _clearToken();
+    _clearActiveRole();
     setUser(null);
   }, []);
 
@@ -97,17 +128,25 @@ export function AuthProvider({ children }) {
     async function restore() {
       const stored = getStoredToken();
       if (!stored) {
-        if (!cancelled) setLoading(false);
+        // Нет сессии — сбрасываем и activeRole, иначе выбор кабинета «протекает»
+        // между разными пользователями на одном устройстве.
+        if (!cancelled) {
+          _clearActiveRole();
+          setLoading(false);
+        }
         return;
       }
 
       tokenRef.current = stored; // must be set BEFORE calling me()
       try {
         const userData = await authApi.me();
-        if (!cancelled) setUser(userData);
+        if (!cancelled) setUser(normalizeUser(userData));
       } catch {
-        // Session invalid or expired — clear it.
-        if (!cancelled) _clearToken();
+        // Session invalid or expired — clear it (token + activeRole).
+        if (!cancelled) {
+          _clearToken();
+          _clearActiveRole();
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -116,6 +155,15 @@ export function AuthProvider({ children }) {
     restore();
     return () => { cancelled = true; };
   }, []);
+
+  // ── Reconcile activeRole against membership ───────────────────────────────
+  // Сохранённый/выбранный activeRole действителен только пока роль в user.roles.
+  useEffect(() => {
+    if (!user) return;
+    if (activeRole && !normalizeRoles(user).includes(activeRole)) {
+      _clearActiveRole();
+    }
+  }, [user, activeRole]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -126,9 +174,11 @@ export function AuthProvider({ children }) {
     const userData = await authApi.me();
     // flushSync: user state must be committed before the caller's navigate()
     // fires, otherwise ProtectedRoute sees user=null and redirects to /.
-    flushSync(() => { setUser(userData); });
+    flushSync(() => { setUser(normalizeUser(userData)); });
 
-    return data.role;
+    // Кабинет выбирает DashboardRedirect — caller навигирует на /dashboard,
+    // а не по одной legacy-роли.
+    return normalizeUser(userData);
   }, []);
 
   const logout = useCallback(async () => {
@@ -139,14 +189,29 @@ export function AuthProvider({ children }) {
   /** Re-fetch /me и обновить user (например, после смены профиля). */
   const refreshUser = useCallback(async () => {
     const userData = await authApi.me();
-    setUser(userData);
-    return userData;
-  }, []);
+    const normalized = normalizeUser(userData);
+    setUser(normalized);
+    // Если текущий activeRole больше не назначен — сбросить (reconcile-эффект
+    // тоже сработает, но делаем явно и синхронно к обновлению user).
+    if (activeRole && !normalized.roles.includes(activeRole)) {
+      _clearActiveRole();
+    }
+    return normalized;
+  }, [activeRole]);
+
+  /** UI-hint выбора кабинета. Принимает роль только из текущего user.roles. */
+  const setActiveRole = useCallback((role) => {
+    if (!normalizeRoles(user).includes(role)) return; // reject non-member
+    setActiveRoleState(role);
+    setStoredActiveRole(role);
+  }, [user]);
 
   const value = {
     user,
     loading,
     isAuthenticated: !!user,
+    activeRole,
+    setActiveRole,
     login,
     logout,
     refreshUser,

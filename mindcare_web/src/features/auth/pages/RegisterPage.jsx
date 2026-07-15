@@ -2,17 +2,16 @@ import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import RegisterForm from '../ui/RegisterForm';
-import { getRoleHome } from '../../../shared/lib/routes';
 import styles from './RegisterPage.module.css';
 
 export default function RegisterPage() {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
-  // Already logged in → go to role dashboard.
+  // Already logged in → DashboardRedirect выбирает кабинет (multi-role).
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate(getRoleHome(user.role), { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 

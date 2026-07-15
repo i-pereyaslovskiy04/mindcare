@@ -4,14 +4,10 @@ import { useAuth } from '../../features/auth/AuthContext';
 import Button from '../UI/Button/Button';
 import Toggle from '../UI/Toggle/Toggle';
 import { getInitials } from '../../shared/lib/utils';
+import { ROLE_LABELS } from '../../shared/lib/roles';
 import Select from '../UI/Select/Select';
 import * as authApi from '../../api/auth.api';
 import styles from './CabinetSettingsPage.module.css';
-
-const ROLE_LABELS = {
-  psychologist: 'Психолог',
-  supervisor:   'Супервизор',
-};
 
 const TIMEZONE_OPTIONS = [
   { value: 'msk', label: 'Москва (UTC+3)' },
@@ -31,7 +27,7 @@ function NotifRow({ label, desc, on, onToggle }) {
   );
 }
 
-export default function CabinetSettingsPage() {
+export default function CabinetSettingsPage({ cabinetRole }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -71,7 +67,8 @@ export default function CabinetSettingsPage() {
     weekly:   false,
   });
 
-  const roleLabel = ROLE_LABELS[user?.role] ?? '';
+  // Лейбл — из роли МАРШРУТА (cabinetRole), а не legacy user.role.
+  const roleLabel = ROLE_LABELS[cabinetRole] ?? '';
 
   function toggleNotif(key) {
     setNotif(n => ({ ...n, [key]: !n[key] }));

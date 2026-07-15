@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
 import { registerInit, registerConfirm } from '../../../api/auth.api';
-import { getRoleHome } from '../../../shared/lib/routes';
 import { TelegramIcon, VKIcon, YandexIcon } from '../../../components/icons';
 import CodeInput from '../../../components/CodeInput/CodeInput';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
@@ -121,9 +120,9 @@ export default function RegisterForm({ onSuccess }) {
     setIsLoading(true);
     try {
       await registerConfirm({ email, code });
-      const role = await login({ email, password });
+      await login({ email, password });
       onSuccess();
-      navigate(getRoleHome(role));
+      navigate('/dashboard');
     } catch (err) {
       setOtpError(err.message || 'Неверный код. Попробуйте снова.');
       setOtp(['', '', '', '', '', '']);

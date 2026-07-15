@@ -1,24 +1,33 @@
 import { useEffect, useState } from 'react';
 import { useLocation, Outlet, NavLink } from 'react-router-dom';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
+import CabinetSwitcher from '../../features/auth/CabinetSwitcher';
 import Icon from '../Icon/Icon';
 import { getInitials } from '../../shared/lib/utils';
+import { ROLE_LABELS, normalizeRoles } from '../../shared/lib/roles';
 import styles from './CabinetLayout.module.css';
 
-const ROLE_LABELS = {
-  psychologist: 'Психолог',
-  supervisor:   'Супервизор',
-  student:      'Пациент',
-};
-
-export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs }) {
+export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, dynamicCrumbs }) {
   const { pathname } = useLocation();
-  const { user }     = useAuth();
+  const { user, activeRole, setActiveRole } = useAuth();
   const logout       = useLogout();
   const crumb        = crumbLabels?.[pathname]
     ?? dynamicCrumbs?.find(({ prefix }) => pathname.startsWith(prefix))?.label
     ?? 'Личный кабинет';
-  const roleLabel    = ROLE_LABELS[user?.role] ?? '';
+  // Лейбл — из cabinetRole (текущего кабинета), а не из legacy user.role.
+  const roleLabel    = ROLE_LABELS[cabinetRole] ?? '';
+
+  // Синхронизируем activeRole с реально открытым кабинетом (работает и при
+  // прямом URL / reload, не только по клику switcher). setState — в эффекте.
+  useEffect(() => {
+    if (
+      cabinetRole &&
+      cabinetRole !== activeRole &&
+      normalizeRoles(user).includes(cabinetRole)
+    ) {
+      setActiveRole(cabinetRole);
+    }
+  }, [cabinetRole, activeRole, user, setActiveRole]);
 
   // Мобильное меню (drawer). На desktop кнопка скрыта, drawer не открыть.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -50,8 +59,7 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
         <div className={styles.userInfo}>
           <div className={styles.userName}>{user?.name ?? roleLabel}</div>
           <div className={styles.userRole}>
-            <span className={styles.roleDot} aria-hidden="true" />
-            {roleLabel}
+            <CabinetSwitcher currentRole={cabinetRole} />
           </div>
         </div>
       </div>
@@ -120,6 +128,12 @@ export default function CabinetLayout({ navSections, crumbLabels, dynamicCrumbs 
             </div>
           </div>
           <div className={styles.actions}>
+            {/* Дублирует switcher из sidebar .userInfo, но видим только когда
+                sidebar свёрнут в icon-rail/скрыт (<=980px) — сами блоки
+                взаимно исключены через CSS, одновременно виден только один. */}
+            <div className={styles.topbarSwitcher}>
+              <CabinetSwitcher currentRole={cabinetRole} />
+            </div>
             <div className={styles.search}>
               <Icon name="search" size={14} />
               <input type="text" placeholder="Поиск по материалам, записям…" readOnly />

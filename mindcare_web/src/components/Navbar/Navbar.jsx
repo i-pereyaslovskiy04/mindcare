@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
-import { getRoleHome } from '../../shared/lib/routes';
 import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
@@ -37,8 +36,9 @@ const CloseIcon = () => (
 
 export default function Navbar({ onOpenAuth }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { user, isAuthenticated, loading } = useAuth();
-  const cabinetTo = getRoleHome(user?.role);
+  const { isAuthenticated, loading } = useAuth();
+  // Кабинет выбирает DashboardRedirect (multi-role: chooser/activeRole).
+  const cabinetTo = '/dashboard';
 
   // Close menu when resizing back to desktop
   useEffect(() => {

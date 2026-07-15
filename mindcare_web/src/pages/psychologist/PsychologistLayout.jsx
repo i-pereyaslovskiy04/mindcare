@@ -37,7 +37,7 @@ const DYNAMIC_CRUMBS = [
 ];
 
 export default function PsychologistLayout() {
-  const messagesBadge = useMessagesBadge();
+  const messagesBadge = useMessagesBadge('psychologist');
   const navSections = useMemo(() => buildNavSections(messagesBadge), [messagesBadge]);
-  return <CabinetLayout navSections={navSections} crumbLabels={CRUMB_LABELS} dynamicCrumbs={DYNAMIC_CRUMBS} />;
+  return <CabinetLayout cabinetRole="psychologist" navSections={navSections} crumbLabels={CRUMB_LABELS} dynamicCrumbs={DYNAMIC_CRUMBS} />;
 }
