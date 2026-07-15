@@ -23,6 +23,7 @@ from typing import Optional
 
 from fastapi import UploadFile
 
+from app.auth.roles import effective_role
 from app.chat import storage
 from app.chat import attachment_service as _att_svc
 from app.chat.audit import (
@@ -38,6 +39,24 @@ class ChatError(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
+
+
+def _actor_role(current_user: dict, cabinet: str) -> str:
+    """
+    Роль актора для audit, scoped под кабинет endpoint-а (ADR-018).
+
+    Chat-эндпоинты role-специфичны (require_role("student"/"psychologist")),
+    поэтому актор действует как участник в конкретном кабинете. Берём именно
+    эту роль из membership (а не случайную primary у multi-role пользователя).
+    None здесь невозможен после require_role; если всё же None — 403, а не
+    actor_role=None в audit.
+    """
+    role = effective_role(
+        current_user.get("roles") or [], allowed={cabinet}, preferred=cabinet
+    )
+    if role is None:
+        raise ChatError("Недостаточно прав для выполнения действия", status_code=403)
+    return role
 
 
 _NOT_FOUND = "Диалог не найден"
@@ -102,7 +121,7 @@ def get_my_conversation(
         if created:
             log_conversation_created(
                 actor_id=student_id,
-                actor_role=current_user["role"],
+                actor_role=_actor_role(current_user, "student"),
                 conversation_id=conv.id,
                 conversation_uuid=str(conv.uuid),
                 engagement_id=eng.id,
@@ -162,7 +181,7 @@ def send_my_message(
     if created:
         log_conversation_created(
             actor_id=student_id,
-            actor_role=current_user["role"],
+            actor_role=_actor_role(current_user, "student"),
             conversation_id=conv.id,
             conversation_uuid=str(conv.uuid),
             engagement_id=eng.id,
@@ -338,7 +357,8 @@ def edit_message(
     conv, eng = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
     return _apply_message_edit(
         conv=conv, eng=eng,
-        actor_user_id=psychologist_id, actor_role=current_user["role"],
+        actor_user_id=psychologist_id,
+        actor_role=_actor_role(current_user, "psychologist"),
         message_uuid=message_uuid, content=content,
         remove_attachment_uuids=remove_attachment_uuids,
     )
@@ -397,7 +417,8 @@ def delete_message(
     conv, eng = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
     return _apply_message_delete(
         conv=conv, eng=eng,
-        actor_user_id=psychologist_id, actor_role=current_user["role"],
+        actor_user_id=psychologist_id,
+        actor_role=_actor_role(current_user, "psychologist"),
         message_uuid=message_uuid,
     )
 
@@ -496,7 +517,8 @@ def edit_student_conversation_message(
     conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
     return _apply_message_edit(
         conv=conv, eng=eng,
-        actor_user_id=student_id, actor_role=current_user["role"],
+        actor_user_id=student_id,
+        actor_role=_actor_role(current_user, "student"),
         message_uuid=message_uuid, content=content,
         remove_attachment_uuids=remove_attachment_uuids,
     )
@@ -510,7 +532,8 @@ def delete_student_conversation_message(
     conv, eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
     return _apply_message_delete(
         conv=conv, eng=eng,
-        actor_user_id=student_id, actor_role=current_user["role"],
+        actor_user_id=student_id,
+        actor_role=_actor_role(current_user, "student"),
         message_uuid=message_uuid,
     )
 
@@ -587,7 +610,7 @@ def upload_attachment_student(
     student_id = int(current_user["id"])
     conv, eng  = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
     return _do_upload_attachment(
-        student_id, current_user["role"], conv, eng, file, data,
+        student_id, _actor_role(current_user, "student"), conv, eng, file, data,
     )
 
 
@@ -601,7 +624,8 @@ def upload_attachment_psychologist(
     psychologist_id = int(current_user["id"])
     conv, eng       = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
     return _do_upload_attachment(
-        psychologist_id, current_user["role"], conv, eng, file, data,
+        psychologist_id, _actor_role(current_user, "psychologist"),
+        conv, eng, file, data,
     )
 
 
@@ -650,7 +674,9 @@ def download_attachment_student(
     """Student скачивает вложение из своей беседы (active или closed)."""
     student_id = int(current_user["id"])
     conv, _eng = _resolve_student_conversation_by_uuid(student_id, conversation_uuid)
-    return _do_download_attachment(student_id, current_user["role"], conv, attachment_uuid)
+    return _do_download_attachment(
+        student_id, _actor_role(current_user, "student"), conv, attachment_uuid,
+    )
 
 
 def download_attachment_psychologist(
@@ -662,7 +688,8 @@ def download_attachment_psychologist(
     psychologist_id = int(current_user["id"])
     conv, _eng      = _resolve_psychologist_conversation(psychologist_id, conversation_uuid)
     return _do_download_attachment(
-        psychologist_id, current_user["role"], conv, attachment_uuid,
+        psychologist_id, _actor_role(current_user, "psychologist"),
+        conv, attachment_uuid,
     )
 
 
