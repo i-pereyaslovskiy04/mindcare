@@ -117,6 +117,7 @@ def login(body: LoginRequest, request: Request):
     return {
         "session_token": session_token,
         "expires_at":    expires_at,
+        "roles":         user["roles"],
         "role":          user["role"],
     }
 
@@ -146,6 +147,7 @@ def me(current_user: dict = Depends(get_current_user)):
         "id":    current_user["id"],
         "email": current_user["email"],
         "name":  current_user["name"],
+        "roles": current_user["roles"],
         "role":  current_user["role"],
     }
 

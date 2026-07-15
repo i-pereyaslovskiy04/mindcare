@@ -180,8 +180,11 @@ class TestUsersStorageEmailNormalization:
         mock_db = MagicMock()
         # Duplicate-check query: User + two .filter() calls → no existing user
         mock_db.query.return_value.filter.return_value.filter.return_value.first.return_value = None
-        # Role-lookup query: Role + one .filter() call → mock role
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(id=99)
+        # Role-lookup query (multi-role create): Role + one .filter() + .all()
+        # → все запрошенные роли существуют.
+        role_obj = MagicMock(id=99)
+        role_obj.name = "psychologist"  # name — reserved Mock kwarg, ставим явно
+        mock_db.query.return_value.filter.return_value.all.return_value = [role_obj]
 
         mock_new_user = MagicMock()
         mock_new_user.id = 1
@@ -193,7 +196,10 @@ class TestUsersStorageEmailNormalization:
 
         with patch("app.users.storage.SessionLocal", _mock_session(mock_db)), \
              patch("app.users.storage.User", return_value=mock_new_user) as mock_user_cls:
-            create_user("User@MAIL.RU", "Test", "hash", "student")
+            create_user(
+                "User@MAIL.RU", "Test", "hash", ["psychologist"],
+                basis_reference="Приказ № 1",
+            )
 
         mock_user_cls.assert_called_once()
         assert mock_user_cls.call_args.kwargs["email"] == "user@mail.ru"

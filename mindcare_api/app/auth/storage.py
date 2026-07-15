@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from app.core.normalization import normalize_email
+from app.auth.roles import ROLE_PRIORITY, primary_role
 from app.db.session import SessionLocal
 from app.db.models import (
     User, UserRole, Role, UserSession, Consent, ConsentRecord, OtpVerification,
@@ -49,28 +50,51 @@ class InvalidCurrentPasswordError(RuntimeError):
 # Вспомогательные функции
 # ---------------------------------------------------------------------------
 
-def _get_primary_role(db, user_id: int) -> str:
-    """Первая активная роль пользователя, по умолчанию — 'student'."""
-    ur = (
-        db.query(UserRole)
-        .join(Role, UserRole.role_id == Role.id)
+_ROLE_PRIORITY_INDEX = {name: i for i, name in enumerate(ROLE_PRIORITY)}
+
+
+def get_active_role_names(db, user_id: int) -> list[str]:
+    """
+    Все активные (непросроченные) роли пользователя из user_roles.
+
+    Просроченные роли (expires_at в прошлом) исключаются. Результат упорядочен
+    по глобальному приоритету ROLE_PRIORITY (admin, supervisor, psychologist,
+    student), чтобы primary_role/effective_role были детерминированы, а сам
+    список читался предсказуемо.
+    """
+    rows = (
+        db.query(Role.name)
+        .join(UserRole, UserRole.role_id == Role.id)
         .filter(UserRole.user_id == user_id)
         .filter(
             UserRole.expires_at.is_(None)
             | (UserRole.expires_at > datetime.now(timezone.utc))
         )
-        .first()
+        .all()
     )
-    return ur.role.name if ur else "student"
+    names = {r[0] for r in rows}
+    return sorted(names, key=lambda n: _ROLE_PRIORITY_INDEX.get(n, len(ROLE_PRIORITY)))
+
+
+def _get_primary_role(db, user_id: int) -> Optional[str]:
+    """
+    Детерминированная primary/default роль (глобальный приоритет) или None.
+
+    НЕ маскирует отсутствие ролей как 'student' — пустой набор возвращает None
+    (пользователь без активных ролей не проходит require_role).
+    """
+    return primary_role(get_active_role_names(db, user_id))
 
 
 def _user_to_dict(user: User, db) -> dict:
+    roles = get_active_role_names(db, user.id)
     return {
         "id":              str(user.id),
         "name":            user.full_name,
         "email":           user.email,
         "hashed_password": user.password_hash,
-        "role":            _get_primary_role(db, user.id),
+        "roles":           roles,
+        "role":            primary_role(roles),
         "is_active":       user.is_active,
     }
 
@@ -126,12 +150,14 @@ def find_user_by_id(user_id: str) -> Optional[dict]:
 
 
 def _profile_to_dict(user: User, db) -> dict:
+    roles = get_active_role_names(db, user.id)
     return {
         "id":        str(user.id),
         "email":     user.email,
         "full_name": user.full_name,
         "phone":     user.phone,
-        "role":      _get_primary_role(db, user.id),
+        "roles":     roles,
+        "role":      primary_role(roles),
     }
 
 

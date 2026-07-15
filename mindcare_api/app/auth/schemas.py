@@ -4,6 +4,11 @@ from datetime import datetime
 
 Role = Literal["student", "psychologist", "admin", "supervisor"]
 
+# Общие поля роли для auth-ответов (ADR-018): `roles` — источник истины (набор
+# активных membership-ролей), `role` — legacy/default/effective primary для
+# совместимости; может быть None у аккаунта без активных ролей (не маскируем
+# отсутствие ролей как "student").
+
 
 class RegisterInitRequest(BaseModel):
     name: str
@@ -25,14 +30,16 @@ class SessionResponse(BaseModel):
     """Ответ на успешный логин — токен сессии."""
     session_token: str
     expires_at: datetime
-    role: Role
+    roles: list[Role] = Field(default_factory=list)
+    role: Optional[Role] = None
 
 
 class UserResponse(BaseModel):
     id: str
     email: str
     name: str
-    role: Role
+    roles: list[Role] = Field(default_factory=list)
+    role: Optional[Role] = None
 
 
 class ProfileRead(BaseModel):
@@ -41,7 +48,8 @@ class ProfileRead(BaseModel):
     email: str
     full_name: str
     phone: Optional[str] = None
-    role: Role
+    roles: list[Role] = Field(default_factory=list)
+    role: Optional[Role] = None
 
 
 class ProfileUpdate(BaseModel):
