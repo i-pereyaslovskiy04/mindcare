@@ -352,9 +352,9 @@ src/data/
 | `/health` | `HealthPage` | Public |
 | `/login` | `LoginPage` | Public |
 | `/register` | `RegisterPage` | Public |
-| `/dashboard` | `DashboardRedirect` | Auth (редирект по роли) |
+| `/dashboard` | `DashboardRedirect` | Auth (active/default role redirect) |
 | `/profile` | `ProfilePage` | Auth |
-| `/student` | `ClientDashboard` (Outlet) | Auth + role: student |
+| `/student` | `ClientDashboard` (Outlet) | Auth + role membership: student |
 | `/student/diary` | `DiaryPage` | — (наследует от `/student`) |
 | `/student/tests` | `TestsPage` | — |
 | `/student/materials` | `StudentMaterialsPage` | — |
@@ -363,20 +363,20 @@ src/data/
 | `/student/calendar` | `CalendarPage` | — |
 | `/student/group-sessions` | `StudentGroupSessionsPage` | — |
 | `/student/settings` | `SettingsPage` | — |
-| `/psychologist` | `PsychologistLayout` (Outlet) | Auth + role: psychologist |
+| `/psychologist` | `PsychologistLayout` (Outlet) | Auth + role membership: psychologist |
 | `/psychologist/students` | `PsychologistStudentsPage` | — |
 | `/psychologist/students/:studentId` | `PsychologistStudentCardPage` | — |
 | `/psychologist/appointments` | `PsychologistAppointmentsPage` | — |
 | `/psychologist/chat` | `PsychologistChatPage` | — |
 | `/psychologist/settings` | `CabinetSettingsPage` | — |
-| `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role: supervisor |
+| `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role membership: supervisor |
 | `/supervisor/engagements` | `EngagementsPage` | — |
 | `/supervisor/meeting-types` | `MeetingTypesPage` | — |
 | `/supervisor/schedule` | `SchedulePage` | — |
 | `/supervisor/booking` | `BookingPage` | — |
 | `/supervisor/group-sessions` | `GroupSessionsPage` | — |
 | `/supervisor/settings` | `CabinetSettingsPage` | — |
-| `/admin` | `AdminLayout` (Outlet) | Auth + role: admin |
+| `/admin` | `AdminLayout` (Outlet) | Auth + role membership: admin |
 | `/admin/users` | `UsersPage` | — (наследует от `/admin`) |
 | `/admin/categories` | `CategoriesPage` | — (UI: «Типы материалов») |
 | `/admin/tags` | `TagsPage` | — (UI: «Темы») |
@@ -384,7 +384,7 @@ src/data/
 | `/admin/articles` | `AdminArticlesPage` | — |
 | `*` | `NotFound` | Public |
 
-**DashboardRedirect** — умный редирект по роли:
+**DashboardRedirect** — редирект по активному/default кабинету:
 
 | Роль | Редирект |
 |------|----------|
@@ -393,9 +393,32 @@ src/data/
 | `supervisor` | `/supervisor` |
 | `admin` | `/admin/users` |
 
+Multi-role users (ADR-018):
+- auth user shape содержит `roles: Role[]`; legacy `role` допустим только как
+  deterministic primary для совместимости и не используется для runtime-решений;
+- `normalizeRoles(user)` считает явно переданный `roles`, включая `roles: []`,
+  источником истины; fallback `[role]` применяется только при отсутствии поля;
+- если сохранённый `activeRole` валиден для `user.roles`, `/dashboard` ведёт в его
+  кабинет;
+- если у пользователя одна роль, `/dashboard` сразу открывает её кабинет;
+- если ролей несколько, а валидный active role не выбран, показывается
+  `RoleChooser`; выбор сохраняется и ведёт в соответствующий кабинет;
+- если активных ролей нет, `/dashboard` ведёт в `/profile`;
+- пользователь с `admin` + `supervisor` попадает в `/admin/*` по роли `admin`, а не
+  потому что `supervisor` наследует admin-доступ;
+- admin users API в list/read/create responses возвращает активные
+  `roles: Role[]` в детерминированном порядке и legacy primary `role`;
+  просроченные роли не включаются;
+- admin create API принимает ровно одно из legacy `role` или staff-only
+  `roles[]`. Frontend отправляет `roles[]`; `role` остаётся
+  только для backward compatibility;
+- `UsersTable`, create/edit forms и role badges используют `roles[]`;
+- `activeRole` очищается при logout, session-expired, failed/no-session restore;
+  прямой URL кабинета синхронизирует active role после membership-check.
+
 **Guards:**
 - `PrivateRoute` — требует аутентификации, редирект на `/login`
-- `RoleRoute` — требует указанную роль, редирект на `/profile` при несоответствии
+- `RoleRoute` — требует membership в `user.roles`, редирект на `/profile` при несоответствии
 - Пока auth восстанавливается — рендерит `null` (без белого экрана — в бэклоге)
 
 ---
@@ -430,16 +453,33 @@ apiFetch() → 401
 
 ```
 AuthProvider mount → read localStorage
-  → token present: GET /api/auth/me → setState
-  → token absent: user = null
+  → token present: GET /api/auth/me → normalizeUser() → reconcile activeRole
+  → token absent/restore failed: user = null + clear activeRole
 ```
 
 ### ProtectedRoute
 
 ```jsx
 if (!user) return <Navigate to="/login" />;
-if (roles && !roles.includes(user.role)) return <Navigate to="/profile" />;
+if (roles && !roles.some((role) => user.roles?.includes(role))) {
+  return <Navigate to="/profile" />;
+}
 ```
+
+Auth payload:
+
+```js
+user = {
+  uuid,
+  email,
+  name,
+  role,   // legacy deterministic primary, может быть null; не источник прав
+  roles,  // source of truth для frontend guards
+}
+```
+
+Для layout-лейблов, breadcrumbs и audit-related UI использовать active/effective role
+текущего кабинета, а не слепо `user.role`.
 
 ---
 
@@ -454,6 +494,7 @@ CabinetLayout (components/CabinetLayout/)
 ├── Sidebar с navSections (конфигурируется каждым Layout)
 ├── Breadcrumbs через crumbLabels
 ├── Avatar с getInitials() из shared/lib/utils.js
+├── CabinetSwitcher: sidebar на desktop, topbar на узких viewport
 └── <Outlet /> для вложенных маршрутов
 
 PsychologistLayout → CabinetLayout (navSections = рабочие секции психолога)
@@ -464,6 +505,38 @@ CabinetSettingsPage — общая страница настроек, подкл
 ```
 
 Student cabinet **не использует** CabinetLayout — у него собственный `StudentLayout` со своим Sidebar.
+
+### Multi-role UI
+
+```text
+shared/lib/roles.js
+├── ROLE_PRIORITY / ROLE_LABELS / ROLE_BADGE_TONES
+├── normalizeRoles(user)
+└── primaryRole(user)
+
+app/guards.jsx
+├── RoleRoute         — membership guard по roles[]
+└── DashboardRedirect — 0/1/many role routing
+
+features/auth/RoleChooser.jsx
+└── явный выбор кабинета для multi-role пользователя без activeRole
+
+features/auth/CabinetSwitcher.jsx
+├── setActiveRole(role) + navigate(getRoleHome(role))
+├── disclosure buttons, Escape/outside-click
+├── fixed panel с viewport clamp
+└── resize/orientation reposition; scroll closes panel
+```
+
+`CabinetSwitcher` меняет UI-контекст и маршрут, но не выдаёт права. В каждом
+кабинете `RoleRoute` проверяет `roles[]`, а backend повторно проверяет membership.
+В `CabinetLayout` и `AdminLayout` desktop/sidebar и narrow/topbar экземпляры
+взаимоисключаются через responsive CSS.
+
+Admin users UI использует `StaffRolesCheckboxes`: три staff-роли редактируются
+set-based, существующая `student` показывается read-only. Student-only/roleless
+пользователь не может получить первую staff-роль через текущий PATCH policy, но
+scalar-only edit остаётся доступным.
 
 ### Modal System
 

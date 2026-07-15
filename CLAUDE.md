@@ -2,6 +2,28 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
+Актуальный handoff по последнему крупному блоку работ:
+`docs/HANDOFFS/2026-07-14-multi-role-user-model-complete.md`
+— завершённая multi-role модель пользователя: backend membership/effective-role
+policy, set-based admin role management, frontend `roles[]`, выбор и переключение
+кабинетов. Предыдущий appointments/scheduling handoff остаётся историческим snapshot.
+
+Актуальная ролевая модель: multi-role user model зафиксирована в
+`docs/DECISIONS.md` ADR-018. Пользователь может иметь несколько активных ролей
+одновременно; `role` — только legacy/default/effective convenience, не единственный
+источник авторизации.
+
+## Рекомендуемый запуск Claude Code
+
+- Обычная реализация и corrective pass: актуальный **Claude Sonnet** (сейчас
+  Sonnet 5), усилие `High`.
+- Небольшая локальная правка с ясным контрактом: Sonnet, усилие `Medium`.
+- Сложная архитектура, auth/security/compliance, миграция с высокой ценой ошибки:
+  актуальный **Claude Opus** (сейчас Opus 5), усилие `High`; максимальное усилие
+  использовать только для действительно самых тяжёлых задач.
+- Конкретный task prompt может переопределить рекомендацию. В промптах, которые
+  готовит Codex, модель и усилие должны быть указаны явно.
+
 ## О проекте
 
 **MindCare** — веб-платформа психологической службы Донецкого государственного университета.
@@ -201,12 +223,14 @@ npm run build
 
 ### Текущее покрытие
 
-Всего backend: **809 passed** (`.\test.ps1` на смерженной ветке dev, alembic head db0b2e177da5) —
-включает чат-вложения (Stage 32b–32j), систему записи на консультации (appointments, 112+)
-и дневник студента (diary).
+Текущий статус backend по финальному multi-role прогону Claude Code:
+**890 passed** (`pytest tests/`; включает чат-вложения, appointments, diary и
+multi-role auth/policy/admin role management).
 Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend (`npm test -- --watchAll=false`): **45 suites / 646 passed** (чат/вложения +
-appointments + diary); lint — 0 warnings; production build — success.
+Frontend (`npm test -- --watchAll=false`): **57 suites / 702 passed**; этот результат
+и production build независимо подтверждены Codex 2026-07-14. Полный `npm run lint`
+прошёл с **0 errors / 0 warnings**. Ручной browser smoke на 1280/800/390 px
+остаётся pending.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -224,8 +248,13 @@ appointments + diary); lint — 0 warnings; production build — success.
 | `tests/integration/test_email_normalization_api.py` | register/login/reset API — 11 |
 | `tests/integration/test_rate_limit_api.py` | 429-поведение auth API — 10 |
 | `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end — 9 |
-| `tests/integration/test_legal_basis_api.py` | legal basis records API — 11 |
-| `tests/integration/test_admin_role_patch_legal_basis.py` | legal basis при смене роли (Stage 31f-fix) — 12 |
+| `tests/integration/test_legal_basis_api.py` | legal basis records + multi-role create API — 27 |
+| `tests/integration/test_admin_role_patch_legal_basis.py` | legacy-adapter и legal basis при set-based PATCH ролей — 12 |
+| `tests/integration/test_admin_role_set_based.py` | set-based admin roles, reactivation, list `roles[]` — 26 |
+| `tests/integration/test_multi_role_auth.py` | multi-role auth/session responses — 15 |
+| `tests/integration/test_multi_role_policy.py` | scoped effective-role policy — 8 |
+| `tests/test_roles.py` | pure role helpers — 12 |
+| `tests/test_role_deps.py` | explicit `roles=[]`, legacy fallback и role guards — 5 |
 | `tests/integration/test_session_notes_api.py` | access policy session_notes (Stage 25b) — 15 |
 | `tests/integration/test_touch_session.py` | debounce touch_session (Stage 26) — 9 |
 | `tests/integration/test_chat_models.py` | constraints chat-таблиц (Stage 28b) — 6 |
@@ -389,25 +418,35 @@ mindcare_api/
    commit; AuditLog обязателен (consent_records не хранит actor); psychologist_id создаёт
    active engagement в ТОЙ ЖЕ транзакции (не отдельным вызовом assign_psychologist);
    карточка незарег. студента с тем же email привязывается (этап 2). Это НЕ admin
-   role-dropdown (там student по-прежнему НЕ selectable). Пароль/ПДн не логировать
-✅ Для admin-created psychologist/supervisor/admin — user_legal_basis_records
-   (документированное основание организации; чекбокс в UI формулируется как
-   «Подтверждаю наличие документированного основания для создания учётной
-   записи и обработки персональных данных пользователя»)
-✅ Смена роли на staff через PATCH /api/admin/users (old_role != new_role,
-   new_role ∈ psychologist/supervisor/admin) тоже требует legal basis
-   (legal_basis_confirmed + basis_type + basis_reference); смена роли и запись
-   user_legal_basis_records атомарны; metadata: action=role_change/old_role/new_role.
-   staff → student основания не требует и старые записи не удаляет (Stage 31f-fix)
-✅ Роль в admin edit-модалке РЕДАКТИРУЕМА (Stage 31n; правило Stage 31h «role
-   read-only» отменено) — но безопасно: при реальной смене на staff/admin UI
-   показывает блок legal basis и шлёт его поля; backend PATCH guard обязателен
-   как defense-in-depth (не полагаться только на UI)
-✅ student НЕ selectable в admin edit-dropdown (Stage 31n-hotfix). Студенты появляются
-   через self-registration ИЛИ через staff-created student flow (`POST /api/supervisor/students`);
-   текущая роль student показывается через Select displayLabel, но недоступна для выбора.
-   student как target роли из admin edit UI не отправляется
-❌ Не делать роль read-only в admin edit и не слать role без legal basis при смене на staff
+   role control (там student по-прежнему НЕ selectable). Пароль/ПДн не логировать
+✅ `POST /api/admin/users` создаёт staff с одной или несколькими ролями:
+   request содержит ровно одно из legacy `role` или `roles[]`; только
+   `psychologist`/`supervisor`/`admin`, без `student`. `basis_reference`
+   обязателен и trim-ится; на каждую уникальную staff-роль в той же
+   транзакции пишется `user_legal_basis_records` с metadata
+   `action=user_create`/`created_role`/`roles_after`. Response возвращает
+   детерминированный `roles[]` и legacy primary `role`. Welcome email для staff
+   role-neutral: без упоминания конкретной роли или прав.
+✅ Добавление новой staff-роли через admin role management
+   (psychologist/supervisor/admin) требует legal basis
+   (legal_basis_confirmed + basis_type + basis_reference); добавление роли и запись
+   user_legal_basis_records атомарны; metadata: action=role_add/added_role/
+   roles_before/roles_after. Удаление staff-роли требует audit trail, но не новый
+   legal basis; старые user_legal_basis_records не удаляются.
+✅ Роли в admin edit-модалке РЕДАКТИРУЕМЫ как multi-role control / set-based API,
+   но безопасно: при добавлении staff/admin роли UI показывает блок legal basis и
+   шлёт его поля; backend guard обязателен как defense-in-depth (не полагаться
+   только на UI). Запрещено заменять весь набор user_roles одним role.
+   В PATCH отсутствие поля `roles` означает «не менять роли», а явный `roles: []` —
+   целевой пустой набор staff-ролей: он снимает все staff-роли только если после
+   операции остаётся другая активная роль (например, `student`), иначе backend
+   отклоняет запрос с 422. Удаление всегда фиксируется в audit trail.
+✅ student НЕ selectable в admin role control. Студенты появляются через
+   self-registration ИЛИ через staff-created student flow (`POST /api/supervisor/students`);
+   существующая роль student показывается read-only badge и не удаляется случайно.
+   student как target роли из admin edit UI/API не отправляется без отдельного
+   compliance-решения
+❌ Не слать role changes без legal basis при добавлении staff-роли
 ❌ Не писать «админ подтверждает согласие пользователя» — только «документированное
    основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
 ✅ session_notes: psychologist — только свои; supervisor — content только поштучно
@@ -604,6 +643,31 @@ mindcare_api/
 | `psychologist` | Психолог | Только через `POST /api/admin/users` |
 | `admin` | Администратор | Только через `POST /api/admin/users` или `scripts/create_admin.py` |
 | `supervisor` | Супервизор | Только через `POST /api/admin/users` |
+
+**Multi-role policy (ADR-018):**
+- `user_roles` — источник прав доступа. У одного пользователя может быть несколько
+  активных ролей одновременно, например `["admin", "supervisor", "psychologist"]`.
+- Auth/session/profile API должны возвращать `roles: Role[]`. Поле `role` можно
+  временно сохранять как primary/default/effective role для совместимости, но
+  backend authorization не должен полагаться только на него.
+- Backend `require_role(...)` проверяет пересечение allowed roles с
+  `current_user.roles`. Frontend `RoleRoute` проверяет `user.roles`.
+- Для экранов и аудита, где важно “в каком кабинете действует пользователь”,
+  использовать `active_role`/`effective_role`, валидированный по `user_roles`.
+  Клиентский выбор роли — только hint; backend всё равно проверяет membership.
+- Admin role edit должен быть set-based: добавлять/удалять конкретные роли, не
+  удаляя весь набор `user_roles`. Запрещён destructive replace-all roles.
+- Для PATCH отсутствие `roles` означает «не менять роли»; явный `roles: []`
+  означает снять все staff-роли. Операция допустима только если у пользователя
+  остаётся другая активная роль; оставить аккаунт без ролей нельзя.
+- Admin create принимает ровно одно из `role`/`roles[]`; admin list,
+  single-read и create response возвращают активные `roles[]` и legacy primary
+  `role` (может быть `null` только у аккаунта без активных ролей).
+- Добавление staff-роли (`psychologist`, `supervisor`, `admin`) требует
+  `user_legal_basis_records`; роль `student` не назначается через admin role
+  control без отдельного compliance-решения.
+- Пользователь с `admin` + `supervisor` попадает в `/admin/*` по роли `admin`.
+  Чистая роль `supervisor` не наследует доступ к admin panel.
 
 ---
 
@@ -1196,5 +1260,8 @@ Conventional Commits:
 - ~~Password reset confirm / change password не атомарны (пароль изменён, старые сессии живы)~~ —
   закрыто (Stage 31m-fix-b3): password_hash + revoke sessions (+ consume OTP) в одной транзакции;
   system-уведомление soft-fail после commit
-- Остаётся pending (deferred): OTP concurrency / `SELECT … FOR UPDATE`; `_get_primary_role`
-  read-fallback `"student"`; transactional outbox для post-commit уведомлений
+- Остаётся pending (deferred): OTP concurrency / `SELECT … FOR UPDATE`;
+  transactional outbox для post-commit уведомлений
+- ~~`_get_primary_role` read-fallback `"student"`~~ — закрыто в ADR-018:
+  отсутствие активных ролей возвращает `role=null`, доступ отклоняется; источник
+  истины — активные `roles[]`

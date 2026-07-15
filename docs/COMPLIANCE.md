@@ -1,7 +1,7 @@
 # ФЗ-152 Compliance Checklist
 
 Статус выполнения требований ФЗ-152 «О персональных данных» для платформы MindCare.
-Последнее обновление: 2026-06-26.
+Последнее обновление: 2026-07-13.
 
 ---
 
@@ -28,24 +28,35 @@
 Реализация:
 - self-registration студента → `consent_records` (личное согласие субъекта),
   основание организации НЕ создаётся;
-- `POST /api/admin/users` (создание staff) требует `legal_basis_confirmed=true` (иначе 422);
-  запись `user_legal_basis_records` создаётся в одной транзакции с пользователем
-  (basis_type, basis_reference, actor admin id, IP, user-agent)
-- `PATCH /api/admin/users/{uuid}` со сменой роли на staff (`psychologist`/`supervisor`/
-  `admin`, при `old_role != new_role`) тоже требует документированного основания:
+- `POST /api/admin/users` (создание staff) принимает ровно одно из legacy
+  `role` или `roles[]`; только `psychologist`/`supervisor`/`admin`, без
+  `student`. `legal_basis_confirmed=true`, валидный `basis_type` и непустой
+  `basis_reference` обязательны (иначе 422); reference trim-ится. На каждую
+  уникальную создаваемую staff-роль в одной транзакции с User/UserRole
+  создаётся отдельная запись в `user_legal_basis_records` с actor admin id, IP,
+  user-agent и metadata `action="user_create"`/`created_role`/`roles_after`;
+- `PATCH /api/admin/users/{uuid}` / role-management endpoint при добавлении новой
+  staff-роли (`psychologist`/`supervisor`/`admin`), которой у пользователя ещё нет,
+  тоже требует документированного основания:
   `legal_basis_confirmed=true` + валидный `basis_type` + непустой `basis_reference`
-  (иначе роль не меняется; 400, либо 422 на невалидный basis_type); смена роли и запись
-  основания атомарны; `metadata` фиксирует `action="role_change"`, `old_role`, `new_role`;
-- переход `staff → student` основания не требует и старые `user_legal_basis_records` не удаляет;
+  (иначе роль не добавляется; 400, либо 422 на невалидный basis_type); добавление роли
+  и запись основания атомарны; `metadata` фиксирует `action="role_add"`, `added_role`,
+  `roles_before`, `roles_after`;
+- удаление staff-роли не требует нового legal basis, но требует audit trail; старые
+  `user_legal_basis_records` не удаляются как historical record;
+- в admin PATCH отсутствие поля `roles` означает, что роли не меняются; явный
+  `roles: []` является целевым пустым staff-набором и снимает все staff-роли только
+  если после операции остаётся другая активная роль (например, `student`). Оставить
+  пользователя без активных ролей нельзя — backend возвращает 422;
 - админ НЕ создаёт consent от имени пользователя ни в create, ни в PATCH;
-- смена роли доступна в admin edit-модалке (Stage 31n / 31n-hotfix), но `student`
-  НЕ назначается через admin role-dropdown — студенты появляются через
+- роли доступны в admin edit-модалке как multi-role control, но `student`
+  НЕ назначается через admin role control — студенты появляются через
   self-registration или staff-created student flow `POST /api/supervisor/students`
-  (их личное согласие — `consent_records`); при смене роли на
-  staff/admin UI требует подтвердить документированное основание;
+  (их личное согласие — `consent_records`); при добавлении staff-роли UI требует
+  подтвердить документированное основание;
 - UI-формулировка при создании: «Подтверждаю наличие документированного основания
   для создания учётной записи и обработки персональных данных пользователя»;
-- UI-формулировка при смене роли: «Подтверждаю наличие документированного основания
+- UI-формулировка при добавлении staff-роли: «Подтверждаю наличие документированного основания
   для назначения этой роли и обработки персональных данных» (НЕ «согласие пользователя»)
 - `scripts/create_admin.py` пишет legal basis (`basis_type=bootstrap`)
   и больше НЕ создаёт consent_records за пользователя
@@ -53,6 +64,24 @@
   (`--dry-run` по умолчанию)
 - Исторические bootstrap consent_records (`user_agent='bootstrap-script'`)
   не удалялись — оставлены как historical record
+
+### Multi-role пользователи и compliance (ADR-018)
+- Один пользователь может иметь несколько активных ролей одновременно через `user_roles`.
+  Это не даёт роли-наследования: например, `supervisor` не получает `/admin/*` без
+  отдельной membership-роли `admin`.
+- Для чувствительных контуров (`session_notes`, chat, diary, test results) policy должна
+  смотреть не на legacy `role`, а на validated `roles` + `effective_role`/активный кабинет.
+- `effective_role` влияет на audit wording и policy branch, но не может расширять доступ
+  сверх membership-ролей в `user_roles`.
+- Frontend `activeRole` хранится только как UI preference выбора кабинета. Он не
+  является доказательством полномочий, очищается вместе с auth session и всегда
+  сверяется с `roles[]`.
+- Если endpoint принимает явный role context (например, `X-Active-Role` для
+  session notes), backend обязан отклонять неизвестную или отсутствующую у
+  пользователя роль с 403, а не делать тихий fallback на primary role.
+- Роль `student` остаётся связанной с личным consent субъекта. Добавление `student` к
+  существующему staff-пользователю через admin UI/API не разрешено без отдельного
+  compliance-решения.
 
 ### Создание аккаунта студента силами staff (2026-06-23)
 Помимо self-registration и карточки незарегистрированного студента, admin/supervisor
@@ -81,6 +110,20 @@
 - временный пароль и ПДн не логируются (только HTTP-ответ авторизованному caller и
   тело письма; в `EMAIL_MODE=dev` тело письма печатается в stdout — как все OTP/welcome).
 
+### Записи, walk-in карточки и групповые занятия (2026-06-27)
+- `appointments` хранит факт записи на консультацию и может ссылаться либо на
+  зарегистрированного студента (`client_id`), либо на walk-in карточку
+  (`unregistered_student_card_id`); CHECK constraint допускает ровно один субъект записи.
+- `unregistered_student_cards` хранит минимальные ПДн walk-in клиента и факт очного
+  согласия; карточка может позже привязаться к аккаунту по `normalized_email`, но
+  автоматически не объединяется с другими карточками.
+- Ручная запись supervisor'ом создаёт обычную индивидуальную запись в
+  `pending_confirmation`; психолог всё равно должен подтвердить/отклонить встречу.
+- Групповые занятия (`group_sessions`) не являются group chat: это события/записи.
+  Group chat и waitlist не реализованы и требуют отдельного compliance/security решения.
+- Автопродление расписаний выполняется только maintenance-скриптом
+  `scripts/extend_schedules.py`; DDL/фоновые scheduler-задачи не запускаются из FastAPI lifespan.
+
 ### Хранение данных
 - Все данные хранятся в PostgreSQL на серверах в РФ
 - Пароли хранятся как bcrypt-хеш — plaintext нигде не сохраняется
@@ -107,6 +150,10 @@ Encryption-at-rest защищает от утечки БД; политика д�
   расшифрованный терапевтический content админу не предоставляется;
   metadata-путь вообще не вызывает decrypt
 - **student** — доступа нет (403)
+- Для multi-role пользователя ветка policy выбирается по validated `effective_role`
+  текущего endpoint/cabinet, а не по legacy primary `role`. Например, пользователь
+  `admin` + `psychologist` не должен случайно получить admin metadata-only поведение
+  на psychologist endpoint или supervisor content-read поведение без supervisor context.
 - create/update заметок также логируются (`session_note_created` /
   `session_note_updated`)
 - Audit-записи не содержат plaintext content (хелпер принимает только
