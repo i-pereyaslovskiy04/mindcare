@@ -13,7 +13,7 @@
   audit       — AuditLog, AuthLog, DataChangeLog (FK → users)
   otp         — OtpVerification (standalone)
 
-Все модули импортируются здесь, чтобы Base.metadata содержал все 41 таблицу
+Все модули импортируются здесь, чтобы Base.metadata содержал все 42 таблицы
 до вызова Alembic autogenerate или любого кода, читающего metadata.tables.
 
 Схема БД управляется через Alembic (mindcare_api/alembic/).
@@ -46,6 +46,9 @@ from app.db.models.consents import (  # noqa: F401
 
 # ── legal basis ───────────────────────────────────────────────────────────────
 from app.db.models.legal_basis import UserLegalBasisRecord  # noqa: F401
+
+# ── email domain allowlist ────────────────────────────────────────────────────
+from app.db.models.email_domains import AllowedEmailDomain  # noqa: F401
 
 # ── media ─────────────────────────────────────────────────────────────────────
 from app.db.models.media import (  # noqa: F401
@@ -131,6 +134,8 @@ __all__ = [
     "Consent", "ConsentRecord",
     # legal basis
     "UserLegalBasisRecord",
+    # email domain allowlist
+    "AllowedEmailDomain",
     # media
     "MediaFile", "MediaVersion",
     # content

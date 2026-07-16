@@ -265,6 +265,7 @@ def _apply_role_and_scalar_changes(
     basis_reference: Optional[str],
     legal_basis_comment: Optional[str],
     confirmed_by_user_id: Optional[int],
+    actor_id: Optional[int],
     actor_role: Optional[str],
     ip: Optional[str],
     user_agent: Optional[str],
@@ -301,6 +302,14 @@ def _apply_role_and_scalar_changes(
 
     added = target_staff - current
     removed = current_staff - target_staff
+
+    # Self-admin guard (defense-in-depth, frontend лишь предотвращает ошибку в UI):
+    # администратор не может снять у себя собственную активную роль admin. Работает
+    # и для set-based roles[], и для legacy role adapter (оба вычисляют removed).
+    # Другой админ может снять admin у другого пользователя (actor_id != user.id).
+    if actor_id is not None and user.id == actor_id and "admin" in removed:
+        raise RoleChangeError("Нельзя снять у себя роль администратора", 422)
+
     if not added and not removed:
         return  # no-op по ролям
 
@@ -426,6 +435,7 @@ def update_user(
     basis_reference: Optional[str] = None,
     legal_basis_comment: Optional[str] = None,
     confirmed_by_user_id: Optional[int] = None,
+    actor_id: Optional[int] = None,
     actor_role: Optional[str] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
@@ -481,6 +491,7 @@ def update_user(
             basis_reference=basis_reference,
             legal_basis_comment=legal_basis_comment,
             confirmed_by_user_id=confirmed_by_user_id,
+            actor_id=actor_id,
             actor_role=actor_role,
             ip=ip,
             user_agent=user_agent,
@@ -596,6 +607,13 @@ def create_user(
     stripped_basis_reference = basis_reference.strip()
 
     with SessionLocal() as db:
+        # Authoritative in-tx проверка домена (FOR SHARE) до создания User.
+        # EmailDomainNotAllowedError (не ValueError) пробрасывается наружу и
+        # мапится в 422 в users.service.create_user (отдельным except раньше
+        # существующего ValueError→409).
+        from app.email_domains.storage import assert_email_domain_allowed_in_tx
+        assert_email_domain_allowed_in_tx(db, email)
+
         existing = (
             db.query(User)
             .filter(User.email == normalize_email(email))

@@ -347,6 +347,14 @@ def register_confirm_atomic(
             raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
 
         # ── OTP верный. Дальше — core UoW без промежуточных commit. ──────────
+        # Authoritative проверка домена ВНУТРИ транзакции, до создания/реактивации
+        # пользователя и до consume OTP. FOR SHARE удерживает разрешённый домен до
+        # commit. Отклонение (домен не в активном allowlist, в т.ч. отключён между
+        # init и confirm) поднимает EmailDomainNotAllowedError до commit → rollback,
+        # OTP НЕ потребляется. Применяется и к реактивации soft-deleted аккаунта.
+        from app.email_domains.storage import assert_email_domain_allowed_in_tx
+        assert_email_domain_allowed_in_tx(db, email)
+
         name = record.name
         password_hash = record.password_hash
 

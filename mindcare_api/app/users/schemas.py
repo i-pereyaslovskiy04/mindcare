@@ -25,6 +25,9 @@ class AdminUserListItem(BaseModel):
 
     """Юзер в списке для админа. Не содержит чувствительных полей (password_hash и т.п.)."""
 
+    # id нужен фронту для сравнения «это мой аккаунт» (self-admin guard, ADR-018):
+    # auth /me отдаёт id, admin-строки — теперь тоже.
+    id: int
     uuid: str
     email: str
     full_name: str
@@ -190,6 +193,8 @@ class AdminUserUpdate(BaseModel):
 class AdminUserRead(BaseModel):
     """Ответ PATCH /api/admin/users/{uuid} и GET /api/admin/users/{uuid}."""
 
+    # id — для сравнения «это мой аккаунт» на фронте (self-admin guard).
+    id: int
     uuid: str
     email: str
     full_name: str

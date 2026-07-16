@@ -96,6 +96,7 @@ def create_user(
     # (dedupe + validate staff-only + существование ролей).
     roles = list(data.roles) if data.roles else [data.role]
 
+    from app.email_domains.errors import EmailDomainNotAllowedError
     try:
         user = storage.create_user(
             email=data.email,
@@ -110,6 +111,10 @@ def create_user(
             ip=ip,
             user_agent=user_agent,
         )
+    except EmailDomainNotAllowedError as e:
+        # Домен вне allowlist — отдельный 422 РАНЬШE общего ValueError→409
+        # (EmailDomainNotAllowedError намеренно НЕ подкласс ValueError).
+        raise AuthError(str(e), status_code=422)
     except ValueError as e:
         raise AuthError(str(e), status_code=409)
 
@@ -202,6 +207,7 @@ def update_user(
             basis_reference=data.basis_reference,
             legal_basis_comment=data.legal_basis_comment,
             confirmed_by_user_id=actor_id,
+            actor_id=actor_id,
             actor_role=actor_role,
             ip=ip,
             user_agent=user_agent,

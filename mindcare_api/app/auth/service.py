@@ -45,6 +45,14 @@ def register_init(name: str, email: str, password: str) -> None:
         raise AuthError("Имя должно содержать не менее 2 символов", 422)
     if len(password) < 8:
         raise AuthError("Пароль должен быть не короче 8 символов", 422)
+    # Ранняя проверка домена (до создания OTP/письма). Authoritative повторная
+    # проверка — внутри транзакции confirm (register_confirm_atomic).
+    from app.email_domains.errors import EmailDomainNotAllowedError
+    from app.email_domains.service import assert_email_domain_allowed
+    try:
+        assert_email_domain_allowed(email)
+    except EmailDomainNotAllowedError as e:
+        raise AuthError(str(e), 422)
     if storage.find_user_by_email(email):
         raise AuthError("Email уже зарегистрирован", 409)
 
@@ -84,6 +92,7 @@ def register_confirm(
     участвует (письмо ушло на init-шаге). Welcome-уведомление — soft-fail и
     выполняется уже ПОСЛЕ успешного commit (его сбой не откатывает регистрацию).
     """
+    from app.email_domains.errors import EmailDomainNotAllowedError
     try:
         user = storage.register_confirm_atomic(
             email=email,
@@ -92,6 +101,10 @@ def register_confirm(
             ip=ip,
             user_agent=user_agent,
         )
+    except EmailDomainNotAllowedError as e:
+        # Домен отключили между init и confirm — новое регистрационное действие
+        # отклоняется; OTP не потреблён (rollback внутри register_confirm_atomic).
+        raise AuthError(str(e), 422)
     except storage.RegistrationDataError as e:
         # Отсутствует роль/consent-политика — проблема seed/reference data.
         raise AuthError(str(e), 500)

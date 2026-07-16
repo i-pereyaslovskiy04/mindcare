@@ -73,7 +73,8 @@ def _auth(token: str) -> dict:
 
 
 def _email() -> str:
-    return f"integ_{_uuid.uuid4().hex[:12]}@example.com"
+    # Разрешённый домен: POST /api/supervisor/students — guarded email-политикой.
+    return f"integ_{_uuid.uuid4().hex[:12]}@donnu.ru"
 
 
 def _body(email: str, **over) -> dict:

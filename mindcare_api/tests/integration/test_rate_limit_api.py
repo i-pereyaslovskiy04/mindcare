@@ -142,14 +142,15 @@ class TestRegisterInitRateLimit:
         for i in range(3):
             r = client.post("/api/auth/register/init", json={
                 "name":     "Test User",
-                "email":    f"integ_reg{i}@example.com",
+                # Разрешённый домен: register/init теперь проверяет allowlist.
+                "email":    f"integ_reg{i}@donnu.ru",
                 "password": "SecurePass42!",
             })
             assert r.status_code == 200
 
         r = client.post("/api/auth/register/init", json={
             "name":     "Test User",
-            "email":    "integ_reg_blocked@example.com",
+            "email":    "integ_reg_blocked@donnu.ru",
             "password": "SecurePass42!",
         })
         assert r.status_code == 429
