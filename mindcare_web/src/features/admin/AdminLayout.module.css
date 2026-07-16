@@ -141,6 +141,10 @@
   gap: 2px;
 }
 
+.navGroup + .navGroup {
+  margin-top: 14px;
+}
+
 .navSectionLabel {
   font-size: 10px;
   letter-spacing: 0.14em;

@@ -8,16 +8,44 @@ import { getInitials } from '../../shared/lib/utils';
 import { normalizeRoles } from '../../shared/lib/roles';
 import styles from './AdminLayout.module.css';
 
-const CRUMB_LABELS = {
-  '/admin/users':         'Пользователи',
-  '/admin/categories':    'Типы материалов',
-  '/admin/tags':          'Темы',
-  '/admin/news':          'Новости',
-  '/admin/articles':      'Материалы',
-  '/admin/tests':         'Тесты',
-  '/admin/meeting-types': 'Типы встреч',
-  '/admin/settings':      'Настройки',
-};
+const ADMIN_NAV_GROUPS = [
+  {
+    label: 'Управление',
+    items: [
+      { label: 'Пользователи', path: '/admin/users', icon: 'users' },
+    ],
+  },
+  {
+    label: 'Контент',
+    items: [
+      { label: 'Материалы', path: '/admin/articles', icon: 'articles' },
+      { label: 'Новости',   path: '/admin/news',     icon: 'news' },
+      { label: 'Тесты',     path: '/admin/tests',    icon: 'tests' },
+    ],
+  },
+  {
+    label: 'Система',
+    items: [
+      { label: 'Типы материалов',    path: '/admin/categories',    icon: 'folder' },
+      { label: 'Темы',               path: '/admin/tags',          icon: 'tag' },
+      { label: 'Типы встреч',        path: '/admin/meeting-types', icon: 'calendar' },
+      { label: 'Домены регистрации', path: '/admin/email-domains', icon: 'mail' },
+    ],
+  },
+  {
+    label: 'Аккаунт',
+    items: [
+      { label: 'Безопасность', path: '/admin/settings', icon: 'settings' },
+    ],
+  },
+];
+
+// Единый источник истины для sidebar-ссылок и breadcrumb-подписей — исключает
+// рассинхронизацию label между ними.
+const CRUMB_LABELS = ADMIN_NAV_GROUPS.reduce((acc, group) => {
+  group.items.forEach(({ path, label }) => { acc[path] = label; });
+  return acc;
+}, {});
 
 export default function AdminLayout() {
   const { pathname } = useLocation();
@@ -55,105 +83,27 @@ export default function AdminLayout() {
         </div>
 
         <nav className={styles.nav}>
-          <div className={styles.navSectionLabel}>Управление</div>
-
-          <NavLink
-            to="/admin/users"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="users" size={18} />
-            </span>
-            <span className={styles.navLabel}>Пользователи</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/categories"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="folder" size={18} />
-            </span>
-            <span className={styles.navLabel}>Типы материалов</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/tags"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="tag" size={18} />
-            </span>
-            <span className={styles.navLabel}>Темы</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/news"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="news" size={18} />
-            </span>
-            <span className={styles.navLabel}>Новости</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/articles"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="articles" size={18} />
-            </span>
-            <span className={styles.navLabel}>Материалы</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/meeting-types"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="calendar" size={18} />
-            </span>
-            <span className={styles.navLabel}>Типы встреч</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/tests"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="tests" size={18} />
-            </span>
-            <span className={styles.navLabel}>Тесты</span>
-          </NavLink>
-
-          <div className={styles.navSectionLabel} style={{ marginTop: 14 }}>Аккаунт</div>
-
-          <NavLink
-            to="/admin/settings"
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}>
-              <Icon name="settings" size={18} />
-            </span>
-            <span className={styles.navLabel}>Настройки</span>
-          </NavLink>
+          {ADMIN_NAV_GROUPS.map((group) => (
+            <div key={group.label} className={styles.navGroup}>
+              <div className={styles.navSectionLabel}>{group.label}</div>
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `${styles.navItem} ${isActive ? styles.active : ''}`
+                  }
+                  aria-label={item.label}
+                  title={item.label}
+                >
+                  <span className={styles.navIcon}>
+                    <Icon name={item.icon} size={18} />
+                  </span>
+                  <span className={styles.navLabel}>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
+          ))}
         </nav>
 
         <div className={styles.foot}>

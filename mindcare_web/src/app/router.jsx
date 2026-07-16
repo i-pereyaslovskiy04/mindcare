@@ -41,6 +41,7 @@ import AdminCategoriesPage from '../features/admin/categories/pages/CategoriesPa
 import AdminTestsPage      from '../features/admin/tests/pages/AdminTestsPage';
 import TestFormPage        from '../features/admin/tests/pages/TestFormPage';
 import AdminSettingsPage   from '../features/admin/settings/pages/AdminSettingsPage';
+import EmailDomainsPage    from '../features/admin/email-domains/pages/EmailDomainsPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
 import ClientDashboard      from '../pages/client/ClientDashboard';
@@ -165,6 +166,7 @@ export default function AppRouter() {
         <Route path="tests/new"    element={<TestFormPage />} />
         <Route path="tests/:uuid"  element={<TestFormPage />} />
         <Route path="meeting-types" element={<MeetingTypesPage cabinetRole="admin" />} />
+        <Route path="email-domains" element={<EmailDomainsPage />} />
         <Route path="settings"   element={<AdminSettingsPage />} />
       </Route>
 
