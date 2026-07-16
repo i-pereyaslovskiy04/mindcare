@@ -3,10 +3,10 @@
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
 Актуальный handoff по последнему крупному блоку работ:
-`docs/HANDOFFS/2026-07-14-multi-role-user-model-complete.md`
-— завершённая multi-role модель пользователя: backend membership/effective-role
-policy, set-based admin role management, frontend `roles[]`, выбор и переключение
-кабинетов. Предыдущий appointments/scheduling handoff остаётся историческим snapshot.
+`docs/HANDOFFS/2026-07-16-email-domain-policy-self-admin-complete.md`
+— управляемый allowlist доменов для создания новых аккаунтов, защита собственной
+роли `admin` и реорганизация admin-навигации. Handoff по multi-role модели от
+2026-07-14 и appointments/scheduling handoff остаются историческими snapshot.
 
 Актуальная ролевая модель: multi-role user model зафиксирована в
 `docs/DECISIONS.md` ADR-018. Пользователь может иметь несколько активных ролей
@@ -141,7 +141,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 49 таблиц создаются через `alembic upgrade head`.
+> Все 58 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -223,14 +223,13 @@ npm run build
 
 ### Текущее покрытие
 
-Текущий статус backend по финальному multi-role прогону Claude Code:
-**890 passed** (`pytest tests/`; включает чат-вложения, appointments, diary и
-multi-role auth/policy/admin role management).
+Текущий статус backend после email-domain/self-admin corrective pass:
+**961 passed** (`pytest tests/`; включает multi-role, email-domain policy/admin
+CRUD/concurrency, self-admin guard, чат-вложения, appointments и diary).
 Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend (`npm test -- --watchAll=false`): **57 suites / 702 passed**; этот результат
-и production build независимо подтверждены Codex 2026-07-14. Полный `npm run lint`
-прошёл с **0 errors / 0 warnings**. Ручной browser smoke на 1280/800/390 px
-остаётся pending.
+Frontend (`npm test -- --watchAll=false`): **60 suites / 720 passed**. Полный
+`npm run lint` прошёл с **0 errors / 0 warnings**, production build успешен.
+Ручной browser smoke на 1280/800/390 px остаётся pending.
 
 | Файл | Что покрыто |
 |------|-------------|
@@ -255,6 +254,11 @@ Frontend (`npm test -- --watchAll=false`): **57 suites / 702 passed**; этот 
 | `tests/integration/test_multi_role_policy.py` | scoped effective-role policy — 8 |
 | `tests/test_roles.py` | pure role helpers — 12 |
 | `tests/test_role_deps.py` | explicit `roles=[]`, legacy fallback и role guards — 5 |
+| `tests/test_email_domain_normalization.py` | normalize/validate/extract email domain — 35 |
+| `tests/integration/test_email_domain_policy.py` | allowlist во всех creation paths, login/reset existing users, OTP preservation — 10 |
+| `tests/integration/test_allowed_email_domains_api.py` | admin CRUD, validation, audit, last-active guard — 17 |
+| `tests/integration/test_allowed_email_domains_concurrency.py` | конкурентные disable/create операции и блокировки — 2 |
+| `tests/integration/test_admin_self_role_guard.py` | backend self-admin membership guard — 7 |
 | `tests/integration/test_session_notes_api.py` | access policy session_notes (Stage 25b) — 15 |
 | `tests/integration/test_touch_session.py` | debounce touch_session (Stage 26) — 9 |
 | `tests/integration/test_chat_models.py` | constraints chat-таблиц (Stage 28b) — 6 |
@@ -315,7 +319,7 @@ mindcare_api/
 │   │   ├── session.py       — engine, SessionLocal
 │   │   ├── init_db.py       — startup: ensure_database + check_migrations + seed
 │   │   ├── seed.py          — идемпотентный seed
-│   │   └── models/          — ORM-модели (13 модулей, 51 таблица; chat.py — Stage 28b/32b; diary.py — Diary)
+│   │   └── models/          — ORM-модели (14 доменных модулей, 58 таблиц; включая email_domains.py)
 │   ├── auth/                — аутентификация и авторизация
 │   │   ├── audit.py         — log_auth_event() для auth_log
 │   │   ├── deps.py          — get_current_user, require_role
@@ -331,6 +335,12 @@ mindcare_api/
 │   │   ├── schemas.py       — Pydantic-схемы users (+ legal_basis_confirmed)
 │   │   ├── service.py       — бизнес-логика users
 │   │   └── storage.py       — работа с БД (find_users, create_user + legal basis record)
+│   ├── email_domains/       — allowlist доменов для создания новых аккаунтов
+│   │   ├── policy.py        — pure normalize/validate/extract helpers
+│   │   ├── routes_admin.py  — /api/admin/email-domains (admin-only)
+│   │   ├── schemas.py       — create/update/read schemas
+│   │   ├── service.py       — бизнес-логика доменной политики
+│   │   └── storage.py       — authoritative checks, CRUD, locks и audit
 │   ├── tags/                — управление тегами контента
 │   │   ├── routes_admin.py  — /api/admin/tags/* (admin + supervisor)
 │   │   ├── routes_public.py — /api/tags/ (autocomplete, без auth)
@@ -446,6 +456,20 @@ mindcare_api/
    существующая роль student показывается read-only badge и не удаляется случайно.
    student как target роли из admin edit UI/API не отправляется без отдельного
    compliance-решения
+✅ Администратор не может снять у самого себя membership-роль admin. Backend
+   сравнивает actor_id и target user id; frontend lock — только UX-дублирование.
+   Другой администратор может изменить роли пользователя.
+✅ Все HTTP/API creation flows допускают новый аккаунт только для активного точного
+   нормализованного домена из allowed_email_domains: self-registration,
+   admin-created staff и supervisor/admin-created student. Existing login/password
+   reset не блокировать. Authoritative check выполняется в creation transaction;
+   в register confirm — до consume OTP. Локальный bootstrap `scripts/create_admin.py`
+   остаётся отдельным privileged ops-path вне allowlist; использовать только при
+   развёртывании и вручную выбирать разрешённый организацией домен.
+✅ Allowlist управляется только admin через GET/POST/PATCH
+   /api/admin/email-domains. DELETE нет; отключённую строку реактивировать PATCH,
+   не повторным POST. Последний активный домен отключить нельзя. Audit не содержит
+   сырой comment.
 ❌ Не слать role changes без legal basis при добавлении staff-роли
 ❌ Не писать «админ подтверждает согласие пользователя» — только «документированное
    основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
@@ -564,7 +588,7 @@ mindcare_api/
 
 ### База данных: схема
 
-51 таблица в 13 модулях. Схема управляется через Alembic.
+58 таблиц в 14 доменных модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения):**
@@ -601,7 +625,8 @@ mindcare_api/
 | **Ветка diary (igor, от `a9b3e1f7c2d4`):** | |
 | `b2e4d7f1a9c3` | add_diary_tables: diary_emotions (catalog), diary_entries (partial UNIQUE active per student+date) |
 | `c3a7f8e2d1b9` | update_diary_emotions_catalog: deactivate angry/light, add tense/irritated/low/lonely, reorder to 12 active states |
-| `db0b2e177da5` | merge_diary_into_dev_heads: вторая merge-миграция (`alembic merge`), объединяет `be8d3ad39b3a` (dev) и `c3a7f8e2d1b9` (diary) в один head. Без операций над схемой (upgrade/downgrade = pass) — **head** |
+| `db0b2e177da5` | merge_diary_into_dev_heads: вторая merge-миграция (`alembic merge`), объединяет `be8d3ad39b3a` (dev) и `c3a7f8e2d1b9` (diary) в один head. Без операций над схемой (upgrade/downgrade = pass) |
+| `c7f1a9e4d2b8` | add_allowed_email_domains: таблица `allowed_email_domains`, уникальный нормализованный domain, active/comment/created_by/timestamps и seed 11 начальных доменов — **head** |
 
 **Ключевые таблицы:**
 
@@ -614,6 +639,7 @@ mindcare_api/
 | `otp_verifications` | OTP для регистрации и сброса пароля. code = SHA-256 хеш |
 | `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
+| `allowed_email_domains` | Управляемый allowlist точных нормализованных доменов для создания новых аккаунтов; отключённые строки сохраняются для истории и могут быть реактивированы |
 | `chat_conversations`, `chat_messages` | Messenger (Stage 28b/29b): `type` engagement/system; engagement-беседа — одна на engagement (UNIQUE), system-беседа — одна на `recipient_id` (partial UNIQUE); `chat_messages.message_kind` user/system, `event_key` для idempotency system-сообщений; content — только `enc:v1:` |
 | `chat_attachments` | Вложения чата (Stage 32b): metadata (original_filename, mime_type, file_size, storage_key, checksum, is_image); физический файл — в `CHAT_FILE_STORAGE_DIR` (private FS, не public static); soft delete через `deleted_at`; скачивание только через auth backend endpoint |
 | `appointments` | Записи на консультации |
@@ -668,6 +694,29 @@ mindcare_api/
   control без отдельного compliance-решения.
 - Пользователь с `admin` + `supervisor` попадает в `/admin/*` по роли `admin`.
   Чистая роль `supervisor` не наследует доступ к admin panel.
+- Администратор не может снять у самого себя активную membership-роль `admin`.
+  Guard авторитетно работает на backend по стабильному actor/user id; другой
+  администратор может изменить этот набор ролей. Самодеактивация и самоудаление
+  этим guard не запрещены и требуют отдельного продуктового решения.
+
+**Email-domain policy для новых аккаунтов (ADR-019):**
+- Через HTTP/API новый аккаунт можно создать только с точным нормализованным
+  доменом, для которого в `allowed_email_domains` есть активная строка. Отсутствие
+  домена в allowlist означает запрет; отдельного denylist нет.
+- Политика применяется к self-registration, admin-created staff и
+  supervisor/admin-created student. В registration flow ранняя проверка выполняется
+  до отправки OTP, а authoritative проверка — в транзакции confirm до consume OTP.
+- Существующие пользователи с доменом, который отсутствует или был отключён,
+  сохраняют login и password reset. Политика не является ретроактивной блокировкой.
+- Реактивация soft-deleted пользователя считается созданием/возвратом аккаунта и
+  требует активного домена.
+- Admin API: `GET/POST/PATCH /api/admin/email-domains`; физического DELETE нет.
+  Повторный POST существующего отключённого домена даёт 409, реактивация делается
+  только PATCH `is_active=true`. Последний активный домен отключить нельзя.
+- Это управляемая организационная политика проекта, а не утверждение об
+  официальном или исчерпывающем государственном перечне почтовых сервисов.
+- `scripts/create_admin.py` — отдельный локальный bootstrap/ops path и сейчас не
+  проверяет allowlist. Не использовать его как обычный account-creation API.
 
 ---
 
@@ -682,6 +731,7 @@ mindcare_web/src/
 │   ├── client.js       — транспорт: токен + 401 retry
 │   ├── auth.api.js
 │   ├── users.api.js    — /api/admin/users/* (CRUD пользователей)
+│   ├── domains.api.js  — /api/admin/email-domains (allowlist регистрации)
 │   ├── tags.api.js     — /api/admin/tags/* + /api/tags (UI: «Темы»)
 │   ├── categories.api.js — /api/admin/categories/* (UI: «Типы материалов»)
 │   ├── news.api.js     — normalizeNewsItem() экспортируется для переиспользования
@@ -699,7 +749,9 @@ mindcare_web/src/
 │       ├── categories/ — CRUD типов материалов (hooks, components, pages)
 │       ├── tags/       — CRUD тем/тегов (hooks, components, pages)
 │       ├── news/       — CRUD новостей (NewsTable, NewsFormModal, NewsPage)
-│       └── articles/   — CRUD материалов (ArticlesTable, ArticleFormModal, ArticlesPage)
+│       ├── articles/   — CRUD материалов (ArticlesTable, ArticleFormModal, ArticlesPage)
+│       ├── email-domains/ — отдельная страница доменов регистрации
+│       └── settings/   — безопасность аккаунта администратора
 ├── components/         — domain-agnostic примитивы
 │   ├── Modal/          — Modal.jsx (пропы: open, onClose, wide, zIndex)
 │   └── UI/
@@ -951,6 +1003,9 @@ POST /api/auth/password/reset/confirm → новый пароль + отзыв �
 | PATCH | `/api/admin/users/{id}` | Admin | ✅ |
 | DELETE | `/api/admin/users/{id}` | Admin | ✅ |
 | GET | `/api/admin/users/{id}` | Admin | ✅ |
+| GET | `/api/admin/email-domains` | Admin | ✅ |
+| POST | `/api/admin/email-domains` | Admin | ✅ |
+| PATCH | `/api/admin/email-domains/{id}` | Admin | ✅ |
 | GET | `/api/admin/tags` | Admin, Supervisor | ✅ |
 | POST | `/api/admin/tags` | Admin, Supervisor | ✅ |
 | PATCH | `/api/admin/tags/{uuid}` | Admin, Supervisor | ✅ |

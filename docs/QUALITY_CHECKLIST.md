@@ -50,9 +50,9 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус по финальному multi-role прогону Claude Code:
-**890 passed** (`pytest tests/`; включая appointments/profile/unregistered-cards,
-chat attachments, diary и multi-role auth/policy/admin role management).
+Текущий ожидаемый статус после email-domain/self-admin corrective pass:
+**961 passed** (`pytest tests/`; включая multi-role, email-domain
+policy/admin CRUD/concurrency, self-admin guard, appointments, chat и diary).
 
 ### Alembic
 
@@ -207,9 +207,26 @@ control / set-based API, а не single-role replace:
 - student-only и roleless пользователи не могут получить первую staff-роль через
   текущий PATCH policy; checkbox-контролы должны быть disabled, но scalar-only edit
   обязан оставаться доступным.
+- собственный checkbox `admin` должен быть заблокирован по стабильному user id, а
+  backend обязан отклонять попытку actor удалить у себя membership-роль `admin`;
+  другой администратор может выполнить такое изменение.
 - `CabinetSwitcher` должен оставаться доступным на desktop/tablet/mobile, не
   обрезаться sidebar overflow, закрываться по Escape/outside click/scroll и не
   выходить за границы viewport. После responsive-изменений нужен browser smoke.
+
+**Email-domain policy (ADR-019).**
+- self-registration, admin-created staff и supervisor/admin-created student
+  проверяют один DB-backed allowlist точных нормализованных доменов;
+- register init отклоняет запрещённый домен до отправки OTP, а confirm повторяет
+  authoritative проверку в creation transaction до consume OTP;
+- существующие login/password reset не должны блокироваться после отключения домена;
+- soft-deleted reactivation требует активного домена;
+- admin CRUD доступен только по membership-роли `admin`; DELETE отсутствует;
+- duplicate/inactive domain через POST даёт 409, реактивация выполняется PATCH;
+- отключение последнего активного домена даёт 409 и остаётся безопасным при
+  конкурентных запросах;
+- audit фиксирует add/disable/reactivate/update без сырого comment;
+- состав allowlist не описывать как официальный государственный перечень.
 
 ---
 
@@ -308,21 +325,24 @@ control / set-based API, а не single-role replace:
 
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
-| **Unit** | Service/helper business logic, без реальной БД | change_password, encryption, normalization, smtp_transport, email_error_sanitization, rate_limit, session_security, auth_hardening, pure multi-role helpers (`test_roles.py`, 12) и role deps (`test_role_deps.py`, 5) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | auth/security, multi-role auth/policy/admin set-based roles, legal basis, session notes, chat/system conversation, chat attachments, appointments/schedules/group sessions/unregistered cards/staff-created students/profile, diary |
+| **Unit** | Service/helper business logic, без реальной БД | change_password, encryption, normalization, email-domain normalize/validate/extract (35), smtp_transport, rate_limit, session security, pure multi-role helpers и role deps |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | auth/security, multi-role roles, legal basis, email-domain creation policy/admin CRUD/concurrency, self-admin guard, session notes, chat, appointments/schedules/group sessions/unregistered cards/staff-created students/profile, diary |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **890 passed** по финальному прогону Claude Code (`pytest tests/`;
-включает multi-role, appointment/profile/unregistered-cards, chat attachments и diary).
+Итого backend: **961 passed** по финальному прогону Claude Code (`pytest tests/`;
+включает multi-role, email-domain allowlist, self-admin guard,
+appointment/profile/unregistered-cards, chat attachments и diary).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **57 suites / 702 passed** —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **60 suites / 720 passed** —
 multi-role normalization/auth/guards, RoleChooser, CabinetSwitcher, layout sync,
-admin set-based role forms/list badges, chat role branching, appointments и diary.
-Production build: success; тесты и build независимо подтверждены Codex 2026-07-14.
+admin set-based role forms/list badges, self-admin lock, отдельная страница доменов,
+группированная admin-навигация, chat role branching, appointments и diary.
+Production build: success.
 Полный `npm run lint` прошёл с **0 errors / 0 warnings**. Ручной browser smoke
-1280/800/390 px и panel positioning у правого/нижнего края остаётся pending перед
-merge/demo. Дополнительно —
+1280/800/390 px, panel positioning у правого/нижнего края, `/admin/email-domains`
+(add/disable/reactivate/409) и direct route/reload остаётся pending перед merge/demo.
+Дополнительно —
 chat (LinkifiedText, messageShape, Chat smoke), admin users (phone, useUserForm, users.api),
 publishLabels, DateInput (dateHelpers, popoverPosition, DateInput) и client.js error-parsing
 (FastAPI/Pydantic 422 detail array). DOM-тесты модалок с Tiptap/ImageUpload/MultiSelect
@@ -364,6 +384,19 @@ npm run build
 3. Убедиться, что произошёл автоматический выход и открылась AuthModal с сообщением «Пароль изменён. Войдите снова.»
 4. Ввести **старый** пароль → получить «Неверный email или пароль».
 5. Ввести **новый** пароль → успешный вход.
+
+### Manual smoke — admin domains и self-admin
+
+1. На 1280/800/390 px проверить четыре группы sidebar: «Управление», «Контент»,
+   «Система», «Аккаунт»; ссылки и active state не должны перекрываться.
+2. Открыть `/admin/email-domains` напрямую и после reload. Проверить список,
+   добавление, отключение с confirm, реактивацию и отображение backend 409 при
+   попытке отключить последний активный домен.
+3. Проверить, что `/admin/settings` содержит только «Безопасность» / «Смена пароля».
+4. В edit собственного пользователя убедиться, что checkbox `admin` заблокирован,
+   а другие staff-роли доступны согласно общей policy.
+5. Прямой PATCH, снимающий собственную роль `admin`, должен получить 422; тот же
+   target может быть изменён другим администратором.
 
 ---
 

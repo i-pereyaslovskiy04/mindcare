@@ -1,6 +1,6 @@
 # MindCare Web — Architecture Document
 
-> Updated: 2026-06-26
+> Updated: 2026-07-16
 > Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)
 > Purpose: University psychology center — public informational site with role-based dashboards and a full authentication flow.
 
@@ -25,6 +25,7 @@ mindcare_web/
     │   ├── client.js          ← transport: token injection + 401 retry
     │   ├── auth.api.js
     │   ├── users.api.js       ← /api/admin/users/* (CRUD пользователей)
+    │   ├── domains.api.js     ← /api/admin/email-domains (allowlist регистрации)
     │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (UI: «Темы»)
     │   ├── categories.api.js  ← /api/admin/categories/* (UI: «Типы материалов»)
     │   ├── news.api.js
@@ -38,6 +39,7 @@ mindcare_web/
     │
     ├── shared/
     │   └── lib/
+    │       ├── roles.js       ← multi-role normalize/priority/labels
     │       └── utils.js       ← getInitials() и другие общие утилиты
     │
     ├── data/                  ← dev/mock data only
@@ -120,10 +122,16 @@ mindcare_web/
     │       │   ├── hooks/useAdminNews.js
     │       │   ├── components/NewsFormModal.jsx + NewsTable.jsx
     │       │   └── pages/NewsPage.jsx
-    │       └── articles/
-    │           ├── hooks/useAdminArticles.js
-    │           ├── components/ArticleFormModal.jsx + ArticlesTable.jsx
-    │           └── pages/ArticlesPage.jsx
+    │       ├── articles/
+    │       │   ├── hooks/useAdminArticles.js
+    │       │   ├── components/ArticleFormModal.jsx + ArticlesTable.jsx
+    │       │   └── pages/ArticlesPage.jsx
+    │       ├── email-domains/
+    │       │   ├── hooks/useAllowedDomains.js
+    │       │   ├── components/EmailDomainsSection.jsx + .module.css
+    │       │   └── pages/EmailDomainsPage.jsx + .module.css
+    │       └── settings/
+    │           └── pages/AdminSettingsPage.jsx + .module.css
     │
     ├── components/            ← domain-agnostic UI primitives
     │   ├── Icon/
@@ -382,6 +390,8 @@ src/data/
 | `/admin/tags` | `TagsPage` | — (UI: «Темы») |
 | `/admin/news` | `AdminNewsPage` | — |
 | `/admin/articles` | `AdminArticlesPage` | — |
+| `/admin/email-domains` | `EmailDomainsPage` | Admin-only; список и управление allowlist регистрации |
+| `/admin/settings` | `AdminSettingsPage` | Admin-only; безопасность / смена пароля |
 | `*` | `NotFound` | Public |
 
 **DashboardRedirect** — редирект по активному/default кабинету:
@@ -537,6 +547,33 @@ Admin users UI использует `StaffRolesCheckboxes`: три staff-рол�
 set-based, существующая `student` показывается read-only. Student-only/roleless
 пользователь не может получить первую staff-роль через текущий PATCH policy, но
 scalar-only edit остаётся доступным.
+
+При редактировании собственного аккаунта checkbox `admin` заблокирован по
+`currentUser.id === editedUser.id`; остальные staff-роли остаются доступны согласно
+общей policy. Это UX-защита: авторитетный self-admin guard находится на backend.
+
+### Admin Navigation and Email Domains
+
+`AdminLayout` рендерит статический `ADMIN_NAV_GROUPS`, а breadcrumbs выводятся из
+тех же данных:
+
+```text
+Управление → Пользователи
+Контент    → Материалы, Новости, Тесты
+Система    → Типы материалов, Темы, Типы встреч, Домены регистрации
+Аккаунт    → Безопасность
+```
+
+Домены регистрации вынесены из пользовательских настроек на отдельный route
+`/admin/email-domains`. `EmailDomainsPage` ограничивает рабочую ширину до 760 px и
+композирует `EmailDomainsSection`; API-вызовы находятся в `api/domains.api.js`,
+состояние — в `useAllowedDomains`. UI поддерживает add, disable с confirm,
+reactivate, loading/error/empty states и показывает backend 409 ровно в одном alert.
+
+`/admin/settings` содержит только персональную безопасность администратора и смену
+пароля (рабочая ширина 520 px). Разделы allowlist и account security не смешиваются.
+Прямой вход и reload на `/admin/email-domains` должны проходить через обычный
+`RoleRoute` с membership-ролью `admin`.
 
 ### Modal System
 
@@ -816,7 +853,7 @@ const {
 - Список записей на консультации (супервизор, психолог)
 - Список результатов тестов (супервизор, связанный психолог)
 - Журналы аудита (админ)
-- Список своих записей (студент) — да, тоже через пагинацию, на случай 
+- Список своих записей (студент) — да, тоже через пагинацию, на случай
   если у студента 50+ записей за годы учёбы
 
 **Не применяется** к:
