@@ -1,0 +1,175 @@
+.card {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(74, 55, 40, 0.04), 0 6px 18px rgba(74, 55, 40, 0.06);
+}
+
+.cardTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin-bottom: 6px;
+}
+
+.cardDesc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-bottom: 20px;
+}
+
+/* ── add form ── */
+.addForm {
+  margin-bottom: 18px;
+}
+
+.addRow {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.input {
+  border: 1px solid var(--nav-border);
+  background: var(--cream);
+  border-radius: 10px;
+  padding: 9px 13px;
+  font-size: 13.5px;
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: 'Nunito', sans-serif;
+  box-sizing: border-box;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.input:focus {
+  border-color: var(--coffee);
+  background: var(--warm-white);
+  box-shadow: 0 0 0 3px rgba(139, 111, 71, 0.08);
+}
+
+.input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── list ── */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--cream);
+}
+
+.rowMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.domain {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  word-break: break-all;
+}
+
+.comment {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.rowActions {
+  flex-shrink: 0;
+}
+
+.muted {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.formError {
+  font-size: 13px;
+  color: var(--error);
+  background: rgba(185, 64, 64, 0.07);
+  border: 1px solid rgba(185, 64, 64, 0.2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+/* ── confirm dialog ── */
+.confirmBody {
+  padding: 22px;
+  max-width: 420px;
+}
+
+.confirmTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin-bottom: 10px;
+}
+
+.confirmText {
+  font-size: 13.5px;
+  color: var(--text-main);
+  line-height: 1.55;
+  margin-bottom: 16px;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ── responsive: stacked rows на узких экранах, без горизонтального overflow ── */
+@media (max-width: 600px) {
+  .addRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .rowActions {
+    align-self: stretch;
+  }
+
+  .rowActions :global(button) {
+    width: 100%;
+  }
+
+  .confirmActions {
+    flex-direction: column-reverse;
+  }
+}

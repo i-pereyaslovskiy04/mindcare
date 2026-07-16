@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import LoginForm from '../ui/LoginForm';
 import ForgotPasswordModal from '../forgot-password/ForgotPasswordModal';
-import { getRoleHome } from '../../../shared/lib/routes';
 import styles from './LoginPage.module.css';
 
 export default function LoginPage() {
@@ -11,10 +10,10 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [forgotOpen, setForgotOpen] = useState(false);
 
-  // Already logged in → go to role dashboard.
+  // Already logged in → DashboardRedirect выбирает кабинет (multi-role).
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate(getRoleHome(user.role), { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 

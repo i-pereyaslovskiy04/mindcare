@@ -1,9 +1,10 @@
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
+import { useAuth } from '../../../auth/AuthContext';
 import Button from '../../../../components/UI/Button/Button';
 import Select from '../../../../components/UI/Select/Select';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
-import { EDIT_ROLE_OPTIONS, ROLE_LABELS, isStaffRole } from '../roleLabels';
+import StaffRolesCheckboxes from './StaffRolesCheckboxes';
 import { BASIS_TYPE_OPTIONS, ROLE_CHANGE_LEGAL_BASIS_LABEL } from '../legalBasis';
 import { PHONE_PLACEHOLDER } from '../phone';
 import styles from './UserEditModal.module.css';
@@ -14,16 +15,19 @@ function formatDate(dateStr) {
 }
 
 export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated }) {
-  const { values, errors, loading, submitting, handleChange, handleSubmit, initialRole } =
-    useUserForm({
-      mode: 'edit',
-      uuid,
-      onSuccess: () => { onUpdated(); onClose(); },
-    });
+  const { user: authUser } = useAuth();
+  const {
+    values, errors, loading, submitting, handleChange, handleSubmit, toggleRole,
+    hasStudent, editNeedsBasis, canManageStaffRoles, isSelf,
+  } = useUserForm({
+    mode: 'edit',
+    uuid,
+    currentUserId: authUser?.id,
+    onSuccess: () => { onUpdated(); onClose(); },
+  });
 
-  // Legal basis нужен только при реальной смене роли на staff/admin.
-  const roleChanged = initialRole != null && values.role !== initialRole;
-  const showLegalBasis = roleChanged && isStaffRole(values.role);
+  // Legal basis нужен только при добавлении новой staff-роли.
+  const showLegalBasis = editNeedsBasis;
 
   return (
     <Modal open={open} onClose={onClose} ariaLabel="Редактировать пользователя" zIndex={2200}>
@@ -71,14 +75,21 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Роль пользователя</label>
-              <Select
-                value={values.role}
-                options={EDIT_ROLE_OPTIONS}
-                displayLabel={ROLE_LABELS[values.role]}
-                onChange={(val) => handleChange({ target: { name: 'role', value: val } })}
-                error={errors.role}
-                panelZIndex={2300}
+              <StaffRolesCheckboxes
+                label="Роли пользователя"
+                value={values.roles}
+                onToggle={toggleRole}
+                hasStudent={hasStudent}
+                disabled={!canManageStaffRoles}
+                disabledHint={
+                  !canManageStaffRoles
+                    ? 'Назначение служебной роли доступно только пользователю, у которого уже есть служебная роль. Для нового сотрудника используйте «Создать пользователя».'
+                    : undefined
+                }
+                lockedRoles={isSelf ? ['admin'] : []}
+                lockedHint="Нельзя снять у себя роль администратора."
+                error={errors.roles}
+                idPrefix="uem-role"
               />
             </div>
 
@@ -106,8 +117,8 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
             {showLegalBasis && (
               <div className={styles.legalBasisGroup}>
                 <p className={styles.legalBasisNote}>
-                  Смена роли на «{ROLE_LABELS[values.role] ?? values.role}»
-                  требует документированного основания обработки ПДн.
+                  Назначение служебной роли требует документированного
+                  основания обработки ПДн.
                 </p>
 
                 <div className={styles.field}>

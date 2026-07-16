@@ -4,7 +4,7 @@ import Badge from '../../components/UI/Badge/Badge';
 import Button from '../../components/UI/Button/Button';
 import Checkbox from '../../components/UI/Checkbox/Checkbox';
 import Modal from '../../components/Modal/Modal';
-import { useAuth } from '../../features/auth/AuthContext';
+import { ROLE_LABELS } from '../../shared/lib/roles';
 import {
   getMeetingTypes,
   createMeetingType,
@@ -49,15 +49,15 @@ const EMPTY_FORM = {
 
 const COLS = 6;
 
-export default function MeetingTypesPage() {
-  const { user } = useAuth();
+export default function MeetingTypesPage({ cabinetRole = 'supervisor' }) {
   const { items, loading, error, refetch } = useMeetingTypes();
   const [modal, setModal]   = useState(null); // null | 'create' | item
   const [form, setForm]     = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState(null);
 
-  const roleLabel = user?.role === 'admin' ? 'Администратор' : 'Супервизор';
+  // Лейбл — из роли МАРШРУТА (cabinetRole), а не legacy user.role.
+  const roleLabel = ROLE_LABELS[cabinetRole] ?? '';
 
   function openCreate() {
     setForm(EMPTY_FORM);

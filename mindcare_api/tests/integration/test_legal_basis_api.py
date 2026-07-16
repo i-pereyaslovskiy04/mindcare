@@ -21,8 +21,9 @@ from pathlib import Path
 import pytest
 
 from app.auth import storage as auth_storage
+from app.auth.roles import primary_role
 from app.db.session import SessionLocal
-from app.db.models import ConsentRecord, User, UserLegalBasisRecord
+from app.db.models import ConsentRecord, Role, User, UserLegalBasisRecord, UserRole
 from tests.integration.conftest import create_test_user
 
 PASSWORD = "SecurePass42!"
@@ -35,6 +36,9 @@ BODY_OK = {
     "basis_reference": "Приказ № 42-к",
     "legal_basis_comment": "Тестовое основание",
 }
+
+# То же тело, но без роли — для multi-role сценариев (roles[] задаётся отдельно).
+BODY_MULTI = {k: v for k, v in BODY_OK.items() if k != "role"}
 
 
 def _make_admin(client) -> tuple[str, int]:
@@ -86,6 +90,21 @@ def _user_exists(email: str) -> bool:
         return db.query(User).filter(User.email == email).first() is not None
 
 
+def _role_names_for_email(email: str) -> list[str]:
+    """Все имена ролей пользователя (для проверки dedupe/rollback)."""
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.email == email).first()
+        if user is None:
+            return []
+        rows = (
+            db.query(Role.name)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .filter(UserRole.user_id == user.id)
+            .all()
+        )
+        return [r[0] for r in rows]
+
+
 # ─── 1. Валидация подтверждения ───────────────────────────────────────────────
 
 class TestConfirmationRequired:
@@ -110,6 +129,82 @@ class TestConfirmationRequired:
         r = _post_create(client, token, body)
         assert r.status_code == 422
         assert not _user_exists(test_email)
+
+
+# ─── 1b. basis_reference обязателен (single-role и multi-role create) ───────
+
+class TestBasisReferenceRequired:
+    def test_missing_basis_reference_422(self, client, test_email):
+        token, _ = _make_admin(client)
+        body = {**BODY_OK, "email": test_email}
+        del body["basis_reference"]
+        r = _post_create(client, token, body)
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+    def test_empty_basis_reference_422(self, client, test_email):
+        token, _ = _make_admin(client)
+        body = {**BODY_OK, "email": test_email, "basis_reference": ""}
+        r = _post_create(client, token, body)
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+    def test_whitespace_only_basis_reference_422(self, client, test_email):
+        token, _ = _make_admin(client)
+        body = {**BODY_OK, "email": test_email, "basis_reference": "   "}
+        r = _post_create(client, token, body)
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+    def test_basis_reference_stripped_on_success(self, client, test_email):
+        token, _ = _make_admin(client)
+        body = {
+            **BODY_OK, "email": test_email,
+            "basis_reference": "  Приказ № 42-к  ",
+        }
+        r = _post_create(client, token, body)
+        assert r.status_code == 201, r.text
+
+        rec = _basis_records_for_email(test_email)[0]
+        assert rec.basis_reference == "Приказ № 42-к"
+
+    def test_missing_basis_reference_422_multi_role(self, client, test_email):
+        token, _ = _make_admin(client)
+        body = {
+            **BODY_MULTI, "email": test_email,
+            "roles": ["psychologist", "supervisor"],
+        }
+        del body["basis_reference"]
+        r = _post_create(client, token, body)
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+    def test_whitespace_basis_reference_422_multi_role(self, client, test_email):
+        token, _ = _make_admin(client)
+        body = {
+            **BODY_MULTI, "email": test_email,
+            "roles": ["psychologist", "supervisor"],
+            "basis_reference": "   ",
+        }
+        r = _post_create(client, token, body)
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+        assert _role_names_for_email(test_email) == []
+
+    def test_basis_reference_stripped_multi_role(self, client, test_email):
+        token, _ = _make_admin(client)
+        body = {
+            **BODY_MULTI, "email": test_email,
+            "roles": ["psychologist", "supervisor"],
+            "basis_reference": "  Приказ № 7-к  ",
+        }
+        r = _post_create(client, token, body)
+        assert r.status_code == 201, r.text
+
+        records = _basis_records_for_email(test_email)
+        assert len(records) == 2
+        for rec in records:
+            assert rec.basis_reference == "Приказ № 7-к"
 
 
 # ─── 2. Создание staff-ролей фиксирует основание ─────────────────────────────
@@ -226,3 +321,140 @@ class TestTransactionRollback:
             _post_create(client, token, {**BODY_OK, "email": test_email})
 
         assert not _user_exists(test_email)
+
+
+# ─── 6. Multi-role create (roles[]) ───────────────────────────────────────────
+
+class TestMultiRoleCreate:
+    def test_roles_creates_all_with_basis_each(self, client, test_email):
+        token, admin_id = _make_admin(client)
+        r = _post_create(client, token, {
+            **BODY_MULTI, "email": test_email,
+            "roles": ["psychologist", "supervisor"],
+        })
+        assert r.status_code == 201, r.text
+        body = r.json()
+        # детерминированный порядок по приоритету (supervisor > psychologist)
+        assert body["roles"] == ["supervisor", "psychologist"]
+        assert body["role"] == "supervisor"
+        assert body["role"] == primary_role(body["roles"])
+
+        assert set(_role_names_for_email(test_email)) == {
+            "psychologist", "supervisor",
+        }
+        records = _basis_records_for_email(test_email)
+        assert len(records) == 2  # по одной basis на каждую staff-роль
+        for rec in records:
+            assert rec.basis_type == "employment"
+            assert rec.basis_source == "admin_ui"
+            assert rec.confirmed_by_user_id == admin_id
+            assert rec.ip_address is not None
+            assert rec.user_agent is not None
+            assert rec.record_metadata["action"] == "user_create"
+        assert {rec.record_metadata["created_role"] for rec in records} == {
+            "psychologist", "supervisor",
+        }
+
+    def test_duplicate_roles_deduped(self, client, test_email):
+        token, _ = _make_admin(client)
+        r = _post_create(client, token, {
+            **BODY_MULTI, "email": test_email,
+            "roles": ["psychologist", "psychologist"],
+        })
+        assert r.status_code == 201, r.text
+        assert r.json()["roles"] == ["psychologist"]
+        assert _role_names_for_email(test_email) == ["psychologist"]
+        assert len(_basis_records_for_email(test_email)) == 1
+
+    def test_legacy_single_role_still_one_basis(self, client, test_email):
+        token, _ = _make_admin(client)
+        r = _post_create(client, token, {**BODY_OK, "email": test_email})
+        assert r.status_code == 201
+        assert r.json()["roles"] == ["psychologist"]
+        assert r.json()["role"] == "psychologist"
+        assert len(_basis_records_for_email(test_email)) == 1
+
+    def test_second_basis_failure_full_rollback(
+        self, client, test_email, monkeypatch,
+    ):
+        """Сбой создания ВТОРОЙ basis-записи откатывает весь multi-role create."""
+        token, _ = _make_admin(client)
+        real_basis = UserLegalBasisRecord
+        calls = {"n": 0}
+
+        def _flaky(*a, **kw):
+            calls["n"] += 1
+            if calls["n"] >= 2:
+                raise RuntimeError("second basis write failed (test)")
+            return real_basis(*a, **kw)
+
+        monkeypatch.setattr("app.users.storage.UserLegalBasisRecord", _flaky)
+
+        with pytest.raises(RuntimeError, match="second basis write failed"):
+            _post_create(client, token, {
+                **BODY_MULTI, "email": test_email,
+                "roles": ["psychologist", "supervisor"],
+            })
+
+        assert not _user_exists(test_email)
+        assert _role_names_for_email(test_email) == []
+        assert _basis_records_for_email(test_email) == []
+
+
+# ─── 7. Валидация role / roles ────────────────────────────────────────────────
+
+class TestCreateRoleValidation:
+    def test_neither_role_nor_roles_422(self, client, test_email):
+        token, _ = _make_admin(client)
+        r = _post_create(client, token, {**BODY_MULTI, "email": test_email})
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+    def test_both_role_and_roles_422(self, client, test_email):
+        token, _ = _make_admin(client)
+        r = _post_create(client, token, {
+            **BODY_OK, "email": test_email, "roles": ["supervisor"],
+        })
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+    def test_empty_roles_422(self, client, test_email):
+        token, _ = _make_admin(client)
+        r = _post_create(client, token, {
+            **BODY_MULTI, "email": test_email, "roles": [],
+        })
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+    def test_student_in_roles_422(self, client, test_email):
+        token, _ = _make_admin(client)
+        r = _post_create(client, token, {
+            **BODY_MULTI, "email": test_email, "roles": ["student"],
+        })
+        assert r.status_code == 422
+        assert not _user_exists(test_email)
+
+
+# ─── 8. Staff welcome email role-neutral ──────────────────────────────────────
+
+class TestStaffWelcomeEmailNeutral:
+    def test_welcome_email_has_no_psychologist_account_phrase(
+        self, client, test_email, monkeypatch,
+    ):
+        token, _ = _make_admin(client)
+        captured: dict[str, str] = {}
+
+        import app.services.email_service as es
+
+        def _fake_send_email(*args, **kwargs):
+            captured["blob"] = " ".join(
+                [str(a) for a in args] + [str(v) for v in kwargs.values()]
+            )
+
+        monkeypatch.setattr(es, "send_email", _fake_send_email)
+
+        r = _post_create(client, token, {**BODY_OK, "email": test_email})
+        assert r.status_code == 201
+        assert "blob" in captured, "welcome email не был отправлен"
+        # точная staff-специфичная формулировка не должна встречаться
+        assert "аккаунт психолога" not in captured["blob"]

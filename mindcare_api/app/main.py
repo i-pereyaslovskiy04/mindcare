@@ -138,6 +138,7 @@ from app.appointments.routes_psychologist import schedule_router as schedule_psy
 from app.appointments.routes_psychologist import exception_router as schedule_exceptions_psychologist_router  # noqa: E402
 from app.appointments.routes_supervisor import router as appointments_supervisor_router  # noqa: E402
 from app.diary.routes import router as diary_router                        # noqa: E402
+from app.email_domains.routes_admin import router as admin_email_domains_router  # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
@@ -164,6 +165,7 @@ app.include_router(schedule_psychologist_router,               prefix="/api")
 app.include_router(schedule_exceptions_psychologist_router,   prefix="/api")
 app.include_router(appointments_supervisor_router,             prefix="/api")
 app.include_router(diary_router,              prefix="/api")
+app.include_router(admin_email_domains_router, prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

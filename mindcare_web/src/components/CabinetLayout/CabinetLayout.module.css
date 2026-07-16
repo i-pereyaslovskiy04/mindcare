@@ -275,6 +275,13 @@
   align-items: center;
   gap: 10px;
 }
+/* Скрыт на desktop (>980px) — там switcher виден в sidebar .userInfo.
+   Показывается только когда sidebar сворачивается/скрывается, чтобы
+   переключатель кабинета оставался доступен на любой ширине. */
+.topbarSwitcher {
+  display: none;
+  color: var(--espresso);
+}
 .search {
   display: flex;
   align-items: center;
@@ -463,6 +470,14 @@
   .sidebar .user {
     justify-content: center;
     padding: 14px 8px;
+  }
+
+  /* Sidebar switcher скрыт вместе с userInfo — показываем topbar-копию,
+     чтобы multi-role пользователь мог переключить кабинет и в icon-rail
+     режиме (801–980px), и на мобильных ширинах (<=600px). */
+  .topbarSwitcher {
+    display: inline-flex;
+    align-items: center;
   }
 
   /* Nav: collapse to icons */

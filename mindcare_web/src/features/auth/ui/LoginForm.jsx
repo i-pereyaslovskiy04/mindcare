@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
-import { getRoleHome } from '../../../shared/lib/routes';
 import { TelegramIcon, VKIcon, YandexIcon } from '../../../components/icons';
 
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -45,9 +44,10 @@ export default function LoginForm({ onSuccess, onForgotPassword }) {
 
     setIsLoading(true);
     try {
-      const role = await login({ email, password });
+      await login({ email, password });
       onSuccess();
-      navigate(getRoleHome(role));
+      // Кабинет выбирает DashboardRedirect (multi-role: chooser/activeRole).
+      navigate('/dashboard');
     } catch (err) {
       setApiError(toRu(err.message) || 'Ошибка входа. Попробуйте снова.');
     } finally {

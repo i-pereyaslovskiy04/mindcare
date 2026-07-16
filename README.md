@@ -4,6 +4,11 @@
 
 Монорепозиторий: FastAPI backend (`mindcare_api/`) + React frontend (`mindcare_web/`).
 
+Актуальная точка входа по последнему крупному блоку:
+[`docs/HANDOFFS/2026-07-16-email-domain-policy-self-admin-complete.md`](docs/HANDOFFS/2026-07-16-email-domain-policy-self-admin-complete.md).
+Handoff по multi-role модели от 2026-07-14 и appointments/scheduling handoff от
+2026-06-27 остаются историческими snapshot.
+
 ---
 
 ## Стек технологий
@@ -48,9 +53,9 @@ HTTP Request
 ```
 mindcare/
 ├── mindcare_api/                    # FastAPI backend — порт 8000
-│   ├── alembic/                     # Конфиг и версии миграций (14 ревизий, head: a9b3e1f7c2d4)
+│   ├── alembic/                     # Конфиг и версии миграций (см. «История ревизий»)
 │   │   ├── env.py
-│   │   └── versions/                # af13ad7a133c … d8f3a6c1e9b4 (см. «История ревизий»)
+│   │   └── versions/
 │   ├── app/
 │   │   ├── main.py                  # Точка входа: FastAPI app, CORS, lifespan, роутеры
 │   │   ├── core/
@@ -68,10 +73,11 @@ mindcare/
 │   │   │       ├── profiles.py      # student_profiles, psychologist_profiles
 │   │   │       ├── consents.py      # consents, consent_records (личное согласие субъекта)
 │   │   │       ├── legal_basis.py   # user_legal_basis_records (основание организации, Stage 23b)
+│   │   │       ├── email_domains.py # allowed_email_domains (allowlist новых аккаунтов)
 │   │   │       ├── media.py         # media_files, media_versions
 │   │   │       ├── content.py       # articles, news, categories, help_resources, Q&A
 │   │   │       ├── diagnostics.py   # tests, questions, options, test_results
-│   │   │       ├── consultations.py # appointments, schedule_rules, session_notes
+│   │   │       ├── consultations.py # engagements, schedules, appointments, groups, walk-in cards, notes
 │   │   │       ├── chat.py          # chat_conversations, chat_messages, chat_attachments (Stage 28b/32b)
 │   │   │       ├── notifications.py # notification_templates, notifications
 │   │   │       ├── audit.py         # auth_log, audit_log, data_change_log
@@ -90,6 +96,7 @@ mindcare/
 │   │   │   ├── service.py           # Бизнес-логика: CRUD пользователей
 │   │   │   ├── storage.py           # DB-запросы: поиск, создание, обновление
 │   │   │   └── schemas.py           # Pydantic-схемы admin user management
+│   │   ├── email_domains/           # /api/admin/email-domains + policy/locks/audit
 │   │   ├── tags/                    # /api/admin/tags/* + /api/tags/ (public)
 │   │   ├── categories/              # /api/admin/categories/*
 │   │   ├── news/                    # /api/admin/news/* + /api/news/* (public)
@@ -98,6 +105,7 @@ mindcare/
 │   │   ├── session_notes/           # /api/session-notes/* + Fernet encrypt-on-write
 │   │   ├── diary/                   # /api/diary/* — student-only дневник, encrypt-on-write
 │   │   ├── chat/                    # /api/chat/* — one-to-one чат (Stage 28c), encrypt-on-write
+│   │   ├── appointments/            # /api/appointments/*, /api/psychologist/* и supervisor booking/schedules/groups
 │   │   ├── supervisor/              # /api/supervisor/* (supervisor role)
 │   │   ├── psychologist/            # /api/psychologist/* (psychologist role)
 │   │   └── services/
@@ -106,10 +114,11 @@ mindcare/
 │   ├── scripts/
 │   │   ├── create_admin.py                      # Создание первого администратора (интерактивный CLI)
 │   │   ├── ensure_audit_partitions.py           # Создание будущих партиций audit-таблиц
+│   │   ├── extend_schedules.py                  # Автопродление schedule series (maintenance, не lifespan)
 │   │   ├── backfill_legal_basis.py              # Backfill legal basis records (--dry-run по умолчанию)
 │   │   ├── repair_missing_chat_conversations.py # Восстановление бесед для существующих engagements
 │   │   └── test_smtp.py                         # Диагностика SMTP-соединения
-│   ├── tests/                       # 587 тестов: unit + integration (см. «Тестирование»)
+│   ├── tests/                       # 961 backend-тест: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -333,7 +342,7 @@ Alembic хранит текущую ревизию в одной строке:
 alembic_version
 ───────────────────
 version_num
-a9b3e1f7c2d4      ← текущий head
+c7f1a9e4d2b8      ← текущий head
 ```
 
 Каждая команда `alembic upgrade head` применяет все недостающие ревизии по цепочке и обновляет эту строку.
@@ -355,9 +364,13 @@ a9b3e1f7c2d4      ← текущий head
 | `d8f3a6c1e9b4` | chat_conversations + chat_messages (Stage 28b) |
 | `c4f7a2e9d1b8` | system conversation support: type/recipient_id + message_kind/event_key (Stage 29b) |
 | `f7e9c2a4b8d1` | chat_messages.edited_at (Stage 31z) |
-| `a9b3e1f7c2d4` | chat_attachments table + FK (Stage 32b) — **head** |
+| `a9b3e1f7c2d4` | chat_attachments table + FK (Stage 32b) |
+| `e1a2b3c4d5f6` … `b7c8d9e0f1a2` | appointments/schedule v3/group sessions/walk-in cards branch |
+| `b2e4d7f1a9c3` … `c3a7f8e2d1b9` | diary tables + emotions catalog branch |
+| `db0b2e177da5` | merge diary into dev heads |
+| `c7f1a9e4d2b8` | allowed_email_domains: управляемый allowlist + seed 11 доменов — **head** |
 
-### ORM-модели (48 таблиц, 12 модулей)
+### ORM-модели (58 таблиц, 14 доменных модулей)
 
 | Модуль | Таблицы |
 |--------|---------|
@@ -365,10 +378,11 @@ a9b3e1f7c2d4      ← текущий head
 | `profiles.py` | student_profiles, psychologist_profiles, emergency_contacts |
 | `consents.py` | consents, consent_records |
 | `legal_basis.py` | user_legal_basis_records |
+| `email_domains.py` | allowed_email_domains |
 | `media.py` | media_files, media_versions |
 | `content.py` | categories, articles, article_categories, news, help_resources, questions_answers |
 | `diagnostics.py` | tests, test_categories, questions, options, question_media, option_media, test_results, test_result_scales, student_answers |
-| `consultations.py` | therapy_engagements, schedule_rules, schedule_exceptions, appointments, session_notes |
+| `consultations.py` | therapy_engagements, meeting_types, schedule_rules, schedule_breaks, schedule_exceptions, unregistered_student_cards, appointments, group_sessions, group_session_registrations, session_notes |
 | `chat.py` | chat_conversations, chat_messages, chat_attachments |
 | `notifications.py` | notification_templates, notifications |
 | `audit.py` | auth_log, audit_log, data_change_log |
@@ -448,10 +462,12 @@ lifespan() startup
 
 ## Тестирование
 
-Текущий статус backend: **587 passed** (unit + API/integration; integration-тесты требуют
-запущенный dev PostgreSQL на alembic head).
-Frontend: **39 suites / 540 passed** (`npm test -- --watchAll=false`).
-Последняя проверка frontend lint: **0 warnings**; production build: **success**.
+Текущий статус backend после email-domain/self-admin corrective pass:
+**961 passed** (`pytest tests/`; integration-тесты требуют запущенный dev PostgreSQL
+на alembic head).
+Frontend: **60 suites / 720 passed** (`npm test -- --watchAll=false`); production
+build: **success**; полный `npm run lint`: **0 errors / 0 warnings**. Ручной browser
+smoke на 1280/800/390 px остаётся обязательной проверкой перед merge/demo.
 
 ```bash
 # Backend
@@ -488,7 +504,17 @@ npm run build
 | `tests/integration/test_email_normalization_api.py` | register/login/reset API (11) |
 | `tests/integration/test_rate_limit_api.py` | 429-поведение auth API (10) |
 | `tests/integration/test_session_token_hashing.py` | hashed tokens end-to-end (9) |
-| `tests/integration/test_legal_basis_api.py` | legal basis records API (11) |
+| `tests/test_email_domain_normalization.py` | нормализация и валидация email-доменов (35) |
+| `tests/integration/test_email_domain_policy.py` | allowlist во всех путях создания аккаунта и сохранение existing login/reset (10) |
+| `tests/integration/test_allowed_email_domains_api.py` | admin CRUD, audit и last-active guard (17) |
+| `tests/integration/test_allowed_email_domains_concurrency.py` | конкурентные disable/create блокировки (2) |
+| `tests/integration/test_admin_self_role_guard.py` | запрет снять собственную роль admin (7) |
+| `tests/test_roles.py` + `tests/test_role_deps.py` | multi-role pure helpers, explicit `roles=[]` и guards (17) |
+| `tests/integration/test_multi_role_auth.py` | multi-role auth/session responses (15) |
+| `tests/integration/test_multi_role_policy.py` | scoped effective-role policy (8) |
+| `tests/integration/test_admin_role_set_based.py` | set-based roles, reactivation и list `roles[]` (26) |
+| `tests/integration/test_admin_role_patch_legal_basis.py` | role PATCH и legal basis (12) |
+| `tests/integration/test_legal_basis_api.py` | legal basis records + multi-role create API (27) |
 | `tests/integration/test_session_notes_api.py` | access policy session_notes (15) |
 | `tests/integration/test_touch_session.py` | debounce touch_session (9) |
 | `tests/integration/test_chat_models.py` | constraints chat-таблиц (6) |
@@ -521,7 +547,32 @@ npm run build
 
 **Аудит.** Все auth-события (login, logout, failed_login, register, password_reset) пишутся в `auth_log` через `audit.log_auth_event()`. Fire-and-forget, ошибки записи не влияют на основной ответ.
 
-**RBAC.** Роли проверяются на бэке через `require_role()` на уровне роутера — нельзя случайно пропустить на новом эндпоинте. Фронтенд не является рубежом безопасности.
+**RBAC / multi-role (ADR-018).** Источник прав — активные membership-роли в
+`user_roles`; один пользователь может одновременно иметь несколько ролей. Backend
+`require_role()` проверяет пересечение разрешённых ролей с `current_user.roles`.
+Frontend `RoleRoute` работает по `user.roles`, но не является рубежом безопасности.
+Legacy `role` — только deterministic primary/convenience и может быть `null`, если
+активных ролей нет. Активный кабинет влияет на UI/audit-policy, но не расширяет
+membership-доступ.
+
+**Защита собственной роли admin (ADR-020).** Backend не позволяет администратору
+снять у самого себя активную membership-роль `admin`; frontend блокирует этот
+checkbox по стабильному user id только как UX-подсказку. Другой администратор может
+изменить набор ролей. Самодеактивация и самоудаление этим правилом не запрещены.
+
+**Allowlist email-доменов новых аккаунтов (ADR-019).** Все HTTP/API creation flows:
+self-registration, admin-created staff и supervisor/admin-created student —
+разрешены только для точного нормализованного домена с активной строкой в
+`allowed_email_domains`. Существующие
+аккаунты сохраняют login и password reset даже после отключения домена. Ранний
+registration check не отправляет OTP на запрещённый домен; authoritative check
+выполняется в creation transaction до consume OTP. Admin управляет списком через
+`GET/POST/PATCH /api/admin/email-domains`; DELETE отсутствует, последний активный
+домен отключить нельзя. Это организационная политика проекта, а не официальный
+государственный перечень почтовых сервисов.
+Локальный `scripts/create_admin.py` остаётся отдельным privileged bootstrap-path
+вне allowlist и должен использоваться только при развёртывании с вручную проверенным
+организационным доменом.
 
 **Идентификаторы.** Внешний API использует `users.uuid` (UUID), не `users.id` (INT).
 
@@ -646,7 +697,6 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 - `target_user_id` в auth_log для поиска операций по субъекту;
 - retention policy для chat_messages (открытый продуктовый вопрос);
 - OTP concurrency / row locking: атомарные confirm-flows не берут `SELECT … FOR UPDATE`, при гонке двух confirm возможен двойной проход валидации (deferred);
-- `_get_primary_role` read-fallback `"student"` при отсутствии активной роли (auth/storage) — cleanup deferred;
 - transactional outbox для гарантированной доставки post-commit уведомлений (deferred);
 - UI просмотра `user_legal_basis_records` в карточке пользователя админки.
 
@@ -679,16 +729,20 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 >
 > При смене роли: Подтверждаю наличие документированного основания для назначения этой роли и обработки персональных данных.
 
-Реализация: отдельная сущность `user_legal_basis_records` (миграция `b6e1f4a7c9d3`, модель `app/db/models/legal_basis.py`). Не использовать `consent_records` как суррогат legal basis для психологов, супервизоров и администраторов. Основание требуется и при создании staff (`POST /api/admin/users`), и при смене роли на staff (`PATCH /api/admin/users/{uuid}`, Stage 31f-fix): смена роли и запись основания атомарны; `staff → student` основания не требует.
+Реализация: отдельная сущность `user_legal_basis_records` (миграция `b6e1f4a7c9d3`, модель `app/db/models/legal_basis.py`). Не использовать `consent_records` как суррогат legal basis для психологов, супервизоров и администраторов. Основание требуется и при создании staff (`POST /api/admin/users`), и при добавлении новой staff-роли через `PATCH /api/admin/users/{uuid}`: добавление роли и запись основания атомарны. Удаление staff-роли нового основания не требует, но фиксируется в audit trail.
 
-**Смена роли в админке (Stage 31n / 31n-hotfix).** Роль пользователя **редактируема** в edit-модалке админки (ранее, Stage 31h, была read-only — правило отменено). UI-поведение:
-- поле «Роль пользователя» расположено сразу под ФИО; при реальной смене роли на `psychologist`/`supervisor`/`admin` появляется блок legal basis (тип основания, документ-основание, опц. комментарий, чекбокс подтверждения) и его поля уходят в PATCH; без документа-основания submit не проходит;
-- если роль не менялась — `role` в PATCH не отправляется и legal basis не требуется;
-- `student` **не предлагается** в edit-dropdown. Студенты появляются через self-registration
-  или через staff-created student flow (`POST /api/supervisor/students`); текущая роль
-  `student` отображается как значение (shared `Select` `displayLabel`), но недоступна
-  для повторного выбора;
-- backend PATCH guard (Stage 31f-fix) остаётся обязательным defense-in-depth — UI-проверка его не заменяет.
+**Управление ролями в админке (ADR-018).** Create/edit формы используют набор
+`roles[]`, а не single-role replace:
+- staff-роли `psychologist`/`supervisor`/`admin` представлены чекбоксами; при добавлении
+  новой роли появляется блок legal basis, без документа-основания submit не проходит;
+- если набор staff-ролей не менялся, `roles` и legal basis в PATCH не отправляются;
+- отсутствие `roles` в PATCH означает «не менять роли»; явный `roles: []` снимает
+  все staff-роли только когда после операции остаётся другая активная роль
+  (например, `student`), иначе backend возвращает 422;
+- `student` показывается read-only badge и не назначается через admin role control;
+- frontend не предлагает student-only/roleless пользователю операцию добавления staff,
+  которую backend policy отклонит; обычные scalar-изменения при этом разрешены;
+- backend set-based PATCH guard остаётся обязательным defense-in-depth.
 
 ---
 
@@ -702,8 +756,8 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 {
   "status": "ok",
   "db": "connected",
-  "tables": 48,
-  "revision": "a9b3e1f7c2d4"
+  "tables": 58,
+  "revision": "c7f1a9e4d2b8"
 }
 ```
 
@@ -713,6 +767,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 |--------|--------|--------|
 | `/api/auth/*` | register/init, register/confirm, login, logout, me, password reset, change-password | Public / Auth |
 | `/api/admin/users/*` | GET list, GET one, POST, PATCH, DELETE | Admin |
+| `/api/admin/email-domains/*` | GET list, POST add, PATCH disable/reactivate/comment | Admin |
 | `/api/admin/tags/*` + `/api/tags` | CRUD tags + public autocomplete | Admin, Supervisor / Public |
 | `/api/admin/categories/*` | CRUD categories | Admin, Supervisor |
 | `/api/admin/news/*` + `/api/news/*` | CRUD news + public list/item | Admin, Supervisor / Public |

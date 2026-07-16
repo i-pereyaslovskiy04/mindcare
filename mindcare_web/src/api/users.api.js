@@ -45,15 +45,16 @@ export function createUser(data) {
  * PATCH /api/admin/users/:uuid — partial update.
  *
  * Allowlist: defensive filtering — только эти поля уходят на backend,
- * неизвестные поля отбрасываются. role и legal basis fields допустимы
- * (Stage 31n): при смене роли на staff/admin backend требует
- * legal_basis_confirmed + basis_type + basis_reference (Stage 31f-fix).
- * Вызывающий код (useUserForm) гарантирует, что role/legal basis
- * присутствуют только при реальной смене роли.
+ * неизвестные поля отбрасываются. Multi-role (ADR-018): `roles` — целевой набор
+ * STAFF-ролей (student сохраняется backend'ом). Legacy `role` оставлен для
+ * совместимости, но новый UI шлёт `roles`. При добавлении staff-роли backend
+ * требует legal_basis_confirmed + basis_type + basis_reference; useUserForm
+ * гарантирует их присутствие только когда роль реально добавляется.
  */
 const EDITABLE_FIELDS = [
   'full_name', 'phone', 'is_active',
-  'role', 'legal_basis_confirmed', 'basis_type', 'basis_reference', 'legal_basis_comment',
+  'role', 'roles',
+  'legal_basis_confirmed', 'basis_type', 'basis_reference', 'legal_basis_comment',
 ];
 
 export function updateUser(uuid, data) {

@@ -6,7 +6,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from typing import Optional
 
-from app.auth.deps import get_current_user, require_role
+from app.auth.deps import get_current_user, require_role, resolve_role_or_403
 from app.supervisor import service, storage
 from app.supervisor.schemas import (
     EngagementClose,
@@ -69,7 +69,10 @@ def create_student(
             psychologist_id=body.psychologist_id,
             primary_concern=body.primary_concern,
             actor_id=current_user["id"],
-            actor_role=current_user["role"],
+            actor_role=resolve_role_or_403(
+                current_user, allowed={"admin", "supervisor"},
+                preferred="supervisor",
+            ),
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
         )
@@ -137,7 +140,10 @@ def create_engagement(
             psychologist_id=body.psychologist_id,
             primary_concern=body.primary_concern,
             actor_id=current_user["id"],
-            actor_role=current_user["role"],
+            actor_role=resolve_role_or_403(
+                current_user, allowed={"admin", "supervisor"},
+                preferred="supervisor",
+            ),
         )
     except service.SupervisorError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -161,7 +167,10 @@ def transfer_engagement(
             new_psychologist_id=body.new_psychologist_id,
             transfer_reason=body.transfer_reason,
             actor_id=current_user["id"],
-            actor_role=current_user["role"],
+            actor_role=resolve_role_or_403(
+                current_user, allowed={"admin", "supervisor"},
+                preferred="supervisor",
+            ),
         )
     except service.SupervisorError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -183,7 +192,10 @@ def close_engagement(
             engagement_id=engagement_id,
             reason=body.reason,
             actor_id=current_user["id"],
-            actor_role=current_user["role"],
+            actor_role=resolve_role_or_403(
+                current_user, allowed={"admin", "supervisor"},
+                preferred="supervisor",
+            ),
         )
     except service.SupervisorError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)

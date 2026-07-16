@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
-import { getRoleHome } from '../../shared/lib/routes';
 import Navbar from '../../components/Navbar/Navbar';
 import Hero from './components/Hero';
 import QuickActions from './components/QuickActions';
@@ -12,7 +11,7 @@ import CookieBanner from '../../components/CookieBanner/CookieBanner';
 
 export default function Home() {
   const location = useLocation();
-  const { user, loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   // Router state set by password-change redirect or route guards
@@ -36,7 +35,8 @@ export default function Home() {
     setIsAuthModalOpen(false);
     setAuthMessage('');
   };
-  const handleGoToDashboard = () => navigate(getRoleHome(user?.role));
+  // Кабинет выбирает DashboardRedirect (multi-role: chooser/activeRole).
+  const handleGoToDashboard = () => navigate('/dashboard');
 
   return (
     <>

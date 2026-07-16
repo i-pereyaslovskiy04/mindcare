@@ -282,6 +282,17 @@ def create_student(
     now = datetime.now(timezone.utc)
 
     with SessionLocal() as db:
+        # 0. Authoritative in-tx проверка домена (FOR SHARE) до создания User.
+        # supervisor.storage не импортирует SupervisorError (service-слой):
+        # EmailDomainNotAllowedError преобразуется в StudentCreateError с кодом,
+        # который service мапит в 422.
+        from app.email_domains.errors import EmailDomainNotAllowedError
+        from app.email_domains.storage import assert_email_domain_allowed_in_tx
+        try:
+            assert_email_domain_allowed_in_tx(db, email)
+        except EmailDomainNotAllowedError as exc:
+            raise StudentCreateError("email_domain_not_allowed", str(exc))
+
         # 1. Уникальность email среди не удалённых пользователей.
         exists = (
             db.query(User.id)

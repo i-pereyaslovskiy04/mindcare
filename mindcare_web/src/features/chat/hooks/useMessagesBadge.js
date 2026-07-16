@@ -14,14 +14,18 @@ const POLL_MS = 30000;
  * (system-беседа и engagement-беседа считаются раздельно), НЕ сумма сообщений.
  *
  * Лёгкий self-poll (30s) на уровне layout. Возвращает число или 0.
- * Источник engagement-части зависит от роли; system — у всех ролей.
+ *
+ * `role` — роль КАБИНЕТА (student/psychologist), в котором рендерится layout,
+ * а не legacy `user.role`. Для multi-role пользователя это важно: студент-
+ * психолог в /student видит student-диалоги, в /psychologist — psychologist.
+ * system-беседа считается у обеих участвующих ролей.
  */
-export function useMessagesBadge() {
+export function useMessagesBadge(role) {
   const { user } = useAuth();
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    if (!user || (user.role !== 'student' && user.role !== 'psychologist')) {
+    if (!user || (role !== 'student' && role !== 'psychologist')) {
       setCount(0);
       return undefined;
     }
@@ -31,7 +35,7 @@ export function useMessagesBadge() {
     async function tick() {
       let dialogs = 0;
       try {
-        if (user.role === 'student') {
+        if (role === 'student') {
           const data = await getStudentConversations({ page: 1, size: 100 });
           dialogs += data.items.filter((c) => c.unread_count > 0).length;
         } else {
@@ -59,7 +63,7 @@ export function useMessagesBadge() {
       clearInterval(t);
       unsub();
     };
-  }, [user]);
+  }, [user, role]);
 
   return count;
 }

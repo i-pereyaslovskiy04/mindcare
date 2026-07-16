@@ -24,12 +24,13 @@ _REQUIRED_CONSENT_TYPES = ["privacy_policy", "data_processing"]
 
 # Маппинг кодов ошибок storage.create_student → HTTP-статус.
 _STUDENT_ERROR_STATUS = {
-    "duplicate_email":        409,
-    "psychologist_not_found": 404,
-    "not_a_psychologist":     400,
-    "psychologist_inactive":  422,
-    "consent_policy_missing": 500,
-    "student_role_missing":   500,
+    "duplicate_email":         409,
+    "psychologist_not_found":  404,
+    "not_a_psychologist":      400,
+    "psychologist_inactive":   422,
+    "consent_policy_missing":  500,
+    "student_role_missing":    500,
+    "email_domain_not_allowed": 422,
 }
 
 
