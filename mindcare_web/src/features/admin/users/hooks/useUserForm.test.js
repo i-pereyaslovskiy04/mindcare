@@ -255,6 +255,62 @@ test('student+staff can remove the last staff role, keeping student', async () =
   expect(result.current.errors.roles).toBeUndefined();
 });
 
+// ─── Self-admin guard (ADR-018) ──────────────────────────────────────────────
+
+test('self-admin: toggling own admin role is a no-op (cannot remove)', async () => {
+  api.getUser.mockResolvedValueOnce({
+    id: 42, full_name: 'Self Admin', phone: '',
+    roles: ['admin', 'supervisor'], is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', currentUserId: '42', onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  expect(result.current.isSelf).toBe(true);
+  toggle(result, 'admin'); // blocked — no-op
+  expect(result.current.values.roles).toContain('admin');
+});
+
+test('self-admin: can remove another own role while keeping admin', async () => {
+  api.getUser.mockResolvedValueOnce({
+    id: 42, full_name: 'Self Admin', phone: '',
+    roles: ['admin', 'supervisor'], is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', currentUserId: 42, onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  toggle(result, 'supervisor'); // remove supervisor, admin сохраняется
+  submit(result);
+
+  await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
+  const [, payload] = api.updateUser.mock.calls[0];
+  expect(payload.roles).toEqual(['admin']);
+  expect(result.current.errors.roles).toBeUndefined();
+});
+
+test('non-self: admin role CAN be toggled off for another user', async () => {
+  api.getUser.mockResolvedValueOnce({
+    id: 99, full_name: 'Other Admin', phone: '',
+    roles: ['admin', 'supervisor'], is_active: true,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u1', currentUserId: 1, onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  expect(result.current.isSelf).toBe(false);
+  toggle(result, 'admin'); // allowed — not self
+  expect(result.current.values.roles).toEqual(['supervisor']);
+  submit(result);
+
+  await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
+  const [, payload] = api.updateUser.mock.calls[0];
+  expect(payload.roles).toEqual(['supervisor']);
+});
+
 // ─── CREATE ──────────────────────────────────────────────────────────────────
 
 test('create sends roles[] + requires non-empty basis_reference', async () => {

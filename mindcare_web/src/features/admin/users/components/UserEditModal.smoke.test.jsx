@@ -1,8 +1,16 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import * as api from '../../../../api/users.api';
 import UserEditModal from './UserEditModal';
+import { useAuth } from '../../../auth/AuthContext';
 
 jest.mock('../../../../api/users.api');
+// useAuth используется для self-admin guard; в unit-smoke мокаем контекст
+// (иначе тянется AuthContext → react-router-dom без провайдера). jest.fn()
+// (не статичный объект) — чтобы отдельный тест мог переопределить currentUserId
+// через mockReturnValue и проверить сравнение id с редактируемым пользователем.
+jest.mock('../../../auth/AuthContext', () => ({
+  useAuth: jest.fn(),
+}));
 
 const USER_INFO = {
   email: 'student@donstu.ru',
@@ -11,6 +19,7 @@ const USER_INFO = {
 };
 
 beforeEach(() => {
+  useAuth.mockReturnValue({ user: { id: 1 } });
   api.getUser.mockResolvedValue({
     full_name: 'Студент Тестов',
     phone: '',
@@ -58,6 +67,40 @@ test('student-only: staff checkboxes are disabled with an explanation, no legal 
   fireEvent.click(psy);
   expect(screen.queryByText('Документ-основание')).toBeNull();
   expect(api.updateUser).not.toHaveBeenCalled();
+});
+
+test('self-admin: admin checkbox is disabled with explanation when editing own account', async () => {
+  useAuth.mockReturnValue({ user: { id: 99 } });
+  api.getUser.mockResolvedValueOnce({
+    id: 99, full_name: 'Self Admin', phone: '',
+    roles: ['admin', 'supervisor'], is_active: true,
+  });
+  renderModal();
+
+  const adminCb = await screen.findByRole('checkbox', { name: 'Администратор' });
+  expect(adminCb).toBeDisabled();
+  expect(
+    screen.getByText('Нельзя снять у себя роль администратора.'),
+  ).toBeInTheDocument();
+
+  // supervisor не заблокирован self-guard'ом (не admin) — можно снять.
+  const supCb = screen.getByRole('checkbox', { name: 'Супервизор' });
+  expect(supCb).not.toBeDisabled();
+});
+
+test('non-self admin: admin checkbox is NOT locked when editing another account', async () => {
+  useAuth.mockReturnValue({ user: { id: 1 } }); // current user id !== target id
+  api.getUser.mockResolvedValueOnce({
+    id: 99, full_name: 'Other Admin', phone: '',
+    roles: ['admin', 'supervisor'], is_active: true,
+  });
+  renderModal();
+
+  const adminCb = await screen.findByRole('checkbox', { name: 'Администратор' });
+  expect(adminCb).not.toBeDisabled();
+  expect(
+    screen.queryByText('Нельзя снять у себя роль администратора.'),
+  ).not.toBeInTheDocument();
 });
 
 test('user with an existing staff role: checking another staff role reveals the legal basis block', async () => {

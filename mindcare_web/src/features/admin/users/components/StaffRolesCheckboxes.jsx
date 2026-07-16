@@ -17,6 +17,9 @@ import styles from './StaffRolesCheckboxes.module.css';
  *     разрешает изменение staff-набора только тому, у кого уже есть staff-роль:
  *     roleless/student-only edit-форма показывает disabled-контрол вместо 422);
  *   disabledHint?: string — пояснение, показывается только при disabled;
+ *   lockedRoles?: string[] — отдельные роли, заблокированные поштучно даже когда
+ *     группа доступна (например self-admin: свою роль admin снять нельзя);
+ *   lockedHint?: string    — пояснение к lockedRoles;
  *   error?: string;
  *   idPrefix?: string.
  */
@@ -26,6 +29,8 @@ export default function StaffRolesCheckboxes({
   hasStudent = false,
   disabled = false,
   disabledHint,
+  lockedRoles = [],
+  lockedHint,
   error,
   label = 'Роли',
   idPrefix = 'staff-roles',
@@ -55,13 +60,17 @@ export default function StaffRolesCheckboxes({
             checked={value.includes(opt.value)}
             onChange={() => onToggle(opt.value)}
             label={opt.label}
-            disabled={disabled}
+            disabled={disabled || lockedRoles.includes(opt.value)}
           />
         ))}
       </div>
 
       {disabled && disabledHint && (
         <span className={styles.readonlyNote}>{disabledHint}</span>
+      )}
+
+      {!disabled && lockedRoles.length > 0 && lockedHint && (
+        <span className={styles.readonlyNote}>{lockedHint}</span>
       )}
 
       {error && (

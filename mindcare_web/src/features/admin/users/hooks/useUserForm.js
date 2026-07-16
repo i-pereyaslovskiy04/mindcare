@@ -70,10 +70,21 @@ function canManageStaffRoles(initialStaffRoles) {
   return initialStaffRoles.length > 0;
 }
 
-function validateEdit(values, initialStaffRoles, hasStudent) {
+function validateEdit(values, initialStaffRoles, hasStudent, isSelf = false) {
   const errs = {};
   if (!values.full_name || values.full_name.trim().length < 2)
     errs.full_name = 'Минимум 2 символа';
+
+  // Self-admin guard (совпадает с backend): администратор не может снять у себя
+  // роль admin. Дублирует no-op в toggleRole как defense-in-depth перед submit.
+  if (
+    isSelf &&
+    initialStaffRoles.includes('admin') &&
+    !values.roles.includes('admin')
+  ) {
+    errs.roles = 'Нельзя снять у себя роль администратора';
+    return errs;
+  }
 
   // Roles не менялись — unchanged empty staff-набор (roleless/student-only
   // пользователь) НЕ должен блокировать чисто скалярное редактирование.
@@ -146,7 +157,7 @@ function buildEditPayload(values, initialStaffRoles) {
   return payload;
 }
 
-export function useUserForm({ mode, uuid, onSuccess }) {
+export function useUserForm({ mode, uuid, onSuccess, currentUserId }) {
   const isCreate = mode === 'create';
 
   const [values, setValues] = useState(isCreate ? CREATE_INITIAL : EDIT_INITIAL);
@@ -154,6 +165,8 @@ export function useUserForm({ mode, uuid, onSuccess }) {
   // добавляются (legal basis нужен только на добавление). null до загрузки.
   const [initialStaffRoles, setInitialStaffRoles] = useState([]);
   const [hasStudent, setHasStudent] = useState(false);
+  // Редактируем ли собственный аккаунт (self-admin guard). Сравнение по stable id.
+  const [isSelf, setIsSelf] = useState(false);
   const [errors, setErrors]       = useState({});
   const [loading, setLoading]     = useState(!isCreate);
   const [submitting, setSubmitting] = useState(false);
@@ -172,6 +185,11 @@ export function useUserForm({ mode, uuid, onSuccess }) {
         const staff = roles.filter(isStaffRole);
         setInitialStaffRoles(staff);
         setHasStudent(roles.includes('student'));
+        setIsSelf(
+          currentUserId != null &&
+          user.id != null &&
+          String(user.id) === String(currentUserId)
+        );
         setValues({
           ...EDIT_INITIAL,
           full_name: user.full_name,
@@ -189,7 +207,7 @@ export function useUserForm({ mode, uuid, onSuccess }) {
       });
 
     return () => { cancelled = true; };
-  }, [isCreate, uuid]);
+  }, [isCreate, uuid, currentUserId]);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -204,6 +222,9 @@ export function useUserForm({ mode, uuid, onSuccess }) {
   /** Тоггл staff-роли в checkbox-контроле. */
   function toggleRole(role) {
     if (!isStaffRole(role)) return; // student через админку не управляется
+    // Self-admin guard: нельзя снять у себя роль admin (no-op, а не тихая
+    // перезапись payload). Backend всё равно вернёт 422 при обходе фронта.
+    if (!isCreate && isSelf && role === 'admin') return;
     // Roleless/student-only: backend отклоняет добавление первой staff-роли
     // через edit (422) — контрол должен быть недоступен ещё на фронте.
     if (!isCreate && !canManageStaffRoles(initialStaffRoles)) return;
@@ -222,7 +243,7 @@ export function useUserForm({ mode, uuid, onSuccess }) {
 
     const errs = isCreate
       ? validateCreate(values)
-      : validateEdit(values, initialStaffRoles, hasStudent);
+      : validateEdit(values, initialStaffRoles, hasStudent, isSelf);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setSubmitting(true);
@@ -253,7 +274,7 @@ export function useUserForm({ mode, uuid, onSuccess }) {
     : {
         values, errors, loading, submitting,
         handleChange, handleSubmit, toggleRole,
-        initialStaffRoles, hasStudent, editNeedsBasis,
+        initialStaffRoles, hasStudent, editNeedsBasis, isSelf,
         canManageStaffRoles: canManageStaffRoles(initialStaffRoles),
       };
 }

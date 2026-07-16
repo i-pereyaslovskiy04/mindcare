@@ -1,5 +1,6 @@
 import Modal from '../../../../components/Modal/Modal';
 import { useUserForm } from '../hooks/useUserForm';
+import { useAuth } from '../../../auth/AuthContext';
 import Button from '../../../../components/UI/Button/Button';
 import Select from '../../../../components/UI/Select/Select';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
@@ -14,12 +15,14 @@ function formatDate(dateStr) {
 }
 
 export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated }) {
+  const { user: authUser } = useAuth();
   const {
     values, errors, loading, submitting, handleChange, handleSubmit, toggleRole,
-    hasStudent, editNeedsBasis, canManageStaffRoles,
+    hasStudent, editNeedsBasis, canManageStaffRoles, isSelf,
   } = useUserForm({
     mode: 'edit',
     uuid,
+    currentUserId: authUser?.id,
     onSuccess: () => { onUpdated(); onClose(); },
   });
 
@@ -83,6 +86,8 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
                     ? 'Назначение служебной роли доступно только пользователю, у которого уже есть служебная роль. Для нового сотрудника используйте «Создать пользователя».'
                     : undefined
                 }
+                lockedRoles={isSelf ? ['admin'] : []}
+                lockedHint="Нельзя снять у себя роль администратора."
                 error={errors.roles}
                 idPrefix="uem-role"
               />
