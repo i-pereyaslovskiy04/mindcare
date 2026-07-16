@@ -118,7 +118,7 @@ mindcare/
 │   │   ├── backfill_legal_basis.py              # Backfill legal basis records (--dry-run по умолчанию)
 │   │   ├── repair_missing_chat_conversations.py # Восстановление бесед для существующих engagements
 │   │   └── test_smtp.py                         # Диагностика SMTP-соединения
-│   ├── tests/                       # 961 backend-тест: unit + integration (см. «Тестирование»)
+│   ├── tests/                       # 967 backend-тестов: unit + integration (см. «Тестирование»)
 │   ├── alembic.ini
 │   └── requirements.txt
 ├── mindcare_web/                    # React frontend — порт 3000
@@ -342,7 +342,7 @@ Alembic хранит текущую ревизию в одной строке:
 alembic_version
 ───────────────────
 version_num
-c7f1a9e4d2b8      ← текущий head
+27202a87a892      ← текущий head (mergepoint)
 ```
 
 Каждая команда `alembic upgrade head` применяет все недостающие ревизии по цепочке и обновляет эту строку.
@@ -368,7 +368,9 @@ c7f1a9e4d2b8      ← текущий head
 | `e1a2b3c4d5f6` … `b7c8d9e0f1a2` | appointments/schedule v3/group sessions/walk-in cards branch |
 | `b2e4d7f1a9c3` … `c3a7f8e2d1b9` | diary tables + emotions catalog branch |
 | `db0b2e177da5` | merge diary into dev heads |
-| `c7f1a9e4d2b8` | allowed_email_domains: управляемый allowlist + seed 11 доменов — **head** |
+| `c7f1a9e4d2b8` | allowed_email_domains: управляемый allowlist + seed 11 доменов |
+| `e7c1a9d4b385` | user ui theme prefs: ui_theme_palette/ui_theme_mode в users |
+| `27202a87a892` | merge email domains + ui theme heads (mergepoint) — **head** |
 
 ### ORM-модели (58 таблиц, 14 доменных модулей)
 
@@ -462,10 +464,11 @@ lifespan() startup
 
 ## Тестирование
 
-Текущий статус backend после email-domain/self-admin corrective pass:
-**961 passed** (`pytest tests/`; integration-тесты требуют запущенный dev PostgreSQL
+Текущий статус backend после merge mindcare_alex в dev (multi-role +
+email-domain policy + темы/a11y):
+**967 passed** (`pytest tests/`; integration-тесты требуют запущенный dev PostgreSQL
 на alembic head).
-Frontend: **60 suites / 720 passed** (`npm test -- --watchAll=false`); production
+Frontend: **64 suites / 762 passed** (`npm test -- --watchAll=false`); production
 build: **success**; полный `npm run lint`: **0 errors / 0 warnings**. Ручной browser
 smoke на 1280/800/390 px остаётся обязательной проверкой перед merge/demo.
 
@@ -757,7 +760,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
   "status": "ok",
   "db": "connected",
   "tables": 58,
-  "revision": "c7f1a9e4d2b8"
+  "revision": "27202a87a892"
 }
 ```
 

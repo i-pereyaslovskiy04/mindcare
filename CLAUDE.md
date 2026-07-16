@@ -223,11 +223,12 @@ npm run build
 
 ### Текущее покрытие
 
-Текущий статус backend после email-domain/self-admin corrective pass:
-**961 passed** (`pytest tests/`; включает multi-role, email-domain policy/admin
-CRUD/concurrency, self-admin guard, чат-вложения, appointments и diary).
+Текущий статус backend после merge mindcare_alex в dev (multi-role +
+email-domain policy + темы/a11y): **967 passed** (`pytest tests/`; включает
+multi-role, email-domain policy/admin CRUD/concurrency, self-admin guard,
+чат-вложения, appointments, diary и theme prefs).
 Integration-тесты требуют запущенный dev PostgreSQL на alembic head.
-Frontend (`npm test -- --watchAll=false`): **60 suites / 720 passed**. Полный
+Frontend (`npm test -- --watchAll=false`): **64 suites / 762 passed**. Полный
 `npm run lint` прошёл с **0 errors / 0 warnings**, production build успешен.
 Ручной browser smoke на 1280/800/390 px остаётся pending.
 
@@ -626,7 +627,11 @@ mindcare_api/
 | `b2e4d7f1a9c3` | add_diary_tables: diary_emotions (catalog), diary_entries (partial UNIQUE active per student+date) |
 | `c3a7f8e2d1b9` | update_diary_emotions_catalog: deactivate angry/light, add tense/irritated/low/lonely, reorder to 12 active states |
 | `db0b2e177da5` | merge_diary_into_dev_heads: вторая merge-миграция (`alembic merge`), объединяет `be8d3ad39b3a` (dev) и `c3a7f8e2d1b9` (diary) в один head. Без операций над схемой (upgrade/downgrade = pass) |
-| `c7f1a9e4d2b8` | add_allowed_email_domains: таблица `allowed_email_domains`, уникальный нормализованный domain, active/comment/created_by/timestamps и seed 11 начальных доменов — **head** |
+| **Ветка email-domains (alex, от `db0b2e177da5`):** | |
+| `c7f1a9e4d2b8` | add_allowed_email_domains: таблица `allowed_email_domains`, уникальный нормализованный domain, active/comment/created_by/timestamps и seed 11 начальных доменов |
+| **Ветка themes (dev, от `db0b2e177da5`):** | |
+| `e7c1a9d4b385` | add_user_ui_theme_prefs: колонки ui_theme_palette/ui_theme_mode в users (синхронизация темы с профилем, T3) |
+| `27202a87a892` | merge_email_domains_and_ui_theme_heads: третья merge-миграция (`alembic merge`), объединяет `e7c1a9d4b385` (themes) и `c7f1a9e4d2b8` (email-domains) в один head. Без операций над схемой (upgrade/downgrade = pass) — **head** |
 
 **Ключевые таблицы:**
 
