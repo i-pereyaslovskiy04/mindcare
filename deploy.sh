@@ -99,6 +99,14 @@ done
 ok "Python: $($PY --version)"
 
 # Node.js
+# Сначала пробуем nvm: ~/.bashrc не читается в неинтерактивном шелле, поэтому
+# без явного PATH node "не находится" и ниже сработала бы установка системного
+# пакета параллельно уже стоящей nvm-версии.
+if ! command -v node &>/dev/null; then
+  NVM_BIN="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | tail -1)"
+  [ -n "$NVM_BIN" ] && PATH="$NVM_BIN:$PATH" && export PATH
+fi
+
 if command -v node &>/dev/null; then
   NODE_MAJ=$(node -e "console.log(process.versions.node.split('.')[0])")
   [ "$NODE_MAJ" -lt 18 ] && die "Node.js 18+ обязателен (найден: $(node --version))"
