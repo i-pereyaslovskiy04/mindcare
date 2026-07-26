@@ -2,7 +2,7 @@
 Session notes API.
 Доступ: только аутентифицированные пользователи с ролями psychologist / admin / supervisor.
 
-Политика доступа (Stage 25b, вариант B):
+Политика доступа (Stage 25b, вариант B) + multi-role (ADR-018):
   - POST / PATCH  → только psychologist (только свои заметки)
   - GET list      → psychologist: свои с content;
                     admin/supervisor: metadata-only (без content, без decrypt)
@@ -10,12 +10,18 @@ Session notes API.
                     supervisor: content + audit-событие session_note_content_read;
                     admin: metadata-only (content_available=false)
   - DELETE        → эндпоинта нет (намеренно)
+
+Для multi-role пользователя policy-ветка/audit выбираются через
+`service._resolve_notes_role`: заголовок `X-Active-Role` (активный кабинет)
+валидируется по membership (невалидная роль → 403, не тихий fallback); без
+заголовка — единственная policy-роль или консервативный default. См. docstring
+service.py.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from typing import Optional, Union
 
-from app.auth.deps import get_current_user, require_role
+from app.auth.deps import get_current_user, require_role, resolve_role_or_403
 from app.session_notes import service
 from app.session_notes.schemas import (
     PaginatedNotesMetaResponse,
@@ -47,7 +53,9 @@ def create_note(
         return service.create_note(
             body.model_dump(),
             author_id=current_user["id"],
-            actor_role=current_user["role"],
+            actor_role=resolve_role_or_403(
+                current_user, allowed={"psychologist"}, preferred="psychologist",
+            ),
             ip=_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
@@ -69,6 +77,7 @@ def list_notes(
     engagement_id:  Optional[int] = Query(default=None),
     author_id:      Optional[int] = Query(default=None),
     current_user:   dict          = Depends(get_current_user),
+    x_active_role:  Optional[str] = Header(default=None, alias="X-Active-Role"),
 ):
     try:
         items, total = service.list_notes(
@@ -78,7 +87,10 @@ def list_notes(
             engagement_id=engagement_id,
             filter_author_id=author_id,
             current_user=current_user,
+            requested_role=x_active_role,
         )
+    except service.NotesAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except RuntimeError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -92,14 +104,18 @@ def get_note(
     note_id:      int,
     request:      Request,
     current_user: dict = Depends(get_current_user),
+    x_active_role: Optional[str] = Header(default=None, alias="X-Active-Role"),
 ):
     try:
         return service.get_note(
             note_id,
             current_user=current_user,
+            requested_role=x_active_role,
             ip=_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
+    except service.NotesAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except service.NoteNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заметка не найдена")
     except RuntimeError:
@@ -124,6 +140,8 @@ def update_note(
             ip=_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
+    except service.NotesAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except service.NoteNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заметка не найдена")
     except RuntimeError:

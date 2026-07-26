@@ -1,6 +1,6 @@
 # MindCare Web — Architecture Document
 
-> Updated: 2026-06-26
+> Updated: 2026-07-16
 > Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)
 > Purpose: University psychology center — public informational site with role-based dashboards and a full authentication flow.
 
@@ -25,6 +25,7 @@ mindcare_web/
     │   ├── client.js          ← transport: token injection + 401 retry
     │   ├── auth.api.js
     │   ├── users.api.js       ← /api/admin/users/* (CRUD пользователей)
+    │   ├── domains.api.js     ← /api/admin/email-domains (allowlist регистрации)
     │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (UI: «Темы»)
     │   ├── categories.api.js  ← /api/admin/categories/* (UI: «Типы материалов»)
     │   ├── news.api.js
@@ -38,6 +39,7 @@ mindcare_web/
     │
     ├── shared/
     │   └── lib/
+    │       ├── roles.js       ← multi-role normalize/priority/labels
     │       └── utils.js       ← getInitials() и другие общие утилиты
     │
     ├── data/                  ← dev/mock data only
@@ -120,10 +122,16 @@ mindcare_web/
     │       │   ├── hooks/useAdminNews.js
     │       │   ├── components/NewsFormModal.jsx + NewsTable.jsx
     │       │   └── pages/NewsPage.jsx
-    │       └── articles/
-    │           ├── hooks/useAdminArticles.js
-    │           ├── components/ArticleFormModal.jsx + ArticlesTable.jsx
-    │           └── pages/ArticlesPage.jsx
+    │       ├── articles/
+    │       │   ├── hooks/useAdminArticles.js
+    │       │   ├── components/ArticleFormModal.jsx + ArticlesTable.jsx
+    │       │   └── pages/ArticlesPage.jsx
+    │       ├── email-domains/
+    │       │   ├── hooks/useAllowedDomains.js
+    │       │   ├── components/EmailDomainsSection.jsx + .module.css
+    │       │   └── pages/EmailDomainsPage.jsx + .module.css
+    │       └── settings/
+    │           └── pages/AdminSettingsPage.jsx + .module.css
     │
     ├── components/            ← domain-agnostic UI primitives
     │   ├── Icon/
@@ -352,9 +360,9 @@ src/data/
 | `/health` | `HealthPage` | Public |
 | `/login` | `LoginPage` | Public |
 | `/register` | `RegisterPage` | Public |
-| `/dashboard` | `DashboardRedirect` | Auth (редирект по роли) |
+| `/dashboard` | `DashboardRedirect` | Auth (active/default role redirect) |
 | `/profile` | `ProfilePage` | Auth |
-| `/student` | `ClientDashboard` (Outlet) | Auth + role: student |
+| `/student` | `ClientDashboard` (Outlet) | Auth + role membership: student |
 | `/student/diary` | `DiaryPage` | — (наследует от `/student`) |
 | `/student/tests` | `TestsPage` | — |
 | `/student/materials` | `StudentMaterialsPage` | — |
@@ -363,28 +371,30 @@ src/data/
 | `/student/calendar` | `CalendarPage` | — |
 | `/student/group-sessions` | `StudentGroupSessionsPage` | — |
 | `/student/settings` | `SettingsPage` | — |
-| `/psychologist` | `PsychologistLayout` (Outlet) | Auth + role: psychologist |
+| `/psychologist` | `PsychologistLayout` (Outlet) | Auth + role membership: psychologist |
 | `/psychologist/students` | `PsychologistStudentsPage` | — |
 | `/psychologist/students/:studentId` | `PsychologistStudentCardPage` | — |
 | `/psychologist/appointments` | `PsychologistAppointmentsPage` | — |
 | `/psychologist/chat` | `PsychologistChatPage` | — |
 | `/psychologist/settings` | `CabinetSettingsPage` | — |
-| `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role: supervisor |
+| `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role membership: supervisor |
 | `/supervisor/engagements` | `EngagementsPage` | — |
 | `/supervisor/meeting-types` | `MeetingTypesPage` | — |
 | `/supervisor/schedule` | `SchedulePage` | — |
 | `/supervisor/booking` | `BookingPage` | — |
 | `/supervisor/group-sessions` | `GroupSessionsPage` | — |
 | `/supervisor/settings` | `CabinetSettingsPage` | — |
-| `/admin` | `AdminLayout` (Outlet) | Auth + role: admin |
+| `/admin` | `AdminLayout` (Outlet) | Auth + role membership: admin |
 | `/admin/users` | `UsersPage` | — (наследует от `/admin`) |
 | `/admin/categories` | `CategoriesPage` | — (UI: «Типы материалов») |
 | `/admin/tags` | `TagsPage` | — (UI: «Темы») |
 | `/admin/news` | `AdminNewsPage` | — |
 | `/admin/articles` | `AdminArticlesPage` | — |
+| `/admin/email-domains` | `EmailDomainsPage` | Admin-only; список и управление allowlist регистрации |
+| `/admin/settings` | `AdminSettingsPage` | Admin-only; безопасность / смена пароля |
 | `*` | `NotFound` | Public |
 
-**DashboardRedirect** — умный редирект по роли:
+**DashboardRedirect** — редирект по активному/default кабинету:
 
 | Роль | Редирект |
 |------|----------|
@@ -393,9 +403,32 @@ src/data/
 | `supervisor` | `/supervisor` |
 | `admin` | `/admin/users` |
 
+Multi-role users (ADR-018):
+- auth user shape содержит `roles: Role[]`; legacy `role` допустим только как
+  deterministic primary для совместимости и не используется для runtime-решений;
+- `normalizeRoles(user)` считает явно переданный `roles`, включая `roles: []`,
+  источником истины; fallback `[role]` применяется только при отсутствии поля;
+- если сохранённый `activeRole` валиден для `user.roles`, `/dashboard` ведёт в его
+  кабинет;
+- если у пользователя одна роль, `/dashboard` сразу открывает её кабинет;
+- если ролей несколько, а валидный active role не выбран, показывается
+  `RoleChooser`; выбор сохраняется и ведёт в соответствующий кабинет;
+- если активных ролей нет, `/dashboard` ведёт в `/profile`;
+- пользователь с `admin` + `supervisor` попадает в `/admin/*` по роли `admin`, а не
+  потому что `supervisor` наследует admin-доступ;
+- admin users API в list/read/create responses возвращает активные
+  `roles: Role[]` в детерминированном порядке и legacy primary `role`;
+  просроченные роли не включаются;
+- admin create API принимает ровно одно из legacy `role` или staff-only
+  `roles[]`. Frontend отправляет `roles[]`; `role` остаётся
+  только для backward compatibility;
+- `UsersTable`, create/edit forms и role badges используют `roles[]`;
+- `activeRole` очищается при logout, session-expired, failed/no-session restore;
+  прямой URL кабинета синхронизирует active role после membership-check.
+
 **Guards:**
 - `PrivateRoute` — требует аутентификации, редирект на `/login`
-- `RoleRoute` — требует указанную роль, редирект на `/profile` при несоответствии
+- `RoleRoute` — требует membership в `user.roles`, редирект на `/profile` при несоответствии
 - Пока auth восстанавливается — рендерит `null` (без белого экрана — в бэклоге)
 
 ---
@@ -430,16 +463,33 @@ apiFetch() → 401
 
 ```
 AuthProvider mount → read localStorage
-  → token present: GET /api/auth/me → setState
-  → token absent: user = null
+  → token present: GET /api/auth/me → normalizeUser() → reconcile activeRole
+  → token absent/restore failed: user = null + clear activeRole
 ```
 
 ### ProtectedRoute
 
 ```jsx
 if (!user) return <Navigate to="/login" />;
-if (roles && !roles.includes(user.role)) return <Navigate to="/profile" />;
+if (roles && !roles.some((role) => user.roles?.includes(role))) {
+  return <Navigate to="/profile" />;
+}
 ```
+
+Auth payload:
+
+```js
+user = {
+  uuid,
+  email,
+  name,
+  role,   // legacy deterministic primary, может быть null; не источник прав
+  roles,  // source of truth для frontend guards
+}
+```
+
+Для layout-лейблов, breadcrumbs и audit-related UI использовать active/effective role
+текущего кабинета, а не слепо `user.role`.
 
 ---
 
@@ -454,6 +504,7 @@ CabinetLayout (components/CabinetLayout/)
 ├── Sidebar с navSections (конфигурируется каждым Layout)
 ├── Breadcrumbs через crumbLabels
 ├── Avatar с getInitials() из shared/lib/utils.js
+├── CabinetSwitcher: sidebar на desktop, topbar на узких viewport
 └── <Outlet /> для вложенных маршрутов
 
 PsychologistLayout → CabinetLayout (navSections = рабочие секции психолога)
@@ -464,6 +515,65 @@ CabinetSettingsPage — общая страница настроек, подкл
 ```
 
 Student cabinet **не использует** CabinetLayout — у него собственный `StudentLayout` со своим Sidebar.
+
+### Multi-role UI
+
+```text
+shared/lib/roles.js
+├── ROLE_PRIORITY / ROLE_LABELS / ROLE_BADGE_TONES
+├── normalizeRoles(user)
+└── primaryRole(user)
+
+app/guards.jsx
+├── RoleRoute         — membership guard по roles[]
+└── DashboardRedirect — 0/1/many role routing
+
+features/auth/RoleChooser.jsx
+└── явный выбор кабинета для multi-role пользователя без activeRole
+
+features/auth/CabinetSwitcher.jsx
+├── setActiveRole(role) + navigate(getRoleHome(role))
+├── disclosure buttons, Escape/outside-click
+├── fixed panel с viewport clamp
+└── resize/orientation reposition; scroll closes panel
+```
+
+`CabinetSwitcher` меняет UI-контекст и маршрут, но не выдаёт права. В каждом
+кабинете `RoleRoute` проверяет `roles[]`, а backend повторно проверяет membership.
+В `CabinetLayout` и `AdminLayout` desktop/sidebar и narrow/topbar экземпляры
+взаимоисключаются через responsive CSS.
+
+Admin users UI использует `StaffRolesCheckboxes`: три staff-роли редактируются
+set-based, существующая `student` показывается read-only. Student-only/roleless
+пользователь не может получить первую staff-роль через текущий PATCH policy, но
+scalar-only edit остаётся доступным.
+
+При редактировании собственного аккаунта checkbox `admin` заблокирован по
+`currentUser.id === editedUser.id`; остальные staff-роли остаются доступны согласно
+общей policy. Это UX-защита: авторитетный self-admin guard находится на backend.
+
+### Admin Navigation and Email Domains
+
+`AdminLayout` рендерит статический `ADMIN_NAV_GROUPS`, а breadcrumbs выводятся из
+тех же данных:
+
+```text
+Управление → Пользователи
+Контент    → Материалы, Новости, Тесты
+Система    → Типы материалов, Темы, Типы встреч, Домены регистрации
+Аккаунт    → Безопасность
+```
+
+Домены регистрации вынесены из пользовательских настроек на отдельный route
+`/admin/email-domains`. `EmailDomainsPage` ограничивает рабочую ширину до 760 px и
+композирует `EmailDomainsSection`; API-вызовы находятся в `api/domains.api.js`,
+состояние — в `useAllowedDomains`. UI поддерживает add, disable с confirm,
+reactivate, loading/error/empty states и показывает backend 409 ровно в одном alert.
+
+`/admin/settings` содержит только персональную безопасность администратора и смену
+пароля (рабочая ширина 520 px). Разделы allowlist и account security не смешиваются.
+Прямой вход и reload на `/admin/email-domains` должны проходить через обычный
+`RoleRoute` с membership-ролью `admin`.
 
 ### Modal System
 
@@ -743,7 +853,7 @@ const {
 - Список записей на консультации (супервизор, психолог)
 - Список результатов тестов (супервизор, связанный психолог)
 - Журналы аудита (админ)
-- Список своих записей (студент) — да, тоже через пагинацию, на случай 
+- Список своих записей (студент) — да, тоже через пагинацию, на случай
   если у студента 50+ записей за годы учёбы
 
 **Не применяется** к:

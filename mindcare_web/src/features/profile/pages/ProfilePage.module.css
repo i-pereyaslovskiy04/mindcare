@@ -48,3 +48,14 @@
   font-size: 14px;
   color: var(--text-muted);
 }
+
+.roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.switcher {
+  margin-top: 4px;
+}

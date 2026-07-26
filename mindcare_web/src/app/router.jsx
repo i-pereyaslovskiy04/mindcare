@@ -11,8 +11,7 @@
  */
 
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from '../features/auth/AuthContext';
-import { getRoleHome } from '../shared/lib/routes';
+import { PrivateRoute, RoleRoute, DashboardRedirect } from './guards';
 
 // ── Public pages ──────────────────────────────────────────────────────────────
 import Home              from '../pages/home/Home';
@@ -43,6 +42,7 @@ import AdminCategoriesPage from '../features/admin/categories/pages/CategoriesPa
 import AdminTestsPage      from '../features/admin/tests/pages/AdminTestsPage';
 import TestFormPage        from '../features/admin/tests/pages/TestFormPage';
 import AdminSettingsPage   from '../features/admin/settings/pages/AdminSettingsPage';
+import EmailDomainsPage    from '../features/admin/email-domains/pages/EmailDomainsPage';
 
 // ── Student (role-specific dashboard) ─────────────────────────────────────────
 import ClientDashboard      from '../pages/client/ClientDashboard';
@@ -80,43 +80,6 @@ import BookingPage         from '../pages/supervisor/BookingPage';
 
 // ── Shared cabinet pages ──────────────────────────────────────────────────────
 import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage';
-
-// ── Route guards ──────────────────────────────────────────────────────────────
-
-/**
- * Requires authentication.
- * While auth state is resolving: render nothing (avoid flash).
- * If not authenticated: redirect to /login.
- */
-function PrivateRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user)   return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
-  return children;
-}
-
-/**
- * Requires one of the given roles.
- * Falls back to /profile on role mismatch (user is authenticated but wrong role).
- */
-function RoleRoute({ roles, children }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user)                        return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
-  if (!roles.includes(user.role))   return <Navigate to="/profile" replace />;
-  return children;
-}
-
-/**
- * /dashboard — smart redirect to the role-specific home page.
- */
-function DashboardRedirect() {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user)   return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
-
-  return <Navigate to={getRoleHome(user.role)} replace />;
-}
 
 // ── Route tree ────────────────────────────────────────────────────────────────
 
@@ -175,7 +138,7 @@ export default function AppRouter() {
         <Route path="students/:studentId"   element={<PsychologistStudentCardPage />} />
         <Route path="appointments"          element={<PsychologistAppointmentsPage />} />
         <Route path="chat"                  element={<PsychologistChatPage />} />
-        <Route path="settings"              element={<CabinetSettingsPage />} />
+        <Route path="settings"              element={<CabinetSettingsPage cabinetRole="psychologist" />} />
       </Route>
 
       {/* Supervisor */}
@@ -185,11 +148,11 @@ export default function AppRouter() {
       >
         <Route index                          element={<SupervisorHome />} />
         <Route path="engagements"           element={<EngagementsPage />} />
-        <Route path="meeting-types"         element={<MeetingTypesPage />} />
+        <Route path="meeting-types"         element={<MeetingTypesPage cabinetRole="supervisor" />} />
         <Route path="schedule"              element={<SchedulePage />} />
         <Route path="booking"               element={<BookingPage />} />
         <Route path="group-sessions"        element={<GroupSessionsPage />} />
-        <Route path="settings"              element={<CabinetSettingsPage />} />
+        <Route path="settings"              element={<CabinetSettingsPage cabinetRole="supervisor" />} />
       </Route>
 
       {/* Admin */}
@@ -206,7 +169,8 @@ export default function AppRouter() {
         <Route path="tests"        element={<AdminTestsPage />} />
         <Route path="tests/new"    element={<TestFormPage />} />
         <Route path="tests/:uuid"  element={<TestFormPage />} />
-        <Route path="meeting-types" element={<MeetingTypesPage />} />
+        <Route path="meeting-types" element={<MeetingTypesPage cabinetRole="admin" />} />
+        <Route path="email-domains" element={<EmailDomainsPage />} />
         <Route path="settings"   element={<AdminSettingsPage />} />
       </Route>
 

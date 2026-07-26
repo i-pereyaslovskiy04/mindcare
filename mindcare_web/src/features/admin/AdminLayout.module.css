@@ -141,6 +141,10 @@
   gap: 2px;
 }
 
+.navGroup + .navGroup {
+  margin-top: 14px;
+}
+
 .navSectionLabel {
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -277,6 +281,11 @@
   text-transform: uppercase;
   font-weight: 600;
   white-space: nowrap;
+  /* Позволяет сжиматься ниже intrinsic-ширины текста (flex item default —
+     min-width: auto) и обрезаться многоточием вместо горизонтального overflow. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .crumbs span {
@@ -287,6 +296,16 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Logout и CabinetSwitcher должны оставаться полностью доступны и не
+     сжиматься/перекрываться с breadcrumbs — сжимаются только crumbs. */
+  flex-shrink: 0;
+}
+
+/* Скрыт на desktop (>980px) — там switcher виден в sidebar .userInfo.
+   Показывается только когда sidebar сворачивается в icon-rail. */
+.topbarSwitcher {
+  display: none;
+  color: var(--espresso);
 }
 
 /* ── content area ── */
@@ -335,6 +354,20 @@
 
   .userInfo {
     display: none;
+  }
+
+  /* Sidebar switcher скрыт вместе с userInfo — показываем topbar-копию. */
+  .topbarSwitcher {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Sidebar сжат до 72px icon-rail — topbar должен ужаться вместе с ним,
+     иначе исходный padding 16px 36px съедает большую часть узкого main-column
+     и провоцирует горизонтальный overflow страницы. */
+  .topbar {
+    padding: 14px 16px;
+    gap: 10px;
   }
 
   .nav {
@@ -391,6 +424,20 @@
 
   .actions {
     flex-shrink: 0;
+    gap: 6px;
+  }
+}
+
+/* Очень узкие ширины (телефоны, включая ~390px): sidebar остаётся 72px
+   icon-rail (правило выше), main-column — совсем узкая, топбару нужен
+   минимальный padding/gap, чтобы crumbs+actions поместились без overflow. */
+@media (max-width: 480px) {
+  .topbar {
+    padding: 10px 10px;
+    gap: 6px;
+  }
+
+  .actions {
     gap: 6px;
   }
 }

@@ -2,6 +2,7 @@ import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Badge from '../../../../components/UI/Badge/Badge';
 import { ROLE_LABELS, ROLE_BADGE_TONES } from '../roleLabels';
+import { normalizeRoles } from '../../../../shared/lib/roles';
 import styles from './UsersTable.module.css';
 
 const SKELETON_ROWS = 7;
@@ -64,9 +65,13 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
               <td className={styles.name}>{item.full_name}</td>
               <td className={styles.email}>{item.email}</td>
               <td>
-                <Badge tone={ROLE_BADGE_TONES[item.role] ?? 'neutral'}>
-                  {ROLE_LABELS[item.role] ?? item.role}
-                </Badge>
+                <div className={styles.roles}>
+                  {normalizeRoles(item).map((role) => (
+                    <Badge key={role} tone={ROLE_BADGE_TONES[role] ?? 'neutral'}>
+                      {ROLE_LABELS[role] ?? role}
+                    </Badge>
+                  ))}
+                </div>
               </td>
               <td>
                 {item.deleted_at ? (

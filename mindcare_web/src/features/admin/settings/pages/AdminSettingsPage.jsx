@@ -53,10 +53,10 @@ export default function AdminSettingsPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>Настройки</h1>
+      <h1 className={styles.pageTitle}>Безопасность</h1>
 
       <div className={styles.card}>
-        <h2 className={styles.cardTitle}>Безопасность</h2>
+        <h2 className={styles.cardTitle}>Смена пароля</h2>
         <p className={styles.cardDesc}>
           Изменение пароля администратора. После успешной смены потребуется войти снова.
         </p>

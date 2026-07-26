@@ -22,10 +22,24 @@ from app.main import app
 from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
 from app.db.models import (
-    Appointment, ChatAttachment, ChatConversation, ChatMessage, ConsentRecord,
-    DiaryEntry, GroupSession, GroupSessionRegistration, MeetingType,
-    OtpVerification, TherapyEngagement, UnregisteredStudentCard, User,
+    AllowedEmailDomain, Appointment, ChatAttachment, ChatConversation,
+    ChatMessage, ConsentRecord, DiaryEntry, GroupSession,
+    GroupSessionRegistration, MeetingType, OtpVerification, Role,
+    TherapyEngagement, UnregisteredStudentCard, User, UserRole,
 )
+
+# Литеральный test-префикс "integ_" (или "integ-" для доменов, где "_"
+# недопустим в hostname). Экранируем "_" как SQL LIKE wildcard (matches any
+# single char) через escape="\\", иначе "integ_%" случайно матчит "integX...".
+_INTEG_PREFIX_LIKE = r"integ\_%"
+_INTEG_LIKE_ESCAPE = "\\"
+
+# Test-домены (allowed_email_domains), созданные тестами, обязаны начинаться
+# с этого префикса — см. reset_email_domains ниже. Домен не может содержать
+# "_", поэтому используем дефис (уже принятая конвенция в существующих тестах:
+# test_allowed_email_domains_api.py, test_email_domain_policy.py,
+# test_allowed_email_domains_concurrency.py).
+TEST_DOMAIN_PREFIX = "integ-"
 
 
 # ─── HTTP client ──────────────────────────────────────────────────────────────
@@ -44,13 +58,36 @@ def client():
 
 # ─── Test email ───────────────────────────────────────────────────────────────
 
+# Разрешённый seeded-домен для тестов, которые создают аккаунты через guarded-пути
+# (register/confirm, POST /api/admin/users, POST /api/supervisor/students). Домен
+# email-allowlist политика проверяет именно на этих путях, поэтому создавать новые
+# аккаунты нужно на активном домене из seed (migration c7f1a9e4d2b8).
+ALLOWED_TEST_DOMAIN = "donnu.ru"
+
+# example.com в allowlist НЕ входит (foreign): используется для сценариев уже
+# существующих пользователей (login/reset) через auth_storage.save_user, который
+# domain-политику НЕ проходит (он не в runtime creation-пути).
+FOREIGN_TEST_DOMAIN = "example.com"
+
+
 @pytest.fixture
 def test_email():
     """
-    Unique per-test email address.  Uses example.com (IANA reserved for tests).
-    Cleanup fixture removes all integ_* @example.com records after each test.
+    Unique per-test email на РАЗРЕШЁННОМ домене (donnu.ru) — годится для тестов,
+    создающих новые аккаунты через guarded-эндпоинты. Cleanup удаляет все
+    integ_*-записи независимо от домена.
     """
-    return f"integ_{uuid.uuid4().hex[:12]}@example.com"
+    return f"integ_{uuid.uuid4().hex[:12]}@{ALLOWED_TEST_DOMAIN}"
+
+
+@pytest.fixture
+def foreign_test_email():
+    """
+    Unique per-test email на НЕразрешённом домене (example.com) — для проверки,
+    что политика отклоняет создание, и для foreign login/reset существующих
+    аккаунтов, заводимых напрямую через save_user.
+    """
+    return f"integ_{uuid.uuid4().hex[:12]}@{FOREIGN_TEST_DOMAIN}"
 
 
 # ─── Email / OTP interception ─────────────────────────────────────────────────
@@ -101,7 +138,14 @@ def reset_rate_limiter():
 @pytest.fixture(autouse=True)
 def cleanup_test_records():
     """
-    Deletes all integ_*@example.com test records from the dev DB after each test.
+    Deletes all integ_*-prefixed test records from the dev DB after each test.
+
+    "integ_" — reserved literal prefix for ALL test-created records (emails on
+    any domain: donnu.ru allowed / example.com foreign — see test_email /
+    foreign_test_email above; meeting type names; unregistered-card full
+    names). LIKE patterns escape "_" (SQL LIKE wildcard for "any single char")
+    via escape="\\" so "integ_%" matches only the literal prefix, not
+    "integX...".
 
     Cleanup order respects FK constraints:
       1. chat_messages → chat_conversations → therapy_engagements
@@ -116,7 +160,7 @@ def cleanup_test_records():
         ids = [
             row.id
             for row in db.query(User.id)
-            .filter(User.email.like("integ_%@example.com"))
+            .filter(User.email.like(_INTEG_PREFIX_LIKE, escape=_INTEG_LIKE_ESCAPE))
             .all()
         ]
         if ids:
@@ -167,7 +211,7 @@ def cleanup_test_records():
                 User.id.in_(ids)
             ).delete(synchronize_session=False)
         db.query(OtpVerification).filter(
-            OtpVerification.email.like("integ_%@example.com")
+            OtpVerification.email.like(_INTEG_PREFIX_LIKE, escape=_INTEG_LIKE_ESCAPE)
         ).delete(synchronize_session=False)
 
         # Тестовые meeting types и их групповые занятия (префикс integ_).
@@ -176,7 +220,9 @@ def cleanup_test_records():
         mt_ids = [
             row.id
             for row in db.query(MeetingType.id)
-            .filter(MeetingType.name.like("integ_%"))
+            .filter(
+                MeetingType.name.like(_INTEG_PREFIX_LIKE, escape=_INTEG_LIKE_ESCAPE)
+            )
             .all()
         ]
         if mt_ids:
@@ -203,7 +249,11 @@ def cleanup_test_records():
         card_ids = [
             row.id
             for row in db.query(UnregisteredStudentCard.id)
-            .filter(UnregisteredStudentCard.full_name.like("integ_%"))
+            .filter(
+                UnregisteredStudentCard.full_name.like(
+                    _INTEG_PREFIX_LIKE, escape=_INTEG_LIKE_ESCAPE
+                )
+            )
             .all()
         ]
         if card_ids:
@@ -213,6 +263,62 @@ def cleanup_test_records():
             db.query(UnregisteredStudentCard).filter(
                 UnregisteredStudentCard.id.in_(card_ids)
             ).delete(synchronize_session=False)
+        db.commit()
+
+
+# ─── Email allowlist isolation ────────────────────────────────────────────────
+
+@pytest.fixture
+def reset_email_domains():
+    """
+    Изолирует изменения allowed_email_domains, сделанные тестом (snapshot/restore).
+
+    Snapshot ДО теста: id, domain, is_active, comment, updated_at ВСЕХ
+    существующих строк — не только seed-набора, но и любых уже присутствующих
+    в dev-БД admin-доменов (не хардкодим список; поэтому фикстура не может
+    случайно затереть ручные изменения администратора dev-окружения).
+
+    Teardown:
+      - удаляет только строки, ОТСУТСТВОВАВШИЕ в snapshot И начинающиеся с
+        TEST_DOMAIN_PREFIX ("integ-") — т.е. заведомо созданные этим тестом.
+        Двойное условие (новая строка + префикс) — защита от случайного
+        удаления домена, добавленного вручную кем-то ещё во время прогона;
+      - восстанавливает is_active/comment/updated_at КАЖДОЙ строки, БЫВШЕЙ в
+        snapshot, к её исходным значениям — включая пользовательские
+        admin-домены dev-БД, не только seed;
+      - НЕ удаляет и не меняет новые строки без TEST_DOMAIN_PREFIX (не
+        созданы этим тестом — оставляем как есть).
+
+    audit_log (append-only) не чистится — это ожидаемо.
+    """
+    with SessionLocal() as db:
+        before = {
+            row.id: {
+                "is_active": row.is_active,
+                "comment": row.comment,
+                "updated_at": row.updated_at,
+            }
+            for row in db.query(AllowedEmailDomain).all()
+        }
+
+    yield
+
+    with SessionLocal() as db:
+        current_ids = {
+            row.id for row in db.query(AllowedEmailDomain.id).all()
+        }
+        new_ids = current_ids - before.keys()
+        if new_ids:
+            db.query(AllowedEmailDomain).filter(
+                AllowedEmailDomain.id.in_(new_ids),
+                AllowedEmailDomain.domain.like(f"{TEST_DOMAIN_PREFIX}%"),
+            ).delete(synchronize_session=False)
+
+        for row_id, snapshot in before.items():
+            db.query(AllowedEmailDomain).filter(
+                AllowedEmailDomain.id == row_id,
+            ).update(snapshot, synchronize_session=False)
+
         db.commit()
 
 
@@ -231,3 +337,68 @@ def create_test_user(email: str, password: str = "SecurePass42!") -> dict:
         "hashed_password": pw_hash,
         "role":            "student",
     })
+
+
+# ─── Multi-role helpers (ADR-018) ─────────────────────────────────────────────
+
+def add_user_role(user_id: int, role_name: str, expires_at=None) -> None:
+    """
+    Добавляет пользователю активную (или просроченную, если expires_at в прошлом)
+    роль напрямую в user_roles. Идемпотентно по (user_id, role_id).
+    """
+    with SessionLocal() as db:
+        role = db.query(Role).filter(Role.name == role_name).first()
+        if role is None:
+            raise RuntimeError(f"Роль {role_name} не сидирована в тестовой БД")
+        existing = (
+            db.query(UserRole)
+            .filter(UserRole.user_id == user_id, UserRole.role_id == role.id)
+            .first()
+        )
+        if existing is not None:
+            existing.expires_at = expires_at
+        else:
+            db.add(UserRole(
+                user_id=user_id, role_id=role.id, expires_at=expires_at,
+            ))
+        db.commit()
+
+
+def remove_all_user_roles(user_id: int) -> None:
+    """Снимает все роли пользователя (для сценария 'нет активных ролей')."""
+    with SessionLocal() as db:
+        db.query(UserRole).filter(
+            UserRole.user_id == user_id
+        ).delete(synchronize_session=False)
+        db.commit()
+
+
+def create_multi_role_user(
+    client,
+    roles: list[str],
+    password: str = "SecurePass42!",
+) -> tuple[str, int, str]:
+    """
+    Создаёт пользователя с несколькими активными ролями и логинит его.
+
+    Возвращает (session_token, user_id, email). Первая роль назначается через
+    save_user, остальные добираются прямым insert в user_roles.
+    """
+    email = f"integ_multirole_{uuid.uuid4().hex[:10]}@example.com"
+    primary = roles[0] if roles else "student"
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    user = auth_storage.save_user({
+        "name":            f"MultiRole {uuid.uuid4().hex[:6]}",
+        "email":           email,
+        "hashed_password": pw_hash,
+        "role":            primary,
+    })
+    user_id = int(user["id"])
+    for role_name in roles[1:]:
+        add_user_role(user_id, role_name)
+
+    r = client.post(
+        "/api/auth/login", json={"email": email, "password": password},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["session_token"], user_id, email

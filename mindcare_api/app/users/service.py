@@ -19,7 +19,7 @@ from app.users.schemas import (
     AdminUserUpdate,
 )
 from app.auth.service import AuthError
-from app.services.email_service import send_welcome_psychologist
+from app.services.email_service import send_welcome_staff
 
 
 def _generate_password(length: int = 12) -> str:
@@ -91,12 +91,18 @@ def create_user(
     password = _generate_password()
     password_hash = _hash(password)
 
+    # Multi-role создание: набор staff-ролей из roles[] либо legacy single role.
+    # Schema гарантирует ровно одно из полей; storage делает defense-in-depth
+    # (dedupe + validate staff-only + существование ролей).
+    roles = list(data.roles) if data.roles else [data.role]
+
+    from app.email_domains.errors import EmailDomainNotAllowedError
     try:
         user = storage.create_user(
             email=data.email,
             full_name=data.full_name,
             password_hash=password_hash,
-            role=data.role,
+            roles=roles,
             phone=data.phone,
             basis_type=data.basis_type,
             basis_reference=data.basis_reference,
@@ -105,11 +111,17 @@ def create_user(
             ip=ip,
             user_agent=user_agent,
         )
+    except EmailDomainNotAllowedError as e:
+        # Домен вне allowlist — отдельный 422 РАНЬШE общего ValueError→409
+        # (EmailDomainNotAllowedError намеренно НЕ подкласс ValueError).
+        raise AuthError(str(e), status_code=422)
     except ValueError as e:
         raise AuthError(str(e), status_code=409)
 
     try:
-        send_welcome_psychologist(
+        # Нейтральное staff-письмо (без «аккаунта психолога» и перечня прав) —
+        # корректно для admin/supervisor/psychologist и multi-role.
+        send_welcome_staff(
             to_email=user["email"],
             name=user["full_name"],
             password=password,
@@ -154,24 +166,28 @@ def update_user(
     data: AdminUserUpdate,
     *,
     actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
     """
-    Частичное обновление юзера от имени администратора.
+    Частичное обновление юзера от имени администратора (multi-role, set-based).
     Требует хотя бы одно непустое поле — иначе 400.
 
-    Смена роли на служебную требует документированного основания; запись
-    основания и смена роли выполняются атомарно в storage (см. update_user).
+    Управление ролями — только staff, без destructive replace-all (см.
+    storage.update_user): `roles[]` (set-based) либо legacy `role` (adapter).
+    Запись legal basis и изменение ролей выполняются атомарно в storage.
 
     Raises:
-        AuthError: если нет ни одного поля (400)
-        AuthError: если юзер не найден (404)
-        AuthError: если роль не существует в БД / нет основания при служебной роли (400)
+        AuthError: если нет ни одного поля (400);
+        AuthError: если юзер не найден (404);
+        AuthError: нарушение role-контракта — свой status_code (400/409/422).
     """
     if all(
         v is None
-        for v in (data.full_name, data.phone, data.is_active, data.role)
+        for v in (
+            data.full_name, data.phone, data.is_active, data.role, data.roles,
+        )
     ):
         raise AuthError(
             "Необходимо указать хотя бы одно поле для обновления",
@@ -185,14 +201,19 @@ def update_user(
             phone=data.phone,
             is_active=data.is_active,
             role=data.role,
+            roles=data.roles,
             legal_basis_confirmed=data.legal_basis_confirmed,
             basis_type=data.basis_type,
             basis_reference=data.basis_reference,
             legal_basis_comment=data.legal_basis_comment,
             confirmed_by_user_id=actor_id,
+            actor_id=actor_id,
+            actor_role=actor_role,
             ip=ip,
             user_agent=user_agent,
         )
+    except storage.RoleChangeError as e:
+        raise AuthError(str(e), status_code=e.status_code)
     except ValueError as e:
         msg = str(e)
         status = 404 if "не найден" in msg else 400

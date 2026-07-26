@@ -1,10 +1,12 @@
 # ТЗ (черновик): Модуль психологических тестов
 
-> Статус: **решения утверждены; реализованы Этап A (admin CRUD) и Этап B
-> (прохождение + scoring + consent-gate + результаты)**. Дата: 2026-06-20.
+> Статус: **решения утверждены; реализованы Этапы A-D**:
+> backend/admin CRUD, frontend admin-конструктор, student прохождение,
+> scoring, consent-gate и история/деталка результатов. Дата сверки: 2026-06-27.
 > Backend-модуль `app/tests/` (routes/routes_admin/schemas/service/storage/scoring),
 > миграция `c1d4e7a2f9b3` (test_interpretations), seed `test_consent` v1,
-> демо PHQ-9 (`scripts/seed_demo_test.py`). Остаются Этапы C–E (frontend, supervisor).
+> демо PHQ-9 (`scripts/seed_demo_test.py`). Остаётся Этап E (supervisor/psychologist
+> просмотр результатов по правилам ADR-016) и отдельный этап moderation workflow.
 > Опирается на уже существующую схему БД ([005_psychodiagnostics.sql](../../db/sql/migrations/005_psychodiagnostics.sql),
 > [diagnostics.py](../../mindcare_api/app/db/models/diagnostics.py)) и enum-типы
 > ([001_extensions_types.sql](../../db/sql/migrations/001_extensions_types.sql)).
@@ -21,15 +23,15 @@
 - Прохождение теста студентом с проверкой согласия ФЗ-152.
 - Автоподсчёт (`sum`, `average`) одношкальных и многошкальных тестов.
 - Сохранение результата, истории прохождений, просмотр результата студентом.
-- Просмотр результатов supervisor (право `tests:view_results_any`).
+- Просмотр результатов supervisor (право `tests:view_results_any`) и связанного
+  psychologist по правилам ADR-016.
 
 **Вне scope MVP** (отдельные этапы):
 - `weighted` / `custom` scoring.
 - Тайм-лимит с серверным enforcement (`time_limit_min` хранится, но не принуждается в MVP).
 - Картиночные тесты (`question_media` / `option_media`) — таблицы есть, UI/логика позже.
 - Экспорт результатов (PDF/CSV), сравнение во времени, графики динамики.
-- Доступ психолога к результатам своих студентов (требует отдельного compliance-решения,
-  как и chat content — см. правила therapeutic content в CLAUDE.md).
+- Экспорт результатов для staff, сравнение динамики и графики по времени.
 
 ## 2. Роли и доступ
 
@@ -38,13 +40,16 @@
 | Список/прохождение активных тестов | ✅ | — | — | — |
 | Свои результаты | ✅ | — | — | — |
 | CRUD тестов/вопросов | — | — | ✅ | ✅ |
-| Результаты любого пользователя | — | ❌ (MVP) | ✅ | metadata-only? (см. 8.4) |
+| Результаты любого пользователя | — | — | ✅ | metadata-only? (см. 8.4) |
+| Результаты своих назначенных студентов | — | planned (active/past engagement) | ✅ | — |
 
 Права уже засижены: `tests:list`, `tests:take`, `tests:manage`, `tests:view_results_any`
 (последнее — у supervisor). Защита — на роутере через `require_role`, не только на фронте.
 
-> ⚠️ **Доступ psychologist к результатам своих студентов в MVP НЕ даём.** Терапевтический
-> контент (как session_notes / chat) расширяется только отдельным compliance-этапом.
+> ⚠️ Обновление 2026-06-27: ADR-016 разрешает psychologist видеть результаты только тех
+> студентов, с которыми есть active/past `TherapyEngagement`. Backend/UI для этого доступа
+> ещё не реализованы; при реализации нужны scope-check, audit и отсутствие доступа admin
+> к регулярному просмотру результатов.
 
 ## 3. Модель данных (существующая, без изменений где возможно)
 
@@ -135,6 +140,7 @@ scoring_method = sum | average | weighted | custom
 | GET/PATCH/DELETE | `/api/admin/tests/{uuid}` | admin, supervisor |
 | вложенное управление вопросами/вариантами/порогами | (через PATCH теста или под-роуты) | admin, supervisor |
 | GET | `/api/admin/tests/{uuid}/results` | supervisor (`tests:view_results_any`) |
+| GET | TBD psychologist results endpoint | psychologist только по active/past engagement |
 
 ## 8. Валидация и edge-cases
 
@@ -156,7 +162,7 @@ scoring_method = sum | average | weighted | custom
 | 9.4 | `total_score` многошкального теста | ✅ Оставить `NULL` (смысл — в шкалах). |
 | 9.5 | Глубина версионирования | ✅ Только номер `version`, без снапшота формулировок. |
 | 9.6 | Шифровать ли результаты | ✅ **Нет** — результат теста (структурированные баллы + шаблонная трактовка) не является свободным терапевтическим текстом. Хранить как обычные таблицы. |
-| 9.7 | Доступ psychologist к результатам своих студентов | ✅ **Нет** в MVP. Расширение доступа к терапевтическому контенту — только отдельным compliance-этапом (как chat/session_notes). |
+| 9.7 | Доступ psychologist к результатам своих студентов | ✅ Обновлено ADR-016: разрешить только для студентов с active/past `TherapyEngagement`; реализация pending и требует scope-check + audit. |
 | 9.8 | Seed реальных методик | ✅ Засидить **одну** валидированную демо-методику (PHQ-9 или HADS) для end-to-end проверки скоринга/интерпретации. |
 
 ### 9.1 — детализация таблицы `test_interpretations`
@@ -186,7 +192,9 @@ test_interpretations
 
 1. **Этап A** — backend admin CRUD тестов/вопросов/вариантов (+ пороги после решения 9.1).
 2. **Этап B** — backend прохождение + scoring + consent-gate + результаты (+ тесты).
-3. **Этап C** — frontend admin-конструктор теста.
-4. **Этап D** — frontend прохождения и просмотра результата студентом.
-5. **Этап E** — supervisor-просмотр результатов.
-6. Позже: медиа-вопросы, weighted/custom, тайм-лимит, экспорт, динамика.
+3. **Этап C** — frontend admin-конструктор теста. ✅ Реализовано.
+4. **Этап D** — frontend прохождения и просмотра результата студентом. ✅ Реализовано.
+5. **Этап E** — supervisor/psychologist-просмотр результатов с role/scope checks. Pending.
+6. **Этап F** — moderation workflow для тестов: `draft -> in_review -> published`
+   / `needs_changes`, авторство psychologist, публикация admin/supervisor. Pending.
+7. Позже: медиа-вопросы, weighted/custom, тайм-лимит, экспорт, динамика.

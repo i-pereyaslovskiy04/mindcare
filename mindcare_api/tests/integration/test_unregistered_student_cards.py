@@ -536,7 +536,9 @@ class TestCardAppointmentLifecycle:
 # ─── Stage 2: linking card to account after confirmed registration ────────────
 
 def _unique_email(prefix: str = "integ_link") -> str:
-    return f"{prefix}_{_uuid.uuid4().hex[:10]}@example.com"
+    # Разрешённый домен: эти пользователи регистрируются через register/confirm
+    # (guarded email-allowlist). Карточка использует тот же email для linking.
+    return f"{prefix}_{_uuid.uuid4().hex[:10]}@donnu.ru"
 
 
 def _register_and_confirm(client, email: str, name: str = "Integ Linked"):
@@ -603,10 +605,10 @@ class TestCardAccountLinking:
         assert _card_linked_user_id(card_id) == uid
 
     def test_link_normalizes_email(self, client):
-        """Карточка TEST@EXAMPLE.COM и user test@example.com связываются."""
+        """Карточка UPPER@DONNU.RU и user lower@donnu.ru связываются."""
         tok_sv, _, _ = _make_user(client, "supervisor")
         suffix = _uuid.uuid4().hex[:10]
-        upper = f"INTEG_LINK_NORM_{suffix}@EXAMPLE.COM"
+        upper = f"INTEG_LINK_NORM_{suffix}@DONNU.RU"
         card_id = _create_card(client, tok_sv, email=upper).json()["id"]
 
         _, uid = _register_and_confirm(client, upper.lower())

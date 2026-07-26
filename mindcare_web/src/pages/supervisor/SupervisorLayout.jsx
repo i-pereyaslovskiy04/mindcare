@@ -33,5 +33,5 @@ const CRUMB_LABELS = {
 };
 
 export default function SupervisorLayout() {
-  return <CabinetLayout navSections={NAV_SECTIONS} crumbLabels={CRUMB_LABELS} />;
+  return <CabinetLayout cabinetRole="supervisor" navSections={NAV_SECTIONS} crumbLabels={CRUMB_LABELS} />;
 }

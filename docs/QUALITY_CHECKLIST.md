@@ -50,9 +50,9 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус: **809 passed** (`.\test.ps1` на смерженной ветке dev,
-alembic head db0b2e177da5; включая appointments/profile/unregistered-cards,
-chat-attachments и diary сьюты).
+Текущий ожидаемый статус после email-domain/self-admin corrective pass:
+**961 passed** (`pytest tests/`; включая multi-role, email-domain
+policy/admin CRUD/concurrency, self-admin guard, appointments, chat и diary).
 
 ### Alembic
 
@@ -130,37 +130,103 @@ mindcare_web/src/components/UI
 
 ## 4. Role policy
 
-Актуальная модель доступа (зафиксирована в ADR-015):
+Актуальная модель доступа зафиксирована в ADR-015/ADR-016, multi-role модель
+пользователя — в ADR-018:
 
 | Роль | Кабинет | Область |
 |------|---------|---------|
-| `admin` | `/admin/*` | Пользователи, контент, новости, материалы, категории, теги |
-| `supervisor` | `/supervisor/*` | Назначения студент ↔ психолог |
-| `psychologist` | `/psychologist/*` | Свои студенты и сессии |
+| `admin` | `/admin/*` | Пользователи, платформенный контент, новости, материалы, категории, теги |
+| `supervisor` | `/supervisor/*` | Назначения, записи, расписания, группы, отчёты, test-results по policy, модерация контента |
+| `psychologist` | `/psychologist/*` | Свои студенты, сессии, чаты, черновики материалов/тестов |
 | `student` | `/student/*` | Личный кабинет |
 
-**Supervisor не является content manager.**
-Supervisor не должен роутиться в `/admin/*`.
-Расширение прав supervisor требует отдельного ADR и изменения backend `require_role`.
+**Supervisor не является пользователем admin panel.**
+Чистая роль `supervisor` не должна роутиться в `/admin/*`; его операционные и
+moderation-функции реализуются в `/supervisor/*` и должны быть явно защищены
+backend `require_role` / scope-checks. Если один и тот же пользователь имеет роли
+`admin` + `supervisor`, доступ в `/admin/*` разрешён только по membership-роли `admin`,
+а не через наследование supervisor.
+
+**Multi-role users (ADR-018).**
+- Источник прав — `user_roles`; пользователь может иметь несколько активных ролей.
+- Auth/profile/session payload должен содержать `roles: Role[]`. Legacy `role`
+  допустим только как primary/default/effective convenience для совместимости.
+- Backend `require_role` проверяет пересечение allowed roles с `current_user.roles`.
+  Frontend `RoleRoute` проверяет `user.roles`, а не `user.role`.
+- Для route-specific audit и sensitive content policy использовать validated
+  `effective_role`/active cabinet. Клиентский active role не является источником
+  доверия без backend membership-проверки.
+- Явный `roles: []` является источником истины и не должен восстанавливаться из
+  legacy `role`; fallback `[role]` допустим только если поле `roles` отсутствует.
+- Выход, истечение сессии и неуспешный restore должны очищать сохранённый
+  `activeRole`; прямой вход в кабинет синхронизирует его только после membership-check.
+- При нескольких ролях и отсутствии валидного `activeRole` показывать `RoleChooser`;
+  при одной роли сразу открывать соответствующий кабинет.
 
 **Legal basis для staff-ролей.** Назначение роли `psychologist`/`supervisor`/`admin`
-— и при создании (`POST /api/admin/users`), и при смене роли (`PATCH …/{uuid}`) —
+— и при создании (`POST /api/admin/users`), и при добавлении новой staff-роли —
 требует документированного основания (`legal_basis_confirmed` + `basis_type` +
-`basis_reference`), которое пишется в `user_legal_basis_records`. PATCH без основания
-backend обязан отклонять (роль не меняется). `consent_records` для staff не использовать.
+`basis_reference`), которое пишется в `user_legal_basis_records`. PATCH/role endpoint
+без основания backend обязан отклонять (роль не добавляется). `consent_records` для
+staff не использовать.
 
-**Admin edit роли пользователя (Stage 31n / 31n-hotfix).** Роль в edit-модалке
-**редактируема** (не read-only — старое правило Stage 31h отменено):
-- при реальной смене роли на `psychologist`/`supervisor`/`admin` UI обязан показать
-  блок legal basis и отправить `role` + `legal_basis_confirmed`/`basis_type`/
+**Admin create/list multi-role.**
+- `POST /api/admin/users` принимает ровно одно из legacy `role` или `roles[]`;
+  оба поля, ни одного, пустой `roles[]` и `student` должны давать 422;
+- create дедуплицирует staff-роли, требует непустой `basis_reference`
+  и атомарно пишет одну `UserRole` + одну legal-basis запись на
+  каждую уникальную роль; partial create при сбое недопустим;
+- `GET /api/admin/users`, `GET /api/admin/users/{uuid}` и create response возвращают
+  детерминированный набор активных `roles[]` и legacy primary `role`;
+  просроченные роли не входят в оба поля, а отсутствие ролей не маскируется
+  как `student`;
+- admin list подтягивает роли одним агрегированным запросом на страницу,
+  без N+1;
+- welcome email для admin-created staff не упоминает конкретную роль
+  или перечень прав.
+
+**Admin edit ролей пользователя.** Роли в edit-модалке должны быть multi-role
+control / set-based API, а не single-role replace:
+- при добавлении `psychologist`/`supervisor`/`admin` UI обязан показать блок legal basis
+  и отправить добавляемые роли + `legal_basis_confirmed`/`basis_type`/
   `basis_reference` (+опц. `legal_basis_comment`); без основания submit не проходит;
-- `student` **не selectable** в admin edit-dropdown. Студенты появляются через
+- удаление staff-роли не требует legal basis, но требует audit trail;
+- отсутствие `roles` в PATCH означает «не менять роли»; явный `roles: []` означает
+  снять все staff-роли и допустим только если после операции остаётся другая активная
+  роль (например, `student`), иначе ожидается 422;
+- backend не должен удалять весь набор `user_roles` при PATCH; добавлять/удалять только
+  явно выбранные роли и не оставлять пользователя без активных ролей;
+- `student` **не selectable** в admin role control. Студенты появляются через
   self-registration или staff-created student flow (`POST /api/supervisor/students`);
-  текущая роль `student` отображается через `Select displayLabel`, но недоступна для выбора;
-- если роль не менялась — legal basis не требуется и `role` в PATCH не отправляется;
+  существующая роль `student` отображается как read-only badge и не удаляется случайно;
+- если набор staff-ролей не менялся — legal basis не требуется и role changes в PATCH
+  не отправляются;
 - формулировка подтверждения — «документированное основание для назначения роли
   и обработки ПДн», НИКОГДА не «согласие пользователя»;
 - backend PATCH guard остаётся обязательным defense-in-depth (не полагаться только на UI).
+- student-only и roleless пользователи не могут получить первую staff-роль через
+  текущий PATCH policy; checkbox-контролы должны быть disabled, но scalar-only edit
+  обязан оставаться доступным.
+- собственный checkbox `admin` должен быть заблокирован по стабильному user id, а
+  backend обязан отклонять попытку actor удалить у себя membership-роль `admin`;
+  другой администратор может выполнить такое изменение.
+- `CabinetSwitcher` должен оставаться доступным на desktop/tablet/mobile, не
+  обрезаться sidebar overflow, закрываться по Escape/outside click/scroll и не
+  выходить за границы viewport. После responsive-изменений нужен browser smoke.
+
+**Email-domain policy (ADR-019).**
+- self-registration, admin-created staff и supervisor/admin-created student
+  проверяют один DB-backed allowlist точных нормализованных доменов;
+- register init отклоняет запрещённый домен до отправки OTP, а confirm повторяет
+  authoritative проверку в creation transaction до consume OTP;
+- существующие login/password reset не должны блокироваться после отключения домена;
+- soft-deleted reactivation требует активного домена;
+- admin CRUD доступен только по membership-роли `admin`; DELETE отсутствует;
+- duplicate/inactive domain через POST даёт 409, реактивация выполняется PATCH;
+- отключение последнего активного домена даёт 409 и остаётся безопасным при
+  конкурентных запросах;
+- audit фиксирует add/disable/reactivate/update без сырого comment;
+- состав allowlist не описывать как официальный государственный перечень.
 
 ---
 
@@ -235,7 +301,9 @@ backend обязан отклонять (роль не меняется). `conse
 - Не запускать `eslint --fix` без отдельного разрешения.
 - Не мигрировать все UI-компоненты за один PR.
 - Не менять startup/seed и auth/session в одном PR.
-- Не добавлять supervisor в admin routes без ADR.
+- Не давать роли `supervisor` доступ в admin routes. В `/admin/*` пускает только
+  membership-роль `admin`; multi-role пользователь `admin` + `supervisor` проходит
+  именно по `admin`.
 - Не удалять `.env` без отдельного подтверждения.
 
 ---
@@ -257,20 +325,24 @@ backend обязан отклонять (роль не меняется). `conse
 
 | Уровень | Что тестирует | Текущий статус |
 |---------|---------------|----------------|
-| **Unit** | Service/helper business logic, без реальной БД | 119 тестов: change_password (13), encryption (26), normalization (16), smtp_transport (21), email_error_sanitization (11), rate_limit (18), session_security (8), auth_hardening_b1 (6) |
-| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | auth/security, legal basis, session notes, chat/system conversation, chat attachments (chat_attachment_models 20, chat_attachment_api 37, chat_attachment_edit 18), appointments/schedules/group sessions/unregistered cards/staff-created students/profile, diary (endpoints, access control, encryption, summary, PATCH/DELETE, soft-delete, malformed UUID, empty PATCH) |
+| **Unit** | Service/helper business logic, без реальной БД | change_password, encryption, normalization, email-domain normalize/validate/extract (35), smtp_transport, rate_limit, session security, pure multi-role helpers и role deps |
+| **API/Integration** | Route → deps → service → storage → DB (нужен dev PostgreSQL на alembic head) | auth/security, multi-role roles, legal basis, email-domain creation policy/admin CRUD/concurrency, self-admin guard, session notes, chat, appointments/schedules/group sessions/unregistered cards/staff-created students/profile, diary |
 | **Manual smoke** | Пользовательские сценарии | Обязателен при UI/UX-sensitive изменениях |
 | **E2E** | Полный browser flow | Позже, когда UI стабилизируется |
 
-Итого backend: **809 passed** (`.\test.ps1` на смерженной ветке dev, alembic head db0b2e177da5;
-включает appointment/profile/unregistered-cards, chat-attachments и diary сьюты).
+Итого backend: **961 passed** по финальному прогону Claude Code (`pytest tests/`;
+включает multi-role, email-domain allowlist, self-admin guard,
+appointment/profile/unregistered-cards, chat attachments и diary).
 
-Frontend (CRA jest, `npm test -- --watchAll=false`): **45 suites / 646 passed** — chat attachments
-(Stage 32i/32j) + appointment/schedule UI + diary (StudentHome, DiaryPage, DiaryEntryForm,
-DiaryEntryItem, DiaryHistoryList). Lint: 0 warnings; production build: success. Дополнительно —
-admin role-edit покрыт `roleLabels.test.js` (edit options без student) и
-`UserEditModal.smoke.test.jsx` (порядок поля роли, текущая роль student, dropdown без «Студент»,
-раскрытие legal basis); плюс предыдущие —
+Frontend (CRA jest, `npm test -- --watchAll=false`): **60 suites / 720 passed** —
+multi-role normalization/auth/guards, RoleChooser, CabinetSwitcher, layout sync,
+admin set-based role forms/list badges, self-admin lock, отдельная страница доменов,
+группированная admin-навигация, chat role branching, appointments и diary.
+Production build: success.
+Полный `npm run lint` прошёл с **0 errors / 0 warnings**. Ручной browser smoke
+1280/800/390 px, panel positioning у правого/нижнего края, `/admin/email-domains`
+(add/disable/reactivate/409) и direct route/reload остаётся pending перед merge/demo.
+Дополнительно —
 chat (LinkifiedText, messageShape, Chat smoke), admin users (phone, useUserForm, users.api),
 publishLabels, DateInput (dateHelpers, popoverPosition, DateInput) и client.js error-parsing
 (FastAPI/Pydantic 422 detail array). DOM-тесты модалок с Tiptap/ImageUpload/MultiSelect
@@ -312,6 +384,19 @@ npm run build
 3. Убедиться, что произошёл автоматический выход и открылась AuthModal с сообщением «Пароль изменён. Войдите снова.»
 4. Ввести **старый** пароль → получить «Неверный email или пароль».
 5. Ввести **новый** пароль → успешный вход.
+
+### Manual smoke — admin domains и self-admin
+
+1. На 1280/800/390 px проверить четыре группы sidebar: «Управление», «Контент»,
+   «Система», «Аккаунт»; ссылки и active state не должны перекрываться.
+2. Открыть `/admin/email-domains` напрямую и после reload. Проверить список,
+   добавление, отключение с confirm, реактивацию и отображение backend 409 при
+   попытке отключить последний активный домен.
+3. Проверить, что `/admin/settings` содержит только «Безопасность» / «Смена пароля».
+4. В edit собственного пользователя убедиться, что checkbox `admin` заблокирован,
+   а другие staff-роли доступны согласно общей policy.
+5. Прямой PATCH, снимающий собственную роль `admin`, должен получить 422; тот же
+   target может быть изменён другим администратором.
 
 ---
 

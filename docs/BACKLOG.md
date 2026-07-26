@@ -103,8 +103,6 @@
 - **OTP concurrency / row locking** — атомарные confirm-flows не берут `SELECT … FOR UPDATE`;
   при гонке двух одновременных confirm возможен двойной проход OTP-валидации. Решение —
   `SELECT FOR UPDATE` или conditional update. **Deferred** (вне scope Stage 31m-fix-b3)
-- **`_get_primary_role` read-fallback `"student"`** — при отсутствии активной роли `auth/storage._get_primary_role`
-  возвращает дефолт `"student"`; cleanup (явная ошибка вместо тихого дефолта на чтении) — deferred
 - **Transactional outbox** — гарантированная доставка post-commit уведомлений (welcome/security/engagement);
   сейчас они best-effort soft-fail. **Deferred** (намеренно не делаем на этом этапе)
 - **HttpOnly Secure SameSite cookie + CSRF** вместо localStorage-токена
@@ -123,6 +121,8 @@
   транзакциями; объединение в одну сессию — отдельный этап
 - **`target_user_id` в auth_log** — см. 🔵-секцию (ADR-006)
 - **~~Legal basis при смене роли через `PATCH /api/admin/users`~~** ✅ Закрыто (Stage 31f-fix)
+  - Исторический single-role этап; текущий set-based контракт реализован в ADR-018
+    и описан в `docs/HANDOFFS/2026-07-14-multi-role-user-model-complete.md`.
   - PATCH смены роли на staff (`psychologist`/`supervisor`/`admin`, при `old_role != new_role`)
     требует `legal_basis_confirmed=true`, валидный `basis_type` и непустой `basis_reference`
     (иначе 400; невалидный `basis_type` → 422); роль не меняется, частичных записей нет;
@@ -132,6 +132,8 @@
   - тесты: `tests/integration/test_admin_role_patch_legal_basis.py` (12); backend full suite **245 passed**.
     Без миграций (использовано существующее JSONB-поле `metadata`)
 - **~~Admin edit роли пользователя через UI~~** ✅ Закрыто (Stage 31n / 31n-hotfix), frontend-only
+  - Исторический single-role UI этап; dropdown впоследствии заменён multi-role
+    `StaffRolesCheckboxes` в ADR-018.
   - Stage 31h сделал роль read-only в `UserEditModal` — **правило отменено**; роль снова
     редактируема, но безопасно: при реальной смене на staff/admin UI показывает блок legal
     basis и шлёт `role` + `legal_basis_confirmed`/`basis_type`/`basis_reference`(+опц. comment)
@@ -360,8 +362,9 @@
   - ✅ Линейный `MoodChart` удалён после manual UI smoke: для нерегулярного дневника
     разрывы линии давали неудачную медицинскую визуальную метафору; текущий UI без SVG,
     осей, линий и утверждений об улучшении/ухудшении
-  - ✅ Проверенный статус проекта: backend **587 passed**; frontend
-    **39 suites / 540 passed**; lint **0 warnings**; build **success**
+  - ✅ На момент завершения diary-этапа: backend **809 passed**; frontend
+    **45 suites / 646 passed**; lint **0 warnings**; build **success**.
+    Актуальный общий статус после ADR-018 см. в `docs/QUALITY_CHECKLIST.md`
   - **Pending / будущие этапы:**
     - Audit trail для diary edit/delete — compliance gap до production hardening
     - Доступ психолога — только отдельная policy с explicit consent/legal basis
@@ -381,9 +384,12 @@
 **~~OTP-коды хранятся в открытом виде~~** ✅ Закрыто
 - Исправлено: migration `c5d8a1b4e7f2`, `app/auth/otp_service.py` — SHA-256 хеш
 
-**`_get_primary_role` недетерминирован при нескольких ролях**
-- ~~Использует `.first()` без `ORDER BY`~~
-- Закрыто: заменено коррелированным подзапросом с `ROLE_PRIORITY` в `users/storage.py`
+**~~`_get_primary_role` недетерминирован и маскировал отсутствие роли как `student`~~** ✅ Закрыто (ADR-018)
+- Primary role вычисляется единым helper `primary_role()` по детерминированному
+  `ROLE_PRIORITY`; просроченные роли не участвуют.
+- Пустой набор активных ролей возвращает `role=null`, без fallback на `student`;
+  авторизация и role guards такой аккаунт не пропускают.
+- Источник истины для доступа — полный набор активных `roles[]`.
 
 **~~Email без нормализации в `register_init`~~** ✅ Закрыто
 - Добавлен единый helper `normalize_email()` в `app/core/normalization.py`
@@ -466,7 +472,8 @@
 - `published_at` API-контракт не менялся (ISO datetime / `null`); конверсия через `dateHelpers`
 - Позиционирование popover: flip вверх/вниз + clamp в viewport (`computePopoverPosition`, тесты `popoverPosition.test.js`)
 - Остаток (pending): manual smoke `DateInput` на mobile / low-height viewport
-- `DateTimePicker` / `TimeInput` / `SlotPicker` — НЕ нужны в ближайшем этапе; `SlotPicker` появится отдельно для записи на приём (не замена `DateInput`)
+- `DateTimePicker` / `TimeInput` — НЕ нужны в ближайшем этапе; для новых форм использовать `DateInput`, `TimePicker` и `DateTimeInput`.
+- Отдельного shared `SlotPicker` пока нет: запись на консультации реализована feature-specific UI в appointments-экранах. Выносить в shared UI только при появлении второго независимого потребителя.
 
 **Раздел 1 в `ARCHITECTURE.md` устарел**
 - Project Tree не отражает реальную структуру `mindcare_web/src/`
@@ -482,9 +489,9 @@
 - По конвенции ARCHITECTURE.md §10 — должны быть `roleStudent`, `rolePsychologist`, `roleAdmin`, `roleSupervisor`
 - Файл: `mindcare_web/src/features/admin/users/components/UsersTable.jsx`
 
-**`phone` не стрипается при обновлении юзера**
-- `update_user` в storage стрипает `full_name`, но не стрипает `phone`
-- Непоследовательная нормализация входных данных
+**~~`phone` не стрипался при обновлении юзера~~** ✅ Закрыто
+- `update_user` нормализует `phone` через `phone.strip() or None`
+- `create_user` также сохраняет `phone` как `phone.strip() or None`
 - Файл: `mindcare_api/app/users/storage.py`
 
 **Дублирование стилей между UserCreateModal и UserEditModal**
@@ -547,13 +554,16 @@
 - Решение: реактивировать старую запись по аналогии с `reactivate_user()` в `auth/storage.py`
 - Файл: `mindcare_api/app/users/storage.py` → `create_user()`
 
-**`audit_log` и `data_change_log` не используются — только `auth_log`**
-- Таблицы созданы в схеме (migration `3a7c5e2b8f1d`), но нигде в коде нет записей в них
-- `audit_log` предназначен для системных событий (деактивация теста, закрытие приёма, смена категории)
-- `data_change_log` предназначен для хранения old/new значений при изменении данных (требование ФЗ-152 для прослеживаемости)
-- Нужно решить: писать вручную через хелпер (`log_data_change(table, record_id, old, new)`) или через PostgreSQL-триггеры
-- Актуально для таблиц с ПДн: `users`, `student_profiles`, `psychologist_profiles`, `session_notes`, `appointments`
-- Файлы: создать `app/audit/service.py`, подключить в модули которые меняют ПДн
+**`data_change_log` не используется; `audit_log` используется точечно**
+- `audit_log` уже пишет системные события в модулях chat, session_notes и supervisor
+  (например staff-доступ к content заметки, создание беседы, создание walk-in/student flows)
+- `data_change_log` пока не используется для old/new значений при изменении данных
+  (требование ФЗ-152 к прослеживаемости остаётся открытым)
+- Нужно решить: писать изменения вручную через хелпер (`log_data_change(table, record_id, old, new)`)
+  или через PostgreSQL-триггеры
+- Актуально для таблиц с ПДн: `users`, `student_profiles`, `psychologist_profiles`,
+  `session_notes`, `appointments`, `unregistered_student_cards`
+- Файлы: создать `app/audit/service.py`, подключить в модули, которые меняют ПДн
 
 **Аудит-лог admin-операций: добавить target_user_id и логировать неудачи**
 - `log_auth_event` не имеет поля `target_user_id` — нельзя ответить «когда и кем изменён конкретный пользователь»
@@ -572,26 +582,22 @@
 - Требует передачи `current_user` из роутера в сервис
 - Файлы: `mindcare_api/app/users/service.py`, `mindcare_api/app/users/routes_admin.py`
 
-**Следующий крупный модуль после Admin Content**
-- Admin Categories CRUD закрыт: `/api/admin/categories` и `/admin/categories` реализованы
-- Нужно выбрать следующий приоритет с владельцем проекта: Appointments, Admin Tests или личные кабинеты
-- При выборе учитывать ФЗ-152: appointments и результаты тестов затрагивают чувствительные психологические данные
+**~~Следующий крупный модуль после Admin Content: Appointments / кабинеты~~** ✅ Закрыто
+- Реализован блок appointments/schedule v3/group sessions/booking flows.
+- Актуальный handoff: `docs/HANDOFFS/2026-06-27-appointments-scheduling-complete.md`.
+- Оставшиеся ограничения вынесены ниже в отложенные MVP-пункты: waitlist, group chat, видеоконсультации, внешние календарные интеграции и full browser E2E.
 
 **Белый экран при загрузке роутов (PrivateRoute / RoleRoute)**
 - `router.jsx`: `if (loading) return null` — пустая страница пока AuthContext восстанавливает сессию
 - Заменить на `<PageSkeleton />` или аналогичный placeholder
 - Файл: `mindcare_web/src/app/router.jsx`
 
-**Показ удалённых пользователей в админке**
-- Сейчас `find_users` всегда фильтрует `deleted_at IS NULL` — удалённые не видны
-- Бэк: добавить `include_deleted: bool = False` в `find_users`, `AdminUserListQuery` и роутер;
-  добавить `deleted_at: Optional[datetime]` в `AdminUserListItem`
-- Фронт: фильтр «Показать удалённых» в `UsersFilters`; визуальный индикатор в `UsersTable`
-  (зачёркнутый текст или отдельный бейдж «Удалён»)
-- Файлы: `mindcare_api/app/users/storage.py`, `mindcare_api/app/users/schemas.py`,
-  `mindcare_api/app/users/routes_admin.py`,
-  `mindcare_web/src/features/admin/users/components/UsersFilters.jsx`,
-  `mindcare_web/src/features/admin/users/components/UsersTable.jsx`
+**~~Показ удалённых пользователей в админке~~** ✅ Закрыто
+- Бэк: `include_deleted` есть в `find_users`, `AdminUserListQuery` и admin users route
+- Фронт: фильтр «Показать удалённых» есть в `UsersFilters`; `UsersTable` показывает бейдж
+  «Удалён» и скрывает edit/delete actions для soft-deleted записей
+- Остаётся архитектурное решение ADR-008: одиночный `GET /api/admin/users/{uuid}`
+  возвращает 404 для удалённых пользователей
 
 ---
 
