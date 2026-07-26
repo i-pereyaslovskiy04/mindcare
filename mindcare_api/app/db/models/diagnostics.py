@@ -224,7 +224,10 @@ class StudentAnswer(Base):
     option_id        = Column(
         Integer, ForeignKey("options.id", ondelete="RESTRICT")
     )
-    free_text_answer = Column(Text)
+    # Свободный текст = терапевтический контент: только encrypted-at-rest
+    # (Fernet, префикс enc:v1:, app/core/encryption.py). Plaintext не хранить
+    # и не логировать — как в session_notes.content / chat_messages.content.
+    free_text_answer_enc = Column(Text)
     scale_value      = Column(Integer)
     selected_options = Column(ARRAY(Integer))
     time_spent_sec   = Column(Integer)

@@ -59,6 +59,34 @@ export function updateTest(uuid, data) {
   return apiFetch(`/api/admin/tests/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
+/**
+ * Анализ несохранённого дерева: достижимый диапазон баллов и проблемы порогов
+ * (дыры в покрытии, недостижимые пороги, ссылки на несуществующие шкалы).
+ * Ничего не сохраняет — подсчёт остаётся единственным, на бэкенде.
+ */
+export function analyzeTest({ scoring, questions, interpretations }) {
+  return apiFetch('/api/admin/tests/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ scoring, questions, interpretations }),
+  });
+}
+
+/**
+ * Пробный подсчёт несохранённого дерева: тот же scoring, что у студента.
+ * Ничего не сохраняет — ни результата, ни ответов.
+ */
+export function previewScore({ scoring, questions, interpretations, answers }) {
+  return apiFetch('/api/admin/tests/preview-score', {
+    method: 'POST',
+    body: JSON.stringify({ scoring, questions, interpretations, answers }),
+  });
+}
+
+/** Копия методики (черновик). Штатный путь правки теста, по которому есть результаты. */
+export function duplicateTest(uuid) {
+  return apiFetch(`/api/admin/tests/${uuid}/duplicate`, { method: 'POST' });
+}
+
 export function deleteTest(uuid) {
   return apiFetch(`/api/admin/tests/${uuid}`, { method: 'DELETE' });
 }

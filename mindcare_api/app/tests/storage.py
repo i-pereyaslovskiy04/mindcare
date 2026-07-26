@@ -12,12 +12,22 @@ from typing import Optional
 
 from sqlalchemy import desc, func
 
+from app.core.encryption import encrypt_text
 from app.db.session import SessionLocal
 from app.db.models import (
     Test, TestCategory, TestTag, TestInterpretation,
     Question, Option, TestResult, TestResultScale, StudentAnswer,
     Category, Tag, User, Consent, ConsentRecord,
 )
+
+
+class TestHasResults(Exception):
+    """
+    Попытка заменить вопросы теста, по которому уже есть пройденные результаты.
+
+    Определена здесь (а не в service), чтобы storage мог её поднять без
+    циклического импорта; service её ре-экспортирует, routes → HTTP 409.
+    """
 
 
 # ── helpers: чтение ───────────────────────────────────────────────────────────
@@ -256,15 +266,102 @@ def has_results(test_id: int, db) -> bool:
     ).scalar()
 
 
+def test_has_results(uuid_str: str) -> bool:
+    """Есть ли хоть один результат по тесту. Несуществующий тест → False."""
+    try:
+        uuid_obj = _uuid.UUID(uuid_str)
+    except ValueError:
+        return False
+    with SessionLocal() as db:
+        test = db.query(Test.id).filter(
+            Test.uuid == uuid_obj, Test.deleted_at.is_(None)
+        ).first()
+        if not test:
+            return False
+        return has_results(test.id, db)
+
+
+def duplicate_test(uuid_str: str, created_by: int) -> Optional[dict]:
+    """
+    Копия методики: вопросы/варианты/пороги/категории/темы переносятся,
+    результаты — нет. Копия создаётся как черновик (is_active=False, version=1),
+    чтобы её можно было доработать до публикации.
+    """
+    try:
+        uuid_obj = _uuid.UUID(uuid_str)
+    except ValueError:
+        return None
+
+    with SessionLocal() as db:
+        src = db.query(Test).filter(
+            Test.uuid == uuid_obj, Test.deleted_at.is_(None)
+        ).first()
+        if not src:
+            return None
+
+        copy = Test(
+            title=f"{src.title} (копия)"[:255],
+            description=src.description,
+            scoring=src.scoring,
+            max_score=src.max_score,
+            time_limit_min=src.time_limit_min,
+            is_active=False,
+            version=1,
+            created_by=created_by,
+        )
+        db.add(copy)
+        db.flush()
+
+        for row in db.query(TestCategory).filter(TestCategory.test_id == src.id).all():
+            db.add(TestCategory(test_id=copy.id, category_id=row.category_id))
+        for row in db.query(TestTag).filter(TestTag.test_id == src.id).all():
+            db.add(TestTag(test_id=copy.id, tag_id=row.tag_id))
+
+        for q in sorted(src.questions, key=lambda x: x.question_order):
+            question = Question(
+                test_id=copy.id,
+                question_text=q.question_text,
+                question_order=q.question_order,
+                question_type=q.question_type,
+                is_required=q.is_required,
+                config=dict(q.config or {}),
+            )
+            db.add(question)
+            db.flush()
+            for o in sorted(q.options, key=lambda x: x.option_order):
+                db.add(Option(
+                    question_id=question.id,
+                    option_text=o.option_text,
+                    option_order=o.option_order,
+                    value_score=o.value_score,
+                ))
+
+        for i in src.interpretations:
+            db.add(TestInterpretation(
+                test_id=copy.id,
+                scale_name=i.scale_name,
+                min_score=i.min_score,
+                max_score=i.max_score,
+                label=i.label,
+                recommendation=i.recommendation,
+            ))
+
+        db.commit()
+        db.refresh(copy)
+        return _test_to_dict(copy, db)
+
+
 def update_test(uuid_str: str, data: dict) -> Optional[dict]:
     """
     Частичное обновление. Скалярные поля — по наличию ключа.
     Вложенные коллекции (questions/interpretations/category_ids/tag_uuids)
     заменяются целиком только если ключ присутствует в data.
 
-    Версионирование (решение 9.5): если меняется структура вопросов теста,
-    на который уже есть результаты, — поднимаем version (исторические
-    результаты остаются привязаны к прежней версии).
+    Вопросы теста, по которому уже есть результаты, менять НЕЛЬЗЯ:
+    student_answers ссылается на questions/options через ON DELETE RESTRICT,
+    поэтому замена дерева физически невозможна — нужна копия методики
+    (`duplicate_test`). Метаданные и пороги интерпретации менять можно:
+    на них FK из результатов нет, а расшифровка снапшотится в момент submit.
     """
     try:
         uuid_obj = _uuid.UUID(uuid_str)
@@ -290,7 +387,10 @@ def update_test(uuid_str: str, data: dict) -> Optional[dict]:
 
         if "questions" in data and data["questions"] is not None:
             if has_results(test.id, db):
-                test.version = (test.version or 1) + 1
+                raise TestHasResults(
+                    "По этому тесту уже есть результаты — его вопросы изменить "
+                    "нельзя. Создайте копию методики и правьте её."
+                )
             _replace_questions(test.id, data["questions"], db)
         if "interpretations" in data and data["interpretations"] is not None:
             _replace_interpretations(test.id, data["interpretations"], db)
@@ -417,11 +517,12 @@ def save_result(user_id: int, test_uuid: str, computed: dict, answers: list[dict
             ))
 
         for a in answers:
+            free_text = (a.get("free_text_answer") or "").strip()
             db.add(StudentAnswer(
                 test_result_id=result.id,
                 question_id=a["question_id"],
                 option_id=a.get("option_id"),
-                free_text_answer=a.get("free_text_answer"),
+                free_text_answer_enc=encrypt_text(free_text) if free_text else None,
                 scale_value=a.get("scale_value"),
                 selected_options=a.get("selected_options"),
                 time_spent_sec=a.get("time_spent_sec"),

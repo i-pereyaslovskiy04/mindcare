@@ -34,6 +34,25 @@
   margin: 0;
 }
 
+/* 409: у теста есть результаты — вопросы заблокированы, предлагаем копию */
+.lockedNotice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(var(--error-rgb), 0.08);
+  border: 1px solid rgba(var(--error-rgb), 0.24);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.lockedText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-main);
+}
+
 .section {
   border: 1px solid var(--nav-border);
   border-radius: 16px;
@@ -105,6 +124,7 @@
 
 .footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 12px;
   padding-bottom: 8px;
@@ -112,4 +132,14 @@
 
 @media (max-width: 600px) {
   .row { grid-template-columns: 1fr; }
+
+  /* До 4 кнопок (Отмена/Предпросмотр/Дублировать/Сохранить) не помещаются
+     в ряд на мобильном — раскладываем в столбец на всю ширину. */
+  .footer {
+    flex-direction: column;
+  }
+
+  .footer > * {
+    width: 100%;
+  }
 }

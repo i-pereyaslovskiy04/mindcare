@@ -112,6 +112,53 @@ class InterpretationRead(BaseModel):
     recommendation: Optional[str]
 
 
+# ── анализ порогов интерпретации (предпросмотр в конструкторе) ────────────────
+
+class TestAnalyzeIn(BaseModel):
+    """
+    Несохранённое дерево теста для анализа. Отдельная схема, а не TestCreate:
+    в конструкторе название может быть ещё пустым, а анализ от него не зависит.
+    """
+    scoring:         ScoringMethod              = "sum"
+    questions:       list[QuestionCreate]       = Field(default_factory=list)
+    interpretations: list[InterpretationCreate] = Field(default_factory=list)
+
+
+class PreviewAnswerIn(BaseModel):
+    """
+    Ответ в предпросмотре. Вопросы адресуются по question_order, а варианты по
+    option_order, а не по id: дерево ещё не сохранено и id у него нет.
+    """
+    question_order:         int
+    option_order:           Optional[int]       = None
+    selected_option_orders: Optional[list[int]] = None
+    scale_value:            Optional[int]       = None
+    free_text_answer:       Optional[str]       = None
+
+
+class TestPreviewScoreIn(TestAnalyzeIn):
+    answers: list[PreviewAnswerIn] = Field(default_factory=list)
+
+
+class ScoreBoundsRead(BaseModel):
+    scale_name: Optional[str]     # None = итоговый балл одношкального теста
+    min_score:  int
+    max_score:  int
+
+
+class InterpretationIssueRead(BaseModel):
+    scale_name: Optional[str]
+    min_score:  int
+    max_score:  int
+    kind:       str               # gap | out_of_range | unknown_scale
+    label:      Optional[str] = None
+
+
+class TestAnalysisRead(BaseModel):
+    score_bounds: list[ScoreBoundsRead]
+    issues:       list[InterpretationIssueRead]
+
+
 class TestRead(BaseModel):
     uuid:           str
     title:          str
@@ -214,6 +261,19 @@ class ScaleResultRead(BaseModel):
     max_score:      Optional[int]
     interpretation: Optional[str]
     label:          Optional[str]
+
+
+class TestPreviewScoreRead(BaseModel):
+    """
+    Результат пробного подсчёта в конструкторе. Тот же расчёт, что у студента
+    (scoring.compute_result), но ничего не сохраняется: ни test_results,
+    ни student_answers, ни uuid.
+    """
+    total_score:     Optional[int]
+    max_possible:    Optional[int]
+    scoring_used:    str
+    recommendations: Optional[str]
+    scales:          list[ScaleResultRead]
 
 
 class ResultRead(BaseModel):

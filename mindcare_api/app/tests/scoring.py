@@ -58,6 +58,30 @@ def max_question_score(question: dict) -> Optional[int]:
     return None  # free_text
 
 
+def min_question_score(question: dict) -> Optional[int]:
+    """
+    Минимально достижимый балл за вопрос — зеркало max_question_score.
+
+    Для multiple_choice учитываем, что _validate_answers требует непустой набор:
+    минимум — сумма всех отрицательных вариантов, а если отрицательных нет,
+    то самый дешёвый одиночный вариант.
+    """
+    qtype = question["question_type"]
+    scores = [o["value_score"] for o in question.get("options", [])]
+
+    if qtype == _CHOICE:
+        return min(scores) if scores else 0
+    if qtype == _MULTI:
+        negatives = [s for s in scores if s < 0]
+        if negatives:
+            return sum(negatives)
+        return min(scores) if scores else 0
+    if qtype == _SCALE:
+        cfg = question.get("config") or {}
+        return int(cfg.get("min") or 0)
+    return None  # free_text
+
+
 # ── агрегация ─────────────────────────────────────────────────────────────────
 
 def _aggregate(values: list[int], method: str) -> int:
@@ -80,6 +104,47 @@ def _scale_of(question: dict) -> Optional[str]:
     cfg = question.get("config") or {}
     name = cfg.get("scale")
     return name if isinstance(name, str) and name.strip() else None
+
+
+def score_bounds(test: dict) -> list[dict]:
+    """
+    Достижимый диапазон баллов теста — [{scale_name, min_score, max_score}].
+
+    Разбиение на шкалы и агрегация повторяют compute_result: тест считается
+    многошкальным, если шкала есть хотя бы у одного вопроса; scale_name=None —
+    итоговый балл одношкального теста. Тест без скорящихся вопросов даёт [].
+    """
+    method = test.get("scoring", "sum")
+    questions = test.get("questions") or []
+    multi_scale = any(_scale_of(q) for q in questions)
+
+    def _bounds_of(qs: list[dict]) -> Optional[tuple[int, int]]:
+        los, his = [], []
+        for q in qs:
+            lo, hi = min_question_score(q), max_question_score(q)
+            if lo is None or hi is None:   # free_text не участвует
+                continue
+            los.append(lo)
+            his.append(hi)
+        if not los:
+            return None
+        return _aggregate(los, method), _aggregate(his, method)
+
+    if multi_scale:
+        buckets: dict[str, list[dict]] = {}
+        for q in questions:
+            sname = _scale_of(q)
+            if sname:
+                buckets.setdefault(sname, []).append(q)
+        rows = []
+        for sname, qs in buckets.items():
+            b = _bounds_of(qs)
+            if b:
+                rows.append({"scale_name": sname, "min_score": b[0], "max_score": b[1]})
+        return rows
+
+    b = _bounds_of(questions)
+    return [{"scale_name": None, "min_score": b[0], "max_score": b[1]}] if b else []
 
 
 # ── основной расчёт ───────────────────────────────────────────────────────────

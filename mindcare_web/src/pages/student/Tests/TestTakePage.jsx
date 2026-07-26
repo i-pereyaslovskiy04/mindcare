@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../../../components/Icon/Icon';
 import Button from '../../../components/UI/Button/Button';
-import QuestionRenderer from './components/QuestionRenderer';
+import QuestionRenderer from '../../../features/tests/ui/QuestionRenderer';
 import ConsentGate from './components/ConsentGate';
 import {
   getTestForTake,
@@ -41,6 +41,7 @@ export default function TestTakePage() {
   const [invalid, setInvalid] = useState([]);       // question ids missing required
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
+  const [stale, setStale]     = useState(false);   // тест изменился, пока его проходили
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -94,6 +95,12 @@ export default function TestTakePage() {
       const result = await submitTest(uuid, payload);
       navigate(`/student/tests/results/${result.uuid}`, { replace: true });
     } catch (err) {
+      // Тест могли отредактировать, пока страница была открыта: id вопросов
+      // устарели и бэкенд их не признаёт. Сообщение об «ответе не из этого
+      // теста» студенту ничего не объясняет — предлагаем перезагрузить.
+      if (err?.status === 422 && /не из этого теста/i.test(err.message || '')) {
+        setStale(true);
+      }
       setError(err.message || 'Не удалось отправить ответы');
       setSubmitting(false);
     }
@@ -157,12 +164,24 @@ export default function TestTakePage() {
       {invalid.length > 0 && (
         <p className={styles.error}>Заполните обязательные вопросы (отмечены *).</p>
       )}
-      {error && <p className={styles.error}>{error}</p>}
+      {error && !stale && <p className={styles.error}>{error}</p>}
+      {stale && (
+        <p className={styles.error} role="alert">
+          Тест обновился, пока вы его проходили, — ответы отправить не удалось.
+          Обновите страницу и пройдите тест заново.
+        </p>
+      )}
 
       <div className={styles.submitRow}>
-        <Button variant="primary" loading={submitting} onClick={submit}>
-          Завершить и узнать результат
-        </Button>
+        {stale ? (
+          <Button variant="primary" onClick={() => window.location.reload()}>
+            Обновить страницу
+          </Button>
+        ) : (
+          <Button variant="primary" loading={submitting} onClick={submit}>
+            Завершить и узнать результат
+          </Button>
+        )}
       </div>
     </div>
   );

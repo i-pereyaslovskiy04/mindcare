@@ -173,3 +173,117 @@ def test_validate_answer_from_foreign_question():
     t = _test([_q(1, "single_choice", [_opt(1, 0), _opt(2, 1)], required=False)])
     with pytest.raises(ValueError, match="не из этого теста"):
         service._validate_answers(t, [{"question_id": 555, "option_id": 1}])
+
+
+# ── free_text: обязательный ответ не должен проходить пробелами ───────────────
+
+def _free_text_test(required=True):
+    return {
+        "scoring": "sum",
+        "interpretations": [],
+        "questions": [{
+            "id": 1, "question_text": "Опишите состояние", "question_order": 1,
+            "question_type": "free_text", "is_required": required,
+            "config": {}, "options": [],
+        }],
+    }
+
+
+def test_validate_required_free_text_rejects_blank():
+    with pytest.raises(ValueError, match="Текстовый ответ не может быть пустым"):
+        service._validate_answers(
+            _free_text_test(), [{"question_id": 1, "free_text_answer": "   "}],
+        )
+
+
+def test_validate_required_free_text_accepts_content():
+    service._validate_answers(
+        _free_text_test(), [{"question_id": 1, "free_text_answer": "тревожно"}],
+    )
+
+
+def test_validate_optional_free_text_allows_blank():
+    service._validate_answers(
+        _free_text_test(required=False),
+        [{"question_id": 1, "free_text_answer": ""}],
+    )
+
+
+# ── достижимый диапазон баллов (score_bounds) ─────────────────────────────────
+
+def _choice_q(qid, scores, scale=None, order=1):
+    return {
+        "id": qid, "question_text": f"Q{qid}", "question_order": order,
+        "question_type": "single_choice", "is_required": True,
+        "config": ({"scale": scale} if scale else {}),
+        "options": [
+            {"id": qid * 100 + i, "option_text": str(s), "option_order": i, "value_score": s}
+            for i, s in enumerate(scores)
+        ],
+    }
+
+
+def test_score_bounds_single_scale_sum():
+    t = {"scoring": "sum", "questions": [_choice_q(1, [0, 3]), _choice_q(2, [0, 3])]}
+    assert scoring.score_bounds(t) == [
+        {"scale_name": None, "min_score": 0, "max_score": 6},
+    ]
+
+
+def test_score_bounds_average_uses_same_aggregation():
+    t = {"scoring": "average", "questions": [_choice_q(1, [0, 2]), _choice_q(2, [0, 4])]}
+    assert scoring.score_bounds(t) == [
+        {"scale_name": None, "min_score": 0, "max_score": 3},
+    ]
+
+
+def test_score_bounds_negative_scores():
+    t = {"scoring": "sum", "questions": [_choice_q(1, [-2, 5])]}
+    assert scoring.score_bounds(t) == [
+        {"scale_name": None, "min_score": -2, "max_score": 5},
+    ]
+
+
+def test_score_bounds_multi_scale_split():
+    t = {"scoring": "sum", "questions": [
+        _choice_q(1, [0, 3], scale="Тревога"),
+        _choice_q(2, [0, 1], scale="Депрессия"),
+    ]}
+    assert sorted(scoring.score_bounds(t), key=lambda b: b["scale_name"]) == [
+        {"scale_name": "Депрессия", "min_score": 0, "max_score": 1},
+        {"scale_name": "Тревога", "min_score": 0, "max_score": 3},
+    ]
+
+
+def test_score_bounds_ignores_free_text():
+    free = {
+        "id": 9, "question_text": "F", "question_order": 2, "question_type": "free_text",
+        "is_required": False, "config": {}, "options": [],
+    }
+    t = {"scoring": "sum", "questions": [_choice_q(1, [0, 3]), free]}
+    assert scoring.score_bounds(t) == [
+        {"scale_name": None, "min_score": 0, "max_score": 3},
+    ]
+
+
+def test_score_bounds_empty_without_scored_questions():
+    assert scoring.score_bounds({"scoring": "sum", "questions": []}) == []
+
+
+def test_min_question_score_multiple_choice_requires_one_option():
+    # непустой набор обязателен → минимум = самый дешёвый одиночный вариант
+    q = {"question_type": "multiple_choice", "config": {},
+         "options": [{"id": 1, "value_score": 2}, {"id": 2, "value_score": 5}]}
+    assert scoring.min_question_score(q) == 2
+
+
+def test_min_question_score_multiple_choice_sums_negatives():
+    q = {"question_type": "multiple_choice", "config": {},
+         "options": [{"id": 1, "value_score": -2}, {"id": 2, "value_score": -3},
+                     {"id": 3, "value_score": 4}]}
+    assert scoring.min_question_score(q) == -5
+
+
+def test_min_question_score_scale_uses_config_min():
+    q = {"question_type": "scale", "config": {"min": 2, "max": 8}, "options": []}
+    assert scoring.min_question_score(q) == 2

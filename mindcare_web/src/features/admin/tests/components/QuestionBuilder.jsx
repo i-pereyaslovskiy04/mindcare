@@ -2,6 +2,7 @@ import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Select from '../../../../components/UI/Select/Select';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
+import { SCORED_TYPES, hasOptions } from '../lib/testShape';
 import styles from './QuestionBuilder.module.css';
 
 const TYPE_OPTIONS = [
@@ -11,7 +12,6 @@ const TYPE_OPTIONS = [
   { value: 'free_text',       label: 'Свободный ответ' },
 ];
 
-const hasOptions = (t) => t === 'single_choice' || t === 'multiple_choice';
 
 /**
  * Редактор списка вопросов теста. Полностью контролируемый: получает questions и
@@ -71,8 +71,31 @@ export default function QuestionBuilder({ questions, onChange, nextKey }) {
     patchQuestion(qIdx, { options: q.options.filter((_, i) => i !== oIdx) });
   };
 
+  // Правило «все шкалы или ни одной»: если шкала указана лишь у части вопросов,
+  // подсчёт молча выбросит остальные и итоговый балл станет пустым. Бэкенд это
+  // отвергает (422) — предупреждаем до сохранения.
+  const scored = questions.filter((q) => SCORED_TYPES.includes(q.question_type));
+  const withoutScale = scored.filter((q) => !q.scale.trim());
+  const partialScales = withoutScale.length > 0 && withoutScale.length !== scored.length;
+  const usedScales = [...new Set(scored.map((q) => q.scale.trim()).filter(Boolean))];
+
   return (
     <div className={styles.wrap}>
+      {partialScales && (
+        <p className={styles.scaleWarning} role="alert">
+          Шкала указана не у всех вопросов, участвующих в подсчёте
+          ({scored.length - withoutScale.length} из {scored.length}). Либо
+          заполните её везде, либо очистите везде: иначе вопросы без шкалы
+          выпадут из подсчёта.
+        </p>
+      )}
+
+      {usedScales.length > 0 && (
+        <datalist id="qb-scale-names">
+          {usedScales.map((name) => <option key={name} value={name} />)}
+        </datalist>
+      )}
+
       {questions.map((q, qIdx) => (
         <div key={q._key} className={styles.qCard}>
           <div className={styles.qHead}>
@@ -113,6 +136,7 @@ export default function QuestionBuilder({ questions, onChange, nextKey }) {
               <input
                 className={styles.input}
                 placeholder="напр. Тревога — или пусто"
+                list="qb-scale-names"
                 value={q.scale}
                 onChange={(e) => patchQuestion(qIdx, { scale: e.target.value })}
               />

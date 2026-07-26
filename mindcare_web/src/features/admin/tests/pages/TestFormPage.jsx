@@ -6,8 +6,12 @@ import Select from '../../../../components/UI/Select/Select';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
 import QuestionBuilder from '../components/QuestionBuilder';
+import { fromBackendQuestion, snapshotQuestions, snapshotInterps } from '../lib/testShape';
 import InterpretationBuilder from '../components/InterpretationBuilder';
-import { getAdminTest, createTest, updateTest } from '../../../../api/tests.api';
+import TestAnalysisPanel from '../components/TestAnalysisPanel';
+import TestPreviewModal from '../components/TestPreviewModal';
+import { useTestAnalysis } from '../hooks/useTestAnalysis';
+import { getAdminTest, createTest, updateTest, duplicateTest } from '../../../../api/tests.api';
 import { getAdminCategories } from '../../../../api/articles.api';
 import { getTagsPublic } from '../../../../api/tags.api';
 import styles from './TestFormPage.module.css';
@@ -29,63 +33,6 @@ const EMPTY = {
   interpretations: [],
 };
 
-// ── трансформации form ⇄ backend ──────────────────────────────────────────────
-
-function fromBackendQuestion(q, nextKey) {
-  const cfg = q.config || {};
-  return {
-    _key: nextKey(),
-    question_text: q.question_text || '',
-    question_type: q.question_type,
-    is_required: q.is_required,
-    scale: cfg.scale || '',
-    config: {
-      min: Number.isInteger(cfg.min) ? cfg.min : 0,
-      max: Number.isInteger(cfg.max) ? cfg.max : 10,
-      step: Number.isInteger(cfg.step) ? cfg.step : 1,
-    },
-    options: [...(q.options || [])]
-      .sort((a, b) => a.option_order - b.option_order)
-      .map((o) => ({ _key: nextKey(), option_text: o.option_text, value_score: o.value_score })),
-  };
-}
-
-function toBackendQuestion(q, index) {
-  const config = {};
-  if (q.scale && q.scale.trim()) config.scale = q.scale.trim();
-  if (q.question_type === 'scale') {
-    config.min = Number(q.config.min);
-    config.max = Number(q.config.max);
-    if (q.config.step && Number(q.config.step) !== 1) config.step = Number(q.config.step);
-  }
-  const out = {
-    question_text: q.question_text.trim(),
-    question_order: index,
-    question_type: q.question_type,
-    is_required: q.is_required,
-    config,
-    options: [],
-  };
-  if (q.question_type === 'single_choice' || q.question_type === 'multiple_choice') {
-    out.options = q.options.map((o, oi) => ({
-      option_text: o.option_text.trim(),
-      option_order: oi,
-      value_score: Number(o.value_score) || 0,
-    }));
-  }
-  return out;
-}
-
-function toBackendInterp(it) {
-  return {
-    scale_name: it.scale_name.trim() || null,
-    min_score: Number(it.min_score),
-    max_score: Number(it.max_score),
-    label: it.label.trim(),
-    recommendation: it.recommendation.trim() || null,
-  };
-}
-
 export default function TestFormPage() {
   const { uuid } = useParams();
   const navigate = useNavigate();
@@ -97,9 +44,23 @@ export default function TestFormPage() {
   const [loading, setLoading]   = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]       = useState('');
+  const [locked, setLocked]     = useState(false);   // 409: у теста есть результаты
+  const [duplicating, setDuplicating] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Исходное состояние дерева при загрузке — база для dirty-tracking.
+  const loadedQuestionsRef = useRef(null);
+  const loadedInterpsRef   = useRef(null);
 
   const keyRef = useRef(0);
   const nextKey = useCallback(() => `k${++keyRef.current}`, []);
+
+  // Диапазон баллов и дыры в порогах — считает бэкенд (единственный scoring)
+  const analysis = useTestAnalysis({
+    scoring: form.scoring,
+    questions: form.questions,
+    interpretations: form.interpretations,
+  });
 
   // справочники категорий/тегов
   useEffect(() => {
@@ -116,9 +77,26 @@ export default function TestFormPage() {
     if (!isEdit) return;
     let alive = true;
     setLoading(true);
+    // Переход на копию меняет только :uuid — компонент не размонтируется,
+    // поэтому баннер «есть результаты» и ошибку сбрасываем вручную.
+    setLocked(false);
+    setError('');
     getAdminTest(uuid)
       .then((t) => {
         if (!alive) return;
+        const questions = (t.questions || [])
+          .sort((a, b) => a.question_order - b.question_order)
+          .map((q) => fromBackendQuestion(q, nextKey));
+        const interpretations = (t.interpretations || []).map((it) => ({
+          _key: nextKey(),
+          scale_name: it.scale_name || '',
+          min_score: it.min_score,
+          max_score: it.max_score,
+          label: it.label || '',
+          recommendation: it.recommendation || '',
+        }));
+        loadedQuestionsRef.current = snapshotQuestions(questions);
+        loadedInterpsRef.current   = snapshotInterps(interpretations);
         setForm({
           title: t.title || '',
           description: t.description || '',
@@ -127,17 +105,8 @@ export default function TestFormPage() {
           is_active: t.is_active,
           category_ids: t.categories?.map((c) => c.id) || [],
           tag_uuids: t.tags?.map((tg) => tg.uuid) || [],
-          questions: (t.questions || [])
-            .sort((a, b) => a.question_order - b.question_order)
-            .map((q) => fromBackendQuestion(q, nextKey)),
-          interpretations: (t.interpretations || []).map((it) => ({
-            _key: nextKey(),
-            scale_name: it.scale_name || '',
-            min_score: it.min_score,
-            max_score: it.max_score,
-            label: it.label || '',
-            recommendation: it.recommendation || '',
-          })),
+          questions,
+          interpretations,
         });
       })
       .catch((err) => { if (alive) setError(`Не удалось загрузить тест: ${err.message}`); })
@@ -152,6 +121,7 @@ export default function TestFormPage() {
     if (submitting) return;
     setSubmitting(true);
     setError('');
+    setLocked(false);
 
     const payload = {
       title: form.title.trim(),
@@ -161,17 +131,40 @@ export default function TestFormPage() {
       is_active: form.is_active,
       category_ids: form.category_ids,
       tag_uuids: form.tag_uuids,
-      questions: form.questions.map(toBackendQuestion),
-      interpretations: form.interpretations.map(toBackendInterp),
     };
+
+    // При редактировании неизменённые коллекции не отправляем: PATCH частичный,
+    // а замена вопросов теста с результатами отвергается бэкендом (409).
+    const questions = snapshotQuestions(form.questions);
+    const interps   = snapshotInterps(form.interpretations);
+    if (!isEdit || questions !== loadedQuestionsRef.current) {
+      payload.questions = JSON.parse(questions);
+    }
+    if (!isEdit || interps !== loadedInterpsRef.current) {
+      payload.interpretations = JSON.parse(interps);
+    }
 
     try {
       if (isEdit) await updateTest(uuid, payload);
       else await createTest(payload);
       navigate('/admin/tests');
     } catch (err) {
+      if (err?.status === 409) setLocked(true);
       setError(err.message || 'Не удалось сохранить тест');
       setSubmitting(false);
+    }
+  }
+
+  async function handleDuplicate() {
+    if (duplicating) return;
+    setDuplicating(true);
+    setError('');
+    try {
+      const copy = await duplicateTest(uuid);
+      navigate(`/admin/tests/${copy.uuid}`);
+    } catch (err) {
+      setError(err.message || 'Не удалось создать копию теста');
+      setDuplicating(false);
     }
   }
 
@@ -187,7 +180,21 @@ export default function TestFormPage() {
 
       <h1 className={styles.title}>{isEdit ? 'Редактирование теста' : 'Новый тест'}</h1>
 
-      {error && <p className={styles.error}>{error}</p>}
+      {error && !locked && <p className={styles.error}>{error}</p>}
+
+      {locked && (
+        <div className={styles.lockedNotice} role="alert">
+          <p className={styles.lockedText}>
+            По этому тесту уже есть пройденные результаты, поэтому его вопросы
+            изменить нельзя — иначе ответы студентов потеряли бы смысл.
+            Создайте копию методики и правьте её: копия сохранится черновиком
+            и не появится в каталоге, пока вы её не активируете.
+          </p>
+          <Button variant="primary" onClick={handleDuplicate} loading={duplicating}>
+            Создать копию и править её
+          </Button>
+        </div>
+      )}
 
       {/* ── Основное ── */}
       <section className={styles.section}>
@@ -290,16 +297,45 @@ export default function TestFormPage() {
           onChange={(it) => set('interpretations', it)}
           nextKey={nextKey}
         />
+
+        <TestAnalysisPanel
+          data={analysis.data}
+          loading={analysis.loading}
+          error={analysis.error}
+        />
       </section>
 
       <div className={styles.footer}>
         <Button variant="secondary" onClick={() => navigate('/admin/tests')} disabled={submitting}>
           Отмена
         </Button>
+        <Button
+          variant="secondary"
+          onClick={() => setPreviewOpen(true)}
+          disabled={form.questions.length === 0}
+        >
+          Предпросмотр
+        </Button>
+        {isEdit && (
+          <Button variant="secondary" onClick={handleDuplicate} loading={duplicating}>
+            Дублировать
+          </Button>
+        )}
         <Button variant="primary" onClick={handleSubmit} loading={submitting}>
           {isEdit ? 'Сохранить изменения' : 'Создать тест'}
         </Button>
       </div>
+
+      {previewOpen && (
+        <TestPreviewModal
+          title={form.title}
+          description={form.description}
+          scoring={form.scoring}
+          questions={form.questions}
+          interpretations={form.interpretations}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </div>
   );
 }

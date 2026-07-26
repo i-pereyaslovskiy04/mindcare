@@ -8,8 +8,11 @@
 from typing import Optional
 
 from app.tests import storage, scoring
+from app.tests.storage import TestHasResults  # noqa: F401  (ре-экспорт для routes)
 
 _CHOICE_TYPES = {"single_choice", "multiple_choice"}
+# Типы, участвующие в подсчёте баллов (free_text — не участвует).
+_SCORED_TYPES = _CHOICE_TYPES | {"scale"}
 
 
 class ConsentRequired(Exception):
@@ -53,6 +56,41 @@ def _validate_questions(questions: list[dict]) -> None:
                 )
         # free_text — варианты/конфиг не требуются
 
+    _validate_scale_coverage(questions)
+
+
+def _scale_name(question: dict) -> Optional[str]:
+    """Имя шкалы вопроса из config['scale']; пустая строка → None."""
+    name = (question.get("config") or {}).get("scale")
+    return name.strip() if isinstance(name, str) and name.strip() else None
+
+
+def _validate_scale_coverage(questions: list[dict]) -> None:
+    """
+    Правило «все шкалы или ни одной».
+
+    scoring.compute_result считает тест многошкальным, если шкала указана хотя бы
+    у одного вопроса, и молча выбрасывает из подсчёта все вопросы без шкалы
+    (total_score при этом становится NULL). Частично заполненные шкалы — почти
+    всегда недосмотр в конструкторе, поэтому ловим их на сохранении, а не молча
+    теряем вопросы при прохождении.
+    """
+    scored = [
+        (idx, q) for idx, q in enumerate(questions, start=1)
+        if q["question_type"] in _SCORED_TYPES
+    ]
+    if not scored:
+        return
+
+    without = [idx for idx, q in scored if _scale_name(q) is None]
+    if without and len(without) != len(scored):
+        listed = ", ".join(f"#{i}" for i in without)
+        raise ValueError(
+            "Шкала указана не у всех вопросов: если тест многошкальный, шкала "
+            f"обязательна для каждого вопроса, участвующего в подсчёте. "
+            f"Без шкалы: {listed}"
+        )
+
 
 def _validate_interpretations(interpretations: list[dict]) -> None:
     if not interpretations:
@@ -90,6 +128,137 @@ def _normalize(data: dict) -> dict:
     return data
 
 
+# ── анализ порогов интерпретации ──────────────────────────────────────────────
+
+def analyze_test(test: dict) -> dict:
+    """
+    Достижимый диапазон баллов + проблемы порогов интерпретации.
+
+    Это предупреждения, а не ошибки валидации, и намеренно: правило можно
+    проверить только когда известны И вопросы, И пороги, а PATCH частичный
+    (можно прислать одни interpretations). Наполовину применённое правило хуже
+    отсутствующего — поэтому 422 здесь не поднимаем, а показываем автору
+    в конструкторе.
+
+    kind:
+      gap           — диапазон баллов, не покрытый ни одним порогом
+                      (студент получит результат без расшифровки);
+      out_of_range  — порог целиком вне достижимого диапазона (недостижим);
+      unknown_scale — порог ссылается на шкалу, которой нет ни у одного вопроса.
+    """
+    bounds = scoring.score_bounds(test)
+    interpretations = test.get("interpretations") or []
+    by_scale = {b["scale_name"]: b for b in bounds}
+    issues: list[dict] = []
+
+    if not bounds:
+        return {"score_bounds": [], "issues": []}   # черновик без скорящихся вопросов
+
+    for i in interpretations:
+        scale = i.get("scale_name")
+        b = by_scale.get(scale)
+        if b is None:
+            issues.append({
+                "scale_name": scale, "min_score": i["min_score"],
+                "max_score": i["max_score"], "kind": "unknown_scale",
+                "label": i.get("label"),
+            })
+        elif i["max_score"] < b["min_score"] or i["min_score"] > b["max_score"]:
+            issues.append({
+                "scale_name": scale, "min_score": i["min_score"],
+                "max_score": i["max_score"], "kind": "out_of_range",
+                "label": i.get("label"),
+            })
+
+    for b in bounds:
+        scale = b["scale_name"]
+        items = sorted(
+            (i for i in interpretations if i.get("scale_name") == scale),
+            key=lambda x: x["min_score"],
+        )
+        if not items:
+            continue   # интерпретация вообще не задана — это черновик, не дыра
+
+        cursor = b["min_score"]
+        for i in items:
+            if i["min_score"] > cursor:
+                issues.append({
+                    "scale_name": scale, "min_score": cursor,
+                    "max_score": min(i["min_score"] - 1, b["max_score"]),
+                    "kind": "gap", "label": None,
+                })
+            cursor = max(cursor, i["max_score"] + 1)
+            if cursor > b["max_score"]:
+                break
+        if cursor <= b["max_score"]:
+            issues.append({
+                "scale_name": scale, "min_score": cursor,
+                "max_score": b["max_score"], "kind": "gap", "label": None,
+            })
+
+    return {
+        "score_bounds": bounds,
+        "issues": [i for i in issues if i["min_score"] <= i["max_score"]],
+    }
+
+
+def preview_score(data: dict) -> dict:
+    """
+    Пробный подсчёт несохранённого дерева — тот же scoring.compute_result, что
+    у студента. Ничего не пишет в БД.
+
+    Дерево ещё не сохранено, поэтому вопросы адресуются по question_order, а
+    варианты по option_order; здесь мы синтезируем такие же id, какие рисует
+    конструктор в предпросмотре (см. lib/testShape.toPreviewQuestions), и
+    отдаём их обычному скорингу.
+
+    Обязательность вопросов НЕ проверяется намеренно: автор пробует частичные
+    наборы ответов, а неотвеченный вопрос даёт 0 — как и в compute_result.
+    """
+    questions = data.get("questions") or []
+    prepared, by_order = [], {}
+    for q in questions:
+        order = q["question_order"]
+        qid = order + 1
+        prepared_q = {
+            **q,
+            "id": qid,
+            "options": [
+                {**o, "id": qid * 1000 + o["option_order"]}
+                for o in (q.get("options") or [])
+            ],
+        }
+        prepared.append(prepared_q)
+        by_order[order] = prepared_q
+
+    answers = []
+    for a in data.get("answers") or []:
+        q = by_order.get(a["question_order"])
+        if q is None:
+            continue
+        ans = {"question_id": q["id"]}
+        if a.get("option_order") is not None:
+            ans["option_id"] = q["id"] * 1000 + a["option_order"]
+        if a.get("selected_option_orders"):
+            ans["selected_options"] = [
+                q["id"] * 1000 + o for o in a["selected_option_orders"]
+            ]
+        if a.get("scale_value") is not None:
+            ans["scale_value"] = a["scale_value"]
+        if a.get("free_text_answer") is not None:
+            ans["free_text_answer"] = a["free_text_answer"]
+        answers.append(ans)
+
+    return scoring.compute_result(
+        {
+            "scoring": data.get("scoring", "sum"),
+            "questions": prepared,
+            "interpretations": data.get("interpretations") or [],
+        },
+        answers,
+    )
+
+
 # ── public API ────────────────────────────────────────────────────────────────
 
 def list_tests(
@@ -109,7 +278,19 @@ def create_test(data: dict, created_by: int) -> dict:
 
 def update_test(uuid: str, data: dict) -> dict:
     data = _normalize(data)
+    if data.get("questions") is not None and storage.test_has_results(uuid):
+        raise TestHasResults(
+            "По этому тесту уже есть результаты — его вопросы изменить нельзя. "
+            "Создайте копию методики и правьте её."
+        )
     result = storage.update_test(uuid, data)
+    if result is None:
+        raise ValueError("Тест не найден")
+    return result
+
+
+def duplicate_test(uuid: str, created_by: int) -> dict:
+    result = storage.duplicate_test(uuid, created_by=created_by)
     if result is None:
         raise ValueError("Тест не найден")
     return result
@@ -223,6 +404,11 @@ def _validate_answers(test: dict, answers: list[dict]) -> None:
             val = a.get("scale_value")
             if val is None or (isinstance(lo, int) and val < lo) or (isinstance(hi, int) and val > hi):
                 raise ValueError("Значение шкалы вне допустимого диапазона")
+        elif qtype == "free_text":
+            # обязательный free_text не должен проходить пробелами: фронт делает
+            # trim в isAnswered, но на сервер полагаться нельзя только на фронт
+            if q["is_required"] and not (a.get("free_text_answer") or "").strip():
+                raise ValueError("Текстовый ответ не может быть пустым")
 
 
 def submit_test(

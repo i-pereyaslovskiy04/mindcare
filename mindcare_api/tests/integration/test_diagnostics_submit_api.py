@@ -160,3 +160,167 @@ def test_result_is_private_to_owner(client, test_email, made_test):
     other_headers = _login(client, f"integ_other_{_uuid.uuid4().hex[:8]}@example.com")
     r = client.get(f"/api/tests/results/{result_uuid}", headers=other_headers)
     assert r.status_code == 404, r.text
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0-1: правка теста с результатами · P0-3: шифрование свободного текста
+# ══════════════════════════════════════════════════════════════════════════════
+
+from app.core.encryption import ENCRYPTION_PREFIX, decrypt_text  # noqa: E402
+from app.db.models import Question as QuestionModel, StudentAnswer  # noqa: E402
+from app.tests import service as tests_service  # noqa: E402
+
+
+def _make_test_with_free_text(created_by_email):
+    with SessionLocal() as db:
+        from app.db.models import User
+        uid = db.query(User.id).filter(User.email == created_by_email).scalar()
+    data = {
+        "title": f"INTEG FreeText {_uuid.uuid4().hex[:6]}",
+        "description": None, "scoring": "sum", "max_score": None,
+        "time_limit_min": None, "is_active": True,
+        "category_ids": [], "tag_uuids": [],
+        "questions": [
+            {"question_text": "Q1", "question_order": 1, "question_type": "single_choice",
+             "is_required": True, "config": {},
+             "options": [{"option_text": "нет", "option_order": 0, "value_score": 0},
+                         {"option_text": "да", "option_order": 1, "value_score": 3}]},
+            {"question_text": "Опишите состояние", "question_order": 2,
+             "question_type": "free_text", "is_required": True, "config": {}, "options": []},
+        ],
+        "interpretations": [],
+    }
+    return tests_storage.create_test(data, created_by=uid)
+
+
+@pytest.fixture
+def free_text_test(test_email):
+    test = _make_test_with_free_text(test_email)
+    try:
+        yield test
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
+def test_free_text_answer_stored_encrypted(client, test_email, free_text_test):
+    """Свободный текст ответа не должен лежать в БД открытым (ФЗ-152)."""
+    headers = _login(client, test_email)
+    client.post("/api/tests/consent/accept", headers=headers)
+
+    secret = f"мне тревожно {_uuid.uuid4().hex[:8]}"
+    q1, q2 = free_text_test["questions"]
+    r = client.post(
+        f"/api/tests/{free_text_test['uuid']}/submit",
+        json={"answers": [
+            {"question_id": q1["id"], "option_id": q1["options"][1]["id"]},
+            {"question_id": q2["id"], "free_text_answer": secret},
+        ]},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+
+    with SessionLocal() as db:
+        stored = (
+            db.query(StudentAnswer.free_text_answer_enc)
+            .filter(StudentAnswer.question_id == q2["id"])
+            .scalar()
+        )
+    assert stored, "свободный ответ не сохранился"
+    assert stored.startswith(ENCRYPTION_PREFIX)
+    assert secret not in stored
+    assert decrypt_text(stored) == secret
+
+
+def test_blank_required_free_text_rejected(client, test_email, free_text_test):
+    headers = _login(client, test_email)
+    client.post("/api/tests/consent/accept", headers=headers)
+    q1, q2 = free_text_test["questions"]
+    r = client.post(
+        f"/api/tests/{free_text_test['uuid']}/submit",
+        json={"answers": [
+            {"question_id": q1["id"], "option_id": q1["options"][1]["id"]},
+            {"question_id": q2["id"], "free_text_answer": "   "},
+        ]},
+        headers=headers,
+    )
+    assert r.status_code == 422, r.text
+
+
+def _submit_once(client, test_email, made_test):
+    headers = _login(client, test_email)
+    client.post("/api/tests/consent/accept", headers=headers)
+    q1, q2 = made_test["questions"]
+    r = client.post(
+        f"/api/tests/{made_test['uuid']}/submit",
+        json={"answers": [
+            {"question_id": q1["id"], "option_id": q1["options"][1]["id"]},
+            {"question_id": q2["id"], "option_id": q2["options"][0]["id"]},
+        ]},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+
+
+def test_editing_questions_with_results_raises_not_500(client, test_email, made_test):
+    """
+    До фикса замена вопросов упиралась в FK student_answers→questions (RESTRICT)
+    и вылетала IntegrityError → HTTP 500. Теперь — доменная ошибка (HTTP 409).
+    """
+    _submit_once(client, test_email, made_test)
+
+    new_questions = [{
+        "question_text": "Изменённый вопрос", "question_order": 1,
+        "question_type": "single_choice", "is_required": True, "config": {},
+        "options": [{"option_text": "a", "option_order": 0, "value_score": 0},
+                    {"option_text": "b", "option_order": 1, "value_score": 1}],
+    }]
+    with pytest.raises(tests_service.TestHasResults):
+        tests_service.update_test(made_test["uuid"], {"questions": new_questions})
+
+    # вопросы остались нетронутыми
+    with SessionLocal() as db:
+        t = db.query(TestModel).filter(
+            TestModel.uuid == _uuid.UUID(made_test["uuid"])
+        ).first()
+        texts = [
+            q.question_text for q in
+            db.query(QuestionModel).filter(QuestionModel.test_id == t.id).all()
+        ]
+    assert sorted(texts) == ["Q1", "Q2"]
+
+
+def test_metadata_edit_allowed_when_results_exist(client, test_email, made_test):
+    """Переименование теста с результатами обязано проходить: FK держит вопросы, не заголовок."""
+    _submit_once(client, test_email, made_test)
+    updated = tests_service.update_test(
+        made_test["uuid"], {"title": "Переименованный INTEG тест"},
+    )
+    assert updated["title"] == "Переименованный INTEG тест"
+    assert len(updated["questions"]) == 2
+
+
+def test_duplicate_test_copies_tree_as_draft(test_email, made_test):
+    with SessionLocal() as db:
+        from app.db.models import User
+        uid = db.query(User.id).filter(User.email == test_email).scalar()
+
+    copy = tests_service.duplicate_test(made_test["uuid"], created_by=uid)
+    try:
+        assert copy["uuid"] != made_test["uuid"]
+        assert copy["is_active"] is False          # копия — черновик
+        assert copy["version"] == 1
+        assert copy["title"].endswith("(копия)")
+        assert len(copy["questions"]) == 2
+        assert [o["value_score"] for o in copy["questions"][0]["options"]] == [0, 3]
+        assert len(copy["interpretations"]) == 2
+
+        # у копии нет результатов → её вопросы редактируются свободно
+        edited = tests_service.update_test(copy["uuid"], {"questions": [{
+            "question_text": "Новый Q", "question_order": 1,
+            "question_type": "single_choice", "is_required": True, "config": {},
+            "options": [{"option_text": "a", "option_order": 0, "value_score": 0},
+                        {"option_text": "b", "option_order": 1, "value_score": 2}],
+        }]})
+        assert [q["question_text"] for q in edited["questions"]] == ["Новый Q"]
+    finally:
+        _hard_delete_test(copy["uuid"])

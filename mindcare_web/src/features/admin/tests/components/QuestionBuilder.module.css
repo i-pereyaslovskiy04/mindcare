@@ -4,6 +4,18 @@
   gap: 14px;
 }
 
+/* Частично заполненные шкалы — вопросы без шкалы выпадут из подсчёта */
+.scaleWarning {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-main);
+  background: rgba(var(--error-rgb), 0.08);
+  border: 1px solid rgba(var(--error-rgb), 0.24);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
 .qCard {
   border: 1px solid var(--nav-border);
   border-radius: 14px;
