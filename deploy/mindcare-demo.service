@@ -1,6 +1,6 @@
 [Unit]
 Description=MindCare demo stand (FastAPI API + built SPA) on :3000
-Documentation=file:///media/data2/psycho/mindcare/CLAUDE.md
+Documentation=file:///media/data2/projects/mindcare/CLAUDE.md
 After=network-online.target postgresql.service
 Wants=network-online.target
 Requires=postgresql.service
@@ -9,9 +9,9 @@ Requires=postgresql.service
 Type=simple
 User=vitbo
 Group=vitbo
-WorkingDirectory=/media/data2/psycho/mindcare/mindcare_api
+WorkingDirectory=/media/data2/projects/mindcare/mindcare_api
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/media/data2/psycho/mindcare/mindcare_api/.venv/bin/uvicorn serve_demo:app --host 0.0.0.0 --port 3000 --workers 1 --no-access-log
+ExecStart=/media/data2/projects/mindcare/mindcare_api/.venv/bin/uvicorn serve_demo:app --host 0.0.0.0 --port 3000 --workers 1 --no-access-log
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
