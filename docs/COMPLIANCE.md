@@ -1,7 +1,12 @@
 # ФЗ-152 Compliance Checklist
 
 Статус выполнения требований ФЗ-152 «О персональных данных» для платформы MindCare.
-Последнее обновление: 2026-07-16.
+Последнее обновление: 2026-08-20.
+
+Этот документ фиксирует техническое состояние реализации и открытые вопросы.
+Он не является юридическим заключением и сам по себе не подтверждает
+соответствие требованиям законодательства; итоговую оценку даёт
+DPO/ответственное лицо.
 
 ---
 
@@ -105,7 +110,8 @@
   реактивируется PATCH `is_active=true`. Последний активный домен отключить нельзя.
 - Add/disable/reactivate/update фиксируются в `audit_log`. Сырой admin comment в
   audit metadata не копируется, потому что в нём могут случайно оказаться ПДн;
-  сохраняются domain, состояния before/after и `comment_changed`.
+  metadata остаётся пустой, target определяется через
+  `entity_type="allowed_email_domain"` / `entity_id`.
 - Начальный seed — техническая стартовая конфигурация. Динамический allowlist
   является организационной политикой MindCare и не должен описываться как
   официальный, исчерпывающий или автоматически следующий из закона перечень
@@ -133,9 +139,10 @@
 
 Реализация:
 - core-запись атомарна: `User` + `UserRole(student)` + `ConsentRecord[]`
-  (privacy_policy + data_processing) + опц. active `TherapyEngagement` + `AuditLog`
-  в одной транзакции/одном commit; `AuditLog` обязателен и не swallow'ится (его сбой
-  откатывает всю запись); сбой валидации психолога не оставляет студента-orphan;
+  (privacy_policy + data_processing) + опц. active `TherapyEngagement` + audit-event
+  в одной транзакции/одном commit; audit стейджится через facade и не swallow'ится
+  (его сбой откатывает всю запись); сбой валидации психолога не оставляет
+  студента-orphan;
 - `consent_records.ip_address/user_agent` = контекст запроса staff, в котором согласие
   внесено (личность actor — в `audit_log`);
 - post-commit (soft-fail): привязка карточки незарег. студента по `normalized_email`,
@@ -178,7 +185,7 @@ Encryption-at-rest защищает от утечки БД; политика д�
 - **psychologist** — создаёт/читает/обновляет только свои заметки (с content)
 - **supervisor** — список: metadata-only; чтение конкретной заметки: content
   разрешён, но **каждое такое чтение пишется в `audit_log`**
-  (`session_note_content_read`: actor, role, note id, author_id, IP/UA)
+  (`session_note_content_read`: actor, role, target note id, IP/UA; metadata пустая)
 - **admin** — metadata-only везде (`content_available: false`);
   расшифрованный терапевтический content админу не предоставляется;
   metadata-путь вообще не вызывает decrypt
@@ -274,28 +281,46 @@ Encryption-at-rest защищает от утечки БД; политика д�
   деплое нужен user-timezone header
 
 ### Аудит auth-событий (`auth_log`)
-Логируются через `log_auth_event` из `app/auth/audit.py`:
+Все события пишутся через единый `app.audit.record_event()` и закрытый registry;
+legacy-модуль `app/auth/audit.py` удалён. В `auth_log` находятся ровно семь
+канонических событий аутентификации и жизненного цикла сессии:
 
-| Событие | Где логируется |
-|---------|----------------|
-| `register` | `auth/routes.py` |
-| `login` | `auth/routes.py` |
-| `failed_login` | `auth/routes.py` |
-| `logout` | `auth/routes.py` |
-| `password_reset` | `auth/routes.py` |
-| `password_change` | `auth/routes.py` |
-| `admin_create_user:{uuid}` | `users/routes_admin.py` |
-| `admin_update_user:{uuid}` | `users/routes_admin.py` |
-| `admin_delete_user:{uuid}` | `users/routes_admin.py` |
+| События | Семантика |
+|---------|-----------|
+| `registration_succeeded`, `registration_failed` | результат регистрации |
+| `login`, `failed_login`, `logout` | жизненный цикл сессии |
+| `password_change`, `password_reset` | изменение/сброс пароля |
 
-UUID цели закодирован в строке события (временное решение, см. ADR-006 в DECISIONS.md).
+Admin CRUD, роли, self-profile и прочие бизнес-события пишутся в `audit_log`, где
+`user_id`/`user_role` — actor, а `entity_type`/`entity_id` — target. UUID не
+кодируется в `event_type`; ожидаемые business-failure используют стабильные
+`failure_reason_code`. Каноника — ADR-006 (SUPERSEDED) и текущий audit registry.
 
 ### Soft delete
 - Физического удаления пользователей нет — только `deleted_at + is_active=False`
 - При soft delete отзываются все активные сессии пользователя
 
-### Анонимизация IP
-- Функция `anonymize_old_ips()` в БД — IP-адреса анонимизируются через 90 дней
+### Анонимизация IP (Stage 7)
+- Охват — **только три audit-журнала**: `audit_log`, `auth_log`, `data_change_log`.
+  `user_sessions`, `consent_records`, `user_legal_basis_records` НЕ затрагиваются:
+  там IP другого назначения (активная сессия, доказательство согласия,
+  документированное основание), и решение по ним остаётся за DPO
+- Механизм: `public.anonymize_old_ips(integer)` (ревизия `c8e2b5f7a3d1`) обнуляет
+  `ip_address` строк старше границы; парная `public.count_old_ips(integer)` —
+  строго read-only счётчик для dry-run
+- **Анонимизация не выполняется сама по себе.** Функцию вызывает
+  `scripts/anonymize_old_ips.py`; его таймер `mindcare-anonymize-ips.timer`
+  `deploy.sh` устанавливает, но **не активирует** — первый прогон необратим.
+  Пока таймер не включён оператором, IP хранятся бессрочно
+- Историческая справка: до Stage 7 функция существовала только в legacy
+  bootstrap-SQL (`db/sql/`), не входила в Alembic-цепочку и не имела ни одного
+  вызывающего. На стендах, развёрнутых через Alembic, 90-дневная анонимизация
+  фактически **не происходила**, хотя документация её обещала
+- Источник IP — `request.client.host`. За reverse-proxy это адрес прокси, а не
+  конечного пользователя; доверенные прокси (`X-Forwarded-For` / `X-Real-IP`) —
+  отдельный этап, см. `docs/BACKLOG.md`
+- Порядок ввода в эксплуатацию и мониторинг —
+  [`deploy/STAGE_7_DEPLOYMENT.md`](../deploy/STAGE_7_DEPLOYMENT.md)
 
 ### Сессии (Stage 22b — hashed tokens)
 - Сессии хранятся в `user_sessions`, не в JWT
@@ -330,16 +355,20 @@ UUID цели закодирован в строке события (време�
 
 ## ⚠️ Частично реализовано / требует улучшения
 
-### Аудит admin-операций
-- Операции над пользователями логируются, но UUID цели закодирован в строке события
-- Нет поля `target_user_id` в `auth_log` — затруднён поиск по конкретному субъекту ПДн
-- Неуспешные admin-операции не логируются
-- В бэклоге: `BACKLOG.md §🔵`
+### ~~Аудит admin-операций~~ ✅ Закрыто (Stages 3–6)
+- Actor и target разделены структурно в `audit_log`; `target_user_id` в
+  `auth_log` не требуется.
+- Success и ожидаемые типизированные failure-события используют стабильный
+  registry и `outcome`/`failure_reason_code`.
+- Generic UPDATE пользователей дополнительно пишет только имена allowlisted
+  изменённых полей в минимизированный `data_change_log`; значения ПДн не копируются.
 
 ### Партиции audit-таблиц
 - Начальные партиции 2026-01..2028-12 созданы миграцией `3a7c5e2b8f1d`
 - Будущие партиции управляются через `scripts/ensure_audit_partitions.py --months-ahead 24`
-- Запускать заблаговременно (рекомендуется раз в год через cron)
+- Начиная со Stage 7 ежемесячный `mindcare-ensure-audit-partitions.timer`
+  устанавливается и автоматически активируется через `deploy.sh`; скрипт только
+  создаёт будущие партиции и не удаляет старые строки/партиции
 - Статус: закрыто в `BACKLOG.md §🔴`
 
 ### Право на удаление данных
@@ -360,4 +389,5 @@ UUID цели закодирован в строке события (време�
 | Вложения чата (metadata + файл на FS) | `chat_attachments` + `CHAT_FILE_STORAGE_DIR` | Специальные категории |
 | Дневник студента (mood, текст, эмоции) | `diary_entries` | Специальные категории |
 | Записи на консультации | `appointments` | Базовые ПДн |
-| IP-адреса | `auth_log` | Анонимизируются через 90 дней |
+| IP-адреса (audit-журналы) | `auth_log`, `audit_log`, `data_change_log` | Обнуляются через 90 дней — но ТОЛЬКО при включённом `mindcare-anonymize-ips.timer` (по умолчанию не активирован) |
+| IP-адреса (вне audit-журналов) | `user_sessions`, `consent_records`, `user_legal_basis_records`, `refresh_tokens` | НЕ анонимизируются; хранятся бессрочно. Политика — открытый вопрос DPO |

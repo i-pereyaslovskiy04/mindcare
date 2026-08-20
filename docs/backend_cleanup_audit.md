@@ -2,6 +2,12 @@
 > Generated: 2026-05-21 | Branch: dev_integration_backend_frontend  
 > Scope: `mindcare_api/app/` + supporting files  
 > Method: full file read + import graph traversal + runtime usage analysis
+>
+> ⚠️ **Historical snapshot, не source of truth.** Упоминания
+> `app/auth/audit.py::log_auth_event` ниже описывают состояние на дату снимка:
+> legacy-helper удалён, текущая точка входа — `app.audit.record_event()`, а
+> канонические правила и обязательный audit-impact review находятся в
+> `CLAUDE.md` и `docs/QUALITY_CHECKLIST.md`.
 
 ---
 

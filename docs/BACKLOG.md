@@ -119,7 +119,10 @@
   optimization: `get_current_user` по-прежнему делает `find_session` +
   `touch_session` (теперь чаще no-op) + `find_user_by_id` отдельными
   транзакциями; объединение в одну сессию — отдельный этап
-- **`target_user_id` в auth_log** — см. 🔵-секцию (ADR-006)
+- ~~**`target_user_id` в auth_log**~~ ✅ Решено иначе (ADR-006 superseded) — см.
+  «Аудит-лог admin-операций: добавить target_user_id» ниже: admin CRUD → `audit_log`,
+  `user_id`/`user_role` = actor, `entity_type`/`entity_id` = target,
+  `target_user_id` в `auth_log` не вводится
 - **~~Legal basis при смене роли через `PATCH /api/admin/users`~~** ✅ Закрыто (Stage 31f-fix)
   - Исторический single-role этап; текущий set-based контракт реализован в ADR-018
     и описан в `docs/HANDOFFS/2026-07-14-multi-role-user-model-complete.md`.
@@ -419,11 +422,21 @@
 
 ## 🟢 Технический долг (не срочно)
 
-**IP-адрес в аудит-логе некорректен за proxy/nginx**
+**IP-адрес в аудит-логе некорректен за proxy/nginx** (открыт; вне Stage 7)
 - `request.client.host` возвращает IP прокси-сервера, а не реального пользователя
 - В продакшене нужно читать `X-Forwarded-For` или `X-Real-IP` из заголовков
 - Решение: добавить хелпер `get_client_ip(request)` в `app/core/` который проверяет заголовки прокси, и использовать его во всех роутерах
 - Файлы: `app/users/routes_admin.py`, `app/tags/routes_admin.py`, `app/auth/routes.py`
+- **Принцип (зафиксирован Stage 7, реализация отложена):** `X-Forwarded-For` /
+  `X-Real-IP` нельзя доверять от произвольного клиента — их подделывает кто
+  угодно. Учитывать заголовки допустимо ТОЛЬКО при явно настроенном списке
+  доверенных proxy/CIDR; без такой настройки authoritative source остаётся
+  `request.client.host`. Именно поэтому `app/audit/request_context.py` эти
+  заголовки не читает вовсе. Решение о proxy topology нельзя принимать без
+  deployment-контекста конкретного стенда
+- Stage 7 это НЕ исправляет: он обнуляет тот IP, который фактически записан
+  (то есть за proxy — адрес proxy). Формулировки в `CLAUDE.md` и
+  `docs/COMPLIANCE.md` это оговаривают явно
 
 **Документирование HTTP-статусов ошибок в OpenAPI (Swagger)**
 - FastAPI автоматически документирует только 200/201/204 — ошибочные статусы (400, 404, 409, 422) не видны в Swagger без явного указания
@@ -554,24 +567,105 @@
 - Решение: реактивировать старую запись по аналогии с `reactivate_user()` в `auth/storage.py`
 - Файл: `mindcare_api/app/users/storage.py` → `create_user()`
 
-**`data_change_log` не используется; `audit_log` используется точечно**
-- `audit_log` уже пишет системные события в модулях chat, session_notes и supervisor
-  (например staff-доступ к content заметки, создание беседы, создание walk-in/student flows)
-- `data_change_log` пока не используется для old/new значений при изменении данных
-  (требование ФЗ-152 к прослеживаемости остаётся открытым)
-- Нужно решить: писать изменения вручную через хелпер (`log_data_change(table, record_id, old, new)`)
-  или через PostgreSQL-триггеры
-- Актуально для таблиц с ПДн: `users`, `student_profiles`, `psychologist_profiles`,
-  `session_notes`, `appointments`, `unregistered_student_cards`
-- Файлы: создать `app/audit/service.py`, подключить в модули, которые меняют ПДн
+**~~`data_change_log` не используется~~** ✅ Технический пробел закрыт (Stage 6)
+- `data_change_log` теперь имеет production-writer `record_data_change()`
+  (`app/audit/data_change.py`) с закрытым `CHANGE_REGISTRY`: 4 таблицы, 25 полей
+  (15 name-only, 10 value-enabled), 1 derived-поле. Обоснование — ADR-021
+- **Охват намеренно ОГРАНИЧЕН четырьмя generic UPDATE-потоками** — это НЕ покрытие
+  всех таблиц с ПДн:
+  - `app/appointments/storage.py::update_meeting_type`
+  - `app/appointments/storage.py::update_group_session`
+  - `app/appointments/storage.py::update_unregistered_student_card`
+  - `app/users/storage.py::_apply_role_and_scalar_changes`
+  Ровно эти четыре call site проверяются AST-тестом
+  `tests/test_data_change_callsites_ast.py`
+- **Значения ПДн НЕ сохраняются штатным путём.** Штатные Stage 6 call sites для
+  `users` и `unregistered_student_cards` всегда передают values=None, поэтому
+  создаваемые ими строки имеют `old_values`/`new_values IS NULL` — журналируются
+  только ИМЕНА изменённых полей. Это application-инвариант, а не DB-гарантия:
+  исторические строки и привилегированный прямой SQL находятся вне него.
+  old/new допускаются лишь per-field opt-in и только для нечувствительных
+  enum/bool/int в `meeting_types`/`group_sessions`
+- Legacy PostgreSQL-функция `log_data_change(...)`, принимавшая полные old/new,
+  удалена миграцией `d4a7b2c9f6e1`; PostgreSQL-триггеры как источник записи
+  отвергнуты (ADR-021 §1)
+- Формулировка о «требовании ФЗ-152» снята: журнал — **техническая мера
+  прослеживаемости**, а не утверждение о соответствии законодательству
+- **Остаётся вне охвата** (отдельные решения, не Stage 6): `student_profiles`,
+  `psychologist_profiles`, `session_notes`, `appointments`, контент-CRUD,
+  self-profile flow (`app/auth/*`). `profile_updated.metadata.fields`
+  журналирует ТОЛЬКО имена self-profile полей `users.full_name`/`users.phone`
+  и НЕ распространяется на `student_profiles`/`psychologist_profiles` — эти две
+  таблицы полностью вне Stage 6 и вне какого-либо field-level журнала
 
-**Аудит-лог admin-операций: добавить target_user_id и логировать неудачи**
-- `log_auth_event` не имеет поля `target_user_id` — нельзя ответить «когда и кем изменён конкретный пользователь»
-- Сейчас uuid цели закодирован в строке события (`admin_create_user:{uuid}`) — костыль
-- Правильное решение: добавить `target_user_id` в модель `AuthLog` + параметр в `log_auth_event` + миграция БД
-- Дополнительно: логировать неуспешные операции (`success=False`) в except-блоках
-- Файлы: `mindcare_api/app/db/models/audit.py`, `mindcare_api/app/auth/audit.py`,
-  `mindcare_api/app/users/routes_admin.py`, новая Alembic-миграция
+**~~Аудит-лог admin-операций: добавить target_user_id~~** ✅ Решено иначе (Stage 3 / 4B-4)
+- Итоговое решение — НЕ расширять `auth_log`, а перенести admin CRUD в `audit_log`,
+  где actor и target разделены структурно:
+  - `audit_log.user_id` / `user_role` — **actor** (кто совершил действие);
+  - `audit_log.entity_type` / `entity_id` — **target** (над чем);
+  - `target_user_id` в `auth_log` **не нужен и не вводится** — этот журнал покрывает
+    только аутентификацию и жизненный цикл сессии
+- Legacy-формат «UUID в строке события» (`admin_create_user:{uuid}`) больше НЕ
+  является текущим решением: имена событий — стабильный snake_case из закрытого
+  registry. ADR-006 помечен SUPERSEDED
+- Логирование неуспешных операций закрыто отдельно: `audit_log.outcome` /
+  `failure_reason_code` (миграция `f2a9c4e7b1d8`) + durable `*_failed` события
+- «Какие именно поля изменились» покрывает `data_change_log` (ADR-021)
+
+**🟣 Открытые решения DPO/ответственного лица по `data_change_log`**
+
+Stage 6 закрыл техническую часть; перечисленное ниже **НЕ решено** и требует
+решения ответственного лица, а не инженерного изменения:
+
+- **Retention `data_change_log`** — журнал append-only и не очищается; срок
+  хранения не определён
+- ~~**Применимость 90-дневной анонимизации IP** (`anonymize_old_ips`) к этому
+  журналу~~ ✅ Техническая часть закрыта (Stage 7): `data_change_log` включён в
+  охват наравне с `audit_log` и `auth_log` — обнуление IP снимает риск
+  переудержания, а не создаёт его, поэтому исключать журнал было бы менее
+  минимизирующим вариантом. Юридическое подтверждение срока (90 дней) остаётся
+  за DPO — см. общую таблицу Stage 7 ниже
+- **Достаточность name-only** для ПДн-полей (`full_name`, `phone`, `email`,
+  `birth_date`, `comment`, `primary_concern`) для целей прослеживаемости
+- **Классификация value-enabled полей как неперсональных** (`format`, `capacity`,
+  `duration_minutes`, `buffer_minutes`, `display_order`, `allow_*`, `is_group`,
+  `is_bookable`, `meeting_type_id`) — подтвердить
+- **Доступ привилегированных DB-пользователей** — прямой SQL может записать в
+  журнал что угодно; технические меры Stage 6 этот сценарий не покрывают
+- **Отсутствие `correlation_id`** — парность `audit_log` ↔ `data_change_log`
+  является caller-инвариантом, а не гарантией facade/БД; достаточно ли этого для
+  расследования инцидента
+- **Политика erasure для append-only журнала** — `actor_id` при удалении
+  пользователя становится NULL (FK ON DELETE SET NULL), но `record_id` остаётся
+  бессрочно как псевдонимный внутренний идентификатор
+- **Неполный round-trip миграции** `d4a7b2c9f6e1` — после `downgrade` legacy-БД
+  остаётся без функции `log_data_change()`; подтвердить приемлемость
+- **Сосуществование двух механизмов** — `profile_updated.metadata.fields`
+  (в `audit_log`) и `data_change_log` решают одну задачу «какие поля изменились»;
+  консолидировать или оставить
+
+**🟣 Открытые решения DPO/ops по retention и IP (Stage 7)**
+
+Stage 7 закрыл механизм IP-анонимизации (ревизия `c8e2b5f7a3d1`, CLI, таймеры),
+но **ни один** из вопросов ниже им не решается. Это решения ответственного лица,
+а не инженерные изменения:
+
+| Вопрос | Технические варианты | Последствия выбора |
+|---|---|---|
+| Срок хранения строк `auth_log` / `audit_log` / `data_change_log` | (а) бессрочно; (б) N лет + `DELETE`; (в) N лет + `DETACH`/`DROP` партиции | (б) даёт bloat и долгие блокировки; (в) быстро, но необратимо; append-only свойство журнала теряется в обоих |
+| `DROP` старых партиций | (а) нет (текущее); (б) `DETACH` + архив в дамп; (в) `DROP` | (б) сохраняет данные вне БД и требует политики хранения дампов. `ensure_audit_partitions.py` намеренно НЕ удаляет партиции |
+| `user_sessions.ip_address` | (а) не трогать (текущее); (б) обнулять у истёкших/отозванных через N дней; (в) физически удалять старые сессии | (в) ломает расследование по сессиям; cleanup-job для сессий сейчас отсутствует вовсе |
+| `consent_records.ip_address` | (а) сохранять бессрочно (рек.); (б) обнулять через N лет | (б) ослабляет доказательную ценность согласия |
+| `user_legal_basis_records.ip_address` | то же | то же |
+| Достаточность 90 дней (в т.ч. для `data_change_log`) | подтвердить либо изменить срок | смена срока = только значение `--days` в unit-файле, кода не касается |
+| Подотчётность за модификацию audit-строк | (а) только maintenance-лог (текущее); (б) событие в `audit_log` | (б) требует нового helper'а в registry (`TargetPolicy` не имеет OPTIONAL) и счётчик 93→94 |
+| Erasure в append-only журналах | вне Stage 7 | связано с `actor_id → NULL` при удалении пользователя |
+| Split-role deployment (migration-role ≠ maintenance-role) | Stage 7 объявляет **неподдерживаемым** | `SECURITY INVOKER` требует не только `EXECUTE`, но и табличных прав; полный least-privilege рецепт требует проверки распространения привилегий parent → партиции на живой БД. `PUBLIC EXECUTE` и молчаливый `SECURITY DEFINER` запрещены |
+
+Отдельно: **таймер `mindcare-anonymize-ips.timer` по умолчанию не активирован**.
+Пока ответственное лицо не подтвердит срок и оператор не выполнит первый ручной
+прогон, IP в журналах хранятся бессрочно — это осознанное состояние по умолчанию,
+а не недоделка. Порядок ввода — [`deploy/STAGE_7_DEPLOYMENT.md`](../deploy/STAGE_7_DEPLOYMENT.md).
 
 **Защита от самоудаления и удаления последнего администратора**
 - Администратор может удалить свой аккаунт → потеря доступа к панели

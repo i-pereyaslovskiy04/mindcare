@@ -24,6 +24,19 @@
 - Конкретный task prompt может переопределить рекомендацию. В промптах, которые
   готовит Codex, модель и усилие должны быть указаны явно.
 
+## Язык ответов Claude Code
+
+**Всегда отвечай пользователю на русском языке.** Это правило распространяется
+на промежуточные сообщения, уточняющие вопросы, планы, объяснения, отчёты о
+реализации, результаты проверок и финальные ответы — даже если задача, приложенный
+отчёт или часть контекста написаны на английском.
+
+Английский сохраняй только там, где он технически необходим: в коде,
+идентификаторах, командах, точных именах файлов/API/классов, дословном выводе
+инструментов и в документах, которые уже ведутся на английском. Пользователь может
+явно попросить другой язык для конкретного ответа или документа — такая просьба
+имеет приоритет.
+
 ## О проекте
 
 **MindCare** — веб-платформа психологической службы Донецкого государственного университета.
@@ -45,7 +58,15 @@
   дневника (`diary_entries.mood_score_enc / entry_text_enc / emotions_enc`) шифруются
   на уровне приложения: Fernet, `enc:v1:` prefix, `app/core/encryption.py`;
   не сохранять и не логировать plaintext content
-- IP-адреса анонимизируются через 90 дней (`anonymize_old_ips()` в БД)
+- IP-адреса в трёх audit-журналах (`audit_log`, `auth_log`, `data_change_log`)
+  обнуляются через 90 дней функцией `public.anonymize_old_ips(integer)`
+  (ревизия `c8e2b5f7a3d1`). Это НЕ происходит само: функцию вызывает
+  `scripts/anonymize_old_ips.py` по таймеру `mindcare-anonymize-ips.timer`,
+  который `deploy.sh` устанавливает, но **не активирует** (первый прогон
+  необратим). Источник IP — `request.client.host`, то есть за reverse-proxy
+  это адрес прокси, а не конечного пользователя (доверенные прокси —
+  отдельный этап). `user_sessions`, `consent_records` и
+  `user_legal_basis_records` в охват НЕ входят: там IP другого назначения
 
 **Монорепо с двумя проектами:**
 - `mindcare_api/` — Python FastAPI бэкенд, порт 8000
@@ -110,10 +131,59 @@ python scripts/create_admin.py
 python scripts/test_smtp.py
 
 # Создание будущих партиций audit-таблиц (запускать отдельно, не из FastAPI)
-# Рекомендуется запускать раз в год с запасом 24+ месяца
+# Stage 7: поставлен на таймер mindcare-ensure-audit-partitions.timer
+# (ежемесячно). Ручной запуск остаётся доступен; только СОЗДАЁТ партиции.
 python scripts/ensure_audit_partitions.py --months-ahead 24
 python scripts/ensure_audit_partitions.py --months-ahead 24 --dry-run  # проверка без DDL
+
+# IP-анонимизация audit-журналов (Stage 7). Вызывает функции ревизии
+# c8e2b5f7a3d1: dry-run → count_old_ips (read-only), live → anonymize_old_ips.
+# ⚠ LIVE-ПРОГОН НЕОБРАТИМ: обнулённые ip_address не восстанавливает ни
+# alembic downgrade, ни повторный запуск. Первый прогон — ВРУЧНУЮ, вне
+# systemd, после dry-run (см. deploy/STAGE_7_DEPLOYMENT.md).
+python scripts/anonymize_old_ips.py --days 90 --dry-run
+python scripts/anonymize_old_ips.py --days 90
+
+# ── ОБЯЗАТЕЛЬНЫЕ периодические maintenance-job'ы (внешний планировщик) ──
+# Автопродление расписаний (серии с auto_extend); per-series транзакция +
+# FOR UPDATE SKIP LOCKED, dry-run не пишет audit и не мутирует
+python scripts/extend_schedules.py
+python scripts/extend_schedules.py --dry-run
+
+# Перевод начавшихся групповых занятий в completed (Stage 5C-3).
+# ⚠ ОБЯЗАТЕЛЕН: раньше этот переход выполнялся лениво из GET/list и из
+# регистрации; теперь read-пути НЕ мутируют данные, поэтому без планировщика
+# status групповых занятий перестаёт актуализироваться.
+python scripts/complete_group_sessions.py
 ```
+
+> **Эксплуатационное требование Stage 5C-3:** `extend_schedules.py` и
+> `complete_group_sessions.py` обязаны запускаться внешним планировщиком —
+> готовые systemd service/timer лежат в [`deploy/`](deploy/STAGE_5C_DEPLOYMENT.md)
+> (`mindcare-complete-group-sessions.timer` — каждые 10 мин;
+> `mindcare-extend-schedules.timer` — ежедневно 03:20). Оба завершаются
+> ненулевым кодом при любом сбое (мутация / audit / commit); мониторинг — по
+> `systemctl is-failed` + `OnFailure=mindcare-maintenance-failure@`. В лог
+> пишутся только фаза и класс исключения (без `str(exc)`, SQL, id и дат).
+>
+> **Порядок деплоя Stage 5C:** одношаговый `alembic upgrade head` без остановки
+> приложения **не поддерживается** (окно совместимости между `a1c4e8b2f7d3` и
+> `b5d7f0a3c9e1`). Допустимы только два пути — с гарантированным простоем либо
+> поэтапный expand/contract; оба описаны в
+> [`deploy/STAGE_5C_DEPLOYMENT.md`](deploy/STAGE_5C_DEPLOYMENT.md).
+> Запись студента на прошедшее занятие при этом невозможна независимо от
+> своевременности job: регистрация сама проверяет `status`, `booking_enabled`
+> и lead time (не позднее чем за 1 час до начала).
+>
+> **Stage 7 — два таймера с РАЗНОЙ политикой активации.**
+> `mindcare-ensure-audit-partitions.timer` (ежемесячно) `deploy.sh` включает
+> автоматически: job только создаёт будущие партиции, ничего не удаляет.
+> `mindcare-anonymize-ips.timer` (ежедневно 03:40) — **устанавливается, но НЕ
+> активируется**: `Persistent=true` + `enable --now` запустили бы необратимый
+> первый прогон немедленно, до dry-run. Порядок ввода в эксплуатацию (dry-run →
+> оценка объёма → ручной live-прогон → активация) и opt-in-флаг
+> `./deploy.sh --enable-ip-anonymization` — в
+> [`deploy/STAGE_7_DEPLOYMENT.md`](deploy/STAGE_7_DEPLOYMENT.md).
 
 ### База данных
 
@@ -241,8 +311,15 @@ npm run build
 
 Тесты: `mindcare_api/tests/` (unit) и `mindcare_api/tests/integration/`.
 Состав и охват — `ls` по этим каталогам и docstring'и файлов; полный прогон —
-`./test.sh` (Linux) / `.\test.ps1` (Windows). Integration-тесты требуют
-запущенный dev PostgreSQL на alembic head.
+`./test.sh` (Linux) / `.\test.ps1` (Windows).
+**Integration-тесты больше НЕ работают с dev-БД (Stage 1):** каждый полный прогон
+идёт на одноразовой `mindcare_test_<random>`, которую `scripts/isolated_test_db.py`
+создаёт, мигрирует (`alembic upgrade head`) и удаляет в `finally`. Нужен отдельный
+`TEST_DATABASE_URL` (admin-точка `postgres`) с привилегией CREATEDB; `ENV=test`
+выставляют сами скрипты; Docker не требуется. Прямой `pytest tests/integration/`
+против dev-БД заблокирован fail-fast'ом; unit-only — `.\test.ps1 -UnitOnly` /
+`./test.sh --unit-only` (без test-БД). Root `tests/conftest.py` гарантирует, что ни
+один pytest-режим не грузит dev `DATABASE_URL` (тестовый URL либо недоступный sentinel).
 Frontend: `npm test -- --watchAll=false`, `npm run lint`, `npm run build`.
 
 ---
@@ -271,7 +348,8 @@ Frontend: `npm test -- --watchAll=false`, `npm run lint`, `npm run build`.
 `storage.py` (весь SQLAlchemy здесь). Вне этой схемы: `core/` (config, encryption,
 normalization, rate_limit), `db/` (session, init_db, seed, models/), `auth/`,
 `services/` (SMTP, email), `scripts/` (create_admin, ensure_audit_partitions,
-backfill_legal_basis, extend_schedules, repair_missing_chat_conversations,
+backfill_legal_basis, extend_schedules, complete_group_sessions,
+repair_missing_chat_conversations,
 cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 
 **Правила бэка:**
@@ -363,10 +441,32 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    будущему аккаунту по normalized_email. Психолог получает system-сообщение
    (event_key appointment_supervisor_new:{uuid})
 ✅ Групповые занятия (`group_sessions`) создаёт supervisor; student записывается только
-   на `scheduled` + `booking_enabled=true`, без подтверждения психолога. При чтении списков
-   lazy-completion переводит начавшиеся/прошедшие `scheduled` в `completed` и выключает
-   `booking_enabled`. Student видит только `scheduled`; supervisor/psychologist видят
-   `scheduled`/`completed`/`cancelled`
+   на `scheduled` + `booking_enabled=true`, без подтверждения психолога.
+   **Stage 5C-3: lazy-completion из GET/list и из регистрации УДАЛЁН** — read-пути
+   не мутируют данные. Переход `scheduled`→`completed` (+ `booking_enabled=false`)
+   выполняет ТОЛЬКО `scripts/complete_group_sessions.py` (обязательный
+   планировщик, событие `group_session_completed`, Actor.system()). Student видит
+   только `scheduled` (список фильтруется `starts_at > now`); supervisor/
+   psychologist видят `scheduled`/`completed`/`cancelled` — до очередного запуска
+   job прошедшее занятие у них может числиться `scheduled` (осознанный размен на
+   read-only GET). Запись на прошедшее занятие невозможна: регистрация проверяет
+   `status`, `booking_enabled` и lead time самостоятельно
+✅ `group_sessions.status` через generic PATCH — стабильный enum: допустим только
+   переход `scheduled`→`cancelled` (событие `group_session_cancelled`).
+   `completed` через API ЗАПРЕЩЁН (принадлежит system maintenance);
+   `cancelled`→`scheduled` запрещён до отдельного спроектированного события
+✅ Регистрация/отмена групповой записи переворачивают строку условным
+   `UPDATE … WHERE <предикат> RETURNING id`: success и audit возникают ровно для
+   ОДНОГО физического перехода (проверка сервиса читается до блокировки занятия и
+   под конкуренцией устаревает). Не-переворот → 409 (регистрация) / 404 (отмена)
+   без мутации и без audit
+✅ В `GroupRegistrationConflict` (409) превращается ТОЛЬКО нарушение
+   `ux_gsr_active`, опознанное по `exc.orig.diag.constraint_name`. Прочие
+   IntegrityError (FK, NOT NULL, чужой unique) всплывают как есть — это дефект,
+   а не «вы уже записаны». Классификацию не делать разбором текста сообщения
+❌ Не отправлять в generic PATCH группового занятия явный `null` для NOT NULL-поля:
+   `exclude_unset` его не отбрасывает, поэтому service отвергает такие поля 422 ДО
+   мутации (иначе был бы 500 на NOT NULL violation)
 ✅ Автопродление расписаний — ТОЛЬКО maintenance (scripts/extend_schedules.py →
    service.auto_extend_schedules); НЕ из FastAPI lifespan. После продления —
    system-сообщение создавшему серию supervisor'у (created_by, soft-fail)
@@ -546,7 +646,15 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 | **Ветка email-domains (alex, от `db0b2e177da5`):** | |
 | `c7f1a9e4d2b8` | add_allowed_email_domains: таблица `allowed_email_domains`, уникальный нормализованный domain, active/comment/created_by/timestamps и seed 11 начальных доменов |
 | `27202a87a892` | merge_email_domains_and_ui_theme_heads: merge-миграция (`alembic merge`), объединяет `e7c1a9d4b385` (themes) и `c7f1a9e4d2b8` (email-domains) в один head. Без операций над схемой (upgrade/downgrade = pass) |
-| `3b46b9d94c08` | merge_tests_fix_and_email_domains_theme_heads: четвёртая merge-миграция (`alembic merge`), объединяет `a4f2c8e1b7d9` (tests-fix, dev) и `27202a87a892` (email-domains+themes, mindcare_alex) в один head. Без операций над схемой (upgrade/downgrade = pass) — **head**
+| `3b46b9d94c08` | merge_tests_fix_and_email_domains_theme_heads: четвёртая merge-миграция (`alembic merge`), объединяет `a4f2c8e1b7d9` (tests-fix, dev) и `27202a87a892` (email-domains+themes, mindcare_alex) в один head. Без операций над схемой (upgrade/downgrade = pass) |
+| **Ветка unified audit trail (Stage 2 / Stage 5C):** | |
+| `f2a9c4e7b1d8` | add_audit_outcome: `audit_log.outcome` VARCHAR(10) NOT NULL DEFAULT 'success' + `failure_reason_code` VARCHAR(100) + CHECK `ck_audit_outcome` + индекс `idx_audit_outcome`. Все DDL — на partitioned parent (наследуются партициями) |
+| `a1c4e8b2f7d3` | add_schedule_series_identity (Stage 5C-0A): таблица `schedule_series` (id SERIAL, `series_uuid` UNIQUE, `psychologist_id` nullable + ON DELETE SET NULL, created_at) — стабильный **integer** audit target для серий расписания (`audit_log.entity_id` = INTEGER, а `series_id` = UUID). Состояние серии НЕ дублируется; `created_by` не хранится (у ScheduleBreak его нет). Backfill из `schedule_rules` ∪ `schedule_breaks`, fail-closed при конфликте владельца серии, идемпотентен. **FK не добавляются** (5C-0C). downgrade fail-closed при наличии audit-ссылок |
+| `b5d7f0a3c9e1` | enforce_schedule_series_fk (Stage 5C-0C): повторный идемпотентный backfill (добирает серии, созданные в окне совместимости) + preflight, затем FK `schedule_rules.series_id` / `schedule_breaks.series_id` → `schedule_series.series_uuid` через `ADD CONSTRAINT … NOT VALID` + отдельный `VALIDATE CONSTRAINT` (короткие блокировки). Новых колонок нет; nullable legacy `series_id` допустим. downgrade fail-closed при наличии audit-ссылок (оба FK остаются валидными). Порядок деплоя expand/contract: 5C-0A → приложение (5C-0B) → 5C-0C; одна ревизия допустима только при полной остановке старой версии |
+| **Ветка minimized data_change_log (Stage 6):** | |
+| `d4a7b2c9f6e1` | harden_data_change_log (Stage 6-A): превращает application-контракт минимизированного журнала в DB-инварианты. `record_id` и `changed_fields` → NOT NULL; три CHECK — `ck_dcl_operation` (`operation IN ('INSERT','UPDATE','DELETE')`), `ck_dcl_changed_fields_nonempty` (`cardinality(changed_fields) > 0`), `ck_dcl_record_id_positive` (`record_id > 0`). Все DDL — на partitioned parent (наследуются существующими и будущими партициями). Fail-closed preflight ДО первого DDL: 5 счётчиков нарушителей будущих инвариантов + зависимости legacy-функции; диагностика — только стабильный код и счётчик (`preflight failed: code=<code> count=<n>`), без значений строк и имён объектов. Удаляет legacy `public.log_data_change(integer, character varying, character varying, integer, character varying, jsonb, jsonb, inet)` — идентификация строго по OID через `to_regprocedure()`, `DROP FUNCTION IF EXISTS` schema-qualified, **без `CASCADE`** (default RESTRICT — зависимость роняет миграцию, а не удаляет зависимые объекты). **downgrade намеренно НЕ полный round-trip**: снимает три CHECK и два NOT NULL (STRICT, без `IF EXISTS`), но функцию НЕ восстанавливает — её контракт (`p_old_values`/`p_new_values` полными JSONB-строками) противоречит минимизации |
+| **Ветка IP-анонимизации (Stage 7):** | |
+| `c8e2b5f7a3d1` | adopt_ip_anonymization (Stage 7A): переносит IP-анонимизацию из legacy bootstrap-SQL (`db/sql/`, где она была недостижима для Alembic-БД и не имела ни consumer'а, ни планировщика) в Alembic-цепочку. Создаёт `public.anonymize_old_ips(integer) RETURNS bigint` (обнуляет `ip_address` старше границы в `audit_log`/`auth_log`/`data_change_log`) и `public.count_old_ips(integer) RETURNS bigint` (строго read-only счётчик тех же строк — основа dry-run). Обе: `SECURITY INVOKER`, `SET search_path = pg_catalog, public`, fail-fast `days_old IS NULL OR < 1` → SQLSTATE 22023, единый `cutoff = now() - make_interval(days => days_old)`; у `anonymize_old_ips` дополнительно `pg_try_advisory_xact_lock` (SQLSTATE 55P03 при конфликте, ключ ОТЛИЧАЕТСЯ от ключа `ensure_audit_partitions.py`). Legacy-тело НЕ копируется: при `days_old <= 0` оно уводило границу в будущее и стирало ВСЕ адреса. Порядок DDL: fail-closed preflight (точные сигнатуры, запрет любых других overload с теми же именами, зависимости по OID) → `DROP FUNCTION IF EXISTS` **без CASCADE** → `CREATE` (не `CREATE OR REPLACE`: тот сохранил бы явные grants и не смог бы сменить тип возврата `integer`→`bigint`) → `REVOKE ALL ... FROM PUBLIC`. `GRANT` именованным ролям не выдаётся, `SECURITY DEFINER` не вводится. **downgrade STRICT** (без `IF EXISTS`, без `CASCADE`) и намеренно НЕ полный round-trip: legacy-тело не восстанавливается. ⚠ Возвращает механизм, но НЕ данные — обнулённые `ip_address` невосстановимы — **head** |
 
 **Ключевые таблицы:**
 
@@ -571,7 +679,7 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 | `tests`, `questions`, `options`, `test_results` | Психодиагностика |
 | `categories`, `article_categories`, `test_categories` | Типы материалов/категории. В MVP плоские: `parent_id` не используется в Admin CRUD |
 | `tags`, `article_tags`, `news_tags`, `test_tags` | Темы/теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
-| `auth_log`, `audit_log`, `data_change_log` | Аудит. В prod могут быть партиционированы по месяцам |
+| `auth_log`, `audit_log`, `data_change_log` | Три журнала с разделёнными зонами ответственности (см. «Три журнала аудита» ниже). Партиционированы по месяцам; схема — только через Alembic |
 | `diary_emotions` | Справочник эмоций дневника: 12 активных состояний (after c3a7f8e2d1b9); key, label, sort_order, is_active; angry/light — деактивированы (is_active=false), legacy labels в DiaryEntryItem.jsx |
 | `diary_entries` | Дневник студента: одна активная запись в день (partial UNIQUE по student_id + entry_date WHERE NOT deleted); mood_score_enc, entry_text_enc, emotions_enc — Fernet encrypted; только student |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
@@ -579,7 +687,97 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 > **Партиционирование audit-таблиц:** `auth_log`/`audit_log`/`data_change_log`
 > создаются как `PARTITION BY RANGE (created_at)` с начальными партициями 2026-01..2028-12.
 > Будущие партиции управляются через `scripts/ensure_audit_partitions.py`.
-> Запускать заблаговременно (не из FastAPI).
+> Запускать заблаговременно (не из FastAPI). Начиная со Stage 7 скрипт стоит на
+> таймере `mindcare-ensure-audit-partitions.timer` (ежемесячно, `--months-ahead 24`).
+> Он ТОЛЬКО создаёт недостающие будущие партиции: DROP старых партиций и удаление
+> строк журналов в него не входят и требуют отдельного решения DPO.
+>
+> **IP в этих трёх журналах** обнуляется через 90 дней (`anonymize_old_ips`,
+> ревизия `c8e2b5f7a3d1`) — но только если запущен соответствующий job; его
+> таймер по умолчанию НЕ активирован, т.к. первый прогон необратим.
+
+### Три журнала аудита: зоны ответственности
+
+Разделение — по зоне ответственности, не по эксклюзивности данных: `audit_log` и
+`data_change_log` могут писаться совместно для одной business-операции (Stage 6
+generic paired events), но несут непересекающуюся информацию — семантику
+действия и перечень изменённых полей соответственно.
+
+| Журнал | Зона | Что НЕ пишется |
+|--------|------|----------------|
+| `auth_log` | Аутентификация и жизненный цикл сессии: login/failed_login/logout, registration, password change/reset | Роль актора (колонки нет), бизнес-сущности, metadata |
+| `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
+| `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
+
+**Event REGISTRY: 93 события** (`AUTH_LOG=7`, `AUDIT_LOG=86`) — `app/audit/registry.py`,
+единый facade `record_event()`.
+
+**CHANGE_REGISTRY: 4 таблицы / 25 полей** (15 name-only, 10 value-enabled) + 1
+derived-поле — `app/audit/change_registry.py`, отдельный writer `record_data_change()`:
+
+| Таблица | paired_event | Полей | value-enabled | derived |
+|---------|--------------|-------|---------------|---------|
+| `users` | `admin_user_updated` | 2 | — (только `full_name`, `phone`, name-only) | — |
+| `unregistered_student_cards` | `unregistered_student_card_updated` | 6 | — (все шесть name-only) | `normalized_email` |
+| `meeting_types` | `meeting_type_updated` | 9 | 7 (`duration_minutes`, `buffer_minutes`, `display_order`, `allow_in_person`, `allow_online`, `is_group`, `is_bookable`) | — |
+| `group_sessions` | `group_session_updated` | 8 | 3 (`format`, `capacity`, `meeting_type_id`) | — |
+
+**Ровно ЧЕТЫРЕ production call site `record_data_change` (проверяется AST-тестом
+`tests/test_data_change_callsites_ast.py`):**
+- `app/appointments/storage.py::update_meeting_type`
+- `app/appointments/storage.py::update_group_session`
+- `app/appointments/storage.py::update_unregistered_student_card`
+- `app/users/storage.py::_apply_role_and_scalar_changes`
+
+```
+✅ data_change_log — ТОЛЬКО ATOMIC/fail-closed: writer делает исключительно
+   db.add в caller-сессию; commit/rollback/close принадлежат владельцу
+   бизнес-транзакции. SOFT/fail-open режима не существует
+✅ Значения НЕ пишутся по умолчанию: политика поля — name-only, если явно не
+   размечено иначе. Штатные Stage 6 call sites для `users` и
+   `unregistered_student_cards` всегда передают values=None, поэтому
+   создаваемые ими строки имеют old_values/new_values IS NULL — ФИО, телефон,
+   email, дата рождения, комментарий и запрос клиента не копируются. Это
+   application-инвариант, а не DB-гарантия: исторические строки и
+   привилегированный прямой SQL находятся вне него
+✅ old/new допускаются только per-field opt-in и только для нечувствительных
+   enum/bool/int; registry-инвариант запрещает value-политику любому полю,
+   чьё имя срабатывает на denylist (`is_denylisted_key`)
+✅ Transition-поля НЕ дублируются в DCL: `users.is_active`, роли,
+   `meeting_types.is_active`, `group_sessions.booking_enabled`/`status`
+   описаны выделенными событиями audit_log и физически отсутствуют в
+   field-allowlist
+✅ `normalized_email` — derived-поле: отбрасывается проекцией; смена email даёт
+   changed_fields=["email"]. Если изменилось ТОЛЬКО derived-поле — мутация и
+   generic audit сохраняются, а DCL-строка не пишется (пустой changed_fields
+   запрещён контрактом)
+✅ Схема audit-таблиц (включая data_change_log) меняется ТОЛЬКО через Alembic;
+   ORM объявляет те же имена ограничений и тот же текст CHECK — расхождение
+   ловится drift-тестом
+❌ Не писать значения ПДн в old_values/new_values ни при каких обстоятельствах
+❌ Не вызывать record_data_change с пустым changed_fields
+❌ Не добавлять пятый call site без обновления CHANGE_REGISTRY и AST-теста
+❌ Не использовать legacy PostgreSQL-функцию log_data_change() — удалена
+   миграцией d4a7b2c9f6e1 (принимала полные old/new и копировала ПДн)
+```
+
+> **Природа решения.** `data_change_log` — **техническая мера
+> прослеживаемости**, введённая инженерным решением проекта. Это НЕ утверждение
+> о прямом требовании ФЗ-152 или иного закона и НЕ утверждение о соответствии
+> законодательству: такую оценку даёт DPO/ответственное лицо. Открытые вопросы
+> (retention, достаточность name-only, доступ привилегированных
+> DB-пользователей, отсутствие correlation_id) — в
+> [`docs/BACKLOG.md`](docs/BACKLOG.md); архитектурное обоснование — ADR-021.
+> Технический охват IP-анонимизации для этого журнала закрыт Stage 7:
+> `data_change_log` входит в неё наравне с `audit_log` и `auth_log`
+> (ADR-022); подтверждение самого срока 90 дней остаётся за DPO.
+
+> **Парность `audit_log` ↔ `data_change_log` — caller-инвариант, а НЕ гарантия
+> facade или БД.** Строка DCL пишется только рядом с успешным
+> `TableSpec.paired_event` в той же транзакции. Инвариант удерживают: статические
+> проверки `paired_event` при построении CHANGE_REGISTRY, AST-тест call sites и
+> integration-тесты совместного commit/rollback. `correlation_id` намеренно не
+> введён — связь восстанавливается по (`entity_type`/`table_name`, id, время).
 
 **Роли в системе:**
 
@@ -618,6 +816,24 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
   Guard авторитетно работает на backend по стабильному actor/user id; другой
   администратор может изменить этот набор ролей. Самодеактивация и самоудаление
   этим guard не запрещены и требуют отдельного продуктового решения.
+- Аккаунт может фактически остаться без активных ролей (единственная роль
+  истекла по `expires_at` или снята). Контракт разделён по стадиям:
+  - **новый вход отклоняется контролируемым 403**: `service.authenticate_user`
+    fail-closed отвергает аккаунт без валидной активной роли ДО
+    `update_last_login`/`create_session`; audit — `failed_login` с
+    `failure_reason = no_active_roles`, сообщение клиенту обобщённое (состав
+    ролей не раскрывается). НЕ 500 и НЕ `internal_error`: это штатный доменный
+    отказ, а не авария;
+  - **уже выданная сессия остаётся валидной**: `/api/auth/me` отдаёт
+    `roles: []`, `role: null`, прикладные эндпоинты дают 403, а `logout`
+    обязан отработать 200 — иначе пользователь не смог бы завершить сессию.
+  Поэтому audit-facade допускает user-актора с `role=None` **только** для
+  событий `Destination.AUTH_LOG` (`auth_log` роль актора не хранит вообще);
+  для `AUDIT_LOG` роль по-прежнему обязательна — там она пишется в `user_role`.
+  Не подставлять фиктивную роль и не «чинить» logout отказом.
+- `internal_error` — только для настоящих внутренних сбоев; `invalid_credentials`
+  — только для неверных credentials. Новое событие под `no_active_roles` не
+  заводится: это failure reason того же `failed_login` (registry остаётся 93).
 
 **Email-domain policy для новых аккаунтов (ADR-019):**
 - Через HTTP/API новый аккаунт можно создать только с точным нормализованным
@@ -807,17 +1023,36 @@ from app.db.session import SessionLocal
 from app.auth.deps import require_role
 ```
 
-**Логирование:**
-```python
-# Auth-события (login, logout, failed_login, register, password_reset)
-from app.auth.audit import log_auth_event
-log_auth_event(event="login", success=True, user_id=..., ...)
+**Audit-impact review и диагностическое логирование:**
 
-# Пока используем print() в стиле проекта
-# При переходе на logging — заменить везде сразу, не по одному
-print(f"[WARN] ...", file=sys.stderr)   # ошибки
-print(f"[INFO] ...")                     # информация
+Каждый новый backend-сценарий (endpoint, service/storage mutation, security-
+проверка, чтение чувствительного content или maintenance-job) ОБЯЗАН до
+реализации получить явное решение по audit impact: какое событие пишется либо
+почему событие не требуется. Отсутствие события допустимо для обычного чтения,
+валидации до бизнес-операции и истинного no-op, но не должно быть результатом
+молчаливого пропуска анализа.
+
+```text
+1. Проверить существующий app/audit/registry.py; динамические event_type запрещены.
+2. Если события нет — сначала добавить EventSpec и его exact-contract тесты.
+3. Писать событие только через app.audit.record_event(); прямые
+   AuditLog/AuthLog/DataChangeLog и legacy app.auth.audit.log_auth_event запрещены.
+4. ATOMIC-success стейджить в caller-сессии до единственного commit; режимом
+   транзакции и failure policy владеет registry, caller их не переопределяет.
+5. Ожидаемый business-failure писать только типизированным стабильным code через
+   record_secondary_failure(), если такой failure-event предусмотрен registry.
+   Commit/postcommit/неожиданные сбои не маскировать ложным business outcome.
+6. Для generic UPDATE отдельно решить, нужен ли data_change_log. Новый call site
+   требует CHANGE_REGISTRY + AST/integration-тестов; значения ПДн запрещены.
+7. metadata/description/context минимизировать: никаких паролей, OTP, токенов,
+   ciphertext, plaintext content, свободного текста исключений и произвольных ПДн.
+8. Тестами зафиксировать actor/target/outcome, точную metadata, отсутствие утечек,
+   no-op semantics и commit/rollback boundary.
 ```
+
+Подробная каноника журналов и транзакций — в разделе «Три журнала аудита» выше.
+Для технической диагностики сохранять принятый минимизированный формат
+`event/phase/error-class`; не выводить `str(exc)`, SQL, credentials, id или ПДн.
 
 ---
 

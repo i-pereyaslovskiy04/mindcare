@@ -23,6 +23,27 @@
 Только анализ и финальный отчёт.
 ```
 
+### Audit impact — обязательный пункт Definition of Done
+
+Для каждого нового backend-сценария в плане, diff review и PR-описании должен быть
+явный раздел `Audit impact`. Решение может быть «событие не требуется», но только
+с кратким обоснованием и тестом соответствующего поведения.
+
+- Проверены бизнес-мутации, роли/доступ, security-failure, чтение чувствительного
+  content и maintenance-job'ы.
+- Используется существующий event из `app/audit/registry.py` либо добавлен новый
+  `EventSpec` с exact-contract тестом; динамические event names запрещены.
+- Writer вызывается через `record_event()`; прямой `AuditLog`/`AuthLog`/
+  `DataChangeLog` и legacy `log_auth_event()` запрещены.
+- Для ATOMIC-события audit и business mutation используют одну caller-сессию и
+  один commit. Для failure-события используется только типизированный стабильный
+  code и предусмотренный контрактом `record_secondary_failure()`.
+- Проверены actor/target/outcome, минимальная metadata, no-op, failure injection,
+  rollback/commit boundary и отсутствие ПДн, plaintext content, credentials,
+  токенов и `str(exc)`.
+- Для generic UPDATE явно решено, требуется ли `data_change_log`; новый call site
+  сопровождается изменением `CHANGE_REGISTRY`, AST- и integration-тестами.
+
 ---
 
 ## 2. Required checks before PR
@@ -50,9 +71,8 @@ pytest tests/ -v
 ```
 
 Или из корня проекта: `.\test.ps1` (compileall + все backend-тесты).
-Текущий ожидаемый статус после email-domain/self-admin corrective pass:
-**961 passed** (`pytest tests/`; включая multi-role, email-domain
-policy/admin CRUD/concurrency, self-admin guard, appointments, chat и diary).
+Конкретное число тестов не фиксируется в checklist: набор растёт. Критерий — ноль
+необъяснённых failures; environment-gated skips должны быть перечислены в отчёте.
 
 ### Alembic
 

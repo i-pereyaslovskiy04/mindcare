@@ -87,10 +87,17 @@ mindcare/
 │   │   │   ├── service.py           # Бизнес-логика аутентификации
 │   │   │   ├── storage.py           # DB-запросы: users, sessions, consents
 │   │   │   ├── otp_service.py       # OTP: создание (SHA-256 hash), верификация, очистка
-│   │   │   ├── audit.py             # log_auth_event() → auth_log
+│   │   │   ├── errors.py            # типизированные auth/OTP ошибки
+│   │   │   ├── roles.py             # membership/effective role helpers
 │   │   │   ├── deps.py              # get_current_user, require_role
 │   │   │   ├── security.py          # generate_session_token(), hash_session_token()
 │   │   │   └── schemas.py           # Pydantic-схемы /api/auth/*
+│   │   ├── audit/
+│   │   │   ├── registry.py          # закрытый реестр auth_log/audit_log событий
+│   │   │   ├── service.py           # единый facade record_event()
+│   │   │   ├── failsafe.py          # best-effort failure writer
+│   │   │   ├── data_change.py       # минимизированный data_change_log writer
+│   │   │   └── change_registry.py   # allowlist таблиц и полей data_change_log
 │   │   ├── users/
 │   │   │   ├── routes_admin.py      # /api/admin/users/* (только admin)
 │   │   │   ├── service.py           # Бизнес-логика: CRUD пользователей
@@ -464,24 +471,41 @@ lifespan() startup
 
 ## Тестирование
 
-Текущий статус backend после merge mindcare_alex в dev (multi-role +
-email-domain policy + темы/a11y):
-**967 passed** (`pytest tests/`; integration-тесты требуют запущенный dev PostgreSQL
-на alembic head).
+Backend: **967 passed** — последний ранее зафиксированный результат полного прогона
+(до Stage 1 isolation). После перевода на isolated test DB это число не
+переизмерялось живым прогоном; оно приведено как исторический baseline, а не как
+подтверждение свежего успешного lifecycle. **Integration-тесты больше НЕ работают с
+dev-БД** (Stage 1): каждый полный прогон идёт на одноразовой `mindcare_test_<random>`,
+которую `scripts/isolated_test_db.py` создаёт, мигрирует (`alembic upgrade head`) и
+удаляет в `finally`. Приложение и Alembic используют один и тот же тестовый URL.
 Frontend: **64 suites / 762 passed** (`npm test -- --watchAll=false`); production
 build: **success**; полный `npm run lint`: **0 errors / 0 warnings**. Ручной browser
 smoke на 1280/800/390 px остаётся обязательной проверкой перед merge/demo.
 
-```bash
-# Backend
-cd mindcare_api
-python -m compileall app scripts -q
-pytest tests/ -v
-```
+**Запуск полного suite (изолированная test-БД):**
+- Задайте `TEST_DATABASE_URL` (в окружении или в `mindcare_api/.env`) — admin-точка
+  `postgres` на тестовом сервере; пользователю нужна привилегия **CREATEDB**.
+  `ENV=test` выставляют сами скрипты, менять `ENV` в `.env` не нужно. Docker не требуется.
 
 ```powershell
-# Из корня проекта (compileall + все backend-тесты)
+# Из корня проекта: compileall + полный isolated suite
 .\test.ps1
+# только unit (integration исключены), test-БД не нужна:
+.\test.ps1 -UnitOnly
+```
+
+```bash
+# Linux-зеркало
+./test.sh
+./test.sh --unit-only
+```
+
+```bash
+# Или напрямую (с ЯВНЫМ ENV=test), без test.sh:
+cd mindcare_api
+python -m compileall app scripts -q
+ENV=test TEST_DATABASE_URL=postgresql+psycopg2://postgres:***@localhost:5432/postgres \
+    python scripts/isolated_test_db.py -v
 ```
 
 ```bash
@@ -544,11 +568,19 @@ npm run build
 - **password reset confirm** — validate OTP → `password_hash` → revoke всех сессий → consume OTP → commit;
 - **change password** — verify current password → `password_hash` → revoke всех сессий → commit.
 
-Хеш нового пароля считается **до** открытия транзакции (bcrypt медленный). Email отправляется на init-шаге (вне транзакции); welcome/security system-уведомления публикуются **после** commit и остаются best-effort/soft-fail (их сбой не откатывает основную операцию и не раскрывает plaintext). `auth_log` — fire-and-forget вне core-транзакции. Transactional outbox на текущем этапе отсутствует. Покрыто failure-injection тестами: `tests/integration/test_register_confirm_atomic.py`, `tests/integration/test_password_uow_atomic.py`.
+Хеш нового пароля считается **до** открытия транзакции (bcrypt медленный). Email отправляется на init-шаге (вне транзакции); welcome/security system-уведомления публикуются **после** commit и остаются best-effort/soft-fail (их сбой не откатывает основную операцию и не раскрывает plaintext). Auth-события пишутся через единый facade в независимой best-effort транзакции согласно registry; сбой audit storage не подменяет HTTP-исход auth-операции. Transactional outbox на текущем этапе отсутствует. Покрыто failure-injection тестами: `tests/integration/test_register_confirm_atomic.py`, `tests/integration/test_password_uow_atomic.py`.
 
 **Санитизация ошибок (Stage 31m-fix-a).** Raw SMTP/auth exceptions не отдаются клиенту; frontend `api/client.js` корректно парсит FastAPI/Pydantic 422 `detail` (array of objects) и не показывает `[object Object]`; email в auth/SMTP логах маскируется через `mask_email`.
 
-**Аудит.** Все auth-события (login, logout, failed_login, register, password_reset) пишутся в `auth_log` через `audit.log_auth_event()`. Fire-and-forget, ошибки записи не влияют на основной ответ.
+**Аудит.** Все события проходят через `app.audit.record_event()` и закрытый
+`app/audit/registry.py`; прямые ORM-записи и динамические имена событий запрещены.
+Семь auth-событий (`registration_succeeded`, `registration_failed`, `login`,
+`failed_login`, `logout`, `password_change`, `password_reset`) пишутся в
+`auth_log` независимо и best-effort. Семантические бизнес-события пишутся в
+`audit_log` с раздельными actor/target и outcome; транзакционный режим задаёт
+registry. При разработке каждого нового backend-сценария обязателен audit-impact
+review: событие либо добавляется сразу вместе с тестами, либо отсутствие события
+явно обосновывается. ПДн, plaintext content, credentials и токены в audit запрещены.
 
 **RBAC / multi-role (ADR-018).** Источник прав — активные membership-роли в
 `user_roles`; один пользователь может одновременно иметь несколько ролей. Backend
