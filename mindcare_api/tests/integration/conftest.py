@@ -1,22 +1,42 @@
 """
 Fixtures for API/integration tests (tests/integration/).
 
-Prerequisites:
-  - PostgreSQL dev DB must be running with alembic upgrade head applied.
-  - Seed data must include privacy_policy and data_processing consents.
-  - EMAIL_MODE=dev (default) — no real email is sent; transport is patched.
+Prerequisites (Stage 1 — isolated test DB):
+  - Запускать ТОЛЬКО через isolated runner (scripts/isolated_test_db.py) или
+    с явными ENV=test и TEST_DATABASE_URL на одноразовую mindcare_test_<random>.
+    Прямой прогон против dev-БД невозможен: см. fail-fast ниже.
+  - Схема применяется runner'ом через `alembic upgrade head`; seed — в lifespan
+    TestClient (init_db). EMAIL_MODE=dev — реальные письма не шлются.
 
 These fixtures are scoped to tests/integration/ only and do NOT affect the
 unit tests in tests/  (test_change_password, test_encryption, test_normalization).
 """
 
+import os
 import re
 import uuid
 from unittest.mock import patch
 
 import bcrypt
 import pytest
+from sqlalchemy.engine import make_url
 from starlette.testclient import TestClient
+
+# ── Fail-fast: integration только на изолированной test-БД ────────────────────
+# Выполняется ДО import app.main / app.db.session (engine связывается на импорте).
+# Root tests/conftest.py уже выставил DATABASE_URL (test URL или sentinel).
+if os.environ.get("MINDCARE_UNIT_ONLY") == "1":
+    raise RuntimeError("Integration-тесты недоступны в unit-only режиме.")
+if os.environ.get("ENV") != "test":
+    raise RuntimeError("Integration-тесты требуют ENV=test и isolated test DB.")
+if not os.environ.get("TEST_DATABASE_URL"):
+    raise RuntimeError("Integration-тесты требуют TEST_DATABASE_URL (test DB).")
+_active_db = make_url(os.environ.get("DATABASE_URL", "")).database or ""
+if not re.match(r"^mindcare_test_[a-z0-9]+$", _active_db):
+    raise RuntimeError(
+        "DATABASE_URL integration-тестов не является isolated test DB "
+        "(ожидается mindcare_test_<random>)."
+    )
 
 from app.main import app
 from app.auth import storage as auth_storage
