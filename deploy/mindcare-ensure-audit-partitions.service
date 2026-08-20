@@ -1,0 +1,28 @@
+[Unit]
+Description=MindCare maintenance: ensure future audit-log partitions exist (Stage 7)
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_7_DEPLOYMENT.md
+After=network-online.target postgresql.service
+Requires=postgresql.service
+# Падение (exit != 0) поднимает шаблонный обработчик мониторинга.
+OnFailure=mindcare-maintenance-failure@mindcare-ensure-audit-partitions.service
+
+[Service]
+# Разовый прогон по таймеру. Скрипт ТОЛЬКО создаёт недостающие будущие
+# партиции: он не удаляет старые, не переносит данные и не конвертирует
+# обычные таблицы в partitioned. Повторный прогон идемпотентен, параллельный
+# запуск отсекается advisory lock внутри самого скрипта.
+Type=oneshot
+User=vitbo
+Group=vitbo
+WorkingDirectory=/media/data2/psycho/mindcare/mindcare_api
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/media/data2/psycho/mindcare/mindcare_api/.venv/bin/python scripts/ensure_audit_partitions.py --months-ahead 24
+
+TimeoutStartSec=600
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mindcare-ensure-audit-partitions
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=MindCare: run schedule auto-extension daily
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_5C_DEPLOYMENT.md
+
+[Timer]
+# Ежедневно ночью. Окно продления — 14 дней вперёд (--within-days 14), поэтому
+# даже несколько пропущенных суток не приводят к обрыву расписания.
+OnCalendar=*-*-* 03:20:00
+AccuracySec=5min
+RandomizedDelaySec=10min
+Persistent=true
+Unit=mindcare-extend-schedules.service
+
+[Install]
+WantedBy=timers.target

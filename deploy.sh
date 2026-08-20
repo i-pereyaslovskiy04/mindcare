@@ -5,6 +5,11 @@
 #   ./deploy.sh              — интерактивное развёртывание
 #   ./deploy.sh --install-deps  — установить системные пакеты автоматически
 #   ./deploy.sh --no-systemd    — не создавать systemd-сервисы
+#   ./deploy.sh --enable-ip-anonymization
+#                               — СРАЗУ включить таймер IP-анонимизации.
+#                                 По умолчанию таймер только устанавливается,
+#                                 но НЕ активируется: первый прогон необратим
+#                                 (см. deploy/STAGE_7_DEPLOYMENT.md).
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -25,10 +30,15 @@ ask()   { echo -en "  ${BOLD}$1${NC} "; }
 # ─── Аргументы ──────────────────────────────────────────────────────────────
 INSTALL_DEPS=false
 SETUP_SYSTEMD=true
+# Default=false осознанно: `enable --now` запустил бы ПЕРВЫЙ прогон немедленно,
+# до dry-run и до того, как оператор увидел объём. Обнулённые ip_address не
+# восстанавливаются ни downgrade, ни повторным запуском.
+ENABLE_IP_ANON=false
 for arg in "$@"; do
   case $arg in
     --install-deps) INSTALL_DEPS=true ;;
     --no-systemd)   SETUP_SYSTEMD=false ;;
+    --enable-ip-anonymization) ENABLE_IP_ANON=true ;;
     *) die "Неизвестный аргумент: $arg" ;;
   esac
 done
@@ -262,22 +272,149 @@ ok "Зависимости установлены"
 # ════════════════════════════════════════════════════════════════════════════
 step "Миграции Alembic"
 
-CURRENT_REV=$(.venv/bin/alembic current 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "none")
-HEAD_REV=$(.venv/bin/alembic heads 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "unknown")
+# Юниты, которые ПИШУТ в БД (uvicorn app.main:app). mindcare-web — CRA-фронт,
+# писателем не является и в этом списке не нужен.
+WRITER_UNITS=(mindcare-api.service mindcare-demo.service)
+STOPPED_UNITS=()
+
+stop_writers() {
+  local unit
+  for unit in "${WRITER_UNITS[@]}"; do
+    if systemctl is-active --quiet "$unit" 2>/dev/null; then
+      sudo systemctl stop "$unit"
+      STOPPED_UNITS+=("$unit")
+      info "Остановлен writer-юнит: $unit"
+    fi
+  done
+  # Незарегистрированный писатель (ручной uvicorn, dev-режим, tmux) сделал бы
+  # «гарантированный простой» фикцией — такой случай останавливаем явно.
+  if curl -sf --max-time 3 http://localhost:8000/docs >/dev/null 2>&1; then
+    die "На порту 8000 работает бэкенд вне systemd. Гарантированный простой\
+ недостижим — погасите его (scripts/mindcare-mode.sh stop) и повторите запуск,\
+ либо выполняйте поэтапный rollout по deploy/STAGE_5C_DEPLOYMENT.md"
+  fi
+}
+
+# Поднимает КАЖДЫЙ ранее остановленный юнит, даже если предыдущий не стартовал:
+# ранний выход оставил бы остальные писатели лежать. Общий провал возвращается
+# только после попытки по всем.
+start_writers() {
+  local unit rc=0
+  for unit in "${STOPPED_UNITS[@]:-}"; do
+    [ -n "$unit" ] || continue
+    if sudo systemctl start "$unit"; then
+      info "Запущен обратно: $unit"
+    else
+      rc=1
+      warn "НЕ УДАЛОСЬ запустить $unit — нужно вмешательство вручную"
+    fi
+  done
+  return $rc
+}
+
+# Аварийное восстановление. Ставится ДО stop_writers, поэтому срабатывает и при
+# сбое самой остановки (например die на «неучтённом» писателе, когда часть
+# юнитов уже погашена).
+restore_writers_on_exit() {
+  start_writers || warn "Часть writer-юнитов осталась остановленной"
+}
+
+# Количество пользовательских таблиц (обычные + партиционированные родители,
+# без дочерних партиций и служебной alembic_version).
+user_table_count() {
+  psql "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}" \
+    -tAc "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relispartition = false AND c.relname != 'alembic_version';" \
+    2>/dev/null | tr -d ' '
+}
+
+run_alembic_upgrade() {
+  local log="$API_DIR/.alembic-deploy.log"
+  # Ошибку миграции НЕ прятать: пайп с grep + `|| true` раньше маскировал
+  # ненулевой код alembic, и деплой продолжался на несогласованной схеме.
+  if ! .venv/bin/alembic upgrade head >"$log" 2>&1; then
+    echo ""
+    grep -E 'ERROR|FAILED|Traceback|raise |Error' "$log" | tail -20 || true
+    die "alembic upgrade head завершился с ошибкой. Полный лог: $log"
+  fi
+  grep -E 'Running upgrade' "$log" || true
+  rm -f "$log"
+}
+
+# `alembic current` на пустой БД печатает пусто и завершается успешно; ошибка
+# подключения — это НЕ «пустая БД», иначе мы приняли бы недоступную боевую базу
+# за новую и накатили миграции без остановки писателей.
+if ! CURRENT_OUT=$(.venv/bin/alembic current 2>&1); then
+  echo "$CURRENT_OUT" | tail -5
+  die "Не удалось прочитать текущую revision (проверьте DATABASE_URL и БД)"
+fi
+CURRENT_REV=$(echo "$CURRENT_OUT" | grep -oE '^[a-f0-9]{6,}' | head -1 || true)
+CURRENT_REV="${CURRENT_REV:-none}"
+HEAD_REV=$(.venv/bin/alembic heads 2>/dev/null | grep -oE '^[a-f0-9]{6,}' | head -1 || echo "unknown")
 
 if [ "$CURRENT_REV" = "$HEAD_REV" ]; then
   ok "Схема актуальна (revision: $CURRENT_REV)"
+elif [ "$CURRENT_REV" = "none" ]; then
+  # Отсутствие revision само по себе НЕ означает новую БД: так же выглядит база,
+  # развёрнутая мимо Alembic (legacy db/sql-bootstrap) или с потерянной
+  # alembic_version. Прогонять по ней миграции как по чистой — разрушительно,
+  # поэтому «пустоту» проверяем фактически.
+  EXISTING_TABLES=$(user_table_count || true)
+  if [ -z "$EXISTING_TABLES" ]; then
+    die "Не удалось пересчитать таблицы в ${DB_NAME} — состояние схемы неизвестно"
+  fi
+  if [ "$EXISTING_TABLES" != "0" ]; then
+    die "В ${DB_NAME} нет alembic revision, но есть таблиц: ${EXISTING_TABLES}.\
+ Схема развёрнута мимо Alembic либо alembic_version потеряна. Автоматический\
+ upgrade запрещён — восстановите revision вручную (alembic stamp) по\
+ deploy/STAGE_5C_DEPLOYMENT.md"
+  fi
+  # Подтверждённо пустая БД: старой версии приложения, которая могла бы писать в
+  # окно между ревизиями, не существует — окна совместимости нет.
+  info "Новая пустая БД, head: ${HEAD_REV} — применяю миграции..."
+  run_alembic_upgrade
+  ok "Миграции применены → $(.venv/bin/alembic current 2>/dev/null)"
 else
-  info "Текущая: ${CURRENT_REV}, head: ${HEAD_REV} — применяю миграции..."
-  .venv/bin/alembic upgrade head 2>&1 | grep -E 'Running|INFO|ERROR' || true
+  # Обновление СУЩЕСТВУЮЩЕЙ базы. Начиная со Stage 5C `upgrade head` содержит
+  # окно совместимости (a1c4e8b2f7d3 → b5d7f0a3c9e1): старая версия приложения
+  # в этот момент создаёт серии расписания без identity-строки, и включение FK
+  # ломает их. Поэтому здесь выполняется ИМЕННО путь A из
+  # deploy/STAGE_5C_DEPLOYMENT.md — с гарантированным простоем.
+  echo ""
+  warn "Обновление существующей схемы: ${CURRENT_REV} → ${HEAD_REV}"
+  warn "Будет выполнен путь A (гарантированный простой): писатели БД"
+  warn "останавливаются на время миграции. Без простоя используйте"
+  warn "поэтапный rollout из deploy/STAGE_5C_DEPLOYMENT.md."
+  echo ""
+
+  if ! $SETUP_SYSTEMD; then
+    die "С --no-systemd скрипт не может гарантировать простой писателей.\
+ Выполните обновление существующей БД по deploy/STAGE_5C_DEPLOYMENT.md"
+  fi
+
+  ask "Продолжить с остановкой сервиса? [y/N]:"
+  read -r CONFIRM_DOWNTIME
+  case "$CONFIRM_DOWNTIME" in
+    [yY]|[yY][eE][sS]) ;;
+    *) die "Отменено. Поэтапный rollout без простоя — deploy/STAGE_5C_DEPLOYMENT.md" ;;
+  esac
+
+  # Trap ставится ДО остановки: иначе die внутри stop_writers (неучтённый
+  # писатель на 8000) оставил бы уже погашенные юниты лежать.
+  trap restore_writers_on_exit EXIT
+  stop_writers
+  run_alembic_upgrade
+  # Trap снимается ТОЛЬКО после того, как поднялись ВСЕ остановленные юниты.
+  if ! start_writers; then
+    die "Миграции применены, но часть writer-юнитов не запустилась —\
+ поднимите их вручную: sudo systemctl start ${STOPPED_UNITS[*]:-<нет>}"
+  fi
+  trap - EXIT
   ok "Миграции применены → $(.venv/bin/alembic current 2>/dev/null)"
 fi
 
-# Считаем логические таблицы: обычные ('r') + партиционированные родители ('p'),
-# исключая дочерние партиции (relispartition) и служебную alembic_version.
-TABLE_COUNT=$(psql "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}" \
-  -tAc "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relispartition = false AND c.relname != 'alembic_version';" 2>/dev/null | tr -d ' ' || echo "?")
-ok "Таблиц в БД: $TABLE_COUNT (ожидается 49)"
+# Тот же счётчик, что и в проверке пустоты выше (одна реализация запроса).
+TABLE_COUNT=$(user_table_count || true)
+ok "Таблиц в БД: ${TABLE_COUNT:-?}"
 
 # Seed запускается автоматически при старте приложения — проверим через быстрый запуск
 info "Запускаю приложение для seed..."
@@ -425,8 +562,87 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+  # ── Обязательные maintenance-таймеры (Stage 5C-3, Stage 7) ───────────────
+  # Без них read-пути (которые больше не мутируют) перестают актуализировать
+  # status групповых занятий, а серии с auto_extend обрываются по
+  # effective_until. Это условие эксплуатации, а не опция.
+  #
+  # Stage 7 добавляет два юнита. Оба УСТАНАВЛИВАЮТСЯ здесь безусловно, но
+  # активируются по-разному (см. блок enable ниже):
+  #   - ensure-audit-partitions — только создаёт будущие партиции, данных не
+  #     удаляет и не изменяет, поэтому включается сразу;
+  #   - anonymize-ips — необратимо обнуляет ip_address, поэтому требует явного
+  #     opt-in --enable-ip-anonymization.
+  MAINT_UNITS=(
+    mindcare-complete-group-sessions.service
+    mindcare-complete-group-sessions.timer
+    mindcare-extend-schedules.service
+    mindcare-extend-schedules.timer
+    mindcare-ensure-audit-partitions.service
+    mindcare-ensure-audit-partitions.timer
+    mindcare-anonymize-ips.service
+    mindcare-anonymize-ips.timer
+    'mindcare-maintenance-failure@.service'
+  )
+  CURRENT_GROUP=$(id -gn)
+  for unit in "${MAINT_UNITS[@]}"; do
+    # Отсутствие юнита прерывает деплой: без таймеров status групповых занятий
+    # и auto_extend перестают обновляться, а read-пути их больше не чинят.
+    # Warning здесь дал бы «успешный» деплой с неработающим maintenance.
+    if [ ! -f "$PROJECT_DIR/deploy/$unit" ]; then
+      die "Не найден обязательный unit-файл: deploy/$unit. Maintenance-таймеры\
+ Stage 5C — условие эксплуатации, деплой без них не выполняется\
+ (см. deploy/STAGE_5C_DEPLOYMENT.md)"
+    fi
+    # Юниты в репозитории написаны под референсный стенд (путь и пользователь
+    # захардкожены) — подставляем фактические, иначе таймеры молча падали бы
+    # на чужом хосте.
+    sed -e "s|/media/data2/psycho/mindcare|${PROJECT_DIR}|g" \
+        -e "s|^User=vitbo$|User=${CURRENT_USER}|" \
+        -e "s|^Group=vitbo$|Group=${CURRENT_GROUP}|" \
+        "$PROJECT_DIR/deploy/$unit" \
+      | sudo tee "/etc/systemd/system/$unit" >/dev/null
+  done
+
   sudo systemctl daemon-reload
   sudo systemctl enable mindcare-api mindcare-web
+
+  sudo systemctl enable --now mindcare-complete-group-sessions.timer
+  sudo systemctl enable --now mindcare-extend-schedules.timer
+  # Только создаёт недостающие будущие партиции: DROP старых партиций и
+  # удаление строк в этот job НЕ входят, поэтому включается без opt-in.
+  sudo systemctl enable --now mindcare-ensure-audit-partitions.timer
+
+  # IP-анонимизация: установка отделена от активации.
+  #
+  # `Persistent=true` + `enable --now` запустили бы ПЕРВЫЙ прогон немедленно —
+  # до dry-run и до того, как оператор увидел объём. Прогон необратим:
+  # обнулённые ip_address не восстанавливает ни `alembic downgrade`, ни
+  # повторный запуск (downgrade возвращает механизм, но не данные).
+  # Интерактивного подтверждения внутри job быть не может: Type=oneshot,
+  # stdin недоступен. Поэтому решение принимает оператор ДО активации таймера.
+  if $ENABLE_IP_ANON; then
+    sudo systemctl enable --now mindcare-anonymize-ips.timer
+    warn "Таймер IP-анонимизации ВКЛЮЧЁН (--enable-ip-anonymization)."
+    warn "Первый прогон необратим; убедитесь, что dry-run уже выполнялся."
+  else
+    info "Таймер IP-анонимизации установлен, но НЕ включён (по умолчанию)."
+    info "Порядок ввода в эксплуатацию:"
+    info "  1) cd $API_DIR && .venv/bin/python scripts/anonymize_old_ips.py --days 90 --dry-run"
+    info "  2) оценить объём и выбрать окно низкой нагрузки"
+    info "  3) .venv/bin/python scripts/anonymize_old_ips.py --days 90   # необратимо"
+    info "  4) повторный --dry-run должен дать ~0"
+    info "  5) sudo systemctl enable --now mindcare-anonymize-ips.timer"
+    info "Подробности: deploy/STAGE_7_DEPLOYMENT.md"
+  fi
+
+  if $ENABLE_IP_ANON; then
+    ok "Maintenance-таймеры установлены и включены"
+  else
+    ok "Maintenance-таймеры установлены; включены все, кроме IP-анонимизации"
+  fi
+  info "Проверка: systemctl list-timers 'mindcare-*'"
+
   ok "Сервисы созданы и включены в автозагрузку"
   info "Управление: sudo systemctl start|stop|status mindcare-api mindcare-web"
 fi
@@ -494,5 +710,16 @@ if $SETUP_SYSTEMD; then
   echo ""
 fi
 echo -e "  ${BOLD}Будущие партиции audit-таблиц:${NC}"
-echo -e "    cd mindcare_api && .venv/bin/python scripts/ensure_audit_partitions.py --months-ahead 24"
+if $SETUP_SYSTEMD; then
+  echo -e "    создаются таймером mindcare-ensure-audit-partitions.timer (ежемесячно)"
+  echo -e "    вручную: cd mindcare_api && .venv/bin/python scripts/ensure_audit_partitions.py --months-ahead 24"
+else
+  echo -e "    cd mindcare_api && .venv/bin/python scripts/ensure_audit_partitions.py --months-ahead 24"
+fi
 echo ""
+if $SETUP_SYSTEMD && ! $ENABLE_IP_ANON; then
+  echo -e "  ${BOLD}IP-анонимизация audit-журналов:${NC}"
+  echo -e "    таймер установлен, но НЕ включён — первый прогон необратим"
+  echo -e "    порядок: deploy/STAGE_7_DEPLOYMENT.md"
+  echo ""
+fi

@@ -1,0 +1,31 @@
+[Unit]
+Description=MindCare maintenance: complete due group sessions (Stage 5C-3)
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_5C_DEPLOYMENT.md
+After=network-online.target postgresql.service
+Requires=postgresql.service
+# Падение (exit != 0) поднимает шаблонный обработчик мониторинга.
+OnFailure=mindcare-maintenance-failure@mindcare-complete-group-sessions.service
+
+[Service]
+# Разовый прогон по таймеру: успех = exit 0, любой сбой (мутация / audit /
+# commit) = exit 1. systemd фиксирует падение в состоянии юнита, поэтому
+# мониторинг строится на exit code, а не на разборе логов.
+Type=oneshot
+User=vitbo
+Group=vitbo
+WorkingDirectory=/media/data2/psycho/mindcare/mindcare_api
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/media/data2/psycho/mindcare/mindcare_api/.venv/bin/python scripts/complete_group_sessions.py
+
+# Ретраи внутри одного окна не нужны: следующий тик таймера повторит переход
+# (операция идемпотентна — предикат status='scheduled' AND starts_at<=now).
+TimeoutStartSec=300
+
+# Диагностика минимизирована на стороне скрипта (только phase + класс
+# исключения); в journal не должно попадать str(exc)/SQL/id/дат.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mindcare-complete-group-sessions
+
+[Install]
+WantedBy=multi-user.target

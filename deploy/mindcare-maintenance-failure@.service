@@ -1,0 +1,26 @@
+[Unit]
+Description=MindCare maintenance failure notice for %i
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_5C_DEPLOYMENT.md
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_7_DEPLOYMENT.md
+
+[Service]
+# ОБЩИЙ шаблонный OnFailure-обработчик: срабатывает для ЛЮБОГО maintenance-юнита,
+# который на него ссылается через OnFailure=mindcare-maintenance-failure@%n —
+# сейчас это четыре job'а (Stage 5C-3: complete-group-sessions, extend-schedules;
+# Stage 7: anonymize-ips, ensure-audit-partitions), а не только два скрипта
+# Stage 5C-3. Новый maintenance-job подключается к этому же шаблону простой
+# ссылкой в своём unit-файле — сам обработчик менять не нужно.
+#
+# Инвариант мониторинга: КАЖДЫЙ подключённый job гарантирует exit 1 при любом
+# сбое мутации / audit / commit, поэтому одного факта срабатывания OnFailure
+# достаточно — разбирать логи не нужно.
+#
+# Сообщение НЕ содержит str(exc)/SQL/id/дат: только имя упавшего юнита. Детали
+# (phase + класс исключения) остаются в journal самого юнита.
+Type=oneshot
+User=vitbo
+Group=vitbo
+ExecStart=/usr/bin/logger -t mindcare-maintenance -p daemon.err "FAILED unit=%i (see: journalctl -u %i)"
+
+# Здесь же подключается доставка наружу (email/Telegram/webhook), когда она
+# появится в проекте: добавить второй ExecStart, не меняя сами job-юниты.

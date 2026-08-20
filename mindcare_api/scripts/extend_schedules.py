@@ -122,7 +122,12 @@ def main() -> None:
         )
         logger.info("=== extend_schedules SUCCESS ===")
     except Exception as exc:
-        logger.error("[error] %s: %s", type(exc).__name__, exc)
+        # Минимизация (Stage 5C-3): только фаза и класс исключения. Без
+        # str(exc), SQL, series UUID, дат и иных значений — по образцу
+        # app/audit/service.py::_diag.
+        logger.error(
+            "[error] phase=auto_extend error=%s", type(exc).__name__
+        )
         logger.error("=== extend_schedules FAILED ===")
         sys.exit(1)
 
