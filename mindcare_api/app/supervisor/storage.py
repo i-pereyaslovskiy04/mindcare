@@ -11,10 +11,10 @@ from typing import Optional
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased
 
+from app.audit import Actor, Outcome, Target, record_event
 from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.db.models import (
-    AuditLog,
     Consent,
     ConsentRecord,
     PsychologistProfile,
@@ -414,30 +414,27 @@ def create_student(
                 "psychologist_id": engagement.psychologist_id,
             }
 
-        # 7. Аудит — обязателен в этой же транзакции, без ПДн в описании.
-        db.add(AuditLog(
-            user_id=actor_id,
-            user_role=actor_role,
-            event_type="supervisor_create_student",
-            entity_type="user",
-            entity_id=new_user.id,
-            description=(
-                f"Создан аккаунт студента id={new_user.id} "
-                f"(actor id={actor_id}, роль {actor_role})"
-            ),
-        ))
+        # 7. Аудит — обязателен в ЭТОЙ транзакции через единый facade (db=db;
+        # facade только db.add, без commit/rollback/close). metadata пуста,
+        # description не пишется, ПДн/имена/пароль не логируются. Сбой аудита
+        # не проглатывается — откатывает всю запись. actor уже int (route _actor).
+        record_event(
+            event="supervisor_create_student",
+            actor=Actor.user(int(actor_id), actor_role),
+            target=Target("user", new_user.id),
+            outcome=Outcome.SUCCESS,
+            context=None,
+            db=db,
+        )
         if engagement_id is not None:
-            db.add(AuditLog(
-                user_id=actor_id,
-                user_role=actor_role,
-                event_type="supervisor_assign_psychologist",
-                entity_type="therapy_engagement",
-                entity_id=engagement_id,
-                description=(
-                    f"Психолог id={psychologist_id} назначен студенту "
-                    f"id={new_user.id} при создании аккаунта"
-                ),
-            ))
+            record_event(
+                event="supervisor_assign_psychologist",
+                actor=Actor.user(int(actor_id), actor_role),
+                target=Target("therapy_engagement", engagement_id),
+                outcome=Outcome.SUCCESS,
+                context=None,
+                db=db,
+            )
 
         db.commit()
         db.refresh(new_user)

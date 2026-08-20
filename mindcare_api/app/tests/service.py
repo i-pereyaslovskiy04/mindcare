@@ -271,33 +271,74 @@ def get_test(uuid: str) -> Optional[dict]:
     return storage.get_test_by_uuid(uuid)
 
 
-def create_test(data: dict, created_by: int) -> dict:
+def create_test(
+    data: dict,
+    created_by: int,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     data = _normalize(data)
-    return storage.create_test(data, created_by=created_by)
+    return storage.create_test(
+        data, created_by=created_by,
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
 
 
-def update_test(uuid: str, data: dict) -> dict:
+def update_test(
+    uuid: str,
+    data: dict,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     data = _normalize(data)
     if data.get("questions") is not None and storage.test_has_results(uuid):
         raise TestHasResults(
             "По этому тесту уже есть результаты — его вопросы изменить нельзя. "
             "Создайте копию методики и правьте её."
         )
-    result = storage.update_test(uuid, data)
+    result = storage.update_test(
+        uuid, data,
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
     if result is None:
         raise ValueError("Тест не найден")
     return result
 
 
-def duplicate_test(uuid: str, created_by: int) -> dict:
-    result = storage.duplicate_test(uuid, created_by=created_by)
+def duplicate_test(
+    uuid: str,
+    created_by: int,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    result = storage.duplicate_test(
+        uuid, created_by=created_by,
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
     if result is None:
         raise ValueError("Тест не найден")
     return result
 
 
-def delete_test(uuid: str) -> None:
-    if not storage.delete_test(uuid):
+def delete_test(
+    uuid: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    if not storage.delete_test(
+        uuid,
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    ):
         raise ValueError("Тест не найден")
 
 
@@ -358,11 +399,18 @@ def get_test_consent_status(user_id: int) -> dict:
     return {**consent, "accepted": accepted}
 
 
-def accept_test_consent(user_id: int, ip: Optional[str], user_agent: Optional[str]) -> dict:
+def accept_test_consent(
+    user_id: int, ip: Optional[str], user_agent: Optional[str],
+    *,
+    actor_role: Optional[str] = None,
+) -> dict:
     consent = storage.get_active_test_consent()
     if not consent:
         raise ConfigError("Политика согласия на тестирование не настроена")
-    storage.save_consent_record(user_id, consent["id"], ip=ip, user_agent=user_agent)
+    storage.save_consent_record(
+        user_id, consent["id"], ip=ip, user_agent=user_agent,
+        actor_role=actor_role,
+    )
     return {**consent, "accepted": True}
 
 
@@ -414,6 +462,8 @@ def _validate_answers(test: dict, answers: list[dict]) -> None:
 def submit_test(
     uuid: str, user_id: int, answers: list[dict],
     ip: Optional[str] = None, user_agent: Optional[str] = None,
+    *,
+    actor_role: Optional[str] = None,
 ) -> dict:
     test = storage.get_active_test_full(uuid)
     if not test:
@@ -423,7 +473,10 @@ def submit_test(
     _validate_answers(test, answers)
 
     computed = scoring.compute_result(test, answers)
-    saved = storage.save_result(user_id, uuid, computed, answers)
+    saved = storage.save_result(
+        user_id, uuid, computed, answers,
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
     if saved is None:
         raise ValueError("Тест не найден")
     return saved

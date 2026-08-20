@@ -7,9 +7,12 @@
 
 import uuid as _uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from app.auth.deps import get_current_user, require_role
+from app.auth.deps import get_current_user, require_role, resolve_role_or_403
+from app.audit import Actor
+from app.audit.failsafe import record_secondary_failure
+from app.audit.request_context import build_request_context
 from app.appointments import service
 from app.appointments.schemas import (
     AppointmentDetailRead,
@@ -40,11 +43,22 @@ from app.appointments.schemas import (
 )
 
 
+def _sup_role(current_user: dict) -> str:
+    return resolve_role_or_403(
+        current_user, allowed={"admin", "supervisor"}, preferred="supervisor",
+    )
+
+
+def _ip(request: Request):
+    return request.client.host if request.client else None
+
+
 def _parse_series_id(series_id: str) -> _uuid.UUID:
     try:
         return _uuid.UUID(series_id)
     except (ValueError, AttributeError):
         raise HTTPException(status_code=422, detail="Некорректный series_id")
+
 
 router = APIRouter(
     prefix="/supervisor",
@@ -68,20 +82,37 @@ def list_meeting_types(
     response_model=MeetingTypeRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_meeting_type(body: MeetingTypeCreate):
+def create_meeting_type(
+    body: MeetingTypeCreate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Создать тип встречи."""
+    role = _sup_role(current_user)
     try:
-        return service.create_meeting_type(body.model_dump())
+        return service.create_meeting_type(
+            body.model_dump(),
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
 @router.patch("/meeting-types/{mt_id}", response_model=MeetingTypeRead)
-def update_meeting_type(mt_id: int, body: MeetingTypeUpdate):
+def update_meeting_type(
+    mt_id: int,
+    body: MeetingTypeUpdate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Обновить тип встречи (частичное обновление)."""
+    role = _sup_role(current_user)
     try:
         return service.update_meeting_type(
-            mt_id, body.model_dump(exclude_unset=True)
+            mt_id, body.model_dump(exclude_unset=True),
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
         )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -142,8 +173,13 @@ def list_schedule_rules(
     response_model=list[ScheduleRuleRead],
     status_code=status.HTTP_201_CREATED,
 )
-def create_schedule_rules(body: ScheduleRuleCreate):
+def create_schedule_rules(
+    body: ScheduleRuleCreate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Создать рабочие окна на один или несколько дней (общий series_id)."""
+    role = _sup_role(current_user)
     try:
         data = body.model_dump()
         from datetime import time as dt_time, date as dt_date
@@ -154,7 +190,11 @@ def create_schedule_rules(body: ScheduleRuleCreate):
             data["effective_until"] = dt_date.fromisoformat(
                 data["effective_until"]
             )
-        return service.create_schedule_rules(data)
+        return service.create_schedule_rules(
+            data,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except ValueError as exc:
@@ -164,10 +204,19 @@ def create_schedule_rules(body: ScheduleRuleCreate):
 @router.delete(
     "/schedule-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-def deactivate_schedule_rule(rule_id: int):
+def deactivate_schedule_rule(
+    rule_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Деактивировать рабочее окно (is_active=False)."""
+    role = _sup_role(current_user)
     try:
-        service.deactivate_schedule_rule(rule_id)
+        service.deactivate_schedule_rule(
+            rule_id,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -181,6 +230,7 @@ def deactivate_schedule_rule(rule_id: int):
 )
 def create_schedule(
     body: ScheduleCreate,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Создать расписание (серию): рабочие окна + перерывы одной операцией.
@@ -188,6 +238,7 @@ def create_schedule(
     Несколько дней недели сразу, время start/end, период (effective_from/until),
     повторяющиеся перерывы и auto_extend. auto_extend требует effective_until.
     """
+    role = _sup_role(current_user)
     try:
         from datetime import time as dt_time, date as dt_date
         data = body.model_dump()
@@ -202,7 +253,11 @@ def create_schedule(
             brk["start_time"] = dt_time.fromisoformat(brk["start_time"])
             brk["end_time"] = dt_time.fromisoformat(brk["end_time"])
         data["created_by"] = int(current_user["id"])
-        return service.create_schedule(data)
+        return service.create_schedule(
+            data,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except ValueError as exc:
@@ -210,13 +265,19 @@ def create_schedule(
 
 
 @router.patch("/schedules/{series_id}", response_model=ScheduleSeriesRead)
-def update_schedule(series_id: str, body: ScheduleUpdate):
+def update_schedule(
+    series_id: str,
+    body: ScheduleUpdate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Редактировать серию расписания (та же series_id, тот же психолог).
 
     Существующие записи не удаляются и не переносятся. auto_extend требует
     effective_until. is_active серии сохраняется.
     """
     sid = _parse_series_id(series_id)
+    role = _sup_role(current_user)
     try:
         from datetime import time as dt_time, date as dt_date
         data = body.model_dump()
@@ -230,7 +291,11 @@ def update_schedule(series_id: str, body: ScheduleUpdate):
         for brk in data.get("breaks", []):
             brk["start_time"] = dt_time.fromisoformat(brk["start_time"])
             brk["end_time"] = dt_time.fromisoformat(brk["end_time"])
-        return service.update_schedule(sid, data)
+        return service.update_schedule(
+            sid, data,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except ValueError as exc:
@@ -250,14 +315,23 @@ def schedule_impact(series_id: str):
 
 
 @router.delete("/schedules/{series_id}", response_model=ScheduleDeleteResult)
-def soft_delete_schedule(series_id: str):
+def soft_delete_schedule(
+    series_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Soft-delete расписания-серии (is_active=False). Записи не удаляются.
 
     Возвращает количество будущих записей в периоде как предупреждение.
     """
     sid = _parse_series_id(series_id)
+    role = _sup_role(current_user)
     try:
-        return service.soft_delete_schedule(sid)
+        return service.soft_delete_schedule(
+            sid,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -265,11 +339,20 @@ def soft_delete_schedule(series_id: str):
 @router.post(
     "/schedules/{series_id}/restore", response_model=ScheduleSeriesRead
 )
-def restore_schedule(series_id: str):
+def restore_schedule(
+    series_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Восстановить ранее деактивированное расписание-серию."""
     sid = _parse_series_id(series_id)
+    role = _sup_role(current_user)
     try:
-        return service.restore_schedule(sid)
+        return service.restore_schedule(
+            sid,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -279,12 +362,19 @@ def restore_schedule(series_id: str):
 )
 def extend_schedule(
     series_id: str,
+    request: Request,
     months: int = Query(default=1, ge=1, le=12),
+    current_user: dict = Depends(get_current_user),
 ):
     """Быстрое действие «продлить на месяц»: двигает effective_until серии."""
     sid = _parse_series_id(series_id)
+    role = _sup_role(current_user)
     try:
-        return service.extend_schedule(sid, months=months)
+        return service.extend_schedule(
+            sid, months=months,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -298,6 +388,7 @@ def extend_schedule(
 )
 def supervisor_book_appointment(
     body: SupervisorAppointmentCreate,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Ручная запись на свободный слот (создаётся pending_confirmation).
@@ -306,6 +397,10 @@ def supervisor_book_appointment(
     незарегистрированного студента (unregistered_student_card_id). Психолог
     получает system-уведомление о записи; created_by фиксирует supervisor'а (аудит).
     """
+    role = _sup_role(current_user)
+    actor = Actor.user(int(current_user["id"]), role)
+    ip = _ip(request)
+    ua = request.headers.get("user-agent")
     try:
         return service.supervisor_book_appointment(
             student_id=body.student_id,
@@ -316,8 +411,17 @@ def supervisor_book_appointment(
             modality=body.modality,
             topic=body.topic,
             current_user=current_user,
+            actor_role=role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AppointmentError as exc:
+        if isinstance(exc, service.AuditableAppointmentError):
+            record_secondary_failure(
+                event="appointment_create_failed", actor=actor,
+                failure_reason_code=exc.audit_code,
+                context=build_request_context(ip=ip, user_agent=ua),
+            )
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
@@ -350,6 +454,7 @@ def list_unregistered_student_cards(
 )
 def create_unregistered_student_card(
     body: UnregisteredStudentCardCreate,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Создать карточку незарегистрированного студента.
@@ -357,11 +462,24 @@ def create_unregistered_student_card(
     Требует full_name и personal_data_consent=true. created_by фиксирует
     создавшего supervisor/admin.
     """
+    role = _sup_role(current_user)
+    actor = Actor.user(int(current_user["id"]), role)
+    ip = _ip(request)
+    ua = request.headers.get("user-agent")
     try:
         return service.create_unregistered_student_card(
-            body.model_dump(), current_user
+            body.model_dump(), current_user,
+            actor_role=role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AppointmentError as exc:
+        if isinstance(exc, service.AuditableAppointmentError):
+            record_secondary_failure(
+                event="unregistered_student_card_create_failed", actor=actor,
+                failure_reason_code=exc.audit_code,
+                context=build_request_context(ip=ip, user_agent=ua),
+            )
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
@@ -372,11 +490,17 @@ def create_unregistered_student_card(
 def update_unregistered_student_card(
     card_id: int,
     body: UnregisteredStudentCardUpdate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
 ):
     """Обновить личные поля карточки (частично). Audit/consent не меняются."""
     try:
         return service.update_unregistered_student_card(
-            card_id, body.model_dump(exclude_unset=True)
+            card_id, body.model_dump(exclude_unset=True),
+            current_user=current_user,
+            actor_role=_sup_role(current_user),
+            ip=_ip(request),
+            user_agent=request.headers.get("user-agent"),
         )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -386,10 +510,20 @@ def update_unregistered_student_card(
     "/unregistered-student-cards/{card_id}/archive",
     response_model=UnregisteredStudentCardRead,
 )
-def archive_unregistered_student_card(card_id: int):
+def archive_unregistered_student_card(
+    card_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Архивировать карточку (soft archive через archived_at)."""
     try:
-        return service.archive_unregistered_student_card(card_id)
+        return service.archive_unregistered_student_card(
+            card_id,
+            current_user=current_user,
+            actor_role=_sup_role(current_user),
+            ip=_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -409,8 +543,13 @@ def list_schedule_breaks(
     response_model=list[ScheduleBreakRead],
     status_code=status.HTTP_201_CREATED,
 )
-def create_schedule_breaks(body: ScheduleBreakCreate):
+def create_schedule_breaks(
+    body: ScheduleBreakCreate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Создать повторяющиеся перерывы (например обед) на один/несколько дней."""
+    role = _sup_role(current_user)
     try:
         data = body.model_dump()
         from datetime import time as dt_time, date as dt_date
@@ -423,7 +562,11 @@ def create_schedule_breaks(body: ScheduleBreakCreate):
             data["effective_until"] = dt_date.fromisoformat(
                 data["effective_until"]
             )
-        return service.create_schedule_breaks(data)
+        return service.create_schedule_breaks(
+            data,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except ValueError as exc:
@@ -433,10 +576,19 @@ def create_schedule_breaks(body: ScheduleBreakCreate):
 @router.delete(
     "/schedule-breaks/{break_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-def deactivate_schedule_break(break_id: int):
+def deactivate_schedule_break(
+    break_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Деактивировать перерыв (is_active=False)."""
+    role = _sup_role(current_user)
     try:
-        service.deactivate_schedule_break(break_id)
+        service.deactivate_schedule_break(
+            break_id,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -446,8 +598,13 @@ def deactivate_schedule_break(break_id: int):
     response_model=ScheduleExceptionRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_schedule_exception(body: ScheduleExceptionCreate):
+def create_schedule_exception(
+    body: ScheduleExceptionCreate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Создать разовое исключение (day_off / unavailable / extra_availability)."""
+    role = _sup_role(current_user)
     try:
         data = body.model_dump()
         from datetime import time as dt_time, date as dt_date
@@ -456,7 +613,11 @@ def create_schedule_exception(body: ScheduleExceptionCreate):
             data["start_time"] = dt_time.fromisoformat(data["start_time"])
         if data.get("end_time"):
             data["end_time"] = dt_time.fromisoformat(data["end_time"])
-        return service.create_schedule_exception(data)
+        return service.create_schedule_exception(
+            data,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except ValueError as exc:
@@ -507,23 +668,41 @@ def list_group_sessions(
 )
 def create_group_session(
     body:         GroupSessionCreate,
+    request:      Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Создать групповое занятие."""
+    role = _sup_role(current_user)
     try:
         data = body.model_dump()
         data["created_by"] = current_user["id"]
-        return service.create_group_session(data)
+        return service.create_group_session(
+            data,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
 @router.patch("/group-sessions/{uuid}", response_model=GroupSessionRead)
-def update_group_session(uuid: str, body: GroupSessionUpdate):
-    """Обновить групповое занятие (частичное обновление)."""
+def update_group_session(
+    uuid: str,
+    body: GroupSessionUpdate,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Обновить групповое занятие (частичное обновление).
+
+    `status` принимает только стабильный enum; допустим лишь переход
+    scheduled→cancelled ('completed' — за system maintenance).
+    """
+    role = _sup_role(current_user)
     try:
         return service.update_group_session(
-            uuid, body.model_dump(exclude_unset=True)
+            uuid, body.model_dump(exclude_unset=True),
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
         )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -532,10 +711,17 @@ def update_group_session(uuid: str, body: GroupSessionUpdate):
 @router.patch("/group-sessions/{uuid}/booking", response_model=GroupSessionRead)
 def set_group_session_booking(
     uuid:    str,
+    request: Request,
     enabled: bool = Query(..., description="true = открыть запись, false = закрыть"),
+    current_user: dict = Depends(get_current_user),
 ):
     """Открыть или закрыть запись на групповое занятие."""
+    role = _sup_role(current_user)
     try:
-        return service.set_group_session_booking(uuid, enabled)
+        return service.set_group_session_booking(
+            uuid, enabled,
+            actor_id=int(current_user["id"]), actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)

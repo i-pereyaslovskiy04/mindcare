@@ -6,6 +6,8 @@ from sqlalchemy import desc
 from app.db.session import SessionLocal
 from app.db.models import SessionNote
 from app.core.encryption import decrypt_text, encrypt_text
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 
 
 def _note_to_dict(note: SessionNote) -> dict:
@@ -59,7 +61,23 @@ def create_note(
     note_type:             str,
     content:               str,
     is_shared_with_client: bool,
+    actor_role:            str,
+    ip:                    Optional[str] = None,
+    user_agent:            Optional[str] = None,
 ) -> dict:
+    """
+    Создаёт заметку и пишет session_note_created в audit_log АТОМАРНО
+    (ATOMIC/RAISE) — в той же транзакции до единственного commit. Сбой аудита
+    откатывает заметку. author_id — единый идентификатор: SessionNote.author_id
+    И actor id (Actor.user); отдельного actor_id нет.
+    """
+    if author_id is None or actor_role is None:
+        raise RuntimeError(
+            "session note create requires authenticated actor context "
+            "(author_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         note = SessionNote(
             author_id=author_id,
@@ -70,6 +88,16 @@ def create_note(
             is_shared_with_client=is_shared_with_client,
         )
         db.add(note)
+        db.flush()   # note.id до commit — нужен Target
+        record_event(
+            event="session_note_created",
+            actor=Actor.user(int(author_id), actor_role),
+            target=Target("session_note", note.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(note)
         return _note_to_dict(note)
@@ -131,17 +159,31 @@ def update_note(
     note_id:   int,
     data:      dict,
     *,
-    author_id: Optional[int] = None,
+    author_id:  int,
+    actor_role: str,
+    ip:         Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Updates fields present in data (exclude_unset semantics from routes).
-    author_id scopes the query to own notes when provided.
-    content is re-encrypted on change; version increments on content change.
+    author_id — единый идентификатор: owner-scope query (заметка автора) И actor
+    id (Actor.user); отдельного actor_id нет. content is re-encrypted on change;
+    version increments on content change. Пишет session_note_updated в audit_log
+    АТОМАРНО (ATOMIC/RAISE) до единственного commit — сбой аудита откатывает
+    правку. Чужая/несуществующая заметка → None (до какой-либо мутации/аудита).
     """
+    if author_id is None or actor_role is None:
+        raise RuntimeError(
+            "session note update requires authenticated actor context "
+            "(author_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
-        q = db.query(SessionNote).filter(SessionNote.id == note_id)
-        if author_id is not None:
-            q = q.filter(SessionNote.author_id == author_id)
+        q = db.query(SessionNote).filter(
+            SessionNote.id == note_id,
+            SessionNote.author_id == author_id,   # owner scope
+        )
         note = q.first()
         if not note:
             return None
@@ -155,6 +197,15 @@ def update_note(
             note.note_type = data["note_type"]
 
         note.updated_at = datetime.now(timezone.utc)
+        record_event(
+            event="session_note_updated",
+            actor=Actor.user(int(author_id), actor_role),
+            target=Target("session_note", note.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(note)
         return _note_to_dict(note)

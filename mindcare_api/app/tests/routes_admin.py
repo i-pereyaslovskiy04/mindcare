@@ -3,8 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.exc import IntegrityError
 
-from app.auth.audit import log_auth_event
-from app.auth.deps import require_role
+from app.auth.deps import require_role, resolve_role_or_403
 from app.tests import service
 from app.tests.service import TestHasResults
 from app.tests.schemas import (
@@ -28,6 +27,14 @@ router = APIRouter(
 def _client(request: Request) -> tuple[Optional[str], Optional[str]]:
     ip = request.client.host if request.client else None
     return ip, request.headers.get("user-agent")
+
+
+def _acting_role(current_user: dict) -> str:
+    # test CRUD доступен admin И supervisor; preferred=admin детерминирует
+    # выбор для dual-role пользователя (ROLE_PRIORITY: admin выше supervisor).
+    return resolve_role_or_403(
+        current_user, allowed={"admin", "supervisor"}, preferred="admin",
+    )
 
 
 @router.get("", response_model=PaginatedTestsResponse)
@@ -93,17 +100,19 @@ def create_test(
     request: Request,
     current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
+    ip, ua = _client(request)
     try:
-        test = service.create_test(body.model_dump(), created_by=current_user["id"])
+        test = service.create_test(
+            body.model_dump(),
+            created_by=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=ip,
+            user_agent=ua,
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         )
-    ip, ua = _client(request)
-    log_auth_event(
-        event=f"admin_create_test:{test['uuid']}",
-        success=True, user_id=current_user["id"], ip_address=ip, user_agent=ua,
-    )
     return test
 
 
@@ -114,8 +123,15 @@ def update_test(
     request: Request,
     current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
+    ip, ua = _client(request)
     try:
-        test = service.update_test(uuid, body.model_dump(exclude_unset=True))
+        test = service.update_test(
+            uuid, body.model_dump(exclude_unset=True),
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=ip,
+            user_agent=ua,
+        )
     except TestHasResults as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except IntegrityError:
@@ -137,11 +153,6 @@ def update_test(
             else status.HTTP_422_UNPROCESSABLE_ENTITY
         )
         raise HTTPException(status_code=code, detail=msg)
-    ip, ua = _client(request)
-    log_auth_event(
-        event=f"admin_update_test:{uuid}",
-        success=True, user_id=current_user["id"], ip_address=ip, user_agent=ua,
-    )
     return test
 
 
@@ -156,15 +167,17 @@ def duplicate_test(
     по которому уже есть результаты: опубликованный инструмент не меняют,
     публикуют новую редакцию.
     """
+    ip, ua = _client(request)
     try:
-        test = service.duplicate_test(uuid, created_by=current_user["id"])
+        test = service.duplicate_test(
+            uuid,
+            created_by=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=ip,
+            user_agent=ua,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    ip, ua = _client(request)
-    log_auth_event(
-        event=f"admin_duplicate_test:{test['uuid']}",
-        success=True, user_id=current_user["id"], ip_address=ip, user_agent=ua,
-    )
     return test
 
 
@@ -174,12 +187,14 @@ def delete_test(
     request: Request,
     current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
+    ip, ua = _client(request)
     try:
-        service.delete_test(uuid)
+        service.delete_test(
+            uuid,
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=ip,
+            user_agent=ua,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    ip, ua = _client(request)
-    log_auth_event(
-        event=f"admin_delete_test:{uuid}",
-        success=True, user_id=current_user["id"], ip_address=ip, user_agent=ua,
-    )

@@ -24,6 +24,8 @@ sys.path.insert(0, ".")
 from app.db.session import SessionLocal           # noqa: E402
 from app.db.models import Test, User              # noqa: E402
 from app.tests import storage                     # noqa: E402
+from app.auth.storage import get_active_role_names  # noqa: E402
+from app.auth.roles import primary_role           # noqa: E402
 
 TITLE = "PHQ-9 — Шкала депрессии (демо)"
 
@@ -103,9 +105,15 @@ def main() -> int:
             .filter(Test.title == TITLE, Test.deleted_at.is_(None))
             .first()
         )
-        # created_by — первый пользователь (если есть), иначе NULL
+        # created_by — первый пользователь (если есть), иначе NULL.
+        # Stage 4B-5: create_test пишет ATOMIC audit и требует actor context —
+        # резолвим фактическую роль created_by (bootstrap ops-path, не HTTP).
         first_user = db.query(User.id).order_by(User.id).first()
         created_by = first_user[0] if first_user else None
+        actor_role = (
+            primary_role(get_active_role_names(db, created_by))
+            if created_by is not None else None
+        )
 
     if exists:
         print(f"[SEED] Демо-тест уже существует: «{TITLE}» — пропуск.")
@@ -116,7 +124,15 @@ def main() -> int:
               f"(9 вопросов, sum 0–27, 5 интерпретаций).")
         return 0
 
-    created = storage.create_test(_build_data(), created_by=created_by)
+    if created_by is None or actor_role not in ("admin", "supervisor"):
+        print("[SEED] Нет пользователя с ролью admin/supervisor для "
+              "атрибуции демо-теста — создайте админа (scripts/create_admin.py) "
+              "и повторите.")
+        return 1
+
+    created = storage.create_test(
+        _build_data(), created_by=created_by, actor_role=actor_role,
+    )
     print(f"[SEED] Создан демо-тест «{TITLE}» uuid={created['uuid']} "
           f"(вопросов: {len(created['questions'])}, "
           f"интерпретаций: {len(created['interpretations'])}).")

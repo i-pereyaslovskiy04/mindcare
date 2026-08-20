@@ -3277,12 +3277,22 @@ class TestScheduleExceptionsList:
         assert dates == ["2027-06-10", "2027-06-05", "2027-06-01"]
 
 
-# ─── Group session lazy-completion + sorting ──────────────────────────────────
+# ─── Group session completion (job-driven, Stage 5C-3) + sorting ─────────────
 
-class TestGroupSessionLazyCompletion:
+class TestGroupSessionCompletion:
 
-    def test_86_due_session_becomes_completed_on_list(self, client):
-        """scheduled с starts_at<=now после запроса списка → completed, запись закрыта."""
+    def test_86_due_session_completed_by_job_not_by_list(self, client):
+        """Stage 5C-3 (вариант B): GET не мутирует, переход делает job.
+
+        Прежде переход `scheduled → completed` выполнялся лениво из GET/list.
+        Теперь read-пути read-only, поэтому тест разделён на две фазы: после
+        списка занятие остаётся `scheduled`, и только явный maintenance-job
+        переводит его в `completed`, закрывает запись и пишет audit-строку
+        `group_session_completed` от системного актора.
+        """
+        from app.appointments import service as appt_service
+        from app.db.models import AuditLog, GroupSession as GS
+
         tok_sv, _, _ = _make_user(client, "supervisor")
         _, pid, _ = _make_user(client, "psychologist")
         now = datetime.now(MOSCOW_TZ)
@@ -3293,7 +3303,9 @@ class TestGroupSessionLazyCompletion:
             )
             gs_uuid = str(gs.uuid)
             db.commit()
+            gs_id = gs.id
 
+        # ── Фаза 1: GET оставляет занятие без изменений ──
         r = client.get(
             "/api/supervisor/group-sessions", headers=_auth(tok_sv)
         )
@@ -3302,17 +3314,39 @@ class TestGroupSessionLazyCompletion:
             (i for i in r.json()["items"] if i["uuid"] == gs_uuid), None
         )
         assert item is not None
-        assert item["status"] == "completed"
+        assert item["status"] == "scheduled"
 
         with SessionLocal() as db:
-            from app.db.models import GroupSession as GS
+            row = db.query(GS).filter(GS.uuid == gs_uuid).first()
+            assert row.status == "scheduled"
+            assert row.booking_enabled is True
+            # read-путь не создал ни одной audit-строки по этому занятию
+            assert db.query(AuditLog).filter(
+                AuditLog.event_type == "group_session_completed",
+                AuditLog.entity_id == gs_id,
+            ).count() == 0
+
+        # ── Фаза 2: переход выполняет maintenance-job ──
+        result = appt_service.complete_due_group_sessions_job()
+        assert result["completed_sessions"] >= 1
+
+        with SessionLocal() as db:
             row = db.query(GS).filter(GS.uuid == gs_uuid).first()
             assert row.status == "completed"
             assert row.booking_enabled is False
+            audit = db.query(AuditLog).filter(
+                AuditLog.event_type == "group_session_completed",
+                AuditLog.entity_id == gs_id,
+            ).all()
+            assert len(audit) == 1          # ровно один физический переход
+            assert audit[0].user_id is None
+            assert audit[0].user_role == "system"
 
-    def test_87_lazy_completion_does_not_touch_cancelled(self, client):
-        """cancelled занятие не переводится в completed."""
-        tok_sv, _, _ = _make_user(client, "supervisor")
+    def test_87_completion_job_does_not_touch_cancelled(self, client):
+        """cancelled занятие job не трогает: ни статуса, ни audit-строки."""
+        from app.appointments import service as appt_service
+        from app.db.models import AuditLog, GroupSession as GS
+
         _, pid, _ = _make_user(client, "psychologist")
         now = datetime.now(MOSCOW_TZ)
         with SessionLocal() as db:
@@ -3323,13 +3357,17 @@ class TestGroupSessionLazyCompletion:
             gs.status = "cancelled"
             gs_uuid = str(gs.uuid)
             db.commit()
+            gs_id = gs.id
 
-        client.get("/api/supervisor/group-sessions", headers=_auth(tok_sv))
+        appt_service.complete_due_group_sessions_job()
 
         with SessionLocal() as db:
-            from app.db.models import GroupSession as GS
             row = db.query(GS).filter(GS.uuid == gs_uuid).first()
             assert row.status == "cancelled"
+            assert db.query(AuditLog).filter(
+                AuditLog.event_type == "group_session_completed",
+                AuditLog.entity_id == gs_id,
+            ).count() == 0
 
     def test_88_cannot_register_on_started_session(self, client):
         """Студент не может записаться на начавшееся/прошедшее занятие (422)."""

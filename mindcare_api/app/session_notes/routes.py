@@ -52,7 +52,7 @@ def create_note(
     try:
         return service.create_note(
             body.model_dump(),
-            author_id=current_user["id"],
+            author_id=int(current_user["id"]),
             actor_role=resolve_role_or_403(
                 current_user, allowed={"psychologist"}, preferred="psychologist",
             ),
@@ -136,7 +136,10 @@ def update_note(
         return service.update_note(
             note_id,
             body.model_dump(exclude_unset=True),
-            current_user=current_user,
+            author_id=int(current_user["id"]),
+            actor_role=resolve_role_or_403(
+                current_user, allowed={"psychologist"}, preferred="psychologist",
+            ),
             ip=_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )

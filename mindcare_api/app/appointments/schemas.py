@@ -1,7 +1,7 @@
 """Pydantic-схемы модуля appointments."""
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -473,6 +473,13 @@ class GroupSessionCreate(BaseModel):
 
 
 class GroupSessionUpdate(BaseModel):
+    """Частичное обновление группового занятия.
+
+    Stage 5C-2: `status` — стабильный enum, а не свободная строка. Через generic
+    PATCH допускается только явно спроектированный переход `scheduled→cancelled`;
+    `completed` принадлежит system maintenance и здесь запрещён (валидация
+    перехода — в сервисе).
+    """
     meeting_type_id: Optional[int] = None
     psychologist_id: Optional[int] = None
     title: Optional[str] = Field(default=None, max_length=255)
@@ -482,7 +489,13 @@ class GroupSessionUpdate(BaseModel):
     format: Optional[str] = None
     capacity: Optional[int] = Field(default=None, ge=1, le=500)
     booking_enabled: Optional[bool] = None
-    status: Optional[str] = None
+    status: Optional[Literal["scheduled", "cancelled"]] = Field(
+        default=None,
+        description=(
+            "Допустимо только 'cancelled' (переход scheduled→cancelled). "
+            "'completed' выставляет только system maintenance."
+        ),
+    )
 
 
 class GroupSessionRead(BaseModel):

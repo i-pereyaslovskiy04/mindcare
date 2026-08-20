@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from typing import Optional
 
-from app.auth.audit import log_auth_event
-from app.auth.deps import require_role, get_current_user
+from app.auth.deps import require_role, get_current_user, resolve_role_or_403
 from app.categories import service
 from app.categories.schemas import (
     AdminCategoriesListQuery,
@@ -17,6 +16,13 @@ router = APIRouter(
     tags=["admin: categories"],
     dependencies=[Depends(require_role("admin"))],
 )
+
+
+def _actor(current_user: dict) -> tuple[int, str]:
+    return (
+        int(current_user["id"]),
+        resolve_role_or_403(current_user, allowed={"admin"}, preferred="admin"),
+    )
 
 
 @router.get("", response_model=PaginatedCategoriesResponse)
@@ -52,17 +58,17 @@ def create_category(
     current_user: dict = Depends(get_current_user),
 ):
     """Создать новую категорию. Slug генерируется из name если не передан."""
+    actor_id, actor_role = _actor(current_user)
     try:
-        cat = service.create_category(body)
+        cat = service.create_category(
+            body,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    log_auth_event(
-        event=f"admin_create_category:{cat['id']}",
-        success=True,
-        user_id=current_user["id"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return cat
 
 
@@ -74,17 +80,17 @@ def update_category(
     current_user: dict = Depends(get_current_user),
 ):
     """Обновить категорию. Передавай только изменяемые поля."""
+    actor_id, actor_role = _actor(current_user)
     try:
-        cat = service.update_category(category_id, body)
+        cat = service.update_category(
+            category_id, body,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    log_auth_event(
-        event=f"admin_update_category:{category_id}",
-        success=True,
-        user_id=current_user["id"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return cat
 
 
@@ -99,14 +105,14 @@ def delete_category(
     Категория скрывается из форм добавления материалов,
     но существующие привязки article_categories не трогаются.
     """
+    actor_id, actor_role = _actor(current_user)
     try:
-        service.delete_category(category_id)
+        service.delete_category(
+            category_id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    log_auth_event(
-        event=f"admin_delete_category:{category_id}",
-        success=True,
-        user_id=current_user["id"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )

@@ -39,7 +39,14 @@ def get_article_public(uuid: str) -> Optional[dict]:
     return storage.get_article_by_uuid(uuid, public_only=True)
 
 
-def create_article(data: dict, created_by: int) -> dict:
+def create_article(
+    data: dict,
+    created_by: int,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     return storage.create_article(
         title=data["title"].strip(),
         excerpt=data.get("excerpt"),
@@ -50,23 +57,47 @@ def create_article(data: dict, created_by: int) -> dict:
         is_published=data.get("is_published", False),
         published_at=data.get("published_at"),
         created_by=created_by,
+        actor_role=actor_role,
+        ip=ip,
+        user_agent=user_agent,
     )
 
 
-def update_article(uuid: str, data: dict) -> Optional[dict]:
+def update_article(
+    uuid: str,
+    data: dict,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
     if "title" in data and data["title"]:
         stripped = data["title"].strip()
         if not stripped:
             raise ValueError("Заголовок не может быть пустым")
         data["title"] = stripped
-    result = storage.update_article(uuid, data)
+    result = storage.update_article(
+        uuid, data,
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
     if result is None:
         raise ValueError("Материал не найден")
     return result
 
 
-def delete_article(uuid: str) -> None:
-    if not storage.delete_article(uuid):
+def delete_article(
+    uuid: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    if not storage.delete_article(
+        uuid,
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    ):
         raise ValueError("Материал не найден")
 
 

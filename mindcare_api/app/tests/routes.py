@@ -2,8 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from app.auth.audit import log_auth_event
-from app.auth.deps import require_role
+from app.auth.deps import require_role, resolve_role_or_403
 from app.tests import service
 from app.tests.service import ConsentRequired, ConfigError
 from app.tests.schemas import (
@@ -25,6 +24,12 @@ router = APIRouter(
 def _client(request: Request):
     ip = request.client.host if request.client else None
     return ip, request.headers.get("user-agent")
+
+
+def _acting_role(current_user: dict) -> str:
+    return resolve_role_or_403(
+        current_user, allowed={"student"}, preferred="student",
+    )
 
 
 # ── список активных тестов ────────────────────────────────────────────────────
@@ -57,13 +62,12 @@ def accept_consent(
 ):
     ip, ua = _client(request)
     try:
-        result = service.accept_test_consent(current_user["id"], ip, ua)
+        result = service.accept_test_consent(
+            int(current_user["id"]), ip, ua,
+            actor_role=_acting_role(current_user),
+        )
     except ConfigError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
-    log_auth_event(
-        event="test_consent_accept", success=True,
-        user_id=current_user["id"], ip_address=ip, user_agent=ua,
-    )
     return result
 
 
@@ -113,9 +117,10 @@ def submit_test(
     ip, ua = _client(request)
     try:
         result = service.submit_test(
-            uuid, current_user["id"],
+            uuid, int(current_user["id"]),
             [a.model_dump() for a in body.answers],
             ip=ip, user_agent=ua,
+            actor_role=_acting_role(current_user),
         )
     except ConsentRequired as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -128,8 +133,4 @@ def submit_test(
             else status.HTTP_422_UNPROCESSABLE_ENTITY
         )
         raise HTTPException(status_code=code, detail=msg)
-    log_auth_event(
-        event=f"test_submit:{uuid}", success=True,
-        user_id=current_user["id"], ip_address=ip, user_agent=ua,
-    )
     return result

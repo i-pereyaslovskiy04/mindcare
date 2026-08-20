@@ -27,6 +27,22 @@ router = APIRouter(
 )
 
 
+def _actor(current_user: dict) -> tuple[int, str]:
+    """
+    Actor для supervisor-мутаций: (actor_id:int, actor_role).
+
+    current_user["id"] приходит строкой (_user_to_dict → str(user.id)); audit-facade
+    требует int actor_id, поэтому int-конвертация выполняется здесь, на route boundary.
+    actor_role — реальная роль актора (admin или supervisor) через resolve_role_or_403.
+    """
+    return (
+        int(current_user["id"]),
+        resolve_role_or_403(
+            current_user, allowed={"admin", "supervisor"}, preferred="supervisor",
+        ),
+    )
+
+
 # ── Студенты ──────────────────────────────────────────────────────────────────
 
 @router.get("/students", response_model=PaginatedStudentsResponse)
@@ -61,6 +77,7 @@ def create_student(
     Опциональный psychologist_id создаёт активную связь студент↔психолог.
     Карточка незарегистрированного студента с тем же email привязывается к аккаунту.
     """
+    actor_id, actor_role = _actor(current_user)
     try:
         return service.create_student(
             full_name=body.full_name,
@@ -68,11 +85,8 @@ def create_student(
             phone=body.phone,
             psychologist_id=body.psychologist_id,
             primary_concern=body.primary_concern,
-            actor_id=current_user["id"],
-            actor_role=resolve_role_or_403(
-                current_user, allowed={"admin", "supervisor"},
-                preferred="supervisor",
-            ),
+            actor_id=actor_id,
+            actor_role=actor_role,
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
         )
@@ -134,16 +148,14 @@ def create_engagement(
     Назначить психолога студенту.
     Возвращает 409 если у студента уже есть активная связь.
     """
+    actor_id, actor_role = _actor(current_user)
     try:
         return service.assign_psychologist(
             client_id=body.client_id,
             psychologist_id=body.psychologist_id,
             primary_concern=body.primary_concern,
-            actor_id=current_user["id"],
-            actor_role=resolve_role_or_403(
-                current_user, allowed={"admin", "supervisor"},
-                preferred="supervisor",
-            ),
+            actor_id=actor_id,
+            actor_role=actor_role,
         )
     except service.SupervisorError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -161,16 +173,14 @@ def transfer_engagement(
     Переназначить клиента на другого психолога.
     Закрывает текущую связь (status=transferred), создаёт новую (status=active).
     """
+    actor_id, actor_role = _actor(current_user)
     try:
         return service.transfer_psychologist(
             engagement_id=engagement_id,
             new_psychologist_id=body.new_psychologist_id,
             transfer_reason=body.transfer_reason,
-            actor_id=current_user["id"],
-            actor_role=resolve_role_or_403(
-                current_user, allowed={"admin", "supervisor"},
-                preferred="supervisor",
-            ),
+            actor_id=actor_id,
+            actor_role=actor_role,
         )
     except service.SupervisorError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -187,15 +197,13 @@ def close_engagement(
     """
     Закрыть активную связь (status=completed).
     """
+    actor_id, actor_role = _actor(current_user)
     try:
         return service.close_engagement(
             engagement_id=engagement_id,
             reason=body.reason,
-            actor_id=current_user["id"],
-            actor_role=resolve_role_or_403(
-                current_user, allowed={"admin", "supervisor"},
-                preferred="supervisor",
-            ),
+            actor_id=actor_id,
+            actor_role=actor_role,
         )
     except service.SupervisorError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)

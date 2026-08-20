@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from app.core.normalization import normalize_email, mask_email
 from app.db.session import SessionLocal
 from app.db.models import OtpVerification
+from app.auth.errors import OtpExpiredError, OtpInvalidError
 
 log = logging.getLogger(__name__)
 
@@ -132,17 +133,17 @@ def verify_otp(email: str, code: str) -> dict:
         )
 
         if not record:
-            raise ValueError("Код не найден или уже использован")
+            raise OtpInvalidError("Код не найден или уже использован")
 
         if now > record.expires_at:
             db.delete(record)
             db.commit()
-            raise ValueError("Срок действия кода истёк. Начните регистрацию заново")
+            raise OtpExpiredError("Срок действия кода истёк. Начните регистрацию заново")
 
         if record.attempts >= MAX_ATTEMPTS:
             db.delete(record)
             db.commit()
-            raise ValueError("Превышено число попыток. Начните регистрацию заново")
+            raise OtpInvalidError("Превышено число попыток. Начните регистрацию заново")
 
         # Сравниваем хеш введённого кода с сохранённым хешем
         if not _verify_code(code, record.code):
@@ -151,7 +152,7 @@ def verify_otp(email: str, code: str) -> dict:
             if remaining <= 0:
                 db.delete(record)
                 db.commit()
-                raise ValueError(
+                raise OtpInvalidError(
                     "Неверный код. Попытки исчерпаны. Начните регистрацию заново"
                 )
             db.commit()
@@ -159,7 +160,7 @@ def verify_otp(email: str, code: str) -> dict:
                 "[OTP] Wrong code for %s, attempts=%d, remaining=%d",
                 mask_email(email), record.attempts, remaining,
             )
-            raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
+            raise OtpInvalidError(f"Неверный код. Осталось попыток: {remaining}")
 
         user_data = {"name": record.name, "password_hash": record.password_hash}
         db.delete(record)

@@ -6,9 +6,12 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.auth.deps import get_current_user, require_role
+from app.auth.deps import get_current_user, require_role, resolve_role_or_403
+from app.audit import Actor
+from app.audit.failsafe import record_secondary_failure
+from app.audit.request_context import build_request_context
 from app.appointments import service
 from app.appointments.schemas import (
     AppointmentDecline,
@@ -18,6 +21,11 @@ from app.appointments.schemas import (
     PsychologistScheduleRead,
     ScheduleExceptionRead,
 )
+
+
+def _ip(request: Request):
+    return request.client.host if request.client else None
+
 
 router = APIRouter(
     prefix="/psychologist/appointments",
@@ -103,15 +111,31 @@ def list_appointments(
 @router.patch("/{uuid}/confirm", response_model=AppointmentDetailRead)
 def confirm_appointment(
     uuid:         str,
+    request:      Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Подтвердить запись студента (pending_confirmation → confirmed)."""
+    role = resolve_role_or_403(
+        current_user, allowed={"psychologist"}, preferred="psychologist",
+    )
+    actor = Actor.user(int(current_user["id"]), role)
+    ip = _ip(request)
+    ua = request.headers.get("user-agent")
     try:
         return service.psychologist_confirm(
             uuid=uuid,
             psychologist_user=current_user,
+            actor_role=role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AppointmentError as exc:
+        if isinstance(exc, service.AuditableAppointmentError):
+            record_secondary_failure(
+                event="appointment_confirm_failed", actor=actor,
+                failure_reason_code=exc.audit_code,
+                context=build_request_context(ip=ip, user_agent=ua),
+            )
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
@@ -119,16 +143,32 @@ def confirm_appointment(
 def decline_appointment(
     uuid:         str,
     body:         AppointmentDecline,
+    request:      Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Отклонить запись студента с необязательной причиной."""
+    role = resolve_role_or_403(
+        current_user, allowed={"psychologist"}, preferred="psychologist",
+    )
+    actor = Actor.user(int(current_user["id"]), role)
+    ip = _ip(request)
+    ua = request.headers.get("user-agent")
     try:
         return service.psychologist_decline(
             uuid=uuid,
             psychologist_user=current_user,
             reason=body.reason,
+            actor_role=role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AppointmentError as exc:
+        if isinstance(exc, service.AuditableAppointmentError):
+            record_secondary_failure(
+                event="appointment_decline_failed", actor=actor,
+                failure_reason_code=exc.audit_code,
+                context=build_request_context(ip=ip, user_agent=ua),
+            )
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 

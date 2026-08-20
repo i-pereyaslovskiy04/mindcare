@@ -23,13 +23,11 @@ from typing import Optional
 
 from fastapi import UploadFile
 
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 from app.auth.roles import effective_role
 from app.chat import storage
 from app.chat import attachment_service as _att_svc
-from app.chat.audit import (
-    log_attachment_downloaded, log_attachment_uploaded,
-    log_conversation_created, log_message_deleted, log_message_edited,
-)
 
 
 class ChatError(Exception):
@@ -119,14 +117,13 @@ def get_my_conversation(
             return {"conversation": None}
         conv, created = storage.get_or_create_conversation(eng.id)
         if created:
-            log_conversation_created(
-                actor_id=student_id,
-                actor_role=_actor_role(current_user, "student"),
-                conversation_id=conv.id,
-                conversation_uuid=str(conv.uuid),
-                engagement_id=eng.id,
-                ip=ip,
-                user_agent=user_agent,
+            record_event(
+                event="chat_conversation_created",
+                actor=Actor.user(student_id, _actor_role(current_user, "student")),
+                target=Target("chat_conversation", conv.id),
+                outcome=Outcome.SUCCESS,
+                context=build_request_context(ip=ip, user_agent=user_agent),
+                db=None,
             )
     elif eng.status != "active" and not storage.conversation_has_messages(conv.id):
         # Пустая неактивная (transferred/closed) беседа — артефакт, скрываем
@@ -179,14 +176,13 @@ def send_my_message(
 
     conv, created = storage.get_or_create_conversation(eng.id)
     if created:
-        log_conversation_created(
-            actor_id=student_id,
-            actor_role=_actor_role(current_user, "student"),
-            conversation_id=conv.id,
-            conversation_uuid=str(conv.uuid),
-            engagement_id=eng.id,
-            ip=ip,
-            user_agent=user_agent,
+        record_event(
+            event="chat_conversation_created",
+            actor=Actor.user(student_id, _actor_role(current_user, "student")),
+            target=Target("chat_conversation", conv.id),
+            outcome=Outcome.SUCCESS,
+            context=build_request_context(ip=ip, user_agent=user_agent),
+            db=None,
         )
 
     try:
@@ -334,13 +330,13 @@ def _apply_message_edit(
 
     msg = result["message"]
     # Audit-факт без plaintext/ciphertext; soft-fail, не ломает правку.
-    log_message_edited(
-        actor_id=actor_user_id,
-        actor_role=actor_role,
-        conversation_id=conv.id,
-        conversation_uuid=str(conv.uuid),
-        message_id=msg["id"],
-        message_uuid=msg["uuid"],
+    record_event(
+        event="chat_message_edited",
+        actor=Actor.user(actor_user_id, actor_role),
+        target=Target("chat_message", msg["id"]),
+        outcome=Outcome.SUCCESS,
+        context=None,
+        db=None,
     )
     return msg
 
@@ -398,13 +394,13 @@ def _apply_message_delete(
         raise ChatError(_NOT_FOUND, status_code=404)
 
     msg = result["message"]
-    log_message_deleted(
-        actor_id=actor_user_id,
-        actor_role=actor_role,
-        conversation_id=conv.id,
-        conversation_uuid=str(conv.uuid),
-        message_id=msg["id"],
-        message_uuid=msg["uuid"],
+    record_event(
+        event="chat_message_deleted",
+        actor=Actor.user(actor_user_id, actor_role),
+        target=Target("chat_message", msg["id"]),
+        outcome=Outcome.SUCCESS,
+        context=None,
+        db=None,
     )
     return msg
 
@@ -575,7 +571,7 @@ def _do_upload_attachment(
     is_image = _att_svc.is_image_mime(mime)
     key      = fs.generate_storage_key()
 
-    result = storage.save_attachment(
+    result, attachment_id = storage.save_attachment(
         conversation_id=conv.id,
         uploader_id=actor_user_id,
         original_filename=file.filename,
@@ -586,15 +582,19 @@ def _do_upload_attachment(
         data=data,
     )
 
-    # Audit soft-fail: сбой audit не ломает upload
-    log_attachment_uploaded(
-        actor_id=actor_user_id,
-        actor_role=actor_role,
-        conversation_id=conv.id,
-        conversation_uuid=str(conv.uuid),
-        attachment_uuid=result["uuid"],
-        file_size=result["file_size"],
-        mime_type=result["mime_type"],
+    # Audit soft-fail: сбой audit не ломает upload. Target — internal id
+    # (attachment_id), не UUID; metadata строго file_size/mime_type (registry).
+    record_event(
+        event="chat_attachment_uploaded",
+        actor=Actor.user(actor_user_id, actor_role),
+        target=Target("chat_attachment", attachment_id),
+        outcome=Outcome.SUCCESS,
+        metadata={
+            "file_size": result["file_size"],
+            "mime_type": result["mime_type"],
+        },
+        context=None,
+        db=None,
     )
 
     return result
@@ -653,14 +653,15 @@ def _do_download_attachment(
     except FileNotFoundError:
         raise ChatError("Файл вложения не найден", status_code=404)
 
-    # Audit soft-fail
-    log_attachment_downloaded(
-        actor_id=actor_user_id,
-        actor_role=actor_role,
-        conversation_id=conv.id,
-        conversation_uuid=str(conv.uuid),
-        attachment_uuid=str(att.uuid),
-        mime_type=att.mime_type,
+    # Audit soft-fail. att.id (internal, уже доступен из ORM) — Target, без
+    # повторного DB lookup ради аудита; metadata пуста (registry).
+    record_event(
+        event="chat_attachment_downloaded",
+        actor=Actor.user(actor_user_id, actor_role),
+        target=Target("chat_attachment", att.id),
+        outcome=Outcome.SUCCESS,
+        context=None,
+        db=None,
     )
 
     return path, att.original_filename, att.mime_type

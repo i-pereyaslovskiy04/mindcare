@@ -13,10 +13,35 @@ import threading
 import time
 import uuid as _uuid
 
+import bcrypt
+import pytest
+
+from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
 from app.db.models import AllowedEmailDomain
 from app.email_domains import storage
 from app.email_domains.errors import DomainError
+
+
+@pytest.fixture
+def admin_actor(client) -> int:      # client → lifespan/seed (нужна роль admin)
+    """Реальный admin: writer allowlist'а fail-closed требует actor context.
+
+    Раньше тесты звали storage с actor_id=None и после введения обязательного
+    актора падали на RuntimeError ещё до конкурентной части.
+
+    Функциональная область — autouse cleanup_test_records удаляет integ_*-записи
+    ПОСЛЕ КАЖДОГО теста, поэтому переиспользованный module-scoped пользователь
+    во втором тесте ронял бы audit-вставку по FK audit_log.user_id.
+    """
+    user = auth_storage.save_user({
+        "name": "Integ CC DomainAdmin",
+        "email": f"integ_cc_domadmin_{_uuid.uuid4().hex[:10]}@example.com",
+        "hashed_password": bcrypt.hashpw(
+            b"SecurePass42!", bcrypt.gensalt()).decode(),
+        "role": "admin",
+    })
+    return int(user["id"])
 
 
 def _add(domain: str, is_active: bool = True) -> int:
@@ -36,15 +61,17 @@ def _active_count() -> int:
         )
 
 
-def _disable(domain_id: int):
+def _disable(domain_id: int, actor_id: int):
     return storage.set_domain_state(
         domain_id=domain_id, new_is_active=False,
         comment_provided=False, new_comment=None,
-        actor_id=None, actor_role=None, ip=None, user_agent=None,
+        actor_id=actor_id, actor_role="admin", ip=None, user_agent=None,
     )
 
 
-def test_two_concurrent_disable_keep_one_active(reset_email_domains):
+def test_two_concurrent_disable_keep_one_active(
+    reset_email_domains, admin_actor
+):
     # Оставляем ровно два активных домена (два temp), остальные — off.
     with SessionLocal() as db:
         db.query(AllowedEmailDomain).update(
@@ -61,7 +88,7 @@ def test_two_concurrent_disable_keep_one_active(reset_email_domains):
     def worker(dom_id: int, key: str):
         barrier.wait()
         try:
-            _disable(dom_id)
+            _disable(dom_id, admin_actor)
             results[key] = "ok"
         except DomainError as e:
             results[key] = e.status_code
@@ -80,7 +107,9 @@ def test_two_concurrent_disable_keep_one_active(reset_email_domains):
     assert _active_count() == 1
 
 
-def test_create_holds_domain_blocks_concurrent_disable(reset_email_domains):
+def test_create_holds_domain_blocks_concurrent_disable(
+    reset_email_domains, admin_actor
+):
     domain = f"integ-cc-hold-{_uuid.uuid4().hex[:8]}.ru"
     dom_id = _add(domain)  # активен; помимо него активны 11 seed → не last-active
 
@@ -100,7 +129,7 @@ def test_create_holds_domain_blocks_concurrent_disable(reset_email_domains):
 
     def disable_worker():
         try:
-            _disable(dom_id)
+            _disable(dom_id, admin_actor)
             disabler["status"] = "ok"
         except DomainError as e:
             disabler["status"] = e.status_code

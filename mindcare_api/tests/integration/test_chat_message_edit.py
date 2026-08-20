@@ -221,7 +221,7 @@ def test_edit_validation(client):
 # ─── K. audit chat_message_edited без plaintext ───────────────────────────────
 
 def test_audit_event_without_plaintext(client):
-    s_token, _s_id, *_rest, conv = _setup_active(client)
+    s_token, s_id, *_rest, conv = _setup_active(client)
     secret_old = "СЕКРЕТ-СТАРЫЙ-uniq"
     secret_new = "СЕКРЕТ-НОВЫЙ-uniq"
     sent = _student_send(client, s_token, conv, secret_old)
@@ -238,12 +238,18 @@ def test_audit_event_without_plaintext(client):
             )
             .all()
         )
-        assert logs, "audit chat_message_edited не создан"
-        for log in logs:
-            blob = f"{log.description} {log.log_metadata}"
-            assert secret_old not in blob
-            assert secret_new not in blob
-            assert ENCRYPTION_PREFIX not in blob
+        assert len(logs) == 1, "ожидается ровно одна строка chat_message_edited"
+        log = logs[0]
+        # Stage 4B-3: metadata пуста (conversation_uuid/message_uuid/actor_id
+        # больше не пишутся), description не пишется (facade), actor == sender.
+        assert (log.log_metadata or {}) == {}
+        assert log.description is None
+        assert log.user_id == s_id
+        assert log.user_role == "student"
+        blob = f"{log.description} {log.log_metadata}"
+        assert secret_old not in blob
+        assert secret_new not in blob
+        assert ENCRYPTION_PREFIX not in blob
 
 
 # ─── L. edit «старого» сообщения в active chat — без ограничения по времени ───

@@ -3,20 +3,61 @@
 Все SQLAlchemy-запросы изолированы здесь.
 """
 
+import sys
 import uuid as _uuid
 from collections import defaultdict
 from typing import Optional
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, asc, desc, select, case as sa_case
+from sqlalchemy.exc import IntegrityError
 
 from app.core.normalization import normalize_email
+from app.audit import (
+    Actor, Operation, Outcome, Target, project_changed_fields,
+    record_data_change, record_event,
+)
+from app.audit.request_context import build_request_context
 from app.auth.roles import ROLE_PRIORITY as _ROLE_PRIORITY_ORDER, primary_role
 from app.auth.storage import get_active_role_names
 from app.db.session import SessionLocal
 from app.db.models import (
-    AuditLog, User, UserRole, Role, UserSession, UserLegalBasisRecord,
+    User, UserRole, Role, UserSession, UserLegalBasisRecord,
 )
+from app.users.errors import (
+    ActorContextError, EmailAlreadyExistsError, InvalidUserRequestError,
+    RoleConfigError, UserNotFoundError,
+)
+
+# Имена email-unique объектов схемы (перепроверены по Alembic: baseline
+# af13ad7a133c → ix_users_email; e5a8f3c1d2b6 → ux_users_email_normalized).
+# Только эти constraint_name считаются email-коллизией на flush; иные
+# IntegrityError re-raise как есть (без анализа str/SQL).
+_USERS_EMAIL_UNIQUE_CONSTRAINTS = frozenset({
+    "ix_users_email", "ux_users_email_normalized",
+})
+
+
+def _is_users_email_unique_violation(exc: IntegrityError) -> bool:
+    orig = getattr(exc, "orig", None)
+    diag = getattr(orig, "diag", None)
+    name = getattr(diag, "constraint_name", None)
+    return name in _USERS_EMAIL_UNIQUE_CONSTRAINTS
+
+
+def _commit_or_diag(db, flow: str) -> None:
+    """Stage 5A-2 commit-phase: узкий try ТОЛЬКО вокруг db.commit(). Сбой commit
+    → outcome ambiguous: безопасная диагностика (event/phase=commit/класс, без
+    str(exc)/URL/email/UUID/ролей/SQL) и немедленный bare raise. НЕ в AuthError,
+    НЕ record_secondary_failure. refresh/query/DTO — вне этого try."""
+    try:
+        db.commit()
+    except Exception as exc:   # noqa: BLE001 — только commit-фаза
+        print(
+            f"[AUDIT] event={flow} phase=commit error={type(exc).__name__}",
+            file=sys.stderr,
+        )
+        raise
 
 _ROLE_PRIORITY = sa_case(
     (Role.name == "admin",        1),
@@ -48,13 +89,14 @@ class RoleChangeError(ValueError):
     """
     Ошибка управления ролями через admin API с явным HTTP-статусом.
 
-    Подкласс ValueError → существующая обработка `except ValueError` в service
-    остаётся валидной, но service отдаёт предпочтение `status_code`.
+    Stage 5A-2: несёт обязательный стабильный `audit_code` (для durable failure-
+    аудита; из allowlist admin_user_update_failed). Подкласс ValueError.
     """
 
-    def __init__(self, message: str, status_code: int = 400):
+    def __init__(self, message: str, status_code: int, audit_code: str):
         super().__init__(message)
         self.status_code = status_code
+        self.audit_code = audit_code
 
 
 def find_users(
@@ -221,7 +263,8 @@ def _target_staff_from_roles(roles: list[str], current: set[str]) -> set[str]:
     target = set(roles)
     if "student" in target:
         raise RoleChangeError(
-            "Роль student не управляется через admin role control", 422
+            "Роль student не управляется через admin role control", 422,
+            "role_policy_violation",
         )
     return target
 
@@ -239,14 +282,15 @@ def _target_staff_from_legacy_role(role: str, current: set[str]) -> set[str]:
     """
     if len(current) > 1:
         raise RoleChangeError(
-            "У пользователя несколько активных ролей — используйте roles[]", 409
+            "У пользователя несколько активных ролей — используйте roles[]", 409,
+            "role_policy_violation",
         )
     if role == "student":
         if current == {"student"}:
             return set()  # no-op: staff не меняем, student сохраняется
         raise RoleChangeError(
             "Роль student не назначается и не снимается через admin role control",
-            422,
+            422, "role_policy_violation",
         )
     return {role}
 
@@ -271,7 +315,12 @@ def _apply_role_and_scalar_changes(
     user_agent: Optional[str],
 ) -> None:
     """
-    Общее ядро set-based управления ролями (без commit; commit — у вызывающего).
+    Общее ядро set-based управления ролями и scalar-полей (без commit; commit —
+    у вызывающего). Stage 4B-4: validate-then-mutate — все проверки, способные
+    отклонить запрос (включая существование actor-контекста и added-ролей),
+    выполняются ДО какой-либо мутации ORM; audit (admin_user_updated/
+    admin_role_*) стейджится в этой же транзакции, ПОСЛЕ мутации, строго
+    ПЕРЕД возвратом (commit — у вызывающего update_user).
 
     target_staff:
       - None → роли не трогаем (только scalar-поля);
@@ -286,140 +335,282 @@ def _apply_role_and_scalar_changes(
     current = set(current_roles)
     current_staff = current & STAFF_ROLES
 
-    # Scalar-поля.
+    # ── (a) Нормализовать proposed scalar-значения в ЛОКАЛЬНЫЕ переменные, БЕЗ
+    #        мутации ORM. Формат-валидация (400-уровень) не зависит от actor
+    #        context и не должна дожидаться guard'а ниже.
+    new_full_name = None
     if full_name is not None:
-        stripped = full_name.strip()
-        if len(stripped) < 2:
-            raise RoleChangeError("ФИО должно содержать минимум 2 символа", 400)
-        user.full_name = stripped
-    if phone is not None:
-        user.phone = phone.strip() or None
-    if is_active is not None:
-        user.is_active = is_active
+        new_full_name = full_name.strip()
+        if len(new_full_name) < 2:
+            raise RoleChangeError(
+                "ФИО должно содержать минимум 2 символа", 400, "invalid_request",
+            )
+    new_phone = (phone.strip() or None) if phone is not None else None
 
-    if target_staff is None:
-        return
+    # ── (b)+(c) Scalar diff — сравнение НОРМАЛИЗОВАННЫХ proposed значений с
+    #            текущими, ДО какой-либо мутации ORM. Stage 5A-1: is_active
+    #            ВЫВЕДЕН из scalar_changed — его переход описывается отдельными
+    #            lifecycle-событиями (admin_user_activated/deactivated), а
+    #            admin_user_updated пишется только при изменении full_name/phone.
+    #
+    #            Stage 6-C: тот же diff теперь даёт ТОЧНЫЙ НАБОР ИМЁН полей —
+    #            он нужен data_change_log. Семантика scalar_changed не меняется:
+    #            это по-прежнему «есть ли реальный diff по full_name/phone».
+    changed_scalar_fields: set = set()
+    if full_name is not None and new_full_name != user.full_name:
+        changed_scalar_fields.add("full_name")
+    if phone is not None and new_phone != user.phone:
+        changed_scalar_fields.add("phone")
+    scalar_changed = bool(changed_scalar_fields)
+    is_active_changed = is_active is not None and is_active != user.is_active
+    deactivating = is_active_changed and is_active is False
 
-    added = target_staff - current
-    removed = current_staff - target_staff
+    # ── (d) Role diff — до мутации.
+    added: set = set()
+    removed: set = set()
+    if target_staff is not None:
+        added = target_staff - current
+        removed = current_staff - target_staff
+
+    # ── (e) Fail-closed actor guard — ДО любой мутации ORM/ролей, если хоть
+    #        один вид реального diff присутствует. Отсутствие actor_id/
+    #        actor_role здесь — internal wiring-баг вызывающего кода (не
+    #        пользовательский ввод и не system actor). RuntimeError не
+    #        ловится service.update_user → HTTP 500; guard стоит до
+    #        self-admin guard, остальных validations и любых мутаций (scalar/
+    #        UserRole/UserLegalBasisRecord/AuditLog) — транзакция вызывающего
+    #        откатывается без частичных изменений. Сообщение фиксированное,
+    #        без ПДн/UUID/email/ролей target.
+    if (scalar_changed or is_active_changed or added or removed) and (
+        actor_id is None or actor_role is None
+    ):
+        raise ActorContextError(
+            "user update requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
 
     # Self-admin guard (defense-in-depth, frontend лишь предотвращает ошибку в UI):
     # администратор не может снять у себя собственную активную роль admin. Работает
     # и для set-based roles[], и для legacy role adapter (оба вычисляют removed).
     # Другой админ может снять admin у другого пользователя (actor_id != user.id).
     if actor_id is not None and user.id == actor_id and "admin" in removed:
-        raise RoleChangeError("Нельзя снять у себя роль администратора", 422)
-
-    if not added and not removed:
-        return  # no-op по ролям
-
-    roles_after_set = (current - removed) | added
-    if not roles_after_set:
         raise RoleChangeError(
-            "Нельзя оставить пользователя без активных ролей", 422
+            "Нельзя снять у себя роль администратора", 422,
+            "self_admin_protected",
         )
 
-    # Назначение staff-роли доступно только тому, у кого уже есть staff-роль:
-    # student→staff и bootstrap staff через PATCH запрещены (новые сотрудники —
-    # через POST /api/admin/users).
-    if added and not current_staff:
-        raise RoleChangeError(
-            "Назначение служебной роли доступно только пользователю, у которого "
-            "уже есть служебная роль; новых сотрудников создавайте через "
-            "POST /api/admin/users",
-            422,
-        )
+    # ── Истинный no-op: ни scalar, ни is_active, ни role — выходим ДО дальнейших
+    #    validations/мутаций/audit.
+    if (
+        not scalar_changed
+        and not is_active_changed
+        and (target_staff is None or (not added and not removed))
+    ):
+        return
 
-    # Legal basis обязателен при добавлении staff-ролей.
-    if added:
-        if legal_basis_confirmed is not True:
+    # ── (f) Оставшиеся role-validations, способные ОТКЛОНИТЬ весь PATCH
+    #        (400/422) — включая существование Role-строк для added. Всё это —
+    #        read-only фаза, без единого db.add/db.delete/setattr на user.
+    roles_after_set = None
+    role_by_name: dict = {}
+    removed_role_ids: list = []
+    if target_staff is not None and (added or removed):
+        roles_after_set = (current - removed) | added
+        if not roles_after_set:
             raise RoleChangeError(
-                "Для назначения служебной роли необходимо подтвердить "
-                "документированное основание (legal_basis_confirmed)", 400,
-            )
-        if not basis_type:
-            raise RoleChangeError(
-                "Необходимо указать basis_type для назначения служебной роли",
-                400,
-            )
-        if not (basis_reference and basis_reference.strip()):
-            raise RoleChangeError(
-                "Необходимо указать basis_reference (документ-основание) "
-                "для назначения служебной роли", 400,
+                "Нельзя оставить пользователя без активных ролей", 422,
+                "role_policy_violation",
             )
 
-    roles_before = _sorted_roles(current)
-    roles_after = _sorted_roles(roles_after_set)
+        # Назначение staff-роли доступно только тому, у кого уже есть
+        # staff-роль: student→staff и bootstrap staff через PATCH запрещены
+        # (новые сотрудники — через POST /api/admin/users).
+        if added and not current_staff:
+            raise RoleChangeError(
+                "Назначение служебной роли доступно только пользователю, у "
+                "которого уже есть служебная роль; новых сотрудников "
+                "создавайте через POST /api/admin/users",
+                422, "role_policy_violation",
+            )
 
-    # Точечное удаление снятых staff-ролей.
-    if removed:
-        removed_role_ids = [
-            r.id for r in db.query(Role).filter(Role.name.in_(removed)).all()
-        ]
+        # Legal basis обязателен при добавлении staff-ролей.
+        if added:
+            if legal_basis_confirmed is not True:
+                raise RoleChangeError(
+                    "Для назначения служебной роли необходимо подтвердить "
+                    "документированное основание (legal_basis_confirmed)", 400,
+                    "legal_basis_required",
+                )
+            if not basis_type:
+                raise RoleChangeError(
+                    "Необходимо указать basis_type для назначения служебной "
+                    "роли", 400, "legal_basis_required",
+                )
+            if not (basis_reference and basis_reference.strip()):
+                raise RoleChangeError(
+                    "Необходимо указать basis_reference (документ-основание) "
+                    "для назначения служебной роли", 400, "legal_basis_required",
+                )
+
+            # Существование Role для ВСЕХ added — здесь, до какой-либо
+            # мутации (раньше проверялось внутри цикла мутации, ПОСЛЕ scalar
+            # setattr и удаления removed — Stage 4B-4 corrective pass).
+            # Отсутствие Role в seed/БД — configuration/internal failure
+            # (RoleConfigError → internal_error), НЕ пользовательский invalid_role.
+            role_objs = db.query(Role).filter(Role.name.in_(added)).all()
+            role_by_name = {r.name: r for r in role_objs}
+            missing = sorted(added - role_by_name.keys())
+            if missing:
+                raise RoleConfigError("required staff role missing in seed/DB")
+
+        # removed_role_ids — тоже чистое чтение (SELECT), не мутация; готовим
+        # заранее, чтобы фаза (g) не содержала ничего, что могло бы отклонить
+        # запрос.
+        if removed:
+            removed_role_ids = [
+                r.id for r in db.query(Role).filter(Role.name.in_(removed)).all()
+            ]
+
+    # ── Единый sanitized context — ОДИН вызов на функцию, переиспользуется и
+    #    для UserLegalBasisRecord, и для обеих audit-строк. Строится ПОСЛЕ
+    #    всех отклоняющих validations (включая role-existence check выше).
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
+    # ── Stage 6-C: публичная проекция journal'а — ДО любой мутации ORM.
+    #    Поле, неизвестное CHANGE_REGISTRY, роняет операцию здесь (fail-closed),
+    #    пока ни один setattr ещё не выполнен. old snapshot НЕ снимается и
+    #    values НЕ строятся: full_name и phone объявлены name-only, поэтому
+    #    ФИО и телефон физически не могут попасть в old_values/new_values.
+    dcl_fields: list = []
+    if scalar_changed:
+        dcl_fields = project_changed_fields("users", changed_scalar_fields)
+
+    # ── (g) Применить мутации — ТОЛЬКО теперь, когда ВСЕ validations прошли
+    #        (включая существование added-ролей). С этой точки и до конца
+    #        функции не остаётся ни одной проверки, способной бросить
+    #        RoleChangeError/ValueError.
+    if full_name is not None:
+        user.full_name = new_full_name
+    if phone is not None:
+        user.phone = new_phone
+    if is_active is not None:
+        user.is_active = is_active
+
+    # Stage 5A-1: отзыв активных сессий ТОЛЬКО при реальном переходе True→False,
+    # в той же транзакции ДО record_event и commit. Сбой аудита/commit откатывает
+    # is_active и отзыв сессий вместе. Активация/no-op/прочие поля сессии не трогают.
+    if deactivating:
+        db.query(UserSession).filter(
+            UserSession.user_id == user.id,
+            ~UserSession.is_revoked,
+        ).update({"is_revoked": True}, synchronize_session=False)
+
+    roles_before = roles_after = None
+    if target_staff is not None and (added or removed):
+        roles_before = _sorted_roles(current)
+        roles_after = _sorted_roles(roles_after_set)
+
+        # Точечное удаление снятых staff-ролей.
         if removed_role_ids:
             db.query(UserRole).filter(
                 UserRole.user_id == user.id,
                 UserRole.role_id.in_(removed_role_ids),
             ).delete(synchronize_session=False)
 
-    # Добавление новых staff-ролей + запись основания на каждую.
-    for role_name in _sorted_roles(added):
-        role_obj = db.query(Role).filter(Role.name == role_name).first()
-        if not role_obj:
-            raise RoleChangeError(f"Роль '{role_name}' не найдена в БД", 400)
-        # get_active_role_names уже исключил просроченные роли из `current`, но
-        # строка user_roles(user_id, role_id) могла остаться в БД с истёкшим
-        # expires_at (UniqueConstraint(user_id, role_id) не позволяет вставить
-        # вторую). Реактивируем существующую строку вместо INSERT, если она есть.
-        existing_ur = (
-            db.query(UserRole)
-            .filter(UserRole.user_id == user.id, UserRole.role_id == role_obj.id)
-            .first()
+        # Добавление новых staff-ролей + запись основания на каждую.
+        for role_name in _sorted_roles(added):
+            role_obj = role_by_name[role_name]   # гарантированно существует (шаг f)
+            # get_active_role_names уже исключил просроченные роли из `current`,
+            # но строка user_roles(user_id, role_id) могла остаться в БД с
+            # истёкшим expires_at (UniqueConstraint не позволяет вставить
+            # вторую). Реактивируем существующую строку вместо INSERT.
+            existing_ur = (
+                db.query(UserRole)
+                .filter(UserRole.user_id == user.id, UserRole.role_id == role_obj.id)
+                .first()
+            )
+            if existing_ur is not None:
+                existing_ur.expires_at = None
+            else:
+                db.add(UserRole(user_id=user.id, role_id=role_obj.id))
+            db.add(UserLegalBasisRecord(
+                user_id=user.id,
+                basis_type=basis_type,
+                basis_source="admin_ui",
+                basis_reference=basis_reference.strip(),
+                confirmed_by_user_id=confirmed_by_user_id,
+                ip_address=safe_ctx.ip_address,   # sanitized, не raw ip
+                user_agent=safe_ctx.user_agent,    # sanitized, не raw user_agent
+                comment=legal_basis_comment,
+                record_metadata={
+                    "action":       "role_add",
+                    "added_role":   role_name,
+                    "roles_before": roles_before,
+                    "roles_after":  roles_after,
+                },
+            ))
+
+    # ── (h) Stage audit rows — success record_event ТОЛЬКО теперь, после того
+    #        как ВСЕ отклоняющие validations уже прошли и мутации применены.
+    #        Порядок: scalar раньше role (естественный порядок кода).
+    if scalar_changed:
+        record_event(
+            event="admin_user_updated",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("user", user.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
         )
-        if existing_ur is not None:
-            existing_ur.expires_at = None
-        else:
-            db.add(UserRole(user_id=user.id, role_id=role_obj.id))
-        db.add(UserLegalBasisRecord(
-            user_id=user.id,
-            basis_type=basis_type,
-            basis_source="admin_ui",
-            basis_reference=basis_reference.strip(),
-            confirmed_by_user_id=confirmed_by_user_id,
-            ip_address=ip,
-            user_agent=user_agent,
-            comment=legal_basis_comment,
-            record_metadata={
-                "action":       "role_add",
-                "added_role":   role_name,
+        # Stage 6-C: field-level журнал рядом с тем же paired_event, в ТОЙ ЖЕ
+        # транзакции (SessionLocal и commit — у update_user). values=None
+        # всегда: full_name/phone — name-only, значения ПДн не копируются.
+        # is_active и роли сюда не попадают — они вне changed_scalar_fields.
+        record_data_change(
+            table="users",
+            record_id=user.id,
+            operation=Operation.UPDATE,
+            actor=Actor.user(actor_id, actor_role),
+            changed_fields=dcl_fields,
+            values=None,
+            context=safe_ctx,
+            db=db,
+        )
+    # Stage 5A-1: отдельное lifecycle-событие для перехода is_active (не дублируется
+    # в admin_user_updated). Ровно одно на реальный переход; direction по deactivating.
+    if is_active_changed:
+        record_event(
+            event="admin_user_deactivated" if deactivating else "admin_user_activated",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("user", user.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+    if target_staff is not None and (added or removed):
+        event = "admin_role_add" if added and not removed else (
+            "admin_role_remove" if removed and not added else "admin_role_update"
+        )
+        # ATOMIC audit через единый facade: та же caller-транзакция (db=db),
+        # facade только db.add (без commit/rollback/close). actor=действующий
+        # админ, target=пользователь, чьи роли меняются (Stage 3 semantics
+        # сохранены). description не пишется (facade), metadata — role-diff.
+        record_event(
+            event=event,
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("user", user.id),
+            outcome=Outcome.SUCCESS,
+            metadata={
                 "roles_before": roles_before,
                 "roles_after":  roles_after,
+                "added":        _sorted_roles(added),
+                "removed":      _sorted_roles(removed),
             },
-        ))
-
-    # Audit операции над ролями (удаление staff-роли — audit без нового basis).
-    if added and not removed:
-        event = "admin_role_add"
-    elif removed and not added:
-        event = "admin_role_remove"
-    else:
-        event = "admin_role_update"
-    db.add(AuditLog(
-        user_id=user.id,
-        user_role=actor_role,
-        event_type=event,
-        entity_type="user",
-        entity_id=user.id,
-        description=f"roles {roles_before} -> {roles_after}",
-        log_metadata={
-            "roles_before": roles_before,
-            "roles_after":  roles_after,
-            "added":        _sorted_roles(added),
-            "removed":      _sorted_roles(removed),
-        },
-        ip_address=ip,
-        user_agent=user_agent,
-    ))
+            context=safe_ctx,
+            db=db,
+        )
 
 
 def update_user(
@@ -450,14 +641,17 @@ def update_user(
         (multi-role → 409; student — только no-op).
     `student`-роль read-only: не добавляется, не снимается, не конвертируется.
 
-    Raises:
-      ValueError        — юзер не найден / некорректный UUID (service → 404/400);
-      RoleChangeError    — нарушение role-контракта (свой status_code: 400/409/422).
+    Raises (Stage 5A-2, typed precommit):
+      InvalidUserRequestError — malformed UUID (service → 400/invalid_request);
+      UserNotFoundError       — юзер не найден (service → 404/user_not_found);
+      RoleChangeError         — нарушение role-контракта (audit_code + status);
+      RoleConfigError         — отсутствует Role в seed/БД (→ internal_error);
+      ActorContextError       — нет actor context (→ internal_error).
     """
     try:
         uuid_obj = _uuid.UUID(uuid)
     except ValueError:
-        raise ValueError(f"Некорректный UUID: {uuid}")
+        raise InvalidUserRequestError("Некорректный идентификатор пользователя")
 
     with SessionLocal() as db:
         user = (
@@ -467,7 +661,7 @@ def update_user(
             .first()
         )
         if not user:
-            raise ValueError(f"Пользователь {uuid} не найден")
+            raise UserNotFoundError("Пользователь не найден")
 
         current_roles = get_active_role_names(db, user.id)
         current = set(current_roles)
@@ -497,7 +691,7 @@ def update_user(
             user_agent=user_agent,
         )
 
-        db.commit()
+        _commit_or_diag(db, "admin_user_update")
         db.refresh(user)
 
         roles_out = get_active_role_names(db, user.id)
@@ -516,16 +710,36 @@ def update_user(
         }
 
 
-def soft_delete_user(uuid: str) -> bool:
+def soft_delete_user(
+    uuid: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> bool:
     """
     Мягкое удаление юзера — выставляет deleted_at, не удаляет физически.
     Возвращает True если юзер найден и помечен удалённым, False если не найден.
     Также отзывает все активные сессии юзера.
+
+    Raises:
+        ActorContextError: нет authenticated actor context (→ internal_error).
     """
+    # malformed UUID → not-found контракт (service → 404/user_not_found).
     try:
         uuid_obj = _uuid.UUID(uuid)
     except ValueError:
         return False
+
+    # Fail-closed actor guard — ДО открытия сессии/поиска пользователя.
+    # Мягкое удаление — всегда привилегированное действие; отсутствие
+    # actor-контекста здесь — internal wiring-баг, не пользовательский ввод.
+    if actor_id is None or actor_role is None:
+        raise ActorContextError(
+            "user delete requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
 
     with SessionLocal() as db:
         user = (
@@ -546,7 +760,20 @@ def soft_delete_user(uuid: str) -> bool:
             ~UserSession.is_revoked,
         ).update({"is_revoked": True}, synchronize_session=False)
 
-        db.commit()
+        # ATOMIC audit через единый facade: та же caller-транзакция (db=db),
+        # facade только db.add. metadata={} (registry не допускает ключей).
+        # Сбой аудита откатывает soft-delete и отзыв сессий целиком.
+        record_event(
+            event="admin_user_deleted",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("user", user.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=build_request_context(ip=ip, user_agent=user_agent),
+            db=db,
+        )
+
+        _commit_or_diag(db, "admin_user_delete")
         return True
 
 
@@ -561,6 +788,7 @@ def create_user(
     basis_reference: Optional[str] = None,
     legal_basis_comment: Optional[str] = None,
     confirmed_by_user_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
@@ -576,14 +804,32 @@ def create_user(
     существуют в БД, basis_reference непустой после strip. На каждую уникальную
     роль — ровно одна UserRole и одна UserLegalBasisRecord (документированное
     основание организации, НЕ consent_records) с обрезанным basis_reference.
-    Всё в одной транзакции: если запись основания падает — пользователь не
-    создаётся (rollback).
+    Всё в одной транзакции: если запись основания или audit-запись падает —
+    пользователь не создаётся (rollback).
+
+    `confirmed_by_user_id` — ЕДИНСТВЕННЫЙ actor identifier (уже существовал для
+    legal basis); используется и как actor audit-события `admin_user_created`
+    (Stage 4B-4) — не дублируется отдельным `actor_id`, чтобы исключить
+    расхождение между «кто подтвердил legal basis» и «кто actor аудита».
 
     Возвращает dict с `roles` (sorted) и `role` = primary_role(roles).
 
-    Raises ValueError при duplicate email, пустом/невалидном наборе ролей,
-    отсутствии роли в БД, либо пустом/whitespace-only basis_reference.
+    Raises:
+        ValueError: duplicate email, пустой/невалидный набор ролей, отсутствие
+            роли в БД, либо пустой/whitespace-only basis_reference.
+        RuntimeError: отсутствует authenticated actor context (fail-closed,
+            wiring-баг вызывающего кода, не пользовательский ввод).
     """
+    # Fail-closed actor guard — ДО какой-либо валидации/мутации. Создание
+    # staff-пользователя — всегда привилегированное действие; отсутствие
+    # actor-контекста здесь означает internal wiring-баг вызывающего кода, не
+    # отсутствие пользовательского ввода. Сообщение фиксированное, без ПДн.
+    if confirmed_by_user_id is None or actor_role is None:
+        raise ActorContextError(
+            "user create requires authenticated actor context "
+            "(confirmed_by_user_id and actor_role)"
+        )
+
     # ── Нормализация и валидация набора ролей ──
     deduped = list(dict.fromkeys(roles))       # dedupe, порядок сохранён
     if not deduped:
@@ -606,6 +852,11 @@ def create_user(
         )
     stripped_basis_reference = basis_reference.strip()
 
+    # Единый sanitized context — один вызов на функцию, переиспользуется и для
+    # UserLegalBasisRecord, и для admin_user_created record_event (не два
+    # независимых источника истины для одного и того же raw ip/user_agent).
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         # Authoritative in-tx проверка домена (FOR SHARE) до создания User.
         # EmailDomainNotAllowedError (не ValueError) пробрасывается наружу и
@@ -614,21 +865,27 @@ def create_user(
         from app.email_domains.storage import assert_email_domain_allowed_in_tx
         assert_email_domain_allowed_in_tx(db, email)
 
+        # Stage 5A-2: authoritative duplicate-check среди ВСЕХ User (включая
+        # soft-deleted) — soft-deleted staff публично/через admin create НЕ
+        # реактивируется. Найдено → typed EmailAlreadyExistsError до мутации.
         existing = (
             db.query(User)
             .filter(User.email == normalize_email(email))
-            .filter(User.deleted_at.is_(None))
             .first()
         )
         if existing:
-            raise ValueError(f"Пользователь с email {email} уже существует")
+            raise EmailAlreadyExistsError(
+                "Пользователь с таким email уже существует"
+            )
 
         # Все роли обязаны существовать в справочнике (один запрос).
+        # Отсутствие Role — configuration/internal failure (RoleConfigError →
+        # internal_error), НЕ пользовательский invalid_role.
         role_objs = db.query(Role).filter(Role.name.in_(deduped)).all()
         by_name = {r.name: r for r in role_objs}
         missing = [r for r in deduped if r not in by_name]
         if missing:
-            raise ValueError(f"Роли не найдены в БД: {missing}")
+            raise RoleConfigError("required staff role missing in seed/DB")
 
         new_user = User(
             email=normalize_email(email),
@@ -638,7 +895,19 @@ def create_user(
             is_active=True,
         )
         db.add(new_user)
-        db.flush()  # получаем id до commit — нужен для user_roles и legal basis
+        # Узкий try ТОЛЬКО вокруг business INSERT+flush. IntegrityError по
+        # email-unique (гонка) → EmailAlreadyExistsError ТОЛЬКО при известном
+        # constraint_name (без анализа str/SQL); иной IntegrityError re-raise
+        # как есть (не AuthError, не *_failed). Precommit → rollback-confirmed.
+        try:
+            db.flush()  # id до commit — нужен для user_roles и legal basis
+        except IntegrityError as exc:
+            db.rollback()
+            if _is_users_email_unique_violation(exc):
+                raise EmailAlreadyExistsError(
+                    "Пользователь с таким email уже существует"
+                )
+            raise
 
         for role_name in sorted_roles:
             db.add(UserRole(user_id=new_user.id, role_id=by_name[role_name].id))
@@ -648,8 +917,8 @@ def create_user(
                 basis_source="admin_ui",
                 basis_reference=stripped_basis_reference,
                 confirmed_by_user_id=confirmed_by_user_id,
-                ip_address=ip,
-                user_agent=user_agent,
+                ip_address=safe_ctx.ip_address,   # sanitized, не raw ip
+                user_agent=safe_ctx.user_agent,    # sanitized, не raw user_agent
                 comment=legal_basis_comment,
                 record_metadata={
                     "action":       "user_create",
@@ -657,7 +926,24 @@ def create_user(
                     "roles_after":  sorted_roles,
                 },
             ))
-        db.commit()
+
+        # ATOMIC audit через единый facade: та же caller-транзакция (db=db),
+        # facade только db.add (без commit/rollback/close). actor=admin,
+        # создавший пользователя (тот же confirmed_by_user_id, что и в legal
+        # basis выше — см. docstring), target=новый пользователь. metadata={}
+        # (registry не допускает ключей для этого события). Сбой аудита
+        # откатывает создание пользователя целиком (ATOMIC/RAISE).
+        record_event(
+            event="admin_user_created",
+            actor=Actor.user(confirmed_by_user_id, actor_role),
+            target=Target("user", new_user.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+
+        _commit_or_diag(db, "admin_user_create")
         db.refresh(new_user)
 
         return {

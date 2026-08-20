@@ -19,6 +19,8 @@ from app.db.models import (
     Question, Option, TestResult, TestResultScale, StudentAnswer,
     Category, Tag, User, Consent, ConsentRecord,
 )
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 
 
 class TestHasResults(Exception):
@@ -237,7 +239,22 @@ def get_test_by_uuid(uuid_str: str) -> Optional[dict]:
         return _test_to_dict(test, db)
 
 
-def create_test(data: dict, created_by: int) -> dict:
+def create_test(
+    data: dict,
+    created_by: int,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    # created_by — единственный actor id (не вводим второй actor_id).
+    if created_by is None or actor_role is None:
+        raise RuntimeError(
+            "test create requires authenticated actor context "
+            "(created_by and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         test = Test(
             title=data["title"],
@@ -255,6 +272,15 @@ def create_test(data: dict, created_by: int) -> dict:
         _sync_tags(test.id, data.get("tag_uuids", []), db)
         _replace_questions(test.id, data.get("questions", []), db)
         _replace_interpretations(test.id, data.get("interpretations", []), db)
+        record_event(
+            event="test_created",
+            actor=Actor.user(created_by, actor_role),
+            target=Target("test", test.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(test)
         return _test_to_dict(test, db)
@@ -281,12 +307,27 @@ def test_has_results(uuid_str: str) -> bool:
         return has_results(test.id, db)
 
 
-def duplicate_test(uuid_str: str, created_by: int) -> Optional[dict]:
+def duplicate_test(
+    uuid_str: str,
+    created_by: int,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
     """
     Копия методики: вопросы/варианты/пороги/категории/темы переносятся,
     результаты — нет. Копия создаётся как черновик (is_active=False, version=1),
     чтобы её можно было доработать до публикации.
     """
+    # created_by — единственный actor id (не вводим второй actor_id).
+    if created_by is None or actor_role is None:
+        raise RuntimeError(
+            "test duplicate requires authenticated actor context "
+            "(created_by and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(uuid_str)
     except ValueError:
@@ -346,12 +387,30 @@ def duplicate_test(uuid_str: str, created_by: int) -> Optional[dict]:
                 recommendation=i.recommendation,
             ))
 
+        # target — НОВАЯ копия (copy.id после flush), не source.
+        record_event(
+            event="test_duplicated",
+            actor=Actor.user(created_by, actor_role),
+            target=Target("test", copy.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(copy)
         return _test_to_dict(copy, db)
 
 
-def update_test(uuid_str: str, data: dict) -> Optional[dict]:
+def update_test(
+    uuid_str: str,
+    data: dict,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
     """
     Частичное обновление. Скалярные поля — по наличию ключа.
     Вложенные коллекции (questions/interpretations/category_ids/tag_uuids)
@@ -363,6 +422,13 @@ def update_test(uuid_str: str, data: dict) -> Optional[dict]:
     (`duplicate_test`). Метаданные и пороги интерпретации менять можно:
     на них FK из результатов нет, а расшифровка снапшотится в момент submit.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "test update requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(uuid_str)
     except ValueError:
@@ -396,12 +462,35 @@ def update_test(uuid_str: str, data: dict) -> Optional[dict]:
             _replace_interpretations(test.id, data["interpretations"], db)
 
         test.updated_at = datetime.now(timezone.utc)
+        record_event(
+            event="test_updated",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("test", test.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(test)
         return _test_to_dict(test, db)
 
 
-def delete_test(uuid_str: str) -> bool:
+def delete_test(
+    uuid_str: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> bool:
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "test delete requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(uuid_str)
     except ValueError:
@@ -414,6 +503,15 @@ def delete_test(uuid_str: str) -> bool:
             return False
         test.deleted_at = datetime.now(timezone.utc)
         test.is_active = False
+        record_event(
+            event="test_deleted",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("test", test.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
     return True
 
@@ -475,11 +573,25 @@ def get_active_test_full(uuid_str: str) -> Optional[dict]:
         return data
 
 
-def save_result(user_id: int, test_uuid: str, computed: dict, answers: list[dict]) -> Optional[dict]:
+def save_result(
+    user_id: int, test_uuid: str, computed: dict, answers: list[dict],
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
     """
     Атомарно сохраняет результат прохождения: test_results + test_result_scales
-    + student_answers в одной транзакции (один commit).
+    + student_answers в одной транзакции (один commit). user_id — единственный
+    actor id (self-action). test_submitted пишется до commit; metadata пуста —
+    score/answers/free_text/recommendations в audit НЕ попадают.
     """
+    if actor_role is None:
+        raise RuntimeError(
+            "test submit requires authenticated actor context (actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(test_uuid)
     except ValueError:
@@ -528,6 +640,15 @@ def save_result(user_id: int, test_uuid: str, computed: dict, answers: list[dict
                 time_spent_sec=a.get("time_spent_sec"),
             ))
 
+        record_event(
+            event="test_submitted",
+            actor=Actor.user(user_id, actor_role),
+            target=Target("test_result", result.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(result)
         return _result_to_dict(result, db)
@@ -626,7 +747,25 @@ def has_accepted_consent(user_id: int, consent_id: int) -> bool:
 def save_consent_record(
     user_id: int, consent_id: int,
     ip: Optional[str] = None, user_agent: Optional[str] = None,
-) -> None:
+    *,
+    actor_role: Optional[str] = None,
+) -> int:
+    """
+    Фиксирует согласие субъекта на тестирование. user_id — единственный actor id
+    (self-action). Возвращает id ConsentRecord (Target аудита).
+
+    accepted-command: каждый успешный accept пишет test_consent_accepted (даже
+    повторный — на тот же существующий record.id). Повторный accept НЕ
+    перезаписывает исходные accepted_at/ip_address/user_agent — первая запись
+    остаётся историческим доказательством первого принятия. Sanitized context
+    (build_request_context) общий для ConsentRecord (new) и audit.
+    """
+    if actor_role is None:
+        raise RuntimeError(
+            "consent accept requires authenticated actor context (actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         existing = (
             db.query(ConsentRecord)
@@ -638,13 +777,28 @@ def save_consent_record(
             .first()
         )
         if existing:
-            existing.accepted = True
+            existing.accepted = True   # идемпотентно; ip/ua/accepted_at не трогаем
+            record_id = existing.id
         else:
-            db.add(ConsentRecord(
+            record = ConsentRecord(
                 user_id=user_id,
                 consent_id=consent_id,
                 accepted=True,
-                ip_address=ip,
-                user_agent=user_agent,
-            ))
+                ip_address=safe_ctx.ip_address,   # sanitized, не raw
+                user_agent=safe_ctx.user_agent,    # sanitized, не raw
+            )
+            db.add(record)
+            db.flush()   # id до commit — нужен Target
+            record_id = record.id
+
+        record_event(
+            event="test_consent_accepted",
+            actor=Actor.user(user_id, actor_role),
+            target=Target("consent_record", record_id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
+        return record_id

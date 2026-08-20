@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from typing import Optional
 
-from app.auth import audit
-from app.auth.deps import require_role, get_current_user
+from app.auth.deps import require_role, get_current_user, resolve_role_or_403
 from app.tags import service
 from app.tags.schemas import (
     AdminTagListQuery,
@@ -17,6 +16,13 @@ router = APIRouter(
     tags=["admin: tags"],
     dependencies=[Depends(require_role("admin"))],
 )
+
+
+def _actor(current_user: dict) -> tuple[int, str]:
+    return (
+        int(current_user["id"]),
+        resolve_role_or_403(current_user, allowed={"admin"}, preferred="admin"),
+    )
 
 
 @router.get("/", response_model=PaginatedTagsResponse)
@@ -37,17 +43,17 @@ def create_tag(
     current_user: dict = Depends(get_current_user),
 ):
     """Создать новый тег. Имя нормализуется: первая буква заглавная."""
+    actor_id, actor_role = _actor(current_user)
     try:
-        tag = service.create_tag(body)
+        tag = service.create_tag(
+            body,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
-        event=f"admin_create_tag:{tag['uuid']}",
-        user_id=current_user["id"],
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return tag
 
 
@@ -59,17 +65,17 @@ def update_tag(
     current_user: dict = Depends(get_current_user),
 ):
     """Переименовать тег."""
+    actor_id, actor_role = _actor(current_user)
     try:
-        tag = service.update_tag(uuid, body)
+        tag = service.update_tag(
+            uuid, body,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
-        event=f"admin_update_tag:{uuid}",
-        user_id=current_user["id"],
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return tag
 
 
@@ -83,14 +89,14 @@ def delete_tag(
     Удалить тег. Все связи с материалами удаляются каскадно.
     Возвращает 204 No Content при успехе.
     """
+    actor_id, actor_role = _actor(current_user)
     try:
-        service.delete_tag(uuid)
+        service.delete_tag(
+            uuid,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
-        event=f"admin_delete_tag:{uuid}",
-        user_id=current_user["id"],
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )

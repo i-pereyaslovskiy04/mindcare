@@ -4,17 +4,16 @@
 """
 
 import logging
-import sys
 from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import desc
 
+from app.audit import Actor, Outcome, Target, record_event
 from app.chat import storage as chat_storage
-from app.chat.audit import log_conversation_created
 from app.chat.system_publisher import publish_system_message
 from app.db.session import SessionLocal
-from app.db.models import AuditLog, Role, TherapyEngagement, User, UserRole
+from app.db.models import Role, TherapyEngagement, User, UserRole
 from app.supervisor import storage
 
 log = logging.getLogger(__name__)
@@ -136,31 +135,6 @@ def _reactivate_engagement(engagement: TherapyEngagement, db):
     return engagement, conv, conv_created
 
 
-def _log_event(
-    event_type: str,
-    actor_id: int,
-    actor_role: str,
-    entity_id: int,
-    description: str,
-    db,
-) -> None:
-    """Записывает событие в audit_log. Не прерывает flow при ошибке."""
-    try:
-        db.add(AuditLog(
-            user_id=actor_id,
-            user_role=actor_role,
-            event_type=event_type,
-            entity_type="therapy_engagement",
-            entity_id=entity_id,
-            description=description,
-        ))
-    except Exception as exc:
-        print(
-            f"[AUDIT FAIL] {event_type}: {type(exc).__name__}: {exc}",
-            file=sys.stderr,
-        )
-
-
 # ── System-уведомления Messenger (Stage 31r) ──────────────────────────────────
 #
 # Тексты: только «Чат с психологом/пациентом <ФИО> создан/закрыт.» — без «снова»,
@@ -275,11 +249,18 @@ def create_student(
     linked = 0
     try:
         from app.appointments.service import link_unregistered_cards_to_user
-        linked = link_unregistered_cards_to_user(new_id, new_email)
-    except Exception:
-        log.exception(
-            "[create_student] card linking failed for user_id=%s", new_id
+        # Stage 5B-1: actor = исходный staff (supervisor/admin), создавший аккаунт;
+        # новый student — субъект (linked_user_id), не actor.
+        linked = link_unregistered_cards_to_user(
+            new_id, new_email,
+            actor_id=int(actor_id), actor_role=actor_role,
+            ip=ip, user_agent=user_agent,
         )
+    except Exception as exc:
+        # Минимизация: без exc_info/str(exc)/email/UUID/id/SQL — только фаза и
+        # класс исключения. Postcommit soft-fail: аккаунт не откатывается.
+        log.warning("[create_student] phase=card_link error=%s",
+                    type(exc).__name__)
 
     # Welcome-письмо с временным паролем (soft-fail; ПДн/пароль не логируем).
     try:
@@ -359,12 +340,7 @@ def assign_psychologist(
         if prior is not None:
             # Реактивация прежней связи этой пары — старый чат снова активен.
             engagement, conv, conv_created = _reactivate_engagement(prior, db)
-            reactivated = True
             audit_event = "supervisor_reactivate_psychologist"
-            audit_desc = (
-                f"Психолог id={psychologist_id} повторно назначен "
-                f"(реактивация связи id={engagement.id}) студенту id={client_id}"
-            )
         else:
             engagement = TherapyEngagement(
                 client_id=client_id,
@@ -380,16 +356,21 @@ def assign_psychologist(
             conv, conv_created = chat_storage.ensure_engagement_conversation(
                 db, engagement.id
             )
-            reactivated = False
             audit_event = "supervisor_assign_psychologist"
-            audit_desc = (
-                f"Психолог id={psychologist_id} назначен студенту id={client_id}"
-            )
 
         conv_id = conv.id
-        conv_uuid = str(conv.uuid)
 
-        _log_event(audit_event, actor_id, actor_role, engagement.id, audit_desc, db)
+        # ATOMIC audit через facade (та же транзакция, db=db; facade только db.add).
+        # Сбой аудита НЕ проглатывается — откатывает всю business-транзакцию.
+        # metadata пуста, description не пишется; ip/ua supervisor не хранит.
+        record_event(
+            event=audit_event,
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("therapy_engagement", engagement.id),
+            outcome=Outcome.SUCCESS,
+            context=None,
+            db=db,
+        )
 
         db.commit()
         db.refresh(engagement)
@@ -410,12 +391,13 @@ def assign_psychologist(
     # (app/chat/service.py). Одно событие на беседу: только при реальном создании
     # (реактивация переиспользует старую беседу → conv_created=False).
     if conv_created:
-        log_conversation_created(
-            actor_id=actor_id,
-            actor_role=actor_role,
-            conversation_id=conv_id,
-            conversation_uuid=conv_uuid,
-            engagement_id=eng_id,
+        record_event(
+            event="chat_conversation_created",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("chat_conversation", conv_id),
+            outcome=Outcome.SUCCESS,
+            context=None,
+            db=None,
         )
 
     # System-уведомления — после успешного commit (soft-fail). Один текст
@@ -499,7 +481,6 @@ def transfer_psychologist(
         if prior is not None:
             # Возврат к прежнему психологу — реактивируем старую связь и чат.
             new_engagement, conv, conv_created = _reactivate_engagement(prior, db)
-            reactivated = True
         else:
             new_engagement = TherapyEngagement(
                 client_id=old_client_id,
@@ -515,20 +496,18 @@ def transfer_psychologist(
             conv, conv_created = chat_storage.ensure_engagement_conversation(
                 db, new_engagement.id
             )
-            reactivated = False
 
         conv_id = conv.id
-        conv_uuid = str(conv.uuid)
 
-        _log_event(
-            "supervisor_transfer_psychologist",
-            actor_id,
-            actor_role,
-            engagement_id,
-            f"Студент id={old_client_id} переназначен с психолога "
-            f"id={old_psychologist_id} на id={new_psychologist_id}"
-            + (" (реактивация прежней связи)" if reactivated else ""),
-            db,
+        # ATOMIC audit через facade (та же транзакция). target — ИСХОДНЫЙ
+        # engagement_id (как в прежнем writer'е). Сбой аудита не проглатывается.
+        record_event(
+            event="supervisor_transfer_psychologist",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("therapy_engagement", engagement_id),
+            outcome=Outcome.SUCCESS,
+            context=None,
+            db=db,
         )
 
         db.commit()
@@ -548,12 +527,13 @@ def transfer_psychologist(
 
     # chat_conversation_created audit для новой беседы — post-commit soft-fail.
     if conv_created:
-        log_conversation_created(
-            actor_id=actor_id,
-            actor_role=actor_role,
-            conversation_id=conv_id,
-            conversation_uuid=conv_uuid,
-            engagement_id=new_eng_id,
+        record_event(
+            event="chat_conversation_created",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("chat_conversation", conv_id),
+            outcome=Outcome.SUCCESS,
+            context=None,
+            db=None,
         )
 
     # System-уведомления — после успешного commit (soft-fail). Transfer = два
@@ -625,14 +605,16 @@ def close_engagement(
         engagement.transfer_reason = reason
         engagement.updated_at      = now
 
-        _log_event(
-            "supervisor_close_engagement",
-            actor_id,
-            actor_role,
-            engagement_id,
-            f"Связь id={engagement_id} закрыта супервизором id={actor_id}"
-            + (f" — причина: {reason}" if reason else ""),
-            db,
+        # ATOMIC audit через facade (та же транзакция). reason НЕ копируется в
+        # audit (остаётся только в TherapyEngagement.transfer_reason). Сбой
+        # аудита не проглатывается — откатывает закрытие связи.
+        record_event(
+            event="supervisor_close_engagement",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("therapy_engagement", engagement_id),
+            outcome=Outcome.SUCCESS,
+            context=None,
+            db=db,
         )
 
         db.commit()

@@ -121,37 +121,45 @@ class TestRevocation:
 # ─── 4. Auth log не содержит raw token ───────────────────────────────────────
 
 class TestAuthLogHashing:
-    def _last_event(self, email: str, event: str) -> AuthLog:
+    def _last_event(self, *, event: str, user_id: int) -> AuthLog:
+        """Ищет строку по user_id, а не по user_email.
+
+        `user_email` пишется не всеми auth-событиями: logout его намеренно НЕ
+        передаёт (субъект восстановим по user_id) — это минимизация ПДн, а не
+        пропажа события. Поиск по email находил бы только часть журнала.
+        """
         with SessionLocal() as db:
             row = (
                 db.query(AuthLog)
-                .filter(AuthLog.user_email == email, AuthLog.event == event)
+                .filter(AuthLog.user_id == user_id, AuthLog.event == event)
                 .order_by(AuthLog.created_at.desc(), AuthLog.id.desc())
                 .first()
             )
-            assert row is not None, f"auth_log has no '{event}' for {email}"
+            assert row is not None, f"auth_log has no '{event}' for user {user_id}"
             db.expunge(row)
             return row
 
     def test_login_event_stores_hash_not_raw(self, client, test_email):
-        create_test_user(test_email)
+        user = create_test_user(test_email)
         raw = _login(client, test_email)
 
-        entry = self._last_event(test_email, "login")
+        entry = self._last_event(event="login", user_id=int(user["id"]))
         assert entry.session_id == hash_session_token(raw)
         assert entry.session_id != raw
         assert raw not in (entry.session_id or "")
 
     def test_logout_event_stores_hash_not_raw(self, client, test_email):
-        create_test_user(test_email)
+        user = create_test_user(test_email)
         raw = _login(client, test_email)
         client.post(
             "/api/auth/logout", headers={"Authorization": f"Bearer {raw}"},
         )
 
-        entry = self._last_event(test_email, "logout")
+        entry = self._last_event(event="logout", user_id=int(user["id"]))
         assert entry.session_id == hash_session_token(raw)
         assert entry.session_id != raw
+        # минимизация: logout не дублирует email — субъект известен по user_id
+        assert entry.user_email is None
 
 
 # ─── 5. Legacy plaintext sessions инвалидированы ─────────────────────────────

@@ -25,7 +25,7 @@ import uuid as _uuid
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey,
-    Index, Integer, String, Text, Time,
+    Index, Integer, String, Text, Time, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -100,7 +100,17 @@ class ScheduleRule(Base):
     start_time      = Column(Time, nullable=False)
     end_time        = Column(Time, nullable=False)
     period          = Column(String(20))               # morning/afternoon/… (опц.)
-    series_id       = Column(UUID(as_uuid=True))        # группировка серии (rules+breaks)
+    # Stage 5C-0C: FK на identity-строку серии (physical constraint добавляется
+    # миграцией b5d7f0a3c9e1). Nullable сохранён: legacy-строки без серии
+    # допустимы, FK не срабатывает на NULL. ON DELETE не задан (NO ACTION) —
+    # идентично DDL: schedule_series не удаляется приложением.
+    series_id       = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "schedule_series.series_uuid", name="fk_schedule_rules_series",
+        ),
+        nullable=True,
+    )
     is_active       = Column(Boolean, default=True)
     auto_extend     = Column(Boolean, nullable=False, default=False)
     effective_from  = Column(Date, nullable=False)
@@ -111,6 +121,43 @@ class ScheduleRule(Base):
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     meeting_type = relationship("MeetingType")
+
+
+class ScheduleSeries(Base):
+    """
+    Identity-строка расписания-серии (Stage 5C-0A).
+
+    Существует ТОЛЬКО ради стабильного целочисленного идентификатора серии:
+    `series_id` в schedule_rules/schedule_breaks — nullable UUID-группировка, а
+    `audit_log.entity_id` имеет тип INTEGER. `schedule_series.id` используется как
+    audit target для событий расписания (Stage 5C-1).
+
+    Состояние серии здесь НЕ дублируется: is_active / effective_from /
+    effective_until / auto_extend остаются в schedule_rules и schedule_breaks —
+    единственный источник истины. `created_by` не хранится: у ScheduleBreak такой
+    колонки нет, поэтому для break-only серий значение недоступно.
+
+    psychologist_id nullable + ON DELETE SET NULL (НЕ CASCADE): удаление
+    пользователя не должно уничтожать identity-строку, на которую ссылается
+    append-only audit_log.
+
+    Business delete отсутствует — строки не удаляются приложением.
+    """
+    __tablename__ = "schedule_series"
+    __table_args__ = (
+        # Имя синхронизировано с DDL миграции a1c4e8b2f7d3; на этот UNIQUE
+        # ссылаются FK из schedule_rules/schedule_breaks (5C-0C).
+        UniqueConstraint("series_uuid", name="uq_schedule_series_uuid"),
+    )
+
+    id              = Column(Integer, primary_key=True)
+    series_uuid     = Column(UUID(as_uuid=True), nullable=False)
+    psychologist_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at      = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class ScheduleBreak(Base):
@@ -140,7 +187,14 @@ class ScheduleBreak(Base):
     start_time      = Column(Time, nullable=False)
     end_time        = Column(Time, nullable=False)
     title           = Column(String(255))
-    series_id       = Column(UUID(as_uuid=True))
+    # Stage 5C-0C: FK на identity-строку серии (см. ScheduleRule.series_id).
+    series_id       = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "schedule_series.series_uuid", name="fk_schedule_breaks_series",
+        ),
+        nullable=True,
+    )
     effective_from  = Column(Date, nullable=False)
     effective_until = Column(Date)
     is_active       = Column(Boolean, nullable=False, default=True)

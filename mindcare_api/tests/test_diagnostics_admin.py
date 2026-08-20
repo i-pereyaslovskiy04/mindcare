@@ -271,8 +271,13 @@ def test_duplicate_test_not_found_raises():
 
 def test_duplicate_test_returns_copy():
     with patch.object(service.storage, "duplicate_test", return_value={"uuid": "copy"}) as m:
-        assert service.duplicate_test("src-uuid", created_by=7) == {"uuid": "copy"}
-    m.assert_called_once_with("src-uuid", created_by=7)
+        assert service.duplicate_test(
+            "src-uuid", created_by=7, actor_role="admin",
+        ) == {"uuid": "copy"}
+    # Stage 4B-5: service пробрасывает actor context в storage.
+    m.assert_called_once_with(
+        "src-uuid", created_by=7, actor_role="admin", ip=None, user_agent=None,
+    )
 
 
 # ── анализ покрытия порогов интерпретации ─────────────────────────────────────

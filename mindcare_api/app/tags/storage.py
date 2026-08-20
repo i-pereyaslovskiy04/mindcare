@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.session import SessionLocal
 from app.db.models import Tag, ArticleTag, NewsTag, TestTag
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 
 
 def _count_subqueries():
@@ -114,11 +116,25 @@ def get_tag_by_uuid(uuid: str) -> Optional[dict]:
         }
 
 
-def create_tag(name: str) -> dict:
+def create_tag(
+    name: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     """
     Создаёт тег. Проверяет уникальность через lower(name).
-    Raises ValueError если тег с таким именем уже есть.
+    Raises ValueError если тег с таким именем уже есть; RuntimeError без actor.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "tag create requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         existing = db.query(Tag).filter(
             func.lower(Tag.name) == name.lower()
@@ -127,13 +143,27 @@ def create_tag(name: str) -> dict:
             raise ValueError(f"Тег «{name}» уже существует")
 
         tag = Tag(name=name)
+        # Узкий try: ТОЛЬКО business INSERT+flush → IntegrityError = дубль имени
+        # (доменный ValueError). Audit staging/commit ВНЕ обработчика — иначе
+        # IntegrityError самой audit-строки был бы преобразован в конфликт имени.
         try:
             db.add(tag)
-            db.commit()
-            db.refresh(tag)
+            db.flush()   # id до commit — нужен Target
         except IntegrityError:
             db.rollback()
             raise ValueError(f"Тег «{name}» уже существует")
+
+        record_event(
+            event="tag_created",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("tag", tag.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+        db.commit()
+        db.refresh(tag)
 
         return {
             "uuid":          str(tag.uuid),
@@ -145,11 +175,26 @@ def create_tag(name: str) -> dict:
         }
 
 
-def update_tag(uuid: str, name: str) -> Optional[dict]:
+def update_tag(
+    uuid: str,
+    name: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
     """
     Переименовывает тег. Проверяет уникальность нового имени (исключая себя).
-    Raises ValueError если тег не найден или имя занято.
+    Raises ValueError если тег не найден или имя занято; RuntimeError без actor.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "tag update requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(uuid)
     except ValueError:
@@ -167,22 +212,49 @@ def update_tag(uuid: str, name: str) -> Optional[dict]:
         if conflict:
             raise ValueError(f"Тег «{name}» уже существует")
 
+        tag.name = name
+        # Узкий try: ТОЛЬКО business flush → IntegrityError = дубль имени.
+        # Audit staging/commit ВНЕ обработчика.
         try:
-            tag.name = name
-            db.commit()
+            db.flush()
         except IntegrityError:
             db.rollback()
             raise ValueError(f"Тег «{name}» уже существует")
 
+        record_event(
+            event="tag_updated",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("tag", tag.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+        db.commit()
+
     return get_tag_by_uuid(uuid)
 
 
-def delete_tag(uuid: str) -> bool:
+def delete_tag(
+    uuid: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> bool:
     """
     Удаляет тег физически. CASCADE в БД автоматически удаляет
     все записи в article_tags, news_tags, test_tags.
     Возвращает True если тег найден и удалён, False если не найден.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "tag delete requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(uuid)
     except ValueError:
@@ -192,6 +264,16 @@ def delete_tag(uuid: str) -> bool:
         tag = db.query(Tag).filter(Tag.uuid == uuid_obj).first()
         if not tag:
             return False
+        tag_id = tag.id   # захватываем до физического удаления (Target)
+        record_event(
+            event="tag_deleted",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("tag", tag_id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.delete(tag)
         db.commit()
 

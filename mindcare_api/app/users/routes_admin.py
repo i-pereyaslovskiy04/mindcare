@@ -6,8 +6,10 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from typing import Optional, Literal
 
-from app.auth import audit
 from app.auth.deps import require_role, get_current_user, resolve_role_or_403
+from app.audit import Actor
+from app.audit.failsafe import record_secondary_failure
+from app.audit.request_context import build_request_context
 from app.users import service
 from app.users.schemas import (
     AdminUserListQuery,
@@ -17,6 +19,18 @@ from app.users.schemas import (
     AdminUserUpdate,
     AdminUserRead,
 )
+
+
+def _admin_actor(current_user: dict) -> Actor:
+    """Валидный admin-actor до business try (router-dep гарантирует роль admin)."""
+    return Actor.user(
+        int(current_user["id"]),
+        resolve_role_or_403(current_user, allowed={"admin"}, preferred="admin"),
+    )
+
+
+def _client_ip(request: Request):
+    return request.client.host if request.client else None
 
 
 router = APIRouter(
@@ -73,22 +87,25 @@ def create_user(
     Требует подтверждения документированного основания (legal_basis_confirmed);
     запись основания создаётся в одной транзакции с пользователем.
     """
+    actor = _admin_actor(current_user)   # валидный actor ДО business try
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
     try:
         user = service.create_user(
             body,
-            actor_id=int(current_user["id"]),
-            ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
+            actor_id=actor.user_id,
+            actor_role=actor.role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AuthError as e:
+        # Durable best-effort failure audit (INDEPENDENT/SOFT); НЕ меняет HTTP.
+        record_secondary_failure(
+            event="admin_user_create_failed", actor=actor,
+            failure_reason_code=e.audit_code,
+            context=build_request_context(ip=ip, user_agent=ua),
+        )
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
-        event=f"admin_create_user:{user['uuid']}",
-        user_id=current_user["id"],
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return user
 
 
@@ -112,26 +129,25 @@ def update_user(
     Частичное обновление пользователя.
     Поддерживает: блокировку/разблокировку, смену роли, ФИО и телефон.
     """
+    actor = _admin_actor(current_user)
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
     try:
         result = service.update_user(
             uuid,
             body,
-            actor_id=int(current_user["id"]),
-            actor_role=resolve_role_or_403(
-                current_user, allowed={"admin"}, preferred="admin",
-            ),
-            ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
+            actor_id=actor.user_id,
+            actor_role=actor.role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AuthError as e:
+        record_secondary_failure(
+            event="admin_user_update_failed", actor=actor,
+            failure_reason_code=e.audit_code,
+            context=build_request_context(ip=ip, user_agent=ua),
+        )
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
-        event=f"admin_update_user:{uuid}",
-        user_id=current_user["id"],
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return result
 
 
@@ -145,14 +161,21 @@ def delete_user(
     Мягкое удаление пользователя. Отзывает все сессии.
     Возвращает 204 No Content при успехе.
     """
+    actor = _admin_actor(current_user)
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
     try:
-        service.delete_user(uuid)
+        service.delete_user(
+            uuid,
+            actor_id=actor.user_id,
+            actor_role=actor.role,
+            ip=ip,
+            user_agent=ua,
+        )
     except service.AuthError as e:
+        record_secondary_failure(
+            event="admin_user_delete_failed", actor=actor,
+            failure_reason_code=e.audit_code,
+            context=build_request_context(ip=ip, user_agent=ua),
+        )
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
-        event=f"admin_delete_user:{uuid}",
-        user_id=current_user["id"],
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )

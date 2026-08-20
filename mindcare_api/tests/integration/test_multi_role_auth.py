@@ -7,7 +7,10 @@ API/integration tests: multi-role auth payload + require_role пересечен
   - require_role проверяет пересечение активных ролей с allowed;
   - пользователь без нужной membership-роли → 403;
   - primary role детерминирован по глобальному приоритету;
-  - нет активных ролей → role=None, roles=[], 403 (НЕ маскируется как student);
+  - нет активных ролей → НОВЫЙ вход отклоняется контролируемым 403 с
+    failure_reason `no_active_roles` (ADR-018), сессия не создаётся; уже
+    выданная сессия отдаёт role=None, roles=[], 403 на прикладных эндпоинтах
+    (НЕ маскируется как student) и корректно закрывается через logout;
   - просроченная роль (expires_at в прошлом) не попадает в roles.
 
 Требования: dev PostgreSQL на alembic head с seed-данными (роли).
@@ -20,6 +23,8 @@ import bcrypt
 import pytest
 
 from app.auth import storage as auth_storage
+from app.db.models import AuthLog, User, UserSession
+from app.db.session import SessionLocal
 from tests.integration.conftest import (
     add_user_role, create_multi_role_user, remove_all_user_roles,
 )
@@ -33,6 +38,31 @@ def _auth(token: str) -> dict:
 
 def _login_user(client, roles):
     return create_multi_role_user(client, roles, password=PASSWORD)
+
+
+def _session_count(user_id: int) -> int:
+    with SessionLocal() as db:
+        return db.query(UserSession).filter(
+            UserSession.user_id == user_id).count()
+
+
+def _last_login(user_id: int):
+    with SessionLocal() as db:
+        return db.query(User.last_login).filter(User.id == user_id).scalar()
+
+
+def _last_auth_event(email: str, event: str):
+    """Последняя строка auth_log по email (failed_login пишет user_email)."""
+    with SessionLocal() as db:
+        row = (
+            db.query(AuthLog)
+            .filter(AuthLog.user_email == email, AuthLog.event == event)
+            .order_by(AuthLog.created_at.desc(), AuthLog.id.desc())
+            .first()
+        )
+        if row is not None:
+            db.expunge(row)
+        return row
 
 
 # ─── 1. Auth payload содержит roles[] + legacy role ──────────────────────────
@@ -161,15 +191,78 @@ class TestNoActiveRoles:
             "/api/psychologist/students", headers=_auth(token),
         ).status_code == 403
 
-    def test_login_no_roles_payload(self, client):
+    def test_login_without_active_roles_is_refused_with_403(self, client):
+        """Вход без активных ролей — ШТАТНЫЙ отказ 403, не 500 (ADR-018).
+
+        `service.authenticate_user` отвергает такой аккаунт ДО
+        update_last_login/create_session: сессия без ролей не должна появляться
+        вообще. Прежний 500/`internal_error` был неотличим от настоящей аварии.
+        Поведение уже выданной сессии проверяют соседние тесты (me → role null,
+        прикладные эндпоинты → 403, logout → 200).
+        """
         uid, email = self._make_student(client)
         remove_all_user_roles(uid)
+        sessions_before = _session_count(uid)
+        last_login_before = _last_login(uid)
+
         r = client.post(
             "/api/auth/login", json={"email": email, "password": PASSWORD},
         )
-        assert r.status_code == 200
-        assert r.json()["roles"] == []
-        assert r.json()["role"] is None
+
+        assert r.status_code == 403, r.text
+        assert "session_token" not in r.json()
+        # внутреннее состояние ролей наружу не раскрывается
+        body = r.text.lower()
+        assert "role" not in body and "user_roles" not in body
+        # новая сессия не создана, last_login не обновлён
+        assert _session_count(uid) == sessions_before
+        assert _last_login(uid) == last_login_before
+
+        entry = _last_auth_event(email, "failed_login")
+        assert entry is not None
+        assert entry.failure_reason == "no_active_roles"
+        assert entry.success is False
+
+    def test_wrong_password_keeps_invalid_credentials_reason(self, client):
+        """`no_active_roles` не подменяет обычный отказ по паролю.
+
+        У пользователя роли есть; причина обязана остаться invalid_credentials,
+        иначе новый код размывал бы значение и путал расследование.
+        """
+        _uid, email = self._make_student(client)
+        r = client.post(
+            "/api/auth/login", json={"email": email, "password": "WrongPass99!"},
+        )
+        assert r.status_code == 401, r.text
+
+        entry = _last_auth_event(email, "failed_login")
+        assert entry is not None
+        assert entry.failure_reason == "invalid_credentials"
+
+    def test_logout_works_after_all_roles_removed(self, client):
+        """Уже выданная сессия обязана закрываться, даже если ролей не осталось.
+
+        Регрессия: audit-facade требовал роль у user-актора, а `auth_log` её не
+        хранит вовсе — logout такого пользователя падал 500, и завершить сессию
+        было нечем. Роль обязательна только для AUDIT_LOG.
+        """
+        uid, email = self._make_student(client)
+        token = client.post(
+            "/api/auth/login", json={"email": email, "password": PASSWORD},
+        ).json()["session_token"]
+        remove_all_user_roles(uid)
+
+        r = client.post("/api/auth/logout", headers=_auth(token))
+        assert r.status_code == 200, r.text
+        # сессия действительно отозвана
+        assert client.get(
+            "/api/auth/me", headers=_auth(token),
+        ).status_code == 401
+
+        with SessionLocal() as db:
+            assert db.query(AuthLog).filter(
+                AuthLog.user_id == uid, AuthLog.event == "logout",
+            ).count() == 1
 
 
 # ─── 5. Просроченная роль исключается ────────────────────────────────────────

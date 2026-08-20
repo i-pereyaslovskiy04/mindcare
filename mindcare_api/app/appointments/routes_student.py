@@ -5,9 +5,12 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from app.auth.deps import get_current_user, require_role
+from app.auth.deps import get_current_user, require_role, resolve_role_or_403
+from app.audit import Actor
+from app.audit.failsafe import record_secondary_failure
+from app.audit.request_context import build_request_context
 from app.appointments import service
 from app.appointments.schemas import (
     AppointmentCancelBody,
@@ -19,6 +22,11 @@ from app.appointments.schemas import (
     PaginatedGroupSessionsResponse,
     SlotsResponse,
 )
+
+
+def _ip(request: Request):
+    return request.client.host if request.client else None
+
 
 router = APIRouter(
     prefix="/appointments",
@@ -112,12 +120,19 @@ def list_my_appointments(
 @router.post("", response_model=AppointmentDetailRead, status_code=status.HTTP_201_CREATED)
 def book_appointment(
     body: AppointmentCreate,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """
     Записаться к психологу. Требует активной связи (TherapyEngagement).
     Запись создаётся со статусом pending_confirmation.
     """
+    role = resolve_role_or_403(
+        current_user, allowed={"student"}, preferred="student",
+    )
+    actor = Actor.user(int(current_user["id"]), role)
+    ip = _ip(request)
+    ua = request.headers.get("user-agent")
     try:
         return service.book_appointment(
             student_user=current_user,
@@ -125,8 +140,17 @@ def book_appointment(
             modality=body.modality,
             topic=body.topic,
             meeting_type_id=body.meeting_type_id,
+            actor_role=role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AppointmentError as exc:
+        if isinstance(exc, service.AuditableAppointmentError):
+            record_secondary_failure(
+                event="appointment_create_failed", actor=actor,
+                failure_reason_code=exc.audit_code,
+                context=build_request_context(ip=ip, user_agent=ua),
+            )
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
@@ -136,19 +160,35 @@ def book_appointment(
 def cancel_appointment(
     uuid:         str,
     body:         AppointmentCancelBody,
+    request:      Request,
     current_user: dict = Depends(get_current_user),
 ):
     """
     Студент отменяет запись. Разрешено только до дня записи (Moscow timezone).
     Статусы pending_confirmation и confirmed можно отменить.
     """
+    role = resolve_role_or_403(
+        current_user, allowed={"student"}, preferred="student",
+    )
+    actor = Actor.user(int(current_user["id"]), role)
+    ip = _ip(request)
+    ua = request.headers.get("user-agent")
     try:
         return service.student_cancel(
             uuid=uuid,
             student_user=current_user,
             reason=body.reason,
+            actor_role=role,
+            ip=ip,
+            user_agent=ua,
         )
     except service.AppointmentError as exc:
+        if isinstance(exc, service.AuditableAppointmentError):
+            record_secondary_failure(
+                event="appointment_cancel_failed", actor=actor,
+                failure_reason_code=exc.audit_code,
+                context=build_request_context(ip=ip, user_agent=ua),
+            )
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
@@ -176,14 +216,21 @@ def list_group_sessions(
 )
 def register_group_session(
     uuid:         str,
+    request:      Request,
     current_user: dict = Depends(get_current_user),
 ):
     """
     Записаться на групповое занятие.
     Подтверждение психолога не требуется.
     """
+    role = resolve_role_or_403(
+        current_user, allowed={"student"}, preferred="student",
+    )
     try:
-        return service.student_register_group(uuid, current_user)
+        return service.student_register_group(
+            uuid, current_user, actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -191,11 +238,18 @@ def register_group_session(
 @group_router.delete("/{uuid}/register", status_code=status.HTTP_204_NO_CONTENT)
 def cancel_group_session(
     uuid:         str,
+    request:      Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Отменить регистрацию на групповое занятие."""
+    role = resolve_role_or_403(
+        current_user, allowed={"student"}, preferred="student",
+    )
     try:
-        service.student_cancel_group(uuid, current_user)
+        service.student_cancel_group(
+            uuid, current_user, actor_role=role,
+            ip=_ip(request), user_agent=request.headers.get("user-agent"),
+        )
     except service.AppointmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 

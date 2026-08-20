@@ -27,7 +27,8 @@ Plaintext content не логируется нигде; audit-хелпер пр�
 from typing import Optional
 
 from app.session_notes import storage
-from app.session_notes.audit import log_note_event
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 
 
 class NoteNotFound(Exception):
@@ -80,30 +81,23 @@ def create_note(
     data: dict,
     author_id: int,
     *,
-    actor_role: str = "psychologist",
+    actor_role: str,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
-    note = storage.create_note(
+    # author_id — единый actor/author id; actor_role обязателен (без default).
+    # Аудит session_note_created пишется АТОМАРНО внутри storage.create_note.
+    return storage.create_note(
         author_id=author_id,
         appointment_id=data.get("appointment_id"),
         engagement_id=data.get("engagement_id"),
         note_type=data.get("note_type", "general"),
         content=data["content"],
         is_shared_with_client=data.get("is_shared_with_client", False),
-    )
-    log_note_event(
-        "session_note_created",
-        actor_id=author_id,
         actor_role=actor_role,
-        note_id=note["id"],
-        author_id=note["author_id"],
-        engagement_id=note["engagement_id"],
-        appointment_id=note["appointment_id"],
         ip=ip,
         user_agent=user_agent,
     )
-    return note
 
 
 def get_note(
@@ -129,17 +123,17 @@ def get_note(
         raise NoteNotFound()
 
     if role == "supervisor":
-        # Staff-доступ к расшифрованному терапевтическому content — в audit
-        log_note_event(
-            "session_note_content_read",
-            actor_id=int(current_user["id"]),
-            actor_role=role,
-            note_id=note["id"],
-            author_id=note["author_id"],
-            engagement_id=note["engagement_id"],
-            appointment_id=note["appointment_id"],
-            ip=ip,
-            user_agent=user_agent,
+        # Staff-доступ к расшифрованному терапевтическому content — read trail.
+        # INDEPENDENT/SOFT (provisional fail-open): facade сам обрабатывает
+        # storage-сбой как AuditResult(SOFT_FAILED) без raise, content-read
+        # остаётся успешным. db НЕ передаётся; без собственного broad try/except.
+        record_event(
+            event="session_note_content_read",
+            actor=Actor.user(int(current_user["id"]), "supervisor"),
+            target=Target("session_note", note["id"]),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=build_request_context(ip=ip, user_agent=user_agent),
         )
 
     return note
@@ -183,25 +177,21 @@ def update_note(
     note_id: int,
     data: dict,
     *,
-    current_user: dict,
+    author_id: int,
+    actor_role: str,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
-    note = storage.update_note(note_id, data, author_id=current_user["id"])
-    if not note:
-        raise NoteNotFound()
-    # update — psychologist-only (require_role на роутере); actor действует как
-    # psychologist, а не как случайная primary роль multi-role пользователя.
-    actor_role = _resolve_notes_role(current_user.get("roles") or [], "psychologist")
-    log_note_event(
-        "session_note_updated",
-        actor_id=int(current_user["id"]),
+    # author_id — единый owner-scope/actor id; actor_role резолвится в route
+    # (psychologist) до мутации, без повторного resolution здесь. Аудит
+    # session_note_updated пишется АТОМАРНО внутри storage.update_note.
+    note = storage.update_note(
+        note_id, data,
+        author_id=author_id,
         actor_role=actor_role,
-        note_id=note["id"],
-        author_id=note["author_id"],
-        engagement_id=note["engagement_id"],
-        appointment_id=note["appointment_id"],
         ip=ip,
         user_agent=user_agent,
     )
+    if not note:
+        raise NoteNotFound()
     return note

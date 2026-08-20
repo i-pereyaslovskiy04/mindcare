@@ -23,6 +23,12 @@ def _hash() -> str:
 
 
 def _make_user(client, role: str) -> str:
+    """Совместимость со старыми тестами: возвращает только token."""
+    token, _uid = _make_user_with_id(client, role)
+    return token
+
+
+def _make_user_with_id(client, role: str) -> tuple[str, int]:
     u = auth_storage.save_user({
         "name": f"Integ {role} {_uuid.uuid4().hex[:6]}",
         "email": f"integ_domadmin_{role}_{_uuid.uuid4().hex[:10]}@example.com",
@@ -33,7 +39,7 @@ def _make_user(client, role: str) -> str:
         "/api/auth/login", json={"email": u["email"], "password": PASSWORD},
     )
     assert r.status_code == 200, r.text
-    return r.json()["session_token"]
+    return r.json()["session_token"], int(u["id"])
 
 
 def _auth(token: str) -> dict:
@@ -57,12 +63,21 @@ def _domain_row(domain: str):
 
 
 def _audit_rows(domain: str):
+    # Stage 4B-2: metadata домена больше не пишется (→ {}), поэтому строки аудита
+    # ищем по entity_id (id домена), а не по log_metadata["domain"].
     with SessionLocal() as db:
+        dom = (
+            db.query(AllowedEmailDomain)
+            .filter(AllowedEmailDomain.domain == domain)
+            .first()
+        )
+        if dom is None:
+            return []
         rows = (
             db.query(AuditLog)
             .filter(
                 AuditLog.entity_type == "allowed_email_domain",
-                AuditLog.log_metadata["domain"].astext == domain,
+                AuditLog.entity_id == dom.id,
             )
             .all()
         )
@@ -161,7 +176,7 @@ class TestPatchDomain:
         return r.json()
 
     def test_disable_then_reactivate(self, client, reset_email_domains):
-        token = _make_user(client, "admin")
+        token, admin_id = _make_user_with_id(client, "admin")
         row = self._add(client, token)
         dom_id = row["id"]
 
@@ -177,10 +192,25 @@ class TestPatchDomain:
         assert r.status_code == 200
         assert r.json()["is_active"] is True
 
+        all_rows = _audit_rows(row["domain"])
+        disable_rows = [a for a in all_rows if a.event_type == "email_domain_disable"]
+        reactivate_rows = [
+            a for a in all_rows if a.event_type == "email_domain_reactivate"
+        ]
+        assert len(disable_rows) == 1
+        assert len(reactivate_rows) == 1
+        for a in (disable_rows[0], reactivate_rows[0]):
+            assert a.entity_type == "allowed_email_domain"
+            assert a.entity_id == dom_id
+            assert (a.log_metadata or {}) == {}
+            assert a.description is None
+            assert a.user_id == admin_id           # actor — текущий admin
+            assert a.user_role == "admin"
+
     def test_comment_only_update_changes_updated_at(
         self, client, reset_email_domains,
     ):
-        token = _make_user(client, "admin")
+        token, admin_id = _make_user_with_id(client, "admin")
         row = self._add(client, token)
         before = _domain_row(row["domain"]).updated_at
         r = client.patch(
@@ -191,9 +221,21 @@ class TestPatchDomain:
         assert r.json()["comment"] == "новый комментарий"
         after = _domain_row(row["domain"]).updated_at
         assert after > before
-        # событие email_domain_update
-        events = {a.event_type for a in _audit_rows(row["domain"])}
-        assert "email_domain_update" in events
+        # ровно одна строка email_domain_update, с корректным actor/target и
+        # без комментария/description (comment может содержать ПДн).
+        update_rows = [
+            a for a in _audit_rows(row["domain"]) if a.event_type == "email_domain_update"
+        ]
+        assert len(update_rows) == 1
+        a = update_rows[0]
+        assert a.entity_type == "allowed_email_domain"
+        assert a.entity_id == row["id"]
+        assert (a.log_metadata or {}) == {}
+        assert a.description is None
+        assert a.user_id == admin_id
+        assert a.user_role == "admin"
+        assert "новый комментарий" not in str(a.log_metadata)
+        assert a.description != "новый комментарий"
 
     def test_noop_patch_no_audit_no_updated_at(
         self, client, reset_email_domains,
@@ -267,24 +309,32 @@ class TestLastActiveGuard:
         assert r.status_code == 409
 
 
-# ─── Audit metadata не содержит сырой comment ─────────────────────────────────
+# ─── Audit не содержит сырой comment / domain / description (Stage 4B-2) ───────
 
 class TestAuditNoRawComment:
     def test_audit_metadata_shape(self, client, reset_email_domains):
-        token = _make_user(client, "admin")
+        token, admin_id = _make_user_with_id(client, "admin")
         secret_comment = "ФИО Иванов +79001234567"
         domain = _temp_domain()
-        client.post(
+        created = client.post(
             BASE, headers=_auth(token),
             json={"domain": domain, "comment": secret_comment},
         )
+        assert created.status_code == 201, created.text
+        dom_id = created.json()["id"]
+
         rows = _audit_rows(domain)
         assert rows, "должно быть audit-событие email_domain_add"
         for a in rows:
-            meta = a.log_metadata or {}
-            assert set(meta.keys()) == {
-                "domain", "is_active_before", "is_active_after", "comment_changed",
-            }
-            # сырой комментарий (ПДн) в audit не пишется
-            assert secret_comment not in str(meta)
-            assert meta["domain"] == domain
+            # metadata пуста, description не пишется (facade); subject — ТОЛЬКО
+            # entity_type/entity_id (не domain/comment в metadata/description).
+            assert (a.log_metadata or {}) == {}
+            assert a.description is None
+            assert a.event_type == "email_domain_add"
+            assert a.entity_type == "allowed_email_domain"
+            assert a.entity_id == dom_id
+            assert a.user_id == admin_id
+            # сырой комментарий (ПДн) и сам domain в audit не пишутся нигде
+            assert secret_comment not in str(a.log_metadata)
+            assert secret_comment != a.description
+            assert domain not in str(a.log_metadata)

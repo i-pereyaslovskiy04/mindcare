@@ -18,8 +18,8 @@ partitioned tables: partition key должен входить в PRIMARY KEY.
 """
 
 from sqlalchemy import (
-    ARRAY, BigInteger, Boolean, Column, DateTime, ForeignKey,
-    Index, Integer, String, Text,
+    ARRAY, BigInteger, Boolean, CheckConstraint, Column, DateTime, ForeignKey,
+    Index, Integer, String, Text, text,
 )
 from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.sql import func
@@ -30,9 +30,13 @@ from app.db.base import Base
 class AuditLog(Base):
     __tablename__ = "audit_log"
     __table_args__ = (
-        Index("idx_audit_user",   "user_id",    "created_at"),
-        Index("idx_audit_event",  "event_type", "created_at"),
-        Index("idx_audit_entity", "entity_type", "entity_id"),
+        Index("idx_audit_user",    "user_id",    "created_at"),
+        Index("idx_audit_event",   "event_type", "created_at"),
+        Index("idx_audit_entity",  "entity_type", "entity_id"),
+        Index("idx_audit_outcome", "outcome",    "created_at"),
+        CheckConstraint(
+            "outcome IN ('success', 'failure')", name="ck_audit_outcome",
+        ),
     )
 
     id             = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -48,13 +52,20 @@ class AuditLog(Base):
     session_id     = Column(String(255))
     request_url    = Column(String(500))
     request_method = Column(String(10))
+    # Stage 2: исход действия. Старые writer'ы не передают outcome — client/server
+    # default 'success' сохраняет совместимость. failure_reason_code — стабильный
+    # enum-код (без PII/exception text), заполняется на следующих этапах.
+    outcome             = Column(String(10), nullable=False, default="success", server_default=text("'success'"))
+    failure_reason_code = Column(String(100))
     created_at     = Column(DateTime(timezone=True), primary_key=True, server_default=func.now())
 
 
 class AuthLog(Base):
     """
     Журнал аутентификационных событий.
-    Используется в app/auth/audit.py → log_auth_event().
+    Заполняется через единый audit-facade (app/audit/service.py) для событий
+    с destination=AUTH_LOG. Legacy-хелпер app/auth/audit.py::log_auth_event
+    удалён (Stage 4B-5); сама таблица/модель остаётся.
     """
     __tablename__ = "auth_log"
     __table_args__ = (
@@ -77,22 +88,48 @@ class AuthLog(Base):
 
 
 class DataChangeLog(Base):
-    """Лог изменений данных (who changed what, ФЗ-152)."""
+    """Минимизированный журнал изменений — техническая мера прослеживаемости
+    (who changed what). Не является утверждением о прямом требовании
+    какого-либо закона или о соответствии законодательству — это отдельное
+    решение DPO/ответственного лица, вне охвата этой модели.
+
+    Stage 6-A: структурные инварианты минимизированного журнала закреплены на
+    уровне БД (migration d4a7b2c9f6e1). Имена ограничений и текст CHECK здесь
+    ОБЯЗАНЫ совпадать с миграцией — расхождение ловится drift-тестом.
+
+    old_values/new_values остаются nullable JSONB намеренно: они заполняются
+    ТОЛЬКО для явно размеченных нечувствительных enum/bool/int полей
+    (app/audit/change_registry.py). CHECK на их содержимое не вводится — БД не
+    может отличить безопасное значение от ПДн; это делает application allowlist.
+    """
     __tablename__ = "data_change_log"
     __table_args__ = (
         Index("idx_dcl_actor",     "actor_id",   "created_at"),
         Index("idx_dcl_table",     "table_name", "record_id"),
         Index("idx_dcl_operation", "operation",  "created_at"),
+        CheckConstraint(
+            "operation IN ('INSERT', 'UPDATE', 'DELETE')",
+            name="ck_dcl_operation",
+        ),
+        CheckConstraint(
+            "cardinality(changed_fields) > 0",
+            name="ck_dcl_changed_fields_nonempty",
+        ),
+        # NOT NULL этот CHECK не заменяет: CHECK с NULL даёт NULL и проходит.
+        CheckConstraint(
+            "record_id > 0",
+            name="ck_dcl_record_id_positive",
+        ),
     )
 
     id             = Column(BigInteger, primary_key=True, autoincrement=True)
     actor_id       = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     actor_role     = Column(String(50))
     table_name     = Column(String(100), nullable=False)
-    record_id      = Column(Integer)
+    record_id      = Column(Integer, nullable=False)
     operation      = Column(String(10), nullable=False)    # INSERT / UPDATE / DELETE
     old_values     = Column(JSONB)
     new_values     = Column(JSONB)
-    changed_fields = Column(ARRAY(Text()))   # TEXT[] — совместимо с PostgreSQL reflection
+    changed_fields = Column(ARRAY(Text()), nullable=False)  # TEXT[] — совместимо с PostgreSQL reflection
     ip_address     = Column(INET)
     created_at     = Column(DateTime(timezone=True), primary_key=True, server_default=func.now())

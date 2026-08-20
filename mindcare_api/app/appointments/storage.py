@@ -10,8 +10,13 @@ import hashlib
 
 import sqlalchemy as sa
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
 from app.core.normalization import normalize_email
+from app.audit import (
+    Actor, ChangeValue, Operation, Outcome, RequestContext, Target,
+    is_value_allowed, project_changed_fields, record_data_change, record_event,
+)
 from app.db.models import (
     Appointment,
     GroupSession,
@@ -20,10 +25,48 @@ from app.db.models import (
     ScheduleBreak,
     ScheduleException,
     ScheduleRule,
+    ScheduleSeries,
     TherapyEngagement,
     UnregisteredStudentCard,
     User,
 )
+
+
+def _require_actor(actor, context) -> None:
+    """Stage 5B-1 fail-closed guard: audit требует подтверждённый user-actor +
+    context (готовые объекты строит service). Проверка ДО любой мутации. Event-
+    specific allowed-role остаётся за facade registry validation."""
+    if (
+        not isinstance(actor, Actor)
+        or actor.kind != "user"
+        or not isinstance(actor.user_id, int)
+        or isinstance(actor.user_id, bool)
+        or actor.user_id <= 0
+        or not isinstance(actor.role, str)
+        or not actor.role
+        or not isinstance(context, RequestContext)
+    ):
+        raise RuntimeError(
+            "appointments audit requires authenticated user actor context"
+        )
+
+
+def _require_system_actor(actor, context) -> None:
+    """Stage 5C-3 fail-closed guard для maintenance-writer'ов.
+
+    Требуется именно SYSTEM actor (не user) и ОТСУТСТВИЕ request-контекста: у
+    CLI-job нет доверенного HTTP-контекста, а контекст читателя системе не
+    принадлежит — request actor и system actor не смешиваются. Проверка ДО
+    любой мутации.
+    """
+    if not isinstance(actor, Actor) or actor.kind != "system":
+        raise RuntimeError(
+            "maintenance audit requires the system actor"
+        )
+    if context is not None:
+        raise RuntimeError(
+            "maintenance audit must not carry a request context"
+        )
 
 # Moscow is UTC+3, no DST since 2014
 MOSCOW_TZ = timezone(timedelta(hours=3))
@@ -457,13 +500,21 @@ def create_appointment(
     unregistered_student_card_id: Optional[int] = None,
     booking_source: str = "student_self",
     created_by: Optional[int] = None,
+    *,
+    actor: Actor,
+    context: RequestContext,
 ) -> dict:
     """Create an appointment.
 
     Субъект — ровно один: client_id (зарегистрированный студент) ИЛИ
     unregistered_student_card_id (карточка незарегистрированного студента).
     DB CHECK chk_appointment_subject_exactly_one гарантирует инвариант.
+
+    Stage 5B-1: appointment_created (ATOMIC/RAISE) стейджится после flush/refresh,
+    до возврата dict (appt.id локален); commit — за service. metadata={}, ПДн/
+    topic/subject ids в audit не пишутся.
     """
+    _require_actor(actor, context)
     now = datetime.now(MOSCOW_TZ)
     ends_at = starts_at + timedelta(minutes=duration_minutes)
     appt = Appointment(
@@ -486,6 +537,15 @@ def create_appointment(
     db.add(appt)
     db.flush()
     db.refresh(appt)
+    record_event(
+        event="appointment_created",
+        actor=actor,
+        target=Target("appointment", appt.id),
+        outcome=Outcome.SUCCESS,
+        metadata={},
+        context=context,
+        db=db,
+    )
     return _appointment_to_dict(appt, db)
 
 
@@ -627,24 +687,38 @@ def get_psychologist_appointments(
     return [_appointment_to_dict(a, db) for a in rows], total
 
 
-def confirm_appointment(appt: Appointment, db) -> dict:
+def confirm_appointment(
+    appt: Appointment, db, *, actor: Actor, context: RequestContext
+) -> dict:
+    _require_actor(actor, context)
     now = datetime.now(MOSCOW_TZ)
     appt.status = "confirmed"
     appt.updated_at = now
     db.flush()
     db.refresh(appt)
+    record_event(
+        event="appointment_confirmed", actor=actor,
+        target=Target("appointment", appt.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
     return _appointment_to_dict(appt, db)
 
 
 def decline_appointment(
-    appt: Appointment, reason: Optional[str], db
+    appt: Appointment, reason: Optional[str], db, *, actor: Actor, context: RequestContext
 ) -> dict:
+    _require_actor(actor, context)
     now = datetime.now(MOSCOW_TZ)
     appt.status = "declined"
-    appt.decline_reason = reason
+    appt.decline_reason = reason   # reason → уведомление, НЕ в audit
     appt.updated_at = now
     db.flush()
     db.refresh(appt)
+    record_event(
+        event="appointment_declined", actor=actor,
+        target=Target("appointment", appt.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
     return _appointment_to_dict(appt, db)
 
 
@@ -654,13 +728,21 @@ def cancel_appointment(
     reason: Optional[str],
     db,
     soft_delete: bool = False,
+    *,
+    actor: Actor,
+    context: RequestContext,
 ) -> dict:
     """Cancel an appointment.
 
     soft_delete=True (отмена ещё не подтверждённой записи) — дополнительно
     проставляет deleted_at, чтобы запись исчезла из списков. Подтверждённые
     записи отменяются без soft-delete (остаются видны как cancelled).
+
+    Stage 5B-1: appointment_cancelled стейджится в той же транзакции до возврата;
+    target=appt.id даже при soft-delete (append-only audit не удаляется). reason
+    идёт в уведомление, НЕ в audit.
     """
+    _require_actor(actor, context)
     now = datetime.now(MOSCOW_TZ)
     appt.status = "cancelled"
     appt.cancellation_reason = reason
@@ -669,6 +751,11 @@ def cancel_appointment(
     if soft_delete:
         appt.deleted_at = now
     db.flush()
+    record_event(
+        event="appointment_cancelled", actor=actor,
+        target=Target("appointment", appt.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
     result = _appointment_to_dict(appt, db)
     return result
 
@@ -705,21 +792,91 @@ def get_meeting_type(mt_id: int, db) -> Optional[MeetingType]:
     return db.query(MeetingType).filter(MeetingType.id == mt_id).first()
 
 
-def create_meeting_type(data: dict, db) -> dict:
+def create_meeting_type(data: dict, db, *, actor: Actor, context: RequestContext) -> dict:
+    _require_actor(actor, context)
     now = datetime.now(MOSCOW_TZ)
     mt = MeetingType(**data, created_at=now, updated_at=now)
     db.add(mt)
     db.flush()
     db.refresh(mt)
+    record_event(
+        event="meeting_type_created", actor=actor,
+        target=Target("meeting_type", mt.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
     return _mt_to_dict(mt)
 
 
-def update_meeting_type(mt: MeetingType, updates: dict, db) -> dict:
+def update_meeting_type(
+    mt: MeetingType, updates: dict, db, *, actor: Actor, context: RequestContext
+) -> dict:
+    """Stage 5C-1: is_active — семантически значимый boolean-переход, поэтому
+    выделен в отдельные события (activated/deactivated), не тонет в generic
+    updated. Combined PATCH (обычные поля + is_active) пишет ДВЕ непересекающиеся
+    строки. Identical PATCH (нет реального diff нигде) — no-op: без мутации,
+    без сдвига updated_at, без audit.
+
+    Stage 6-B: рядом с generic `meeting_type_updated` пишется ОДНА строка
+    data_change_log — только по non_status_diff (is_active в неё не попадает,
+    он уже вне non_status_diff). Проекция полей (project_changed_fields) и
+    snapshot value-enabled полей (is_value_allowed) снимаются ДО setattr —
+    неизвестное для CHANGE_REGISTRY поле роняет операцию до любой мутации ORM.
+    """
+    _require_actor(actor, context)
+    is_active_before = mt.is_active
+    non_status_diff = {
+        k: v for k, v in updates.items()
+        if k != "is_active" and getattr(mt, k) != v
+    }
+    is_active_after = updates.get("is_active", is_active_before)
+    is_active_changed = "is_active" in updates and is_active_after != is_active_before
+
+    if not non_status_diff and not is_active_changed:
+        return _mt_to_dict(mt)   # no-op: ORM/updated_at/audit/DCL не трогаем
+
+    # Stage 6-B: ДО мутации — проекция allowlist'а и snapshot old ТОЛЬКО для
+    # value-enabled полей (name/description — name-only, значение не снимается).
+    dcl_fields: list[str] = []
+    old_snapshot: dict = {}
+    if non_status_diff:
+        dcl_fields = project_changed_fields("meeting_types", non_status_diff.keys())
+        old_snapshot = {
+            f: getattr(mt, f) for f in dcl_fields
+            if is_value_allowed("meeting_types", f)
+        }
+
     for k, v in updates.items():
         setattr(mt, k, v)
     mt.updated_at = datetime.now(MOSCOW_TZ)
     db.flush()
     db.refresh(mt)
+
+    if non_status_diff:
+        record_event(
+            event="meeting_type_updated", actor=actor,
+            target=Target("meeting_type", mt.id), outcome=Outcome.SUCCESS,
+            metadata={}, context=context, db=db,
+        )
+        # Stage 6-B: field-level журнал рядом с тем же paired_event, в ТОЙ ЖЕ
+        # транзакции (owner commit — за service). values — только по
+        # value-enabled полям; пусто → None (не {}).
+        values = {
+            f: ChangeValue(old=old_snapshot[f], new=getattr(mt, f))
+            for f in dcl_fields if f in old_snapshot
+        } or None
+        record_data_change(
+            table="meeting_types", record_id=mt.id,
+            operation=Operation.UPDATE, actor=actor,
+            changed_fields=dcl_fields, values=values,
+            context=context, db=db,
+        )
+    if is_active_changed:
+        record_event(
+            event=("meeting_type_activated" if is_active_after
+                   else "meeting_type_deactivated"),
+            actor=actor, target=Target("meeting_type", mt.id),
+            outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+        )
     return _mt_to_dict(mt)
 
 
@@ -764,10 +921,59 @@ def get_schedule_rules(
     return [_rule_to_dict(r) for r in rows]
 
 
-def create_schedule_rules_bulk(data: dict, db) -> list[dict]:
-    """Create one rule per day in data['days_of_week'], sharing a series_id."""
+# Фиксированная диагностика: без UUID / id / ПДн / SQL / исходных значений.
+_ERR_SERIES_OWNER_MISMATCH = (
+    "schedule series identity owner mismatch: the existing series belongs to a "
+    "different psychologist"
+)
+
+
+def _ensure_series_identity(series_id, psychologist_id: int, db) -> ScheduleSeries:
+    """Stage 5C-0B: identity-строка серии создаётся ДО rules/breaks в ТОЙ ЖЕ
+    транзакции.
+
+    После 5C-0C на `schedule_rules.series_id` / `schedule_breaks.series_id` стоят FK
+    → `schedule_series.series_uuid`, поэтому вставка identity обязана
+    предшествовать вставке строк серии (иначе FK violation). Идемпотентна:
+    существующая серия переиспользуется (важно для повторного использования
+    series_id в update_schedule_series). Возвращает ORM-строку — её `.id` служит
+    стабильным integer audit target (Stage 5C-1).
+
+    Fail-closed по владельцу: если серия уже существует, её `psychologist_id`
+    обязан совпадать с ожидаемым (в т.ч. NULL-владелец у существующей строки при
+    попытке создать дочерние строки — это несовпадение). Существующая строка НЕ
+    мутируется и владелец НЕ перепривязывается: тихая перепривязка исказила бы
+    исторические audit-ссылки на серию. Дочерние rules/breaks в этом случае не
+    создаются (исключение поднимается до их вставки).
+    """
+    owner = int(psychologist_id)
+    existing = (
+        db.query(ScheduleSeries)
+        .filter(ScheduleSeries.series_uuid == series_id)
+        .first()
+    )
+    if existing is not None:
+        if existing.psychologist_id != owner:
+            raise RuntimeError(_ERR_SERIES_OWNER_MISMATCH)
+        return existing
+    row = ScheduleSeries(series_uuid=series_id, psychologist_id=owner)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def create_schedule_rules_bulk(
+    data: dict, db, *, actor: Actor, context: RequestContext
+) -> list[dict]:
+    """Create one rule per day in data['days_of_week'], sharing a series_id.
+
+    Stage 5C-1: legacy bulk endpoint — per-row schedule_rule_created (distinct
+    from the unified `schedule_created` event of create_schedule_series). Empty
+    days_of_week → 0 rows → 0 audit events."""
+    _require_actor(actor, context)
     import uuid as _uuid_module
     series_id = _uuid_module.uuid4()
+    _ensure_series_identity(series_id, data["psychologist_id"], db)
     created = []
     for dow in data["days_of_week"]:
         rule = ScheduleRule(
@@ -787,18 +993,31 @@ def create_schedule_rules_bulk(data: dict, db) -> list[dict]:
         db.add(rule)
         db.flush()
         db.refresh(rule)
+        record_event(
+            event="schedule_rule_created", actor=actor,
+            target=Target("schedule_rule", rule.id), outcome=Outcome.SUCCESS,
+            metadata={}, context=context, db=db,
+        )
         created.append(_rule_to_dict(rule))
     return created
 
 
-def create_schedule_series(data: dict, db) -> dict:
+def create_schedule_series(
+    data: dict, db, *, actor: Actor, context: RequestContext
+) -> dict:
     """Create a full schedule (rules + recurring breaks) in one series.
 
     Rules and breaks share one series_id and the same effective period so the
     series can be soft-deleted / restored / extended as a unit.
+
+    Stage 5C-1: ОДНО событие `schedule_created` на серию с target=
+    schedule_series.id (stable integer identity), а не per-row — серия является
+    единицей бизнес-операции.
     """
+    _require_actor(actor, context)
     import uuid as _uuid_module
     series_id = _uuid_module.uuid4()
+    identity = _ensure_series_identity(series_id, data["psychologist_id"], db)
 
     rules = []
     for dow in data["days_of_week"]:
@@ -842,6 +1061,12 @@ def create_schedule_series(data: dict, db) -> dict:
     for b in breaks:
         db.refresh(b)
 
+    record_event(
+        event="schedule_created", actor=actor,
+        target=Target("schedule_series", identity.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
+
     return {
         "series_id":       str(series_id),
         "psychologist_id": data["psychologist_id"],
@@ -856,7 +1081,71 @@ def create_schedule_series(data: dict, db) -> dict:
     }
 
 
-def update_schedule_series(series_id, data: dict, db) -> dict:
+def _canonical_rule_rows(rules) -> "Counter":
+    """Мультимножество канонических кортежей ORM-правил серии.
+
+    Исключены generated id, created_at и series_id/UUID — они не являются
+    бизнес-состоянием серии и меняются при физической перезаписи.
+    """
+    from collections import Counter
+    return Counter(
+        (
+            r.day_of_week, r.meeting_type_id, r.start_time, r.end_time,
+            r.period, r.effective_from, r.effective_until,
+            bool(r.auto_extend), r.created_by, bool(r.is_active),
+            r.psychologist_id,
+        )
+        for r in rules
+    )
+
+
+def _canonical_break_rows(breaks) -> "Counter":
+    from collections import Counter
+    return Counter(
+        (
+            b.day_of_week, b.start_time, b.end_time, b.title,
+            b.effective_from, b.effective_until, bool(b.is_active),
+            b.psychologist_id,
+        )
+        for b in breaks
+    )
+
+
+def _canonical_target_state(data: dict, psychologist_id, created_by, is_active):
+    """Каноническое состояние, которое ПРОИЗВЕЛА БЫ перезапись из payload.
+
+    Строится ровно теми же значениями, что и ветка мутации ниже (в т.ч.
+    meeting_type_id=None у schedule v3 и сохранённые из head psychologist_id /
+    created_by / is_active). Поэтому равенство с текущим состоянием означает,
+    что перезапись была бы буквальным no-op.
+    """
+    from collections import Counter
+    eff_from = data["effective_from"]
+    eff_until = data.get("effective_until")
+    auto_extend = bool(data.get("auto_extend", False))
+    period = data.get("period")
+    rules = Counter(
+        (
+            dow, None, data["start_time"], data["end_time"], period,
+            eff_from, eff_until, auto_extend, created_by, bool(is_active),
+            psychologist_id,
+        )
+        for dow in data["days_of_week"]
+    )
+    breaks = Counter(
+        (
+            dow, brk["start_time"], brk["end_time"], brk.get("title"),
+            eff_from, eff_until, bool(is_active), psychologist_id,
+        )
+        for brk in data.get("breaks", [])
+        for dow in data["days_of_week"]
+    )
+    return rules, breaks
+
+
+def update_schedule_series(
+    series_id, data: dict, db, *, actor: Actor, context: RequestContext
+) -> dict:
     """Update a schedule series in place (recreate rules+breaks, same series_id).
 
     Existing rules/breaks of the series are physically removed and recreated
@@ -867,12 +1156,39 @@ def update_schedule_series(series_id, data: dict, db) -> dict:
 
     Schedule v3: recreated rules carry no meeting_type_id (working window).
     Caller must ensure the series exists (404 handled in service).
+
+    Stage 5C-1 — канонический diff: физическая перезапись НЕ является бизнес-
+    изменением. Если каноническое состояние payload совпадает с текущим, строки
+    НЕ удаляются и НЕ пересоздаются (row-id сохраняются), effective-состояние не
+    меняется и `schedule_updated` НЕ пишется. При различии — ровно одно событие.
     """
+    _require_actor(actor, context)
     existing = get_series_rules(series_id, db)
+    existing_breaks = get_series_breaks(series_id, db)
     head = existing[0]
     psychologist_id = head.psychologist_id
     is_active = head.is_active
     created_by = head.created_by
+    identity = _ensure_series_identity(series_id, psychologist_id, db)
+
+    target_rules, target_breaks = _canonical_target_state(
+        data, psychologist_id, created_by, is_active
+    )
+    if (_canonical_rule_rows(existing) == target_rules
+            and _canonical_break_rows(existing_breaks) == target_breaks):
+        # no-op: перезапись ничего бы не изменила — не трогаем строки и audit.
+        return {
+            "series_id":       str(series_id),
+            "psychologist_id": psychologist_id,
+            "meeting_type_id": head.meeting_type_id,
+            "auto_extend":     bool(head.auto_extend),
+            "effective_from":  str(head.effective_from),
+            "effective_until": str(head.effective_until)
+                               if head.effective_until else None,
+            "is_active":       is_active,
+            "rules":           [_rule_to_dict(r) for r in existing],
+            "breaks":          [_break_to_dict(b) for b in existing_breaks],
+        }
 
     # series_id здесь — тот же тип (UUID), что и колонка ScheduleRule.series_id,
     # поэтому bulk delete реально находит строки. Записи (appointments) не трогаем.
@@ -926,6 +1242,12 @@ def update_schedule_series(series_id, data: dict, db) -> dict:
     for b in breaks:
         db.refresh(b)
 
+    record_event(
+        event="schedule_updated", actor=actor,
+        target=Target("schedule_series", identity.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
+
     return {
         "series_id":       str(series_id),
         "psychologist_id": psychologist_id,
@@ -958,13 +1280,24 @@ def get_series_breaks(series_id, db) -> list[ScheduleBreak]:
     )
 
 
-def soft_delete_series(series_id, db) -> tuple[int, int]:
+def soft_delete_series(
+    series_id, db, *, actor: Actor, context: RequestContext
+) -> tuple[int, int]:
     """Deactivate all rules and breaks of a series (is_active=False).
 
     Returns (deactivated_rules, deactivated_breaks). Appointments untouched.
+
+    Stage 5C-1: событие только при РЕАЛЬНОМ переходе (r_count+b_count > 0);
+    повторная деактивация уже неактивной серии — no-op без audit. metadata={} —
+    counts не переносятся в журнал (масштаб перезаписи не нужен для семантики).
     """
+    _require_actor(actor, context)
     rules = get_series_rules(series_id, db)
     breaks = get_series_breaks(series_id, db)
+    identity = _ensure_series_identity(
+        series_id, rules[0].psychologist_id if rules else
+        (breaks[0].psychologist_id if breaks else None), db,
+    )
     r_count = 0
     for r in rules:
         if r.is_active:
@@ -975,14 +1308,32 @@ def soft_delete_series(series_id, db) -> tuple[int, int]:
         if b.is_active:
             b.is_active = False
             b_count += 1
+    if r_count + b_count == 0:
+        return 0, 0                     # no-op: без flush и без audit
     db.flush()
+    record_event(
+        event="schedule_deactivated", actor=actor,
+        target=Target("schedule_series", identity.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
     return r_count, b_count
 
 
-def restore_series(series_id, db) -> tuple[int, int]:
-    """Re-activate all rules and breaks of a series (is_active=True)."""
+def restore_series(
+    series_id, db, *, actor: Actor, context: RequestContext
+) -> tuple[int, int]:
+    """Re-activate all rules and breaks of a series (is_active=True).
+
+    Stage 5C-1: событие только при реальном переходе; повторный restore уже
+    активной серии — no-op без audit.
+    """
+    _require_actor(actor, context)
     rules = get_series_rules(series_id, db)
     breaks = get_series_breaks(series_id, db)
+    identity = _ensure_series_identity(
+        series_id, rules[0].psychologist_id if rules else
+        (breaks[0].psychologist_id if breaks else None), db,
+    )
     r_count = 0
     for r in rules:
         if not r.is_active:
@@ -993,17 +1344,107 @@ def restore_series(series_id, db) -> tuple[int, int]:
         if not b.is_active:
             b.is_active = True
             b_count += 1
+    if r_count + b_count == 0:
+        return 0, 0                     # no-op: без flush и без audit
     db.flush()
+    record_event(
+        event="schedule_restored", actor=actor,
+        target=Target("schedule_series", identity.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
     return r_count, b_count
 
 
-def extend_series(series_id, new_until: date, db) -> None:
-    """Set effective_until on all rules and breaks of a series."""
+def apply_series_extension(series_id, new_until: date, db) -> int:
+    """Сдвинуть effective_until серии; вернуть число РЕАЛЬНО изменённых строк.
+
+    Audit-free примитив: используется и ручным `extend_series` (событие
+    `schedule_extended`, Stage 5C-1), и автопродлением
+    (`auto_extend_schedules`, аудит которого относится к Stage 5C-3 и здесь
+    намеренно не добавляется). flush выполняется только при реальном сдвиге.
+    """
+    changed = 0
     for r in get_series_rules(series_id, db):
-        r.effective_until = new_until
+        if r.effective_until != new_until:
+            r.effective_until = new_until
+            changed += 1
     for b in get_series_breaks(series_id, db):
-        b.effective_until = new_until
-    db.flush()
+        if b.effective_until != new_until:
+            b.effective_until = new_until
+            changed += 1
+    if changed:
+        db.flush()
+    return changed
+
+
+def lock_series_for_maintenance(series_id, db):
+    """Взять блокировку серии по её стабильной identity (Stage 5C-0).
+
+    `FOR UPDATE SKIP LOCKED`: второй параллельный worker не ждёт, а получает
+    None и пропускает серию — двойного продления и дублирующих audit-строк не
+    возникает. Возвращает ORM-строку `ScheduleSeries` либо None.
+    """
+    return (
+        db.query(ScheduleSeries)
+        .filter(ScheduleSeries.series_uuid == series_id)
+        .with_for_update(skip_locked=True)
+        .first()
+    )
+
+
+def auto_extend_series(
+    series_id, new_until: date, db, *, actor: Actor, context=None
+) -> int:
+    """Автопродление серии системой (Stage 5C-3).
+
+    Отличается от ручного `extend_series` только actor'ом и событием:
+    `Actor.system()` + `schedule_auto_extended`. Событие пишется ТОЛЬКО при
+    фактическом сдвиге `effective_until` (0 изменённых строк → no-op без audit).
+    Вызывающий job обязан держать блокировку серии и уже перепроверить предикат.
+    """
+    _require_system_actor(actor, context)
+    identity = (
+        db.query(ScheduleSeries)
+        .filter(ScheduleSeries.series_uuid == series_id)
+        .first()
+    )
+    if identity is None:
+        return 0
+    changed = apply_series_extension(series_id, new_until, db)
+    if changed == 0:
+        return 0                        # no-op: без audit
+    record_event(
+        event="schedule_auto_extended", actor=actor,
+        target=Target("schedule_series", identity.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
+    return changed
+
+
+def extend_series(
+    series_id, new_until: date, db, *, actor: Actor, context: RequestContext,
+) -> int:
+    """Ручное продление серии supervisor/admin.
+
+    Stage 5C-1: событие `schedule_extended` пишется только при фактическом
+    сдвиге `effective_until` (0 изменённых строк → no-op без audit).
+    """
+    _require_actor(actor, context)
+    rules = get_series_rules(series_id, db)
+    breaks = get_series_breaks(series_id, db)
+    identity = _ensure_series_identity(
+        series_id, rules[0].psychologist_id if rules else
+        (breaks[0].psychologist_id if breaks else None), db,
+    )
+    changed = apply_series_extension(series_id, new_until, db)
+    if changed == 0:
+        return 0                        # no-op: без audit
+    record_event(
+        event="schedule_extended", actor=actor,
+        target=Target("schedule_series", identity.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
+    return changed
 
 
 def count_future_appointments_for_series(
@@ -1079,12 +1520,25 @@ def get_auto_extend_series_due(threshold: date, db) -> list:
     return [r[0] for r in rows]
 
 
-def deactivate_schedule_rule(rule_id: int, db) -> bool:
+def deactivate_schedule_rule(
+    rule_id: int, db, *, actor: Actor, context: RequestContext
+) -> bool:
+    """Stage 5C-1: событие только при РЕАЛЬНОМ переходе is_active true→false.
+    Повторная деактивация уже неактивного правила — no-op (без flush/audit), но
+    по-прежнему возвращает True (правило найдено → route отдаёт 204, не 404)."""
+    _require_actor(actor, context)
     rule = db.query(ScheduleRule).filter(ScheduleRule.id == rule_id).first()
     if not rule:
         return False
+    if not rule.is_active:
+        return True                     # no-op: перехода нет → нет audit
     rule.is_active = False
     db.flush()
+    record_event(
+        event="schedule_rule_deactivated", actor=actor,
+        target=Target("schedule_rule", rule.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
     return True
 
 
@@ -1117,10 +1571,17 @@ def get_schedule_breaks(psychologist_id: int, db) -> list[dict]:
     return [_break_to_dict(b) for b in rows]
 
 
-def create_schedule_breaks_bulk(data: dict, db) -> list[dict]:
-    """Create one break per day in data['days_of_week'], sharing a series_id."""
+def create_schedule_breaks_bulk(
+    data: dict, db, *, actor: Actor, context: RequestContext
+) -> list[dict]:
+    """Create one break per day in data['days_of_week'], sharing a series_id.
+
+    Stage 5C-1: per-row `schedule_break_created`; пустой bulk → 0 строк и 0
+    событий."""
+    _require_actor(actor, context)
     import uuid as _uuid_module
     series_id = _uuid_module.uuid4()
+    _ensure_series_identity(series_id, data["psychologist_id"], db)
     created = []
     for dow in data["days_of_week"]:
         br = ScheduleBreak(
@@ -1137,16 +1598,32 @@ def create_schedule_breaks_bulk(data: dict, db) -> list[dict]:
         db.add(br)
         db.flush()
         db.refresh(br)
+        record_event(
+            event="schedule_break_created", actor=actor,
+            target=Target("schedule_break", br.id), outcome=Outcome.SUCCESS,
+            metadata={}, context=context, db=db,
+        )
         created.append(_break_to_dict(br))
     return created
 
 
-def deactivate_schedule_break(break_id: int, db) -> bool:
+def deactivate_schedule_break(
+    break_id: int, db, *, actor: Actor, context: RequestContext
+) -> bool:
+    """Stage 5C-1: событие только при реальном переходе is_active true→false."""
+    _require_actor(actor, context)
     br = db.query(ScheduleBreak).filter(ScheduleBreak.id == break_id).first()
     if not br:
         return False
+    if not br.is_active:
+        return True                     # no-op: перехода нет → нет audit
     br.is_active = False
     db.flush()
+    record_event(
+        event="schedule_break_deactivated", actor=actor,
+        target=Target("schedule_break", br.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
     return True
 
 
@@ -1163,12 +1640,32 @@ def _exception_to_dict(e: ScheduleException) -> dict:
     }
 
 
-def create_schedule_exception(data: dict, db) -> dict:
-    exc = ScheduleException(**data)
-    db.add(exc)
+def create_schedule_exception(
+    data: dict, db, *, actor: Actor, context: RequestContext
+) -> dict:
+    """Создать разовое исключение расписания.
+
+    Corrective (Stage 5C): прежний `except IntegrityError → 409 «Конфликт
+    исключения расписания»` УДАЛЁН как выдуманный бизнес-конфликт. У
+    `schedule_exceptions` нет ни одного unique-constraint (уникальность
+    (psychologist_id, exception_date) снята миграцией 9e193b84bba8) — таблица
+    несёт только PK и FK, поэтому «конфликт расписания» был недостижим по
+    построению, а реально под него маскировалась FK-ошибка на несуществующего
+    психолога. Теперь эта причина проверяется явно в service (422 «Психолог не
+    найден», как в create_schedule), а любой остаточный IntegrityError всплывает
+    как есть и НЕ переименовывается в доменный конфликт.
+    """
+    _require_actor(actor, context)
+    exc_row = ScheduleException(**data)
+    db.add(exc_row)
     db.flush()
-    db.refresh(exc)
-    return _exception_to_dict(exc)
+    db.refresh(exc_row)
+    record_event(
+        event="schedule_exception_created", actor=actor,
+        target=Target("schedule_exception", exc_row.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
+    return _exception_to_dict(exc_row)
 
 
 def get_schedule_exceptions(
@@ -1267,23 +1764,44 @@ def is_psychologist(user_id: int, db) -> bool:
     return row is not None
 
 
-def complete_due_group_sessions(db, now: datetime) -> int:
-    """Lazy-перевод начавшихся/прошедших занятий в completed (+ закрыть запись).
+def complete_due_group_sessions(
+    db, now: datetime, *, actor: Actor, context=None
+) -> list[int]:
+    """Перевод начавшихся/прошедших занятий в completed (+ закрыть запись).
 
-    Трогает ТОЛЬКО status='scheduled' (cancelled/completed не меняются).
-    Коммит — на стороне вызывающего service-метода (та же сессия, что и чтение).
+    Stage 5C-3: вызывается ТОЛЬКО из явного maintenance-job (не из GET/list и не
+    из регистрации — read-пути мутаций больше не содержат).
+
+    Конкурентно-безопасно: один атомарный `UPDATE … RETURNING id`. В READ
+    COMMITTED параллельный второй UPDATE блокируется на строке, после commit
+    первого перечитывает предикат, видит status='completed' и строку НЕ обновляет
+    и НЕ возвращает — поэтому на один физический переход приходится ровно одна
+    audit-строка.
+
+    Трогает ТОЛЬКО status='scheduled' (cancelled/completed не меняются). Пустой
+    результат → 0 строк и 0 событий. Audit стейджится в ТОЙ ЖЕ транзакции
+    (ATOMIC/RAISE), поэтому сбой аудита откатывает сам переход. Commit — за
+    вызывающим job'ом.
     """
-    return (
-        db.query(GroupSession)
-        .filter(
+    _require_system_actor(actor, context)
+    stmt = (
+        sa.update(GroupSession)
+        .where(
             GroupSession.status == "scheduled",
             GroupSession.starts_at <= now,
         )
-        .update(
-            {"status": "completed", "booking_enabled": False},
-            synchronize_session=False,
-        )
+        .values(status="completed", booking_enabled=False, updated_at=now)
+        .returning(GroupSession.id)
+        .execution_options(synchronize_session=False)
     )
+    completed_ids = [row[0] for row in db.execute(stmt)]
+    for gs_id in completed_ids:
+        record_event(
+            event="group_session_completed", actor=actor,
+            target=Target("group_session", gs_id), outcome=Outcome.SUCCESS,
+            metadata={}, context=context, db=db,
+        )
+    return completed_ids
 
 
 def get_group_sessions_list(
@@ -1344,7 +1862,10 @@ def get_group_session_by_uuid(uuid_str: str, db) -> Optional[GroupSession]:
     )
 
 
-def create_group_session(data: dict, db) -> dict:
+def create_group_session(
+    data: dict, db, *, actor: Actor, context: RequestContext
+) -> dict:
+    _require_actor(actor, context)
     import uuid as _uuid_module
     now = datetime.now(MOSCOW_TZ)
     gs = GroupSession(
@@ -1356,44 +1877,205 @@ def create_group_session(data: dict, db) -> dict:
     db.add(gs)
     db.flush()
     db.refresh(gs)
+    record_event(
+        event="group_session_created", actor=actor,
+        target=Target("group_session", gs.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
     return _gs_to_dict(gs, db)
 
 
-def update_group_session(gs: GroupSession, updates: dict, db) -> dict:
+# Поля, семантически значимые сами по себе: имеют собственные события и НЕ входят
+# в generic group_session_updated (иначе важный переход утонул бы в «обновлено»).
+_GS_TRANSITION_FIELDS = ("booking_enabled", "status")
+
+
+def update_group_session(
+    gs: GroupSession, updates: dict, db, *, actor: Actor,
+    context: RequestContext
+) -> dict:
+    """Stage 5C-2: generic `group_session_updated` покрывает только обычные поля.
+
+    `booking_enabled` → booking_opened/closed, `status` scheduled→cancelled →
+    group_session_cancelled: отдельные непересекающиеся строки. Identical PATCH
+    (нет реального diff нигде) — no-op: без мутации, без сдвига updated_at, без
+    audit. Валидация допустимости самого перехода status — за service.
+
+    Stage 6-B: рядом с generic `group_session_updated` пишется ОДНА строка
+    data_change_log — только по regular_diff (booking_enabled/status в неё не
+    попадают, они уже вне regular_diff). Проекция полей (project_changed_fields)
+    и snapshot value-enabled полей (is_value_allowed) снимаются ДО setattr —
+    неизвестное для CHANGE_REGISTRY поле роняет операцию до любой мутации ORM.
+    """
+    _require_actor(actor, context)
+    booking_before = gs.booking_enabled
+    status_before = gs.status
+
+    regular_diff = {
+        k: v for k, v in updates.items()
+        if k not in _GS_TRANSITION_FIELDS and getattr(gs, k) != v
+    }
+    booking_after = updates.get("booking_enabled", booking_before)
+    booking_changed = (
+        "booking_enabled" in updates and booking_after != booking_before
+    )
+    status_after = updates.get("status", status_before)
+    status_changed = "status" in updates and status_after != status_before
+
+    if not regular_diff and not booking_changed and not status_changed:
+        return _gs_to_dict(gs, db)   # no-op: ORM/updated_at/audit/DCL не трогаем
+
+    # Stage 6-B: ДО мутации — проекция allowlist'а и snapshot old ТОЛЬКО для
+    # value-enabled полей (title/description/starts_at/ends_at/psychologist_id
+    # — name-only, значение не снимается).
+    dcl_fields: list[str] = []
+    old_snapshot: dict = {}
+    if regular_diff:
+        dcl_fields = project_changed_fields("group_sessions", regular_diff.keys())
+        old_snapshot = {
+            f: getattr(gs, f) for f in dcl_fields
+            if is_value_allowed("group_sessions", f)
+        }
+
     for k, v in updates.items():
         setattr(gs, k, v)
     gs.updated_at = datetime.now(MOSCOW_TZ)
     db.flush()
     db.refresh(gs)
+
+    if regular_diff:
+        record_event(
+            event="group_session_updated", actor=actor,
+            target=Target("group_session", gs.id), outcome=Outcome.SUCCESS,
+            metadata={}, context=context, db=db,
+        )
+        # Stage 6-B: field-level журнал рядом с тем же paired_event, в ТОЙ ЖЕ
+        # транзакции (owner commit — за service). values — только по
+        # value-enabled полям; пусто → None (не {}).
+        values = {
+            f: ChangeValue(old=old_snapshot[f], new=getattr(gs, f))
+            for f in dcl_fields if f in old_snapshot
+        } or None
+        record_data_change(
+            table="group_sessions", record_id=gs.id,
+            operation=Operation.UPDATE, actor=actor,
+            changed_fields=dcl_fields, values=values,
+            context=context, db=db,
+        )
+    if booking_changed:
+        record_event(
+            event=("group_session_booking_opened" if booking_after
+                   else "group_session_booking_closed"),
+            actor=actor, target=Target("group_session", gs.id),
+            outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+        )
+    if status_changed and status_after == "cancelled":
+        record_event(
+            event="group_session_cancelled", actor=actor,
+            target=Target("group_session", gs.id), outcome=Outcome.SUCCESS,
+            metadata={}, context=context, db=db,
+        )
     return _gs_to_dict(gs, db)
 
 
 def set_group_session_booking(
-    gs: GroupSession, enabled: bool, db
+    gs: GroupSession, enabled: bool, db, *, actor: Actor,
+    context: RequestContext
 ) -> dict:
+    """Stage 5C-2: событие только при РЕАЛЬНОМ переходе booking_enabled;
+    повторное выставление того же значения — no-op без audit."""
+    _require_actor(actor, context)
+    if gs.booking_enabled == enabled:
+        return _gs_to_dict(gs, db)   # no-op: перехода нет
     gs.booking_enabled = enabled
     gs.updated_at = datetime.now(MOSCOW_TZ)
     db.flush()
     db.refresh(gs)
+    record_event(
+        event=("group_session_booking_opened" if enabled
+               else "group_session_booking_closed"),
+        actor=actor, target=Target("group_session", gs.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
     return _gs_to_dict(gs, db)
 
 
-def lock_group_session_for_update(
-    gs_id: int, db
-) -> Optional[GroupSession]:
-    """Lock the group session row to serialise concurrent registrations."""
+def lock_group_session_by_uuid(uuid_str: str, db) -> Optional[GroupSession]:
+    """Locks and returns the group session row identified by `uuid_str`.
+
+    Corrective (concurrency gap, Stage 5C): single query, no preliminary
+    unlocked read whose attributes could go stale while this call waits on
+    `FOR UPDATE`. `populate_existing()` is required even so: `FOR UPDATE`
+    only guarantees the ROW LOCK — if this row is already in the session's
+    identity map (e.g. loaded earlier in the same request), SQLAlchemy would
+    otherwise hand back the CACHED in-memory object instead of the values
+    this `SELECT ... FOR UPDATE` just read, silently defeating the lock's
+    entire purpose. Without it, a caller could hold a real database lock
+    while working off stale Python attributes.
+
+    Callers MUST treat every attribute on the returned object as the sole
+    authoritative source for any business decision and must NOT reuse a
+    previously loaded instance of the same row.
+    """
     return (
         db.query(GroupSession)
-        .filter(GroupSession.id == gs_id)
+        .filter(GroupSession.uuid == uuid_str)
+        .populate_existing()
         .with_for_update()
         .first()
     )
 
 
+class GroupRegistrationConflict(Exception):
+    """Активная регистрация студента на это занятие уже существует.
+
+    Поднимается ТОЛЬКО из проверенных источников: (а) условный UPDATE не нашёл
+    строку для перехода `не-registered → registered`; (б) IntegrityError,
+    ИМЕННО нарушение partial unique index `ux_gsr_active` (одна 'registered'-строка
+    на пару session+student). Оба случая — настоящий бизнес-конфликт, а не выдуманный.
+    """
+
+
+# Единственный constraint, нарушение которого является бизнес-конфликтом
+# регистрации. Любое другое нарушение целостности (FK на занятие/студента,
+# NOT NULL, чужой unique) — дефект, а не «вы уже записаны», и маскировать его
+# доменным 409 запрещено.
+_UX_GSR_ACTIVE = "ux_gsr_active"
+
+
+def _is_gsr_active_violation(exc: IntegrityError) -> bool:
+    """True только для нарушения ``ux_gsr_active``.
+
+    psycopg2 отдаёт имя constraint в ``exc.orig.diag.constraint_name`` — это
+    структурированное поле, а не разбор текста сообщения. Если драйвер имя не
+    сообщил, классификация НЕ угадывается: возвращаем False и даём исходному
+    IntegrityError всплыть.
+    """
+    diag = getattr(getattr(exc, "orig", None), "diag", None)
+    return getattr(diag, "constraint_name", None) == _UX_GSR_ACTIVE
+
+
 def register_student_group_session(
-    gs: GroupSession, student_id: int, db
+    gs: GroupSession, student_id: int, db, *, actor: Actor,
+    context: RequestContext
 ) -> dict:
-    """Register student, reusing a cancelled row if one exists."""
+    """Register student, reusing a cancelled row if one exists.
+
+    Stage 5C-2: audit стейджится ЗДЕСЬ, после flush, где доступен ORM-объект и
+    его внутренний integer id. Реактивация `cancelled→registered` переиспользует
+    ТУ ЖЕ строку, поэтому target остаётся стабильным между циклами
+    регистрация→отмена→регистрация. Публичный DTO не расширяется: наружу
+    по-прежнему отдаётся только uuid.
+
+    Corrective (concurrency): переход выполняется УСЛОВНЫМ `UPDATE … WHERE
+    status <> 'registered' RETURNING id`. Проверка сервиса читается ДО
+    блокировки занятия и под конкуренцией устаревает, поэтому безусловный
+    `setattr` давал бы вторую audit-строку при нулевом физическом переходе.
+    Теперь строку «переворачивает» ровно одна транзакция — она же и аудирует;
+    проигравшая получает `GroupRegistrationConflict` (409) и не пишет ничего.
+    Для новой строки ту же роль играет partial unique `ux_gsr_active`.
+    """
+    _require_actor(actor, context)
     import uuid as _uuid_module
     now = datetime.now(MOSCOW_TZ)
 
@@ -1408,10 +2090,26 @@ def register_student_group_session(
         .first()
     )
     if existing:
-        existing.status = "registered"
-        existing.updated_at = now
-        db.flush()
+        flipped = db.execute(
+            sa.update(GroupSessionRegistration)
+            .where(
+                GroupSessionRegistration.id == existing.id,
+                GroupSessionRegistration.status != "registered",
+            )
+            .values(status="registered", updated_at=now)
+            .returning(GroupSessionRegistration.id)
+            .execution_options(synchronize_session=False)
+        ).first()
+        if flipped is None:
+            # Уже 'registered' (в т.ч. переведена конкурентной транзакцией):
+            # физического перехода нет → ни мутации, ни audit.
+            raise GroupRegistrationConflict()
         db.refresh(existing)
+        record_event(
+            event="group_session_registered", actor=actor,
+            target=Target("group_session_registration", existing.id),
+            outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+        )
         return {
             "uuid":             str(existing.uuid),
             "group_session_id": existing.group_session_id,
@@ -1428,9 +2126,23 @@ def register_student_group_session(
         created_at=now,
         updated_at=now,
     )
-    db.add(reg)
-    db.flush()
+    # Узкая граница: в конфликт превращается ТОЛЬКО нарушение ux_gsr_active,
+    # опознанное по имени constraint. Прочие IntegrityError (FK, NOT NULL,
+    # чужой unique) всплывают как есть и откатывают транзакцию — они дефект,
+    # а не «вы уже записаны».
+    try:
+        db.add(reg)
+        db.flush()
+    except IntegrityError as exc:
+        if not _is_gsr_active_violation(exc):
+            raise
+        raise GroupRegistrationConflict() from None
     db.refresh(reg)
+    record_event(
+        event="group_session_registered", actor=actor,
+        target=Target("group_session_registration", reg.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
     return {
         "uuid":             str(reg.uuid),
         "group_session_id": reg.group_session_id,
@@ -1441,8 +2153,20 @@ def register_student_group_session(
 
 
 def cancel_student_group_session(
-    gs_uuid: str, student_id: int, db
+    gs_uuid: str, student_id: int, db, *, actor: Actor,
+    context: RequestContext
 ) -> bool:
+    """Stage 5C-2: событие только при РЕАЛЬНОЙ отмене активной регистрации.
+
+    Отсутствие занятия/регистрации → False (route отдаёт 404) и НИ ОДНОГО
+    success-события.
+
+    Corrective (concurrency): отмена выполняется УСЛОВНЫМ `UPDATE … WHERE
+    status = 'registered' RETURNING id`. Две параллельные отмены больше не дают
+    две audit-строки: вторая транзакция после блокировки перечитывает предикат,
+    строку не переворачивает и получает False (404).
+    """
+    _require_actor(actor, context)
     gs = get_group_session_by_uuid(gs_uuid, db)
     if not gs:
         return False
@@ -1457,9 +2181,23 @@ def cancel_student_group_session(
     )
     if not reg:
         return False
-    reg.status = "cancelled"
-    reg.updated_at = datetime.now(MOSCOW_TZ)
-    db.flush()
+    flipped = db.execute(
+        sa.update(GroupSessionRegistration)
+        .where(
+            GroupSessionRegistration.id == reg.id,
+            GroupSessionRegistration.status == "registered",
+        )
+        .values(status="cancelled", updated_at=datetime.now(MOSCOW_TZ))
+        .returning(GroupSessionRegistration.id)
+        .execution_options(synchronize_session=False)
+    ).first()
+    if flipped is None:
+        return False        # конкурентная отмена уже перевела строку
+    record_event(
+        event="group_session_registration_cancelled", actor=actor,
+        target=Target("group_session_registration", reg.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
     return True
 
 
@@ -1532,56 +2270,116 @@ def get_unregistered_student_card(
     )
 
 
-def create_unregistered_student_card(data: dict, db) -> dict:
+def create_unregistered_student_card(
+    data: dict, db, *, actor: Actor, context: RequestContext
+) -> dict:
+    _require_actor(actor, context)
     now = datetime.now(MOSCOW_TZ)
     card = UnregisteredStudentCard(**data, created_at=now, updated_at=now)
     db.add(card)
     db.flush()
     db.refresh(card)
+    record_event(
+        event="unregistered_student_card_created", actor=actor,
+        target=Target("unregistered_student_card", card.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
     return _card_to_dict(card)
 
 
 def update_unregistered_student_card(
-    card: UnregisteredStudentCard, updates: dict, db
+    card: UnregisteredStudentCard, updates: dict, db, *, actor: Actor,
+    context: RequestContext
 ) -> dict:
-    for k, v in updates.items():
+    """Stage 5B-1: storage — ЕДИНСТВЕННЫЙ владелец diff. service лишь нормализует
+    входные поля. Настоящий diff по загруженной ORM-карточке: empty/identical
+    PATCH → нет мутации/updated_at/audit; реальное изменение → ровно один
+    unregistered_student_card_updated. consent/linked_user_id не редактируются.
+
+    Stage 6-C: рядом с generic `unregistered_student_card_updated` пишется ОДНА
+    строка data_change_log — по ПУБЛИЧНОЙ проекции diff'а. Все шесть полей
+    карточки объявлены name-only, поэтому values всегда None: ни ФИО, ни
+    телефон, ни email, ни дата рождения, ни комментарий, ни запрос клиента не
+    копируются в journal. `normalized_email` — derived-поле: service
+    пересчитывает его при смене email, оно попадает в `changed`, но ЯВНО
+    отбрасывается проекцией и никогда не журналируется.
+    """
+    _require_actor(actor, context)
+    changed = {k: v for k, v in updates.items() if getattr(card, k) != v}
+    if not changed:
+        return _card_to_dict(card)   # no-op: ORM/updated_at/audit/DCL не трогаем
+
+    # Stage 6-C: проекция — ДО мутации; неизвестное поле роняет операцию здесь.
+    dcl_fields = project_changed_fields(
+        "unregistered_student_cards", changed.keys()
+    )
+
+    for k, v in changed.items():
         setattr(card, k, v)
     card.updated_at = datetime.now(MOSCOW_TZ)
     db.flush()
     db.refresh(card)
+    record_event(
+        event="unregistered_student_card_updated", actor=actor,
+        target=Target("unregistered_student_card", card.id),
+        outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+    )
+    # Проекция может быть ПУСТОЙ при непустом changed: единственный такой случай —
+    # изменилось только derived `normalized_email` (repair рассинхрона без правки
+    # самого email). Техническая мутация и generic audit сохраняются, но
+    # journal-строка не пишется: публично не изменилось ни одно поле, а
+    # record_data_change с пустым changed_fields запрещён контрактом.
+    if dcl_fields:
+        record_data_change(
+            table="unregistered_student_cards", record_id=card.id,
+            operation=Operation.UPDATE, actor=actor,
+            changed_fields=dcl_fields, values=None,
+            context=context, db=db,
+        )
     return _card_to_dict(card)
 
 
 def archive_unregistered_student_card(
-    card: UnregisteredStudentCard, db
+    card: UnregisteredStudentCard, db, *, actor: Actor, context: RequestContext
 ) -> dict:
+    """Stage 5B-1: audit только при реальном переходе archived_at NULL→timestamp.
+    Повторный archive уже архивной карточки — no-op (updated_at/audit не меняются)."""
+    _require_actor(actor, context)
     if card.archived_at is None:
         now = datetime.now(MOSCOW_TZ)
         card.archived_at = now
         card.updated_at = now
         db.flush()
         db.refresh(card)
+        record_event(
+            event="unregistered_student_card_archived", actor=actor,
+            target=Target("unregistered_student_card", card.id),
+            outcome=Outcome.SUCCESS, metadata={}, context=context, db=db,
+        )
     return _card_to_dict(card)
 
 
-def link_unregistered_cards_to_user(user_id: int, email: str, db) -> int:
+def link_unregistered_cards_to_user(
+    user_id: int, email: str, db, *, actor: Actor, context: RequestContext
+) -> list[int]:
     """Привязать все UNLINKED карточки с этим email к пользователю.
 
-    Этап 2: вызывается после подтверждения владения email (регистрация confirm).
-    Правила:
+    Этап 2: вызывается после подтверждения владения email (регистрация confirm /
+    staff-created student). Правила:
       - сравнение по normalized_email (канонический lower/trim);
       - привязываются только карточки с linked_user_id IS NULL — карточка, уже
-        привязанная к другому пользователю, НЕ перепривязывается;
-      - несколько unlinked карточек с одним email привязываются все (email
-        подтверждён владельцем; карточки не объединяются и не удаляются);
-      - archived-карточки тоже привязываются: архивность запрещает новую ручную
-        запись, но не должна мешать исторической связке уже созданных
-        appointments.
+        привязанная к другому пользователю, НЕ перепривязывается и НЕ аудируется;
+      - несколько unlinked карточек с одним email привязываются все;
+      - archived-карточки тоже привязываются.
 
-    Возвращает количество привязанных карточек. ПДн не логируются.
+    Stage 5B-1 порядок: fail-closed guard → SELECT (null) → set linked_user_id/
+    updated_at → db.flush() бизнес-изменений → ТОЛЬКО после успешного flush
+    record_event per-card (metadata={"linked_user_id": int(user_id)}). storage не
+    commit. Возвращает список id привязанных карточек. ПДн не логируются.
     """
+    _require_actor(actor, context)
     if not email:
-        return 0
+        return []
     normalized = normalize_email(email)
     cards = (
         db.query(UnregisteredStudentCard)
@@ -1591,12 +2389,24 @@ def link_unregistered_cards_to_user(user_id: int, email: str, db) -> int:
         )
         .all()
     )
+    if not cards:
+        return []
     now = datetime.now(MOSCOW_TZ)
     for card in cards:
         card.linked_user_id = int(user_id)
         card.updated_at = now
-    db.flush()
-    return len(cards)
+    db.flush()   # бизнес-изменения ДО первого record_event
+    linked_ids = []
+    for card in cards:
+        record_event(
+            event="unregistered_student_card_linked", actor=actor,
+            target=Target("unregistered_student_card", card.id),
+            outcome=Outcome.SUCCESS,
+            metadata={"linked_user_id": int(user_id)},
+            context=context, db=db,
+        )
+        linked_ids.append(card.id)
+    return linked_ids
 
 
 def list_unregistered_student_cards(

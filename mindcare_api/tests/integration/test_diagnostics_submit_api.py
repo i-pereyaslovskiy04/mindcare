@@ -16,15 +16,32 @@ import uuid as _uuid
 import pytest
 
 from app.db.session import SessionLocal
-from app.db.models import Test as TestModel, TestResult as TestResultModel
+from app.db.models import (
+    Test as TestModel, TestResult as TestResultModel, User,
+)
 from app.tests import storage as tests_storage
 from tests.integration.conftest import create_test_user
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+def _ensure_user(email, password="SecurePass42!") -> int:
+    """Возвращает id пользователя, создавая его ТОЛЬКО при отсутствии.
+
+    Фикстура made_test выполняется до логина, а `create_test` теперь
+    fail-closed требует actor context — раньше в неё уходил `created_by=None`,
+    который storage молча принимал. Поэтому автора нужно завести заранее, а
+    логин не должен создавать его повторно.
+    """
+    with SessionLocal() as db:
+        uid = db.query(User.id).filter(User.email == email).scalar()
+    if uid is not None:
+        return int(uid)
+    return int(create_test_user(email, password)["id"])
+
+
 def _login(client, email, password="SecurePass42!"):
-    create_test_user(email, password)
+    _ensure_user(email, password)
     r = client.post("/api/auth/login", json={"email": email, "password": password})
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['session_token']}"}
@@ -32,9 +49,7 @@ def _login(client, email, password="SecurePass42!"):
 
 def _make_test(created_by_email):
     """Создаёт активный тест (single_choice, sum) напрямую через storage."""
-    with SessionLocal() as db:
-        from app.db.models import User
-        uid = db.query(User.id).filter(User.email == created_by_email).scalar()
+    uid = _ensure_user(created_by_email)
     data = {
         "title": f"INTEG Тест {_uuid.uuid4().hex[:6]}",
         "description": "d", "scoring": "sum", "max_score": 6,
@@ -55,7 +70,8 @@ def _make_test(created_by_email):
             {"scale_name": None, "min_score": 3, "max_score": 6, "label": "Высокий", "recommendation": "к специалисту"},
         ],
     }
-    return tests_storage.create_test(data, created_by=uid)
+    # Stage 4B-5: create_test пишет ATOMIC audit → нужен actor context.
+    return tests_storage.create_test(data, created_by=uid, actor_role="admin")
 
 
 def _hard_delete_test(test_uuid):
@@ -172,9 +188,7 @@ from app.tests import service as tests_service  # noqa: E402
 
 
 def _make_test_with_free_text(created_by_email):
-    with SessionLocal() as db:
-        from app.db.models import User
-        uid = db.query(User.id).filter(User.email == created_by_email).scalar()
+    uid = _ensure_user(created_by_email)
     data = {
         "title": f"INTEG FreeText {_uuid.uuid4().hex[:6]}",
         "description": None, "scoring": "sum", "max_score": None,
@@ -190,7 +204,7 @@ def _make_test_with_free_text(created_by_email):
         ],
         "interpretations": [],
     }
-    return tests_storage.create_test(data, created_by=uid)
+    return tests_storage.create_test(data, created_by=uid, actor_role="admin")
 
 
 @pytest.fixture
@@ -292,8 +306,12 @@ def test_editing_questions_with_results_raises_not_500(client, test_email, made_
 def test_metadata_edit_allowed_when_results_exist(client, test_email, made_test):
     """Переименование теста с результатами обязано проходить: FK держит вопросы, не заголовок."""
     _submit_once(client, test_email, made_test)
+    with SessionLocal() as db:
+        from app.db.models import User
+        uid = db.query(User.id).filter(User.email == test_email).scalar()
     updated = tests_service.update_test(
         made_test["uuid"], {"title": "Переименованный INTEG тест"},
+        actor_id=uid, actor_role="admin",
     )
     assert updated["title"] == "Переименованный INTEG тест"
     assert len(updated["questions"]) == 2
@@ -304,7 +322,9 @@ def test_duplicate_test_copies_tree_as_draft(test_email, made_test):
         from app.db.models import User
         uid = db.query(User.id).filter(User.email == test_email).scalar()
 
-    copy = tests_service.duplicate_test(made_test["uuid"], created_by=uid)
+    copy = tests_service.duplicate_test(
+        made_test["uuid"], created_by=uid, actor_role="admin",
+    )
     try:
         assert copy["uuid"] != made_test["uuid"]
         assert copy["is_active"] is False          # копия — черновик
@@ -320,7 +340,7 @@ def test_duplicate_test_copies_tree_as_draft(test_email, made_test):
             "question_type": "single_choice", "is_required": True, "config": {},
             "options": [{"option_text": "a", "option_order": 0, "value_score": 0},
                         {"option_text": "b", "option_order": 1, "value_score": 2}],
-        }]})
+        }]}, actor_id=uid, actor_role="admin")
         assert [q["question_text"] for q in edited["questions"]] == ["Новый Q"]
     finally:
         _hard_delete_test(copy["uuid"])

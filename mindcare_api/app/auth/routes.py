@@ -1,3 +1,5 @@
+import ipaddress
+
 from fastapi import APIRouter, HTTPException, Depends, Request
 
 from app.core.rate_limit import RateLimitExceeded, enforce as enforce_rate_limit
@@ -14,9 +16,11 @@ from app.auth.schemas import (
     ProfileRead,
     ProfileUpdate,
 )
-from app.auth import service, audit
+from app.auth import service
 from app.auth.deps import get_current_user, get_session_token
 from app.auth.security import hash_session_token
+from app.audit import record_event, Actor, Outcome, RequestContext
+from app.audit.failsafe import record_secondary_failure
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,6 +37,47 @@ def _check_rate_limit(action: str, request: Request, email: str | None = None) -
         enforce_rate_limit(action, email=email, ip=ip)
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail=_RATE_LIMIT_MESSAGE)
+
+
+# Единый безопасный audit-контекст. Недоверенные optional IP/User-Agent приходят
+# из заголовков клиента: невалидное значение НЕ должно ломать уже успешную
+# бизнес-операцию (facade validate_context бросил бы AuditError → 500 после
+# смены пароля/создания сессии). Санитизируем ДО передачи facade: невалидное →
+# None (не попадает в журнал), строгую валидацию record_event НЕ ослабляем.
+# Исходное значение нигде не печатаем. session_id_hash пробрасываем как есть
+# (raw token сюда никогда не передаётся).
+_UA_MAX_LEN = 512
+
+
+def _safe_user_agent(user_agent) -> str | None:
+    if not isinstance(user_agent, str):
+        return None
+    if len(user_agent) > _UA_MAX_LEN:
+        return None
+    if any(ord(c) < 32 or ord(c) == 127 for c in user_agent):
+        return None
+    return user_agent
+
+
+def _safe_ip(ip) -> str | None:
+    if not isinstance(ip, str):
+        return None
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    return ip
+
+
+def _audit_context(
+    request: Request, *, session_id_hash: str | None = None
+) -> RequestContext:
+    ip = request.client.host if request.client else None
+    return RequestContext(
+        ip_address=_safe_ip(ip),
+        user_agent=_safe_user_agent(request.headers.get("user-agent")),
+        session_id_hash=session_id_hash,
+    )
 
 
 @router.post("/register/init", response_model=MessageResponse)
@@ -58,22 +103,21 @@ def register_confirm(body: RegisterConfirmRequest, request: Request):
             user_agent=user_agent,
         )
     except service.AuthError as e:
-        audit.log_auth_event(
-            event="register",
-            success=False,
+        record_event(
+            event="registration_failed",
+            actor=Actor.anonymous(),
+            outcome=Outcome.FAILURE,
+            failure_reason_code=e.audit_code,
             user_email=body.email,
-            failure_reason=e.message[:255],
-            ip_address=ip,
-            user_agent=user_agent,
+            context=_audit_context(request),
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
-        event="register",
-        success=True,
-        user_id=int(user["id"]),
+    record_event(
+        event="registration_succeeded",
+        actor=Actor.user(int(user["id"]), "student"),
+        outcome=Outcome.SUCCESS,
         user_email=user["email"],
-        ip_address=ip,
-        user_agent=user_agent,
+        context=_audit_context(request),
     )
     return {"message": "Регистрация завершена"}
 
@@ -86,13 +130,13 @@ def login(body: LoginRequest, request: Request):
     try:
         user = service.authenticate_user(email=body.email, password=body.password)
     except service.AuthError as e:
-        audit.log_auth_event(
+        record_event(
             event="failed_login",
-            success=False,
+            actor=Actor.anonymous(),
+            outcome=Outcome.FAILURE,
+            failure_reason_code=e.audit_code,
             user_email=body.email,
-            failure_reason=e.message[:255],
-            ip_address=ip,
-            user_agent=user_agent,
+            context=_audit_context(request),
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
@@ -102,16 +146,16 @@ def login(body: LoginRequest, request: Request):
         user_agent=user_agent,
     )
 
-    audit.log_auth_event(
+    record_event(
         event="login",
-        success=True,
-        user_id=int(user["id"]),
+        actor=Actor.user(int(user["id"]), user["role"]),
+        outcome=Outcome.SUCCESS,
         user_email=user["email"],
-        ip_address=ip,
-        user_agent=user_agent,
-        # В audit пишем hash, не raw token: совпадает с user_sessions.id,
+        # session_id_hash (не raw token): совпадает с user_sessions.id,
         # join для расследований работает, credential в лог не утекает.
-        session_id=hash_session_token(session_token),
+        context=_audit_context(
+            request, session_id_hash=hash_session_token(session_token)
+        ),
     )
 
     return {
@@ -129,14 +173,14 @@ def logout(
     current_user: dict = Depends(get_current_user),
 ):
     service.terminate_session(token)
-    audit.log_auth_event(
+    record_event(
         event="logout",
-        success=True,
-        user_id=int(current_user["id"]),
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        session_id=hash_session_token(token),
+        actor=Actor.user(int(current_user["id"]), current_user["role"]),
+        outcome=Outcome.SUCCESS,
+        # user_email НЕ передаётся: субъект известен по user_id.
+        context=_audit_context(
+            request, session_id_hash=hash_session_token(token)
+        ),
     )
     return {"message": "Logged out successfully"}
 
@@ -167,22 +211,27 @@ def update_profile(
     current_user: dict = Depends(get_current_user),
 ):
     # PATCH-семантика: меняем только реально пришедшие поля (unset ≠ None).
+    # ФИО/телефон НЕ логируются — profile_updated (record_event) пишется
+    # внутри storage.update_profile_atomic, атомарно с мутацией, только если
+    # хотя бы одно аудируемое поле реально изменилось (Stage 4B-4).
+    actor = Actor.user(int(current_user["id"]), current_user["role"])
     try:
         profile = service.update_profile(
             user_id=current_user["id"],
             fields=body.model_dump(exclude_unset=True),
+            actor_role=current_user["role"],
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
     except service.AuthError as e:
+        # Stage 5A-2 durable best-effort failure audit (INDEPENDENT/SOFT);
+        # НЕ меняет исходный HTTP-ответ. Только этот self-profile endpoint.
+        record_secondary_failure(
+            event="profile_update_failed", actor=actor,
+            failure_reason_code=e.audit_code,
+            context=_audit_context(request),
+        )
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    # ФИО/телефон НЕ логируются.
-    audit.log_auth_event(
-        event="profile_update",
-        success=True,
-        user_id=int(current_user["id"]),
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return profile
 
 
@@ -213,13 +262,12 @@ def change_password(
         )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
+    record_event(
         event="password_change",
-        success=True,
-        user_id=int(current_user["id"]),
-        user_email=current_user["email"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
+        actor=Actor.user(int(current_user["id"]), current_user["role"]),
+        outcome=Outcome.SUCCESS,
+        # user_email НЕ передаётся: субъект известен по user_id.
+        context=_audit_context(request),
     )
     return {"message": "Пароль изменён. Войдите снова."}
 
@@ -227,8 +275,6 @@ def change_password(
 @router.post("/password/reset/confirm", response_model=MessageResponse)
 def password_reset_confirm(body: PasswordResetConfirmRequest, request: Request):
     _check_rate_limit("confirm", request, email=body.email)
-    ip = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
     try:
         service.password_reset_confirm(
             email=body.email,
@@ -236,20 +282,20 @@ def password_reset_confirm(body: PasswordResetConfirmRequest, request: Request):
             new_password=body.new_password,
         )
     except service.AuthError as e:
-        audit.log_auth_event(
+        record_event(
             event="password_reset",
-            success=False,
+            actor=Actor.anonymous(),
+            outcome=Outcome.FAILURE,
+            failure_reason_code=e.audit_code,
             user_email=body.email,
-            failure_reason=e.message[:255],
-            ip_address=ip,
-            user_agent=user_agent,
+            context=_audit_context(request),
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    audit.log_auth_event(
+    record_event(
         event="password_reset",
-        success=True,
+        actor=Actor.anonymous(),
+        outcome=Outcome.SUCCESS,
         user_email=body.email,
-        ip_address=ip,
-        user_agent=user_agent,
+        context=_audit_context(request),
     )
     return {"message": "Пароль успешно изменён. Войдите с новым паролем"}

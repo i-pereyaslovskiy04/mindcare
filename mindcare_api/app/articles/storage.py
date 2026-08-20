@@ -9,6 +9,8 @@ from app.db.models import (
     Article, ArticleCategory, ArticleTag,
     Category, Tag, User, MediaFile,
 )
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -158,7 +160,18 @@ def create_article(
     is_published: bool,
     published_at: Optional[datetime],
     created_by: int,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
+    # created_by — единственный actor id (не вводим второй actor_id).
+    if created_by is None or actor_role is None:
+        raise RuntimeError(
+            "article create requires authenticated actor context "
+            "(created_by and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         cover_id = _resolve_cover(cover_image_uuid, db)
         auto_published_at = published_at
@@ -178,17 +191,41 @@ def create_article(
         db.flush()
         _sync_categories(article.id, category_ids, db)
         _sync_tags(article.id, tag_uuids, db)
+        record_event(
+            event="article_created",
+            actor=Actor.user(created_by, actor_role),
+            target=Target("article", article.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(article)
         return _article_to_dict(article, db)
 
 
-def update_article(uuid_str: str, data: dict) -> Optional[dict]:
+def update_article(
+    uuid_str: str,
+    data: dict,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
     """
     Обновляет только поля переданные в data (exclude_unset семантика).
     cover_image_uuid: None в data → убрать обложку.
     cover_image_uuid отсутствует в data → не трогать обложку.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "article update requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(uuid_str)
     except ValueError:
@@ -221,12 +258,35 @@ def update_article(uuid_str: str, data: dict) -> Optional[dict]:
             _sync_tags(article.id, data["tag_uuids"], db)
 
         article.updated_at = datetime.now(timezone.utc)
+        record_event(
+            event="article_updated",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("article", article.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
         db.refresh(article)
         return _article_to_dict(article, db)
 
 
-def delete_article(uuid_str: str) -> bool:
+def delete_article(
+    uuid_str: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> bool:
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "article delete requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     try:
         uuid_obj = _uuid.UUID(uuid_str)
     except ValueError:
@@ -239,6 +299,15 @@ def delete_article(uuid_str: str) -> bool:
         if not article:
             return False
         article.deleted_at = datetime.now(timezone.utc)
+        record_event(
+            event="article_deleted",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("article", article.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
 
     return True

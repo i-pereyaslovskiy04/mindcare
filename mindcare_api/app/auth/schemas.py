@@ -10,19 +10,25 @@ Role = Literal["student", "psychologist", "admin", "supervisor"]
 # отсутствие ролей как "student").
 
 
+# DB/audit-контракт ограничивают email 255 символами; отклоняем слишком длинный
+# на входе (Pydantic) — до бизнес-операции и audit-записи. См. _EMAIL_MAX в
+# app/audit/validation.py и колонки users.email / auth_log.user_email.
+_EMAIL_MAX_LEN = 255
+
+
 class RegisterInitRequest(BaseModel):
     name: str
-    email: EmailStr
+    email: EmailStr = Field(max_length=_EMAIL_MAX_LEN)
     password: str
 
 
 class RegisterConfirmRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=_EMAIL_MAX_LEN)
     code: str
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=_EMAIL_MAX_LEN)
     password: str
 
 
@@ -79,11 +85,11 @@ class MessageResponse(BaseModel):
 
 
 class PasswordResetInitRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=_EMAIL_MAX_LEN)
 
 
 class PasswordResetConfirmRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=_EMAIL_MAX_LEN)
     code: str
     new_password: str
 

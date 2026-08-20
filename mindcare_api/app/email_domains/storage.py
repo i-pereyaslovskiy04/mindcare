@@ -20,8 +20,10 @@ from typing import Optional
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 from app.db.session import SessionLocal
-from app.db.models import AllowedEmailDomain, AuditLog
+from app.db.models import AllowedEmailDomain
 from app.email_domains.errors import DomainError, EmailDomainNotAllowedError
 from app.email_domains.policy import extract_domain
 
@@ -107,34 +109,39 @@ def list_domains() -> list[dict]:
         return [_row_to_dict(r) for r in rows]
 
 
-def _audit(
+def _require_actor(actor_id: Optional[int], actor_role: Optional[str]) -> None:
+    """
+    Fail-closed actor context: изменение allowlist — привилегированная admin-операция.
+    Отсутствие actor_id/actor_role — внутренний wiring-баг (routes всегда передают
+    admin через _actor). RuntimeError до любой мутации → транзакция не открывается/
+    откатывается без частичных изменений. Сообщение без ПДн.
+    """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "email domain change requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+
+
+def _record_domain_event(
     db, *, event_type: str, domain_row: AllowedEmailDomain,
-    is_active_before: Optional[bool], is_active_after: bool,
-    comment_changed: bool, actor_id: Optional[int], actor_role: Optional[str],
+    actor_id: int, actor_role: str,
     ip: Optional[str], user_agent: Optional[str],
 ) -> None:
     """
-    AuditLog изменения домена — атомарно с самим изменением (тот же commit).
-
-    В metadata НЕ пишем сырой comment (может случайно содержать ПДн): только
-    domain, is_active before/after и флаг comment_changed.
+    ATOMIC audit изменения домена через единый facade (та же caller-транзакция,
+    db=db; facade только db.add, без commit/rollback/close). metadata пуста, а
+    description не пишется — domain/comment/before/after в журнал не попадают
+    (defense against ПДн в comment); субъект восстановим по entity_id.
     """
-    db.add(AuditLog(
-        user_id=actor_id,
-        user_role=actor_role,
-        event_type=event_type,
-        entity_type="allowed_email_domain",
-        entity_id=domain_row.id,
-        description=f"email domain '{domain_row.domain}' {event_type}",
-        log_metadata={
-            "domain":           domain_row.domain,
-            "is_active_before": is_active_before,
-            "is_active_after":  is_active_after,
-            "comment_changed":  comment_changed,
-        },
-        ip_address=ip,
-        user_agent=user_agent,
-    ))
+    record_event(
+        event=event_type,
+        actor=Actor.user(actor_id, actor_role),
+        target=Target("allowed_email_domain", domain_row.id),
+        outcome=Outcome.SUCCESS,
+        context=build_request_context(ip=ip, user_agent=user_agent),
+        db=db,
+    )
 
 
 def create_domain(
@@ -152,6 +159,7 @@ def create_domain(
     на уровне БД: IntegrityError по ux_allowed_email_domains_domain → 409;
     прочие IntegrityError не маскируются под duplicate.
     """
+    _require_actor(actor_id, actor_role)
     with SessionLocal() as db:
         row = AllowedEmailDomain(
             domain=domain,
@@ -177,10 +185,8 @@ def create_domain(
                     409,
                 )
             raise
-        _audit(
+        _record_domain_event(
             db, event_type="email_domain_add", domain_row=row,
-            is_active_before=None, is_active_after=True,
-            comment_changed=comment is not None,
             actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
         )
         db.commit()
@@ -212,6 +218,7 @@ def set_domain_state(
     оставят 0 активных) → 409. No-op (ничего не изменилось) не пишет audit и не
     трогает updated_at. Не найден → 404. Audit атомарен с изменением.
     """
+    _require_actor(actor_id, actor_role)
     with SessionLocal() as db:
         # Transaction-scoped mutex по фиксированному policy-key.
         db.execute(
@@ -268,10 +275,8 @@ def set_domain_state(
         else:
             event_type = "email_domain_update"
 
-        _audit(
+        _record_domain_event(
             db, event_type=event_type, domain_row=row,
-            is_active_before=is_active_before, is_active_after=row.is_active,
-            comment_changed=comment_changed,
             actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
         )
         db.commit()

@@ -670,7 +670,7 @@ def save_attachment(
     file_size:         int,
     is_image:          bool,
     data:              bytes,
-) -> dict:
+) -> tuple[dict, int]:
     """
     Атомарное сохранение: сначала запись файла на диск, затем DB-строка.
 
@@ -682,6 +682,10 @@ def save_attachment(
 
     Если запись на диск упала — DB-строка не создаётся.
     Если DB commit упал — файл остаётся orphan на диске (очищает cleanup-скрипт).
+
+    Возвращает (public_dict, internal_id) — Stage 4B-3: internal `att.id`
+    (BigInteger PK) нужен только для audit Target и НЕ входит в public_dict
+    (ChatAttachmentRead не содержит id; storage_key/checksum и так не публикуются).
     """
     from app.chat import attachment_storage as fs
 
@@ -702,7 +706,7 @@ def save_attachment(
         db.add(att)
         db.commit()
         db.refresh(att)
-        return _attachment_to_dict(att)
+        return _attachment_to_dict(att), att.id
 
 
 def get_attachment_for_download(
@@ -1012,16 +1016,23 @@ def create_system_message(
     *,
     event_key: str,
     text: str,
-) -> dict:
+) -> tuple[dict, bool]:
     """
     Get-or-create system-беседы + encrypt-on-write одного сообщения.
     Идемпотентность: повторный вызов с тем же (conversation, event_key)
     не создаёт дубль (partial UNIQUE → IntegrityError → skipped).
 
-    Возвращает {"created": bool, "conversation_id": int}.
+    Возвращает ({"created": bool, "conversation_id": int}, conversation_created).
+    "created" в dict — было ли создано СООБЩЕНИЕ (публичный контракт, не меняется).
+    conversation_created — race-safe флаг из get_or_create_system_conversation
+    (Stage 4B-3): True только для транзакции, которая реально создала БЕСЕДУ
+    (не для параллельного проигравшего IntegrityError-race и не для повторного
+    вызова с уже существующей беседой) — используется caller'ом (system_publisher)
+    для audit system_conversation_created ровно один раз, без отдельного
+    preflight/postflight запроса.
     Plaintext text не возвращается и не логируется.
     """
-    conv, _created_conv = get_or_create_system_conversation(recipient_id)
+    conv, conversation_created = get_or_create_system_conversation(recipient_id)
     now = datetime.now(timezone.utc)
 
     with SessionLocal() as db:
@@ -1037,7 +1048,7 @@ def create_system_message(
             db.flush()
         except IntegrityError:
             db.rollback()
-            return {"created": False, "conversation_id": conv.id}
+            return {"created": False, "conversation_id": conv.id}, conversation_created
 
         db.query(ChatConversation).filter(
             ChatConversation.id == conv.id
@@ -1046,7 +1057,7 @@ def create_system_message(
             synchronize_session=False,
         )
         db.commit()
-        return {"created": True, "conversation_id": conv.id}
+        return {"created": True, "conversation_id": conv.id}, conversation_created
 
 
 def get_system_messages(

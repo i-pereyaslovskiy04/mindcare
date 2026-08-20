@@ -9,6 +9,7 @@ from typing import Optional
 
 import bcrypt
 from app.auth import storage
+from app.auth.roles import ROLE_PRIORITY
 from app.core.normalization import mask_email
 
 log = logging.getLogger(__name__)
@@ -27,9 +28,18 @@ def _verify(password: str, hashed: str) -> bool:
 
 
 class AuthError(Exception):
-    def __init__(self, message: str, status_code: int = 400):
-        self.message = message
-        self.status_code = status_code
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 400,
+        audit_code: Optional[str] = None,
+    ):
+        self.message = message          # клиентское сообщение (может быть на русском)
+        self.status_code = status_code  # HTTP status
+        # Стабильный машинный код для audit (facade failure_reason_code). Обязателен
+        # для loggable failure-путей (register_confirm/login/password_reset_confirm);
+        # для прочих AuthError допустим None (их routes не пишут failure-audit в 4B-1).
+        self.audit_code = audit_code
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +103,7 @@ def register_confirm(
     выполняется уже ПОСЛЕ успешного commit (его сбой не откатывает регистрацию).
     """
     from app.email_domains.errors import EmailDomainNotAllowedError
+    from app.auth.errors import OtpExpiredError, OtpInvalidError
     try:
         user = storage.register_confirm_atomic(
             email=email,
@@ -104,12 +115,25 @@ def register_confirm(
     except EmailDomainNotAllowedError as e:
         # Домен отключили между init и confirm — новое регистрационное действие
         # отклоняется; OTP не потреблён (rollback внутри register_confirm_atomic).
-        raise AuthError(str(e), 422)
-    except storage.RegistrationDataError as e:
+        raise AuthError(str(e), 422, audit_code="domain_not_allowed")
+    except storage.RegistrationDataError:
         # Отсутствует роль/consent-политика — проблема seed/reference data.
-        raise AuthError(str(e), 500)
-    except ValueError as e:
-        raise AuthError(str(e), 400)
+        # Клиенту — фиксированное безопасное сообщение (str(e) называет
+        # роль/таблицу/consent-политику и в HTTP-ответ попадать не должен);
+        # деталь остаётся только в server-side логах (см. storage-уровень).
+        raise AuthError(
+            "Не удалось завершить регистрацию. Обратитесь в поддержку.",
+            500,
+            audit_code="internal_error",
+        )
+    except OtpExpiredError as e:
+        raise AuthError(str(e), 400, audit_code="otp_expired")
+    except OtpInvalidError as e:
+        # Явно только типизированный OTP-сбой (not-found/attempts/wrong).
+        raise AuthError(str(e), 400, audit_code="otp_invalid")
+    # Прочий (неожиданный) ValueError НЕ маскируется под otp_invalid: он
+    # распространяется как внутренняя ошибка (route не ловит → 500), а не даёт
+    # клиенту ложный «неверный код». Durable-обработка неожиданного — Stage 5A.
 
     # Привязка карточек незарегистрированного студента к новому аккаунту (этап 2).
     # Только ПОСЛЕ подтверждения владения email (этот шаг и есть подтверждение).
@@ -117,12 +141,17 @@ def register_confirm(
     # привязки её не откатывает. ПДн (email) не логируем — только user_id.
     try:
         from app.appointments.service import link_unregistered_cards_to_user
-        link_unregistered_cards_to_user(user["id"], user["email"])
-    except Exception:
-        log.exception(
-            "[register_confirm] card linking failed for user_id=%s",
-            user["id"],
+        # Stage 5B-1: actor = сам подтвердивший email student (self-service).
+        link_unregistered_cards_to_user(
+            user["id"], user["email"],
+            actor_id=int(user["id"]), actor_role="student",
+            ip=ip, user_agent=user_agent,
         )
+    except Exception as exc:
+        # Минимизация: без exc_info/str(exc)/email/UUID/id/SQL — только фаза и
+        # класс исключения. Postcommit soft-fail: регистрация не откатывается.
+        log.warning("[register_confirm] phase=card_link error=%s",
+                    type(exc).__name__)
 
     # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
     # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
@@ -144,7 +173,31 @@ def register_confirm(
 def authenticate_user(email: str, password: str) -> dict:
     user = storage.find_user_by_email(email)
     if not user or not _verify(password, user["hashed_password"]):
-        raise AuthError("Неверный email или пароль", 401)
+        raise AuthError(
+            "Неверный email или пароль", 401, audit_code="invalid_credentials"
+        )
+    # Fail-closed role invariant: не создаём сессию для аккаунта без валидной
+    # активной роли. role — backend-computed primary из реальных roles; проверяем
+    # ДО update_last_login/create_session.
+    #
+    # ADR-018: это ШТАТНЫЙ доменный отказ (403 / `no_active_roles`), а не
+    # внутренняя авария. Прежний 500/`internal_error` был неотличим от реального
+    # сбоя, шумел в мониторинге и вводил оператора в заблуждение.
+    # `internal_error` остаётся только за настоящими внутренними сбоями.
+    # Наружное сообщение обобщённое: состав ролей аккаунта не раскрывается.
+    roles = user.get("roles") or []
+    role = user.get("role")
+    if (
+        not roles                       # есть хотя бы одна активная роль
+        or not isinstance(role, str)    # primary role — строка (не None/не мусор)
+        or role not in roles            # primary role принадлежит активному набору
+        or role not in ROLE_PRIORITY    # и это каноническая известная роль
+    ):
+        raise AuthError(
+            "Доступ к системе не активирован. Обратитесь к администратору.",
+            403,
+            audit_code="no_active_roles",
+        )
     storage.update_last_login(user["id"])
     return user
 
@@ -193,8 +246,12 @@ def password_reset_confirm(
     но любой следующий шаг падает, всё откатывается и OTP не теряется.
     """
     if len(new_password) < 8:
-        raise AuthError("Пароль должен быть не короче 8 символов", 422)
+        raise AuthError(
+            "Пароль должен быть не короче 8 символов", 422,
+            audit_code="password_policy",
+        )
 
+    from app.auth.errors import OtpExpiredError, OtpInvalidError
     new_password_hash = _hash(new_password)
     try:
         storage.password_reset_confirm_atomic(
@@ -203,9 +260,13 @@ def password_reset_confirm(
             new_password_hash=new_password_hash,
         )
     except storage.UserNotFoundError:
-        raise AuthError("Пользователь не найден", 404)
-    except ValueError as e:
-        raise AuthError(str(e), 400)
+        raise AuthError("Пользователь не найден", 404, audit_code="user_not_found")
+    except OtpExpiredError as e:
+        raise AuthError(str(e), 400, audit_code="otp_expired")
+    except OtpInvalidError as e:
+        # Только типизированный OTP-сбой; неожиданный ValueError не маскируется
+        # (распространяется как внутренняя ошибка → 500).
+        raise AuthError(str(e), 400, audit_code="otp_invalid")
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +336,14 @@ def get_profile(user_id: str) -> dict:
     return profile
 
 
-def update_profile(user_id: str, fields: dict) -> dict:
+def update_profile(
+    user_id: str,
+    fields: dict,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     """Обновляет разрешённые self-поля (PATCH-семантика: только переданные).
     ПДн (ФИО/телефон) не логируются. Значения полей темы уже провалидированы
     Literal-схемой (иначе 422).
@@ -285,16 +353,30 @@ def update_profile(user_id: str, fields: dict) -> dict:
     if "full_name" in updates:
         name = (updates["full_name"] or "").strip()
         if len(name) < 2:
-            raise AuthError("ФИО должно содержать минимум 2 символа", 422)
+            raise AuthError(
+                "ФИО должно содержать минимум 2 символа", 422,
+                audit_code="invalid_request",
+            )
         updates["full_name"] = name
 
     if "phone" in updates:
         updates["phone"] = (updates["phone"] or "").strip() or None  # пустой → NULL
 
+    from app.auth.errors import ProfileActorContextError
     try:
-        return storage.update_profile_atomic(user_id, updates)
+        return storage.update_profile_atomic(
+            user_id, updates,
+            actor_role=actor_role, ip=ip, user_agent=user_agent,
+        )
     except storage.UserNotFoundError:
-        raise AuthError("Пользователь не найден", 404)
+        raise AuthError(
+            "Пользователь не найден", 404, audit_code="user_not_found",
+        )
+    except ProfileActorContextError:
+        raise AuthError(
+            "Не удалось обновить профиль.", 500, audit_code="internal_error",
+        )
+    # commit-time/postcommit/unknown НЕ ловятся здесь → 500 без *_failed.
 
 
 def terminate_session(token: str) -> None:

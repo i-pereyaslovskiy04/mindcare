@@ -178,8 +178,8 @@ class TestUsersStorageEmailNormalization:
     def test_create_user_stores_normalized_email(self):
         """create_user writes the normalized email to the User ORM object."""
         mock_db = MagicMock()
-        # Duplicate-check query: User + two .filter() calls → no existing user
-        mock_db.query.return_value.filter.return_value.filter.return_value.first.return_value = None
+        # Stage 5A-2: duplicate-check — один .filter() (все User) → no existing.
+        mock_db.query.return_value.filter.return_value.first.return_value = None
         # Role-lookup query (multi-role create): Role + one .filter() + .all()
         # → все запрошенные роли существуют.
         role_obj = MagicMock(id=99)
@@ -196,9 +196,16 @@ class TestUsersStorageEmailNormalization:
 
         with patch("app.users.storage.SessionLocal", _mock_session(mock_db)), \
              patch("app.users.storage.User", return_value=mock_new_user) as mock_user_cls:
+            # Stage 4B-4: create_user требует authenticated actor context
+            # (fail-closed guard) — синтетические actor-значения, не связаны
+            # с проверяемой normalization-логикой. record_event выполняется
+            # по-настоящему (не мокнут): db.add(...) на MagicMock не бросает,
+            # validate_actor/target/metadata/context проходят на валидных
+            # синтетических значениях.
             create_user(
                 "User@MAIL.RU", "Test", "hash", ["psychologist"],
                 basis_reference="Приказ № 1",
+                confirmed_by_user_id=1, actor_role="admin",
             )
 
         mock_user_cls.assert_called_once()

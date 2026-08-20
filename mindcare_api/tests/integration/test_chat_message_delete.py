@@ -258,7 +258,7 @@ def test_delete_does_not_create_unread(client):
 # ─── G. audit chat_message_deleted без plaintext ──────────────────────────────
 
 def test_audit_event_without_plaintext(client):
-    s_token, *_rest, conv = _setup_active(client)
+    s_token, s_id, *_rest, conv = _setup_active(client)
     secret = "СЕКРЕТ-для-удаления-uniq"
     sent = _student_send(client, s_token, conv, secret)
     r = _student_delete(client, s_token, conv, sent["uuid"])
@@ -274,8 +274,44 @@ def test_audit_event_without_plaintext(client):
             )
             .all()
         )
-        assert logs, "audit chat_message_deleted не создан"
+        assert len(logs) == 1, "ожидается ровно одна строка chat_message_deleted"
+        log = logs[0]
+        # Stage 4B-3: metadata пуста, description не пишется, actor == sender.
+        assert (log.log_metadata or {}) == {}
+        assert log.description is None
+        assert log.user_id == s_id
+        assert log.user_role == "student"
+        blob = f"{log.description} {log.log_metadata}"
+        assert secret not in blob
+        assert ENCRYPTION_PREFIX not in blob
+
+
+def test_repeated_idempotent_delete_writes_second_audit_row(client):
+    # Stage 4B-3 plan §2.4 (документированное поведение, не баг): storage
+    # no-op на повторном удалении уже удалённого сообщения (deleted_at не
+    # трогается повторно), но service всё равно вызывает record_event при
+    # status=="ok" — повторный DELETE того же сообщения пишет ВТОРУЮ
+    # audit-строку chat_message_deleted на тот же entity_id.
+    s_token, s_id, *_rest, conv = _setup_active(client)
+    sent = _student_send(client, s_token, conv, "сообщение для повторного удаления")
+    msg_id = sent["id"]
+
+    r1 = _student_delete(client, s_token, conv, sent["uuid"])
+    assert r1.status_code == 200
+    r2 = _student_delete(client, s_token, conv, sent["uuid"])
+    assert r2.status_code == 200          # идемпотентно на уровне HTTP-ответа
+
+    with SessionLocal() as db:
+        logs = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.event_type == "chat_message_deleted",
+                AuditLog.entity_id == msg_id,
+            )
+            .all()
+        )
+        assert len(logs) == 2             # документированное поведение, не баг
         for log in logs:
-            blob = f"{log.description} {log.log_metadata}"
-            assert secret not in blob
-            assert ENCRYPTION_PREFIX not in blob
+            assert log.user_id == s_id
+            assert (log.log_metadata or {}) == {}
+            assert log.description is None

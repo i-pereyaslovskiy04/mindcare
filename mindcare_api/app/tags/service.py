@@ -1,3 +1,5 @@
+from typing import Optional
+
 from app.tags import storage
 from app.tags.schemas import (
     AdminTagListQuery,
@@ -30,30 +32,61 @@ def get_tags_list(query: AdminTagListQuery) -> PaginatedTagsResponse:
     return PaginatedTagsResponse(items=items, total=total, page=query.page, size=query.size)
 
 
-def create_tag(data: TagCreate) -> dict:
+def create_tag(
+    data: TagCreate,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     name = _normalize(data.name)
     if not name:
         raise AuthError("Название тега не может быть пустым", status_code=400)
     try:
-        return storage.create_tag(name)
+        return storage.create_tag(
+            name,
+            actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+        )
     except ValueError as e:
         raise AuthError(str(e), status_code=409)
 
 
-def update_tag(uuid: str, data: TagUpdate) -> dict:
+def update_tag(
+    uuid: str,
+    data: TagUpdate,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     name = _normalize(data.name)
     if not name:
         raise AuthError("Название тега не может быть пустым", status_code=400)
     try:
-        return storage.update_tag(uuid, name)
+        return storage.update_tag(
+            uuid, name,
+            actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+        )
     except ValueError as e:
         msg = str(e)
         status = 404 if "не найден" in msg else 409
         raise AuthError(msg, status_code=status)
 
 
-def delete_tag(uuid: str) -> None:
-    found = storage.delete_tag(uuid)
+def delete_tag(
+    uuid: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    found = storage.delete_tag(
+        uuid,
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
     if not found:
         raise AuthError("Тег не найден", status_code=404)
 

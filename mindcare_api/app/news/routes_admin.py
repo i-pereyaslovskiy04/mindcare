@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from typing import Optional
 
-from app.auth.audit import log_auth_event
-from app.auth.deps import require_role
+from app.auth.deps import require_role, resolve_role_or_403
 from app.news import service
 from app.news.schemas import (
     NewsCreate,
@@ -16,6 +15,10 @@ router = APIRouter(
     tags=["admin-news"],
     dependencies=[Depends(require_role("admin"))],
 )
+
+
+def _acting_role(current_user: dict) -> str:
+    return resolve_role_or_403(current_user, allowed={"admin"}, preferred="admin")
 
 
 @router.get("", response_model=PaginatedNewsResponse)
@@ -49,12 +52,11 @@ def create_news(
     request: Request,
     current_user: dict = Depends(require_role("admin")),
 ):
-    news = service.create_news(body.model_dump(), created_by=current_user["id"])
-    log_auth_event(
-        event=f"admin_create_news:{news['uuid']}",
-        success=True,
-        user_id=current_user["id"],
-        ip_address=request.client.host if request.client else None,
+    news = service.create_news(
+        body.model_dump(),
+        created_by=int(current_user["id"]),
+        actor_role=_acting_role(current_user),
+        ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
     return news
@@ -68,16 +70,15 @@ def update_news(
     current_user: dict = Depends(require_role("admin")),
 ):
     try:
-        news = service.update_news(uuid, body.model_dump(exclude_unset=True))
+        news = service.update_news(
+            uuid, body.model_dump(exclude_unset=True),
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    log_auth_event(
-        event=f"admin_update_news:{uuid}",
-        success=True,
-        user_id=current_user["id"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
     return news
 
 
@@ -88,13 +89,12 @@ def delete_news(
     current_user: dict = Depends(require_role("admin")),
 ):
     try:
-        service.delete_news(uuid)
+        service.delete_news(
+            uuid,
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    log_auth_event(
-        event=f"admin_delete_news:{uuid}",
-        success=True,
-        user_id=current_user["id"],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )

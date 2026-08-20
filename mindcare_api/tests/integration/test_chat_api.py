@@ -122,9 +122,15 @@ class TestConversationLifecycle:
 
     def test_conversation_created_audit_without_plaintext(self, client):
         p = _pair(client)
-        client.get("/api/chat/my-conversation", headers=_auth(p["s_token"]))
+        r = client.get("/api/chat/my-conversation", headers=_auth(p["s_token"]))
+        conv_uuid = r.json()["conversation"]["uuid"]
 
         with SessionLocal() as db:
+            conv = (
+                db.query(ChatConversation)
+                .filter(ChatConversation.uuid == conv_uuid)
+                .first()
+            )
             events = db.query(AuditLog).filter(
                 AuditLog.event_type == "chat_conversation_created",
                 AuditLog.user_id == p["s_id"],
@@ -132,7 +138,34 @@ class TestConversationLifecycle:
             assert len(events) == 1
             ev = events[0]
             assert ev.entity_type == "chat_conversation"
-            assert ev.log_metadata["engagement_id"] == p["eng_id"]
+            # Stage 4B-3: metadata больше не пишется (engagement_id удалён из
+            # metadata) — target определяется только через entity_id.
+            assert ev.entity_id == conv.id
+            assert (ev.log_metadata or {}) == {}
+            assert ev.description is None
+            assert ev.user_role == "student"
+
+    def test_psychologist_cannot_trigger_conversation_creation(self, client):
+        # Stage 4B-3: psychologist-инициированного создания беседы не существует
+        # (_resolve_psychologist_conversation только ищет существующую — 404
+        # если её нет). Без визита студента на my-conversation беседа не
+        # создаётся вовсе, поэтому chat_conversation_created с actor role
+        # "psychologist" никогда не пишется.
+        p = _pair(client)
+        r = client.get("/api/chat/conversations", headers=_auth(p["p_token"]))
+        assert r.status_code == 200
+        assert r.json()["total"] == 0
+
+        with SessionLocal() as db:
+            count = db.query(ChatConversation).filter(
+                ChatConversation.engagement_id == p["eng_id"]
+            ).count()
+            assert count == 0
+            events = db.query(AuditLog).filter(
+                AuditLog.event_type == "chat_conversation_created",
+                AuditLog.user_id == p["p_id"],
+            ).all()
+            assert events == []
 
 
 # ─── 2. Messaging + encryption ────────────────────────────────────────────────

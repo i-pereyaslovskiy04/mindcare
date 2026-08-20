@@ -470,11 +470,13 @@ class TestAtomicity:
         _, pid, _ = _make_user(client, "psychologist")
         email = _email()
 
-        class Boom:
-            def __init__(self, *a, **kw):
-                raise RuntimeError("audit write failed (test)")
+        # Прямого AuditLog(...) в storage больше нет: запись идёт через единый
+        # facade record_event(db=db) в ТОЙ ЖЕ транзакции. Отказ инъектируем
+        # именно в facade — иначе тест проверял бы несуществующий путь.
+        def _boom(**kwargs):
+            raise RuntimeError("audit write failed (test)")
 
-        monkeypatch.setattr("app.supervisor.storage.AuditLog", Boom)
+        monkeypatch.setattr("app.supervisor.storage.record_event", _boom)
         with pytest.raises(RuntimeError, match="audit write failed"):
             client.post(
                 URL, json=_body(email, psychologist_id=pid),

@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.session import SessionLocal
 from app.db.models import Category, ArticleCategory
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 
 
 # ── slug helpers ──────────────────────────────────────────────────────────────
@@ -128,7 +130,6 @@ def get_category_by_id(category_id: int) -> Optional[dict]:
         }
 
 
-
 def create_category(
     *,
     name: str,
@@ -136,12 +137,23 @@ def create_category(
     description: Optional[str],
     display_order: int,
     is_active: bool,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
     """
     Создаёт категорию. Slug генерируется из name если не передан.
     parent_id всегда None — иерархия не используется в текущем MVP.
-    Raises ValueError при конфликте slug.
+    Raises ValueError при конфликте slug; RuntimeError при отсутствии actor.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "category create requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         raw_slug = slug.strip() if slug and slug.strip() else _slugify(name)
 
@@ -158,23 +170,57 @@ def create_category(
             display_order=display_order,
             is_active=is_active,
         )
+        # Узкий try: ТОЛЬКО business INSERT+flush. IntegrityError здесь = дубль
+        # slug → доменный ValueError (409). Audit staging/commit ВНЕ этого
+        # обработчика — иначе IntegrityError самой audit-строки был бы ошибочно
+        # преобразован в конфликт slug.
         try:
             db.add(cat)
-            db.commit()
-            db.refresh(cat)
+            db.flush()   # id до commit — нужен Target
         except IntegrityError:
             db.rollback()
             raise ValueError(f"Slug «{raw_slug}» уже используется")
 
+        # ATOMIC audit в той же транзакции (db=db), после успешного business
+        # flush, до commit. AuditError/AuditStorageError и любой IntegrityError
+        # на commit всплывают и откатывают всю транзакцию (with-блок), НЕ
+        # преобразуются в конфликт slug.
+        record_event(
+            event="category_created",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("category", cat.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+        db.commit()
+        db.refresh(cat)
+
     return get_category_by_id(cat.id)
 
 
-def update_category(category_id: int, data: dict) -> Optional[dict]:
+def update_category(
+    category_id: int,
+    data: dict,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
     """
     Обновляет только переданные поля (exclude_unset семантика через dict).
     parent_id не принимается — иерархия не используется в текущем MVP.
-    Raises ValueError при конфликте slug.
+    Raises ValueError при конфликте slug; RuntimeError при отсутствии actor.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "category update requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         cat = db.query(Category).filter(Category.id == category_id).first()
         if not cat:
@@ -204,26 +250,62 @@ def update_category(category_id: int, data: dict) -> Optional[dict]:
         if "is_active" in data and data["is_active"] is not None:
             cat.is_active = data["is_active"]
 
+        # Узкий try: ТОЛЬКО business flush → IntegrityError = конфликт данных
+        # (доменный ValueError). Audit staging/commit ВНЕ обработчика.
         try:
-            db.commit()
+            db.flush()
         except IntegrityError:
             db.rollback()
             raise ValueError("Конфликт данных при сохранении")
 
+        record_event(
+            event="category_updated",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("category", cat.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+        db.commit()
+
     return get_category_by_id(category_id)
 
 
-def deactivate_category(category_id: int) -> bool:
+def deactivate_category(
+    category_id: int,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> bool:
     """
     Soft delete: устанавливает is_active=False.
     Связи article_categories не трогаем — материалы остаются привязаны,
     но активная форма не предложит категорию при создании нового.
     Возвращает True если категория найдена, False если нет.
     """
+    if actor_id is None or actor_role is None:
+        raise RuntimeError(
+            "category delete requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+
     with SessionLocal() as db:
         cat = db.query(Category).filter(Category.id == category_id).first()
         if not cat:
             return False
         cat.is_active = False
+        record_event(
+            event="category_deleted",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("category", cat.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
         db.commit()
     return True

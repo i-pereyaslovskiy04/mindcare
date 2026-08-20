@@ -5,6 +5,7 @@ PostgreSQL storage via SQLAlchemy ORM.
 Роль пользователя берётся через JOIN user_roles → roles.
 """
 
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -15,10 +16,15 @@ from app.db.models import (
     User, UserRole, Role, UserSession, Consent, ConsentRecord, OtpVerification,
 )
 from app.auth.security import generate_session_token, hash_session_token
+from app.auth.errors import (
+    OtpExpiredError, OtpInvalidError, ProfileActorContextError,
+)
 # OTP-хелперы переиспользуются для атомарного confirm (один пакет app.auth,
 # цикла импортов нет: otp_service не импортирует storage).
 from app.auth.otp_service import _verify_code, MAX_ATTEMPTS, _utcnow
 from app.core.config import SESSION_EXPIRE_DAYS
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 
 
 class RegistrationDataError(RuntimeError):
@@ -27,6 +33,18 @@ class RegistrationDataError(RuntimeError):
     при подтверждении регистрации. Подкласс RuntimeError → существующие
     проверки `pytest.raises(RuntimeError)` остаются валидными; service-слой
     может отлавливать этот тип отдельно и мапить на HTTP 500.
+    """
+
+
+class SelfReactivationNotAllowedError(RegistrationDataError):
+    """
+    Stage 5A-1 (security): попытка публичной self-registration реактивировать
+    soft-deleted аккаунт, активные роли которого НЕ равны строго {"student"}
+    (staff-роль, пустой набор или student+staff). Подкласс RegistrationDataError
+    → уже существующий `except storage.RegistrationDataError` в service мапит его
+    в безопасный generic ответ (HTTP 500, audit_code="internal_error") БЕЗ
+    раскрытия существования аккаунта и его ролей. Сообщение исключения намеренно
+    фиксированное и НЕ содержит email/id/UUID/названий ролей.
     """
 
 
@@ -178,16 +196,45 @@ def get_profile(user_id: str) -> Optional[dict]:
 
 
 ALLOWED_PROFILE_FIELDS = ("full_name", "phone", "ui_theme_palette", "ui_theme_mode")
+# Подмножество ALLOWED_PROFILE_FIELDS, реальное изменение которого пишет
+# compliance-audit profile_updated (registry metadata enum — только эти два).
+AUDITED_PROFILE_FIELDS = frozenset({"full_name", "phone"})
 
 
-def update_profile_atomic(user_id: str, updates: dict) -> dict:
+def update_profile_atomic(
+    user_id: str,
+    updates: dict,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
     """Атомарно обновляет разрешённые self-поля текущего пользователя.
     Один SessionLocal + один commit.
 
     updates — только реально переданные поля (exclude_unset): отсутствие ключа
     = не менять, значение None = сбросить. Ключи вне ALLOWED_PROFILE_FIELDS
     игнорируются (defense-in-depth: схема их и так не пропустит).
+
+    Настоящий no-op (Stage 4B-4): мутируются и попадают в `updated_at` ТОЛЬКО
+    реально изменившиеся поля (сравнение со значением в БД, не факт
+    присутствия в `updates`). `profile_updated` (record_event) пишется только
+    если реально изменилось хотя бы одно поле из AUDITED_PROFILE_FIELDS
+    (full_name/phone) — theme-only изменение мутирует/бампает updated_at, но
+    не порождает compliance-audit запись. Значения full_name/phone нигде не
+    логируются — только их имена.
+
+    Raises:
+        ProfileActorContextError: нет authenticated actor context (fail-closed,
+            wiring-баг; precommit → service мапит в 500/internal_error).
+        UserNotFoundError: пользователь не найден (precommit → 404).
     """
+    # Fail-closed actor guard — ДО открытия сессии, ДО любых setattr/updated_at.
+    if actor_role is None:
+        raise ProfileActorContextError(
+            "profile update requires authenticated actor context (actor_role)"
+        )
+
     with SessionLocal() as db:
         user = (
             db.query(User)
@@ -199,11 +246,52 @@ def update_profile_atomic(user_id: str, updates: dict) -> dict:
         )
         if user is None:
             raise UserNotFoundError("User not found")
+
+        # Настоящий diff по ВСЕМ разрешённым полям (включая тему) — до
+        # какой-либо мутации ORM.
+        changed_all_fields = []
+        changed_audited_fields = []
         for field, value in updates.items():
-            if field in ALLOWED_PROFILE_FIELDS:
-                setattr(user, field, value)
-        user.updated_at = datetime.now(timezone.utc)
-        db.commit()
+            if field not in ALLOWED_PROFILE_FIELDS:
+                continue
+            if value != getattr(user, field):
+                changed_all_fields.append(field)
+                if field in AUDITED_PROFILE_FIELDS:
+                    changed_audited_fields.append(field)
+
+        # Мутация — только реально изменившихся полей.
+        for field in changed_all_fields:
+            setattr(user, field, updates[field])
+
+        # updated_at — только если хоть что-то реально изменилось.
+        if changed_all_fields:
+            user.updated_at = datetime.now(timezone.utc)
+
+        # profile_updated — только если изменилось хотя бы одно аудируемое
+        # поле; ATOMIC/RAISE, в той же транзакции, до commit.
+        if changed_audited_fields:
+            record_event(
+                event="profile_updated",
+                actor=Actor.user(int(user_id), actor_role),
+                target=Target("user", int(user_id)),
+                outcome=Outcome.SUCCESS,
+                metadata={"fields": sorted(changed_audited_fields)},
+                context=build_request_context(ip=ip, user_agent=user_agent),
+                db=db,
+            )
+
+        # Stage 5A-2 commit-phase: узкий try ТОЛЬКО вокруг commit (ambiguous
+        # outcome). refresh/DTO — вне try; профильный failure на этих шагах не
+        # пишется.
+        try:
+            db.commit()
+        except Exception as exc:   # noqa: BLE001 — только commit-фаза
+            print(
+                "[AUDIT] event=self_profile_update phase=commit "
+                f"error={type(exc).__name__}",
+                file=sys.stderr,
+            )
+            raise
         db.refresh(user)
         return _profile_to_dict(user, db)
 
@@ -329,17 +417,17 @@ def register_confirm_atomic(
             .first()
         )
         if not record:
-            raise ValueError("Код не найден или уже использован")
+            raise OtpInvalidError("Код не найден или уже использован")
 
         if now > record.expires_at:
             db.delete(record)
             db.commit()
-            raise ValueError("Срок действия кода истёк. Начните регистрацию заново")
+            raise OtpExpiredError("Срок действия кода истёк. Начните регистрацию заново")
 
         if record.attempts >= MAX_ATTEMPTS:
             db.delete(record)
             db.commit()
-            raise ValueError("Превышено число попыток. Начните регистрацию заново")
+            raise OtpInvalidError("Превышено число попыток. Начните регистрацию заново")
 
         if not _verify_code(code, record.code):
             record.attempts += 1
@@ -347,11 +435,11 @@ def register_confirm_atomic(
             if remaining <= 0:
                 db.delete(record)
                 db.commit()
-                raise ValueError(
+                raise OtpInvalidError(
                     "Неверный код. Попытки исчерпаны. Начните регистрацию заново"
                 )
             db.commit()
-            raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
+            raise OtpInvalidError(f"Неверный код. Осталось попыток: {remaining}")
 
         # ── OTP верный. Дальше — core UoW без промежуточных commit. ──────────
         # Authoritative проверка домена ВНУТРИ транзакции, до создания/реактивации
@@ -391,12 +479,37 @@ def register_confirm_atomic(
             .first()
         )
         if user is not None:
+            # Stage 5A-1 (security): публичная self-registration может
+            # реактивировать ТОЛЬКО чистый student-аккаунт. Проверяем реальные
+            # активные роли ДО любой мутации/flush/audit/consume OTP. Staff-роль,
+            # пустой набор или student+staff → fail closed (typed internal
+            # precommit error, generic ответ без раскрытия ролей/существования).
+            active_roles = set(get_active_role_names(db, user.id))
+            if active_roles != {"student"}:
+                raise SelfReactivationNotAllowedError(
+                    "self-reactivation is not permitted for this account"
+                )
             # Реактивация: id/uuid/роль сохраняются (как в reactivate_user).
             user.deleted_at = None
             user.is_active = True
             user.full_name = name
             user.password_hash = password_hash
             db.flush()
+            # Stage 5A-1: entity-привязанное lifecycle-событие восстановления
+            # soft-deleted аккаунта. Actor = сам восстановленный student, target =
+            # этот же аккаунт. ATOMIC (db=db) в той же транзакции до единственного
+            # commit — сбой аудита откатывает реактивацию/consent/consume OTP.
+            # Только reactivation-ветка; новая регистрация его НЕ пишет. ПДн
+            # (email/ФИО/OTP/hash/consent) в audit не попадают: metadata={}.
+            record_event(
+                event="user_reactivated",
+                actor=Actor.user(user.id, "student"),
+                target=Target("user", user.id),
+                outcome=Outcome.SUCCESS,
+                metadata={},
+                context=build_request_context(ip=ip, user_agent=user_agent),
+                db=db,
+            )
         else:
             user = User(
                 full_name=name,
@@ -566,17 +679,17 @@ def password_reset_confirm_atomic(
             .first()
         )
         if not record:
-            raise ValueError("Код не найден или уже использован")
+            raise OtpInvalidError("Код не найден или уже использован")
 
         if now > record.expires_at:
             db.delete(record)
             db.commit()
-            raise ValueError("Срок действия кода истёк. Запросите код заново")
+            raise OtpExpiredError("Срок действия кода истёк. Запросите код заново")
 
         if record.attempts >= MAX_ATTEMPTS:
             db.delete(record)
             db.commit()
-            raise ValueError("Превышено число попыток. Запросите код заново")
+            raise OtpInvalidError("Превышено число попыток. Запросите код заново")
 
         if not _verify_code(code, record.code):
             record.attempts += 1
@@ -584,11 +697,11 @@ def password_reset_confirm_atomic(
             if remaining <= 0:
                 db.delete(record)
                 db.commit()
-                raise ValueError(
+                raise OtpInvalidError(
                     "Неверный код. Попытки исчерпаны. Запросите код заново"
                 )
             db.commit()
-            raise ValueError(f"Неверный код. Осталось попыток: {remaining}")
+            raise OtpInvalidError(f"Неверный код. Осталось попыток: {remaining}")
 
         # ── OTP верный. Дальше — core UoW без промежуточных commit. ──────────
         user = (

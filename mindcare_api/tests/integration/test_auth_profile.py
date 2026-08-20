@@ -16,7 +16,7 @@ import bcrypt
 
 from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
-from app.db.models import User
+from app.db.models import AuditLog, AuthLog, User
 
 PASSWORD = "SecurePass42!"
 
@@ -283,3 +283,194 @@ class TestSelfProfile:
             other = db.query(User).filter(User.id == other_id).first()
             assert other.email == other_email
             assert other.full_name != "Админ Обновлённый"
+
+
+# ─── Stage 4B-4 — profile_updated audit (gated, requires PostgreSQL) ──────────
+
+def _profile_updated_rows(uid):
+    with SessionLocal() as db:
+        rows = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.event_type == "profile_updated",
+                AuditLog.entity_type == "user",
+                AuditLog.entity_id == uid,
+            )
+            # Детерминированный порядок — created_at может совпадать до
+            # микросекунды на быстрых последовательных PATCH; id — надёжный
+            # tie-breaker (append-only BigInteger PK, растёт монотонно).
+            .order_by(AuditLog.created_at.asc(), AuditLog.id.asc())
+            .all()
+        )
+        for r in rows:
+            db.expunge(r)
+        return rows
+
+
+def _auth_log_rows_for_user(uid, event_prefix):
+    with SessionLocal() as db:
+        rows = (
+            db.query(AuthLog)
+            .filter(AuthLog.user_id == uid, AuthLog.event.like(f"{event_prefix}%"))
+            .all()
+        )
+        for r in rows:
+            db.expunge(r)
+        return rows
+
+
+class TestSelfProfileAudit:
+
+    def test_full_name_and_phone_change_writes_exact_fields(self, client):
+        tok, uid, _ = _make_user(client, "student")
+        r = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Иванов Иван Иванович",
+                  "phone": "+7 (949) 123-45-67"},
+            headers=_auth(tok),
+        )
+        assert r.status_code == 200, r.text
+
+        rows = _profile_updated_rows(uid)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.user_id == uid                 # self-action: actor == target
+        assert row.entity_id == uid
+        assert set(row.log_metadata["fields"]) == {"full_name", "phone"}
+        # Stage 4B-4 corrective pass: точный контракт success-события.
+        assert row.outcome == "success"
+        assert row.failure_reason_code is None
+        assert row.description is None
+        blob = str(row.log_metadata)
+        assert "Иванов Иван Иванович" not in blob
+        assert "+7 (949) 123-45-67" not in blob
+
+        # Legacy auth_log event="profile_update" не пишется вообще (Stage 4B-4
+        # перенёс это событие в audit_log как profile_updated).
+        assert _auth_log_rows_for_user(uid, "profile_update") == []
+
+    def test_repeat_same_value_patch_after_real_change_writes_only_changed_field(self, client):
+        tok, uid, _ = _make_user(client, "student")
+        client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Имя Первое", "phone": "+70001112233"},
+            headers=_auth(tok),
+        )
+        # Второй PATCH: phone тот же самый, full_name — новый.
+        r = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Имя Второе", "phone": "+70001112233"},
+            headers=_auth(tok),
+        )
+        assert r.status_code == 200, r.text
+
+        rows = _profile_updated_rows(uid)   # детерминированный порядок (id asc)
+        assert len(rows) == 2   # одна строка на каждый PATCH с реальным изменением
+        assert set(rows[-1].log_metadata["fields"]) == {"full_name"}
+
+    def test_theme_only_change_does_not_write_profile_updated(self, client):
+        tok, uid, _ = _make_user(client, "student")
+        with SessionLocal() as db:
+            before = db.query(User.updated_at).filter(User.id == uid).scalar()
+
+        r = client.patch(
+            "/api/auth/profile",
+            json={"ui_theme_mode": "dark"},
+            headers=_auth(tok),
+        )
+        assert r.status_code == 200, r.text
+
+        # Реальное изменение темы сдвигает updated_at (мутация применяется),
+        # но НЕ пишет compliance-audit profile_updated.
+        with SessionLocal() as db:
+            after = db.query(User.updated_at).filter(User.id == uid).scalar()
+        assert after != before
+        assert _profile_updated_rows(uid) == []
+
+        r2 = client.get("/api/auth/profile", headers=_auth(tok))
+        assert r2.json()["ui_theme_mode"] == "dark"
+
+    def test_identical_value_patch_is_true_no_op(self, client):
+        tok, uid, _ = _make_user(client, "student")
+
+        # Первый PATCH — реальное изменение (новый пользователь начинает без
+        # этого имени) → должен создать ровно одну profile_updated строку.
+        r1 = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Имя Стабильное", "phone": None},
+            headers=_auth(tok),
+        )
+        assert r1.status_code == 200, r1.text
+        rows_after_first = _profile_updated_rows(uid)
+        assert len(rows_after_first) == 1
+        count_before = len(rows_after_first)
+
+        with SessionLocal() as db:
+            before = db.query(User.updated_at).filter(User.id == uid).scalar()
+
+        # Второй PATCH — идентичные значения (настоящий no-op).
+        r2 = client.patch(
+            "/api/auth/profile",
+            json={"full_name": "Имя Стабильное", "phone": None},
+            headers=_auth(tok),
+        )
+        assert r2.status_code == 200, r2.text
+
+        # Append-only таблица — не очищаем; сравниваем количество ДО/ПОСЛЕ,
+        # не абсолютную пустоту исторической выборки.
+        rows_after_second = _profile_updated_rows(uid)
+        assert len(rows_after_second) == count_before
+
+        with SessionLocal() as db:
+            after = db.query(User.updated_at).filter(User.id == uid).scalar()
+        assert before == after   # updated_at НЕ сдвинулся на настоящем no-op
+
+    def test_empty_patch_writes_nothing(self, client):
+        tok, uid, _ = _make_user(client, "student")
+        rows_before = len(_profile_updated_rows(uid))
+
+        r = client.patch("/api/auth/profile", json={}, headers=_auth(tok))
+        assert r.status_code == 200, r.text
+
+        assert len(_profile_updated_rows(uid)) == rows_before
+
+
+# ─── Stage 5A-2: profile_update_failed (durable best-effort failure) ──────────
+
+def _profile_failed_rows(uid):
+    with SessionLocal() as db:
+        rows = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.event_type == "profile_update_failed",
+                AuditLog.user_id == uid,
+                AuditLog.outcome == "failure",
+            )
+            .order_by(AuditLog.created_at.asc(), AuditLog.id.asc())
+            .all()
+        )
+        for r in rows:
+            db.expunge(r)
+        return rows
+
+
+def test_profile_full_name_too_short_writes_profile_update_failed(client):
+    tok, uid, _ = _make_user(client, "student")
+    before = len(_profile_failed_rows(uid))
+
+    r = client.patch(
+        "/api/auth/profile", json={"full_name": "X"}, headers=_auth(tok),
+    )
+    assert r.status_code == 422, r.text
+
+    rows = _profile_failed_rows(uid)
+    assert len(rows) == before + 1
+    row = rows[-1]
+    assert row.outcome == "failure"
+    assert row.failure_reason_code == "invalid_request"
+    assert row.user_id == uid and row.user_role == "student"   # actor = сам subject
+    assert row.entity_type is None and row.entity_id is None    # target FORBIDDEN
+    assert (row.log_metadata or {}) == {}
+    assert row.description is None
+    # profile_updated (success) НЕ пишется на этом отказе
+    assert _profile_updated_rows(uid) == []

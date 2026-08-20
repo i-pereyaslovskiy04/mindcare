@@ -13,23 +13,74 @@
   ёмкости групповых занятий.
 """
 
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
-
-from sqlalchemy.exc import IntegrityError
 
 from app.core.normalization import normalize_email
 from app.db.session import SessionLocal
 from app.appointments import storage
+from app.audit import Actor
+from app.audit.request_context import build_request_context
 
 # Moscow is UTC+3, no DST since 2014
 MOSCOW_TZ = timezone(timedelta(hours=3))
+
+
+def _audit_actor_ctx(actor_id, actor_role, ip, user_agent):
+    """Stage 5B-1: строит ОДИН sanitized RequestContext + Actor на операцию
+    (route определяет actor id/role; storage получает готовые объекты)."""
+    return (
+        Actor.user(int(actor_id), actor_role),
+        build_request_context(ip=ip, user_agent=user_agent),
+    )
 
 
 class AppointmentError(Exception):
     def __init__(self, message: str, status_code: int = 400):
         self.message = message
         self.status_code = status_code
+
+
+# ── Stage 5B-2: durable failure audit codes + auditable error subclass ───────
+# Стабильные snake_case коды для доказанных precommit business-отказов с
+# security/compliance-ценностью (audit-worthiness review §3). Обычная input/UX-
+# валидация НЕ получает код и остаётся базовым AppointmentError (не аудируется).
+AUDIT_CODE_ACCOUNT_INACTIVE = "account_inactive"
+AUDIT_CODE_ENGAGEMENT_REQUIRED = "engagement_required"
+AUDIT_CODE_ACCESS_DENIED = "access_denied"
+AUDIT_CODE_CONSENT_REQUIRED = "consent_required"
+
+# Локальная копия формата стабильного имени (не импортируем приватную
+# app.audit.registry._STABLE_NAME_RE — appointments/service.py не должен
+# зависеть от внутренностей registry). Совпадает по смыслу: lowercase
+# snake_case, начинается с буквы.
+_AUDIT_CODE_MAX_LEN = 100
+_AUDIT_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+class AuditableAppointmentError(AppointmentError):
+    """Precommit business-отказ, подлежащий durable failure-аудиту.
+
+    audit_code обязателен и должен быть стабильным snake_case-идентификатором
+    (str, длина 1..100, ^[a-z][a-z0-9_]*$) — иначе это programming contract
+    error (fail-fast: фиксированный RuntimeError без самого audit_code/
+    message/UUID/ролей/иных данных). Auditability определяется ТИПОМ (route:
+    isinstance), не строкой и не ambiguous None.
+    """
+
+    def __init__(self, message: str, status_code: int, *, audit_code: str):
+        if (
+            not isinstance(audit_code, str)
+            or not (1 <= len(audit_code) <= _AUDIT_CODE_MAX_LEN)
+            or not _AUDIT_CODE_RE.fullmatch(audit_code)
+        ):
+            raise RuntimeError(
+                "AuditableAppointmentError requires a stable snake_case "
+                "audit_code (^[a-z][a-z0-9_]*$, length 1..100)"
+            )
+        super().__init__(message, status_code)
+        self.audit_code = audit_code
 
 
 # ── MeetingType / modality helpers ─────────────────────────────────────────
@@ -103,13 +154,18 @@ def book_appointment(
     modality: str,
     topic: Optional[str],
     meeting_type_id: Optional[int],
+    *,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
     now_msk = datetime.now(MOSCOW_TZ)
     cutoff = now_msk + timedelta(hours=1)
 
     if not student_user.get("is_active", True):
-        raise AppointmentError(
-            "Ваш аккаунт неактивен", status_code=403
+        raise AuditableAppointmentError(
+            "Ваш аккаунт неактивен", 403,
+            audit_code=AUDIT_CODE_ACCOUNT_INACTIVE,
         )
 
     if starts_at.tzinfo is None:
@@ -126,9 +182,9 @@ def book_appointment(
             client_id=student_user["id"], db=db
         )
         if engagement is None:
-            raise AppointmentError(
-                "У вас нет активного назначенного психолога",
-                status_code=403,
+            raise AuditableAppointmentError(
+                "У вас нет активного назначенного психолога", 403,
+                audit_code=AUDIT_CODE_ENGAGEMENT_REQUIRED,
             )
 
         mt = _load_individual_meeting_type(meeting_type_id, db)
@@ -158,6 +214,9 @@ def book_appointment(
                 "Выбранное время уже занято", status_code=409
             )
 
+        actor, ctx = _audit_actor_ctx(
+            student_user["id"], actor_role, ip, user_agent
+        )
         appt = storage.create_appointment(
             client_id=student_user["id"],
             psychologist_id=psych_id,
@@ -170,6 +229,8 @@ def book_appointment(
             db=db,
             booking_source="student_self",
             created_by=int(student_user["id"]),
+            actor=actor,
+            context=ctx,
         )
         db.commit()
 
@@ -214,7 +275,11 @@ def supervisor_book_appointment(
     topic: Optional[str],
     student_id: Optional[int] = None,
     unregistered_student_card_id: Optional[int] = None,
-    current_user: Optional[dict] = None,
+    *,
+    current_user: dict,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
     """Ручная запись супервизором на свободный слот психолога.
 
@@ -263,9 +328,9 @@ def supervisor_book_appointment(
                 student_id, psychologist_id, db
             )
             if engagement is None:
-                raise AppointmentError(
-                    "Студент не закреплён за этим психологом",
-                    status_code=422,
+                raise AuditableAppointmentError(
+                    "Студент не закреплён за этим психологом", 422,
+                    audit_code=AUDIT_CODE_ENGAGEMENT_REQUIRED,
                 )
             engagement_id = engagement.id
         else:
@@ -307,6 +372,7 @@ def supervisor_book_appointment(
             )
 
         booker_id = int(current_user["id"]) if current_user else None
+        actor, ctx = _audit_actor_ctx(booker_id, actor_role, ip, user_agent)
         appt = storage.create_appointment(
             client_id=student_id,
             unregistered_student_card_id=card_id,
@@ -320,6 +386,8 @@ def supervisor_book_appointment(
             db=db,
             booking_source="supervisor",
             created_by=booker_id,
+            actor=actor,
+            context=ctx,
         )
         db.commit()
 
@@ -369,7 +437,9 @@ def list_unregistered_student_cards(
 
 
 def create_unregistered_student_card(
-    data: dict, current_user: dict
+    data: dict, current_user: dict,
+    *, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
     """Создать карточку незарегистрированного студента.
 
@@ -381,9 +451,9 @@ def create_unregistered_student_card(
     if not full_name:
         raise AppointmentError("Укажите ФИО (full_name)", status_code=422)
     if data.get("personal_data_consent") is not True:
-        raise AppointmentError(
-            "Требуется согласие на обработку персональных данных",
-            status_code=422,
+        raise AuditableAppointmentError(
+            "Требуется согласие на обработку персональных данных", 422,
+            audit_code=AUDIT_CODE_CONSENT_REQUIRED,
         )
 
     email = data.get("email")
@@ -401,7 +471,12 @@ def create_unregistered_student_card(
         "created_by":            int(current_user["id"]),
     }
     with SessionLocal() as db:
-        result = storage.create_unregistered_student_card(record, db)
+        actor, ctx = _audit_actor_ctx(
+            current_user["id"], actor_role, ip, user_agent
+        )
+        result = storage.create_unregistered_student_card(
+            record, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
@@ -411,11 +486,16 @@ _CARD_EDITABLE_FIELDS = (
 )
 
 
-def update_unregistered_student_card(card_id: int, updates: dict) -> dict:
+def update_unregistered_student_card(
+    card_id: int, updates: dict,
+    *, current_user: dict, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     """Частичное обновление карточки (только личные поля).
 
-    Audit/consent/linked_user_id не редактируются. При смене email
-    пересчитывается normalized_email.
+    service лишь НОРМАЛИЗУЕТ разрешённые входные поля; решение mutation/no-op и
+    diff — на storage (единственный владелец). Audit/consent/linked_user_id не
+    редактируются. При смене email пересчитывается normalized_email.
     """
     clean = {k: v for k, v in updates.items() if k in _CARD_EDITABLE_FIELDS}
     if "full_name" in clean:
@@ -431,37 +511,57 @@ def update_unregistered_student_card(card_id: int, updates: dict) -> dict:
         card = storage.get_unregistered_student_card(card_id, db)
         if card is None:
             raise AppointmentError("Карточка не найдена", status_code=404)
-        result = storage.update_unregistered_student_card(card, clean, db)
+        actor, ctx = _audit_actor_ctx(
+            current_user["id"], actor_role, ip, user_agent
+        )
+        result = storage.update_unregistered_student_card(
+            card, clean, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
 
-def archive_unregistered_student_card(card_id: int) -> dict:
+def archive_unregistered_student_card(
+    card_id: int,
+    *, current_user: dict, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     with SessionLocal() as db:
         card = storage.get_unregistered_student_card(card_id, db)
         if card is None:
             raise AppointmentError("Карточка не найдена", status_code=404)
-        result = storage.archive_unregistered_student_card(card, db)
+        actor, ctx = _audit_actor_ctx(
+            current_user["id"], actor_role, ip, user_agent
+        )
+        result = storage.archive_unregistered_student_card(
+            card, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
 
-def link_unregistered_cards_to_user(user_id, email: str) -> int:
+def link_unregistered_cards_to_user(
+    user_id, email: str,
+    *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> int:
     """Привязать карточки незарегистрированного студента к аккаунту (этап 2).
 
-    Вызывается из auth-сервиса ПОСЛЕ подтверждения владения email (registration
-    confirm). Идемпотентна: привязывает только ещё не привязанные карточки с
-    совпавшим normalized_email; повторный вызов ничего не делает. Карточка,
-    привязанная к другому пользователю, не перепривязывается. ПДн не логируются.
-
-    Возвращает число привязанных карточек.
+    Два caller (разный actor): self-registration (actor=созданный/восстановленный
+    student) и staff-created student (actor=исходный supervisor/admin). Один
+    Actor + один RequestContext + один SessionLocal + один commit. storage
+    возвращает список id привязанных карточек; audit per-card в той же транзакции.
+    Идемпотентна: повторный вызов → 0 карточек → 0 audit-строк. Карточка,
+    привязанная к другому пользователю, не перепривязывается и не аудируется.
+    ПДн не логируются. Возвращает число привязанных карточек (linked_cards_count).
     """
     with SessionLocal() as db:
-        linked = storage.link_unregistered_cards_to_user(
-            int(user_id), email, db
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        card_ids = storage.link_unregistered_cards_to_user(
+            int(user_id), email, db, actor=actor, context=ctx
         )
         db.commit()
-    return linked
+    return len(card_ids)
 
 
 def _student_owns_appointment(appt, user_id: int, db) -> bool:
@@ -516,6 +616,10 @@ def student_cancel(
     uuid: str,
     student_user: dict,
     reason: Optional[str],
+    *,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
     now_msk = datetime.now(MOSCOW_TZ)
     today_msk = now_msk.date()
@@ -529,7 +633,9 @@ def student_cancel(
         if not _student_owns_appointment(
             appt, int(student_user["id"]), db
         ):
-            raise AppointmentError("Нет доступа", status_code=403)
+            raise AuditableAppointmentError(
+                "Нет доступа", 403, audit_code=AUDIT_CODE_ACCESS_DENIED,
+            )
         if appt.status not in ("pending_confirmation", "confirmed"):
             raise AppointmentError(
                 f"Нельзя отменить запись со статусом {appt.status}",
@@ -551,12 +657,17 @@ def student_cancel(
         psych_id = appt.psychologist_id
         starts_at = appt.starts_at
 
+        actor, ctx = _audit_actor_ctx(
+            student_user["id"], actor_role, ip, user_agent
+        )
         result = storage.cancel_appointment(
             appt=appt,
             canceled_by=int(student_user["id"]),
             reason=reason,
             db=db,
             soft_delete=not was_confirmed,
+            actor=actor,
+            context=ctx,
         )
         db.commit()
 
@@ -622,13 +733,19 @@ def list_psychologist_appointments(
         )
 
 
-def psychologist_confirm(uuid: str, psychologist_user: dict) -> dict:
+def psychologist_confirm(
+    uuid: str, psychologist_user: dict,
+    *, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     with SessionLocal() as db:
         appt = storage.get_appointment_by_uuid(uuid, db)
         if appt is None:
             raise AppointmentError("Запись не найдена", status_code=404)
         if appt.psychologist_id != int(psychologist_user["id"]):
-            raise AppointmentError("Нет доступа", status_code=403)
+            raise AuditableAppointmentError(
+                "Нет доступа", 403, audit_code=AUDIT_CODE_ACCESS_DENIED,
+            )
         if appt.status != "pending_confirmation":
             raise AppointmentError(
                 f"Нельзя подтвердить статус {appt.status}",
@@ -637,7 +754,10 @@ def psychologist_confirm(uuid: str, psychologist_user: dict) -> dict:
         # Получатель уведомления: прямой студент или привязанный к карточке user
         # (захватываем ДО commit, пока appt в сессии).
         recipient_id = _appt_student_recipient(appt, db)
-        result = storage.confirm_appointment(appt, db)
+        actor, ctx = _audit_actor_ctx(
+            psychologist_user["id"], actor_role, ip, user_agent
+        )
+        result = storage.confirm_appointment(appt, db, actor=actor, context=ctx)
         db.commit()
 
     # Уведомление студенту: есть либо у прямой записи, либо у привязанной
@@ -680,13 +800,19 @@ def psychologist_decline(
     uuid: str,
     psychologist_user: dict,
     reason: Optional[str],
+    *,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> dict:
     with SessionLocal() as db:
         appt = storage.get_appointment_by_uuid(uuid, db)
         if appt is None:
             raise AppointmentError("Запись не найдена", status_code=404)
         if appt.psychologist_id != int(psychologist_user["id"]):
-            raise AppointmentError("Нет доступа", status_code=403)
+            raise AuditableAppointmentError(
+                "Нет доступа", 403, audit_code=AUDIT_CODE_ACCESS_DENIED,
+            )
         if appt.status not in ("pending_confirmation", "confirmed"):
             raise AppointmentError(
                 f"Нельзя отклонить статус {appt.status}",
@@ -695,7 +821,12 @@ def psychologist_decline(
         # Получатель уведомления: прямой студент или привязанный к карточке user
         # (захватываем ДО commit, пока appt в сессии).
         recipient_id = _appt_student_recipient(appt, db)
-        result = storage.decline_appointment(appt, reason, db)
+        actor, ctx = _audit_actor_ctx(
+            psychologist_user["id"], actor_role, ip, user_agent
+        )
+        result = storage.decline_appointment(
+            appt, reason, db, actor=actor, context=ctx
+        )
         db.commit()
 
     # Уведомление студенту: есть либо у прямой записи, либо у привязанной
@@ -767,15 +898,24 @@ def list_student_meeting_types() -> list[dict]:
     ]
 
 
-def create_meeting_type(data: dict) -> dict:
+def create_meeting_type(
+    data: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     _validate_group_formats(data)
     with SessionLocal() as db:
-        result = storage.create_meeting_type(data, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.create_meeting_type(
+            data, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
 
-def update_meeting_type(mt_id: int, updates: dict) -> dict:
+def update_meeting_type(
+    mt_id: int, updates: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     with SessionLocal() as db:
         mt = storage.get_meeting_type(mt_id, db)
         if mt is None:
@@ -792,7 +932,10 @@ def update_meeting_type(mt_id: int, updates: dict) -> dict:
             if k in updates:
                 merged[k] = updates[k]
         _validate_group_formats(merged)
-        result = storage.update_meeting_type(mt, updates, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.update_meeting_type(
+            mt, updates, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
@@ -836,7 +979,10 @@ def get_psychologist_schedule(psychologist_id: int) -> dict:
     }
 
 
-def create_schedule_rules(data: dict) -> list[dict]:
+def create_schedule_rules(
+    data: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> list[dict]:
     """Bulk-создание рабочих окон (один или несколько дней, общий series_id).
 
     Schedule v3: meeting_type_id НЕОБЯЗАТЕЛЕН. Принимается для обратной
@@ -852,14 +998,23 @@ def create_schedule_rules(data: dict) -> list[dict]:
                 raise AppointmentError(
                     "Тип встречи не найден", status_code=404
                 )
-        result = storage.create_schedule_rules_bulk(data, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.create_schedule_rules_bulk(
+            data, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
 
-def deactivate_schedule_rule(rule_id: int) -> None:
+def deactivate_schedule_rule(
+    rule_id: int, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> None:
     with SessionLocal() as db:
-        found = storage.deactivate_schedule_rule(rule_id, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        found = storage.deactivate_schedule_rule(
+            rule_id, db, actor=actor, context=ctx
+        )
         if not found:
             raise AppointmentError(
                 "Правило расписания не найдено", status_code=404
@@ -869,7 +1024,10 @@ def deactivate_schedule_rule(rule_id: int) -> None:
 
 # ── Unified schedule (series) management (supervisor) ──────────────────────
 
-def create_schedule(data: dict) -> dict:
+def create_schedule(
+    data: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     """Создать расписание (серию): рабочие окна + перерывы за одну операцию.
 
     Schedule v3: тип встречи НЕ задаётся — рабочее окно не привязано к типу.
@@ -888,7 +1046,10 @@ def create_schedule(data: dict) -> dict:
     with SessionLocal() as db:
         if not storage.is_psychologist(data["psychologist_id"], db):
             raise AppointmentError("Психолог не найден", status_code=422)
-        result = storage.create_schedule_series(data, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.create_schedule_series(
+            data, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
@@ -900,12 +1061,16 @@ def _series_or_404(series_id: str, db) -> list:
     return rules
 
 
-def update_schedule(series_id, data: dict) -> dict:
+def update_schedule(
+    series_id, data: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     """Отредактировать серию расписания атомарно (один commit).
 
     Психолог серии и существующие записи не меняются (см. storage). auto_extend
     требует effective_until; время правил и перерывов валидируется как в create.
     is_active серии сохраняется (PATCH не активирует деактивированную серию).
+    Идентичный payload — no-op: строки не пересоздаются, audit не пишется.
     """
     _validate_time_range(data.get("start_time"), data.get("end_time"))
     if data.get("auto_extend") and not data.get("effective_until"):
@@ -918,7 +1083,10 @@ def update_schedule(series_id, data: dict) -> dict:
 
     with SessionLocal() as db:
         _series_or_404(series_id, db)
-        result = storage.update_schedule_series(series_id, data, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.update_schedule_series(
+            series_id, data, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
@@ -931,16 +1099,23 @@ def schedule_impact(series_id: str) -> dict:
     return {"series_id": str(series_id), "future_appointments": future}
 
 
-def soft_delete_schedule(series_id: str) -> dict:
+def soft_delete_schedule(
+    series_id: str, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     """Деактивировать расписание (серию). Записи НЕ удаляются.
 
     Возвращает счётчики и количество будущих записей в периоде как
     предупреждение (записи остаются и продолжают занимать слоты).
+    Повторная деактивация — no-op без audit.
     """
     with SessionLocal() as db:
         rules = _series_or_404(series_id, db)
         future = storage.count_future_appointments_for_series(rules, db)
-        r_count, b_count = storage.soft_delete_series(series_id, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        r_count, b_count = storage.soft_delete_series(
+            series_id, db, actor=actor, context=ctx
+        )
         db.commit()
     return {
         "series_id":         str(series_id),
@@ -950,30 +1125,69 @@ def soft_delete_schedule(series_id: str) -> dict:
     }
 
 
-def restore_schedule(series_id: str) -> dict:
-    """Восстановить ранее деактивированное расписание (серию)."""
+def restore_schedule(
+    series_id: str, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Восстановить ранее деактивированное расписание (серию).
+
+    Повторный restore уже активной серии — no-op без audit.
+    """
     with SessionLocal() as db:
         _series_or_404(series_id, db)
-        storage.restore_series(series_id, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        storage.restore_series(series_id, db, actor=actor, context=ctx)
         db.commit()
         rules = storage.get_series_rules(series_id, db)
         breaks = storage.get_series_breaks(series_id, db)
         return _series_to_dict(series_id, rules, breaks)
 
 
-def extend_schedule(series_id: str, months: int = 1) -> dict:
-    """Быстрое действие «продлить на месяц»: двигает effective_until серии."""
+def extend_schedule(
+    series_id: str, months: int = 1, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Быстрое действие «продлить на месяц»: двигает effective_until серии.
+
+    Событие пишется только при фактическом сдвиге effective_until.
+    """
     with SessionLocal() as db:
         rules = _series_or_404(series_id, db)
         today = datetime.now(MOSCOW_TZ).date()
         current = rules[0].effective_until
         base = current if current is not None else max(today, rules[0].effective_from)
         new_until = _add_months(base, months)
-        storage.extend_series(series_id, new_until, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        storage.extend_series(
+            series_id, new_until, db, actor=actor, context=ctx
+        )
         db.commit()
         rules = storage.get_series_rules(series_id, db)
         breaks = storage.get_series_breaks(series_id, db)
         return _series_to_dict(series_id, rules, breaks)
+
+
+def complete_due_group_sessions_job() -> dict:
+    """Stage 5C-3: явный maintenance-переход групповых занятий в `completed`.
+
+    Заменяет прежний lazy-вызов из GET/list и из регистрации — read-пути больше
+    не мутируют. Один атомарный `UPDATE … RETURNING id` + per-row
+    `group_session_completed` (Actor.system(), context=None) в ТОЙ ЖЕ
+    транзакции: сбой аудита откатывает переход, ложного success не возникает.
+    Пустой результат → 0 строк, 0 событий, один согласованный no-op commit.
+
+    ЭКСПЛУАТАЦИОННОЕ ТРЕБОВАНИЕ: job обязан запускаться внешним планировщиком
+    (cron / systemd timer / Task Scheduler) — без него `status` групповых
+    занятий перестаёт актуализироваться. Исключения наружу не подавляются:
+    вызывающий скрипт обязан завершиться ненулевым кодом.
+    """
+    now_msk = datetime.now(MOSCOW_TZ)
+    with SessionLocal() as db:
+        completed_ids = storage.complete_due_group_sessions(
+            db, now_msk, actor=Actor.system(), context=None
+        )
+        db.commit()
+    return {"completed_sessions": len(completed_ids)}
 
 
 def auto_extend_schedules(
@@ -985,38 +1199,70 @@ def auto_extend_schedules(
     у которых окно заканчивается в пределах `within_days`. После продления
     отправляет system-сообщение создавшему серию supervisor'у (soft-fail).
 
-    dry_run=True откатывает изменения и не шлёт уведомления (только подсчёт).
+    Stage 5C-3:
+    - **per-series транзакция** (не batch): ограничивает время удержания
+      блокировок и не откатывает весь прогон из-за одной серии;
+    - блокировка по стабильной identity `FOR UPDATE SKIP LOCKED` — второй
+      параллельный worker серию пропускает, двойного продления нет;
+    - предикат due **перепроверяется ПОСЛЕ** блокировки — если первый worker уже
+      сдвинул границу, второй ничего не делает;
+    - событие `schedule_auto_extended` (Actor.system()) пишется только при
+      фактическом сдвиге; сбой аудита откатывает продление ЭТОЙ серии;
+    - **dry_run вообще не вызывает `record_event`**: ветка только читает и
+      считает, не берёт блокировок, не мутирует и не шлёт уведомлений — превью
+      не зависит от доступности audit storage.
+
     Возвращает сводку {extended_series, notified, dry_run}.
     """
     today = datetime.now(MOSCOW_TZ).date()
     threshold = today + timedelta(days=within_days)
 
-    notifications: list[tuple[int, str, str]] = []
-    extended = 0
     with SessionLocal() as db:
         series_ids = storage.get_auto_extend_series_due(threshold, db)
-        for series_id in series_ids:
+
+    if dry_run:
+        # Preview: только чтение. Ни мутаций, ни блокировок, ни record_event.
+        preview = 0
+        with SessionLocal() as db:
+            for series_id in series_ids:
+                rules = storage.get_series_rules(series_id, db)
+                if not rules or rules[0].effective_until is None:
+                    continue
+                if _add_months(rules[0].effective_until, months) != \
+                        rules[0].effective_until:
+                    preview += 1
+        return {"extended_series": preview, "notified": 0, "dry_run": True}
+
+    notifications: list[tuple[int, str, str]] = []
+    extended = 0
+    for series_id in series_ids:
+        # Отдельная транзакция на серию.
+        with SessionLocal() as db:
+            if storage.lock_series_for_maintenance(series_id, db) is None:
+                continue          # SKIP LOCKED: серию обрабатывает другой worker
             rules = storage.get_series_rules(series_id, db)
             if not rules:
                 continue
-            base = rules[0].effective_until or today
-            new_until = _add_months(base, months)
-            storage.extend_series(series_id, new_until, db)
-            extended += 1
-            creator = rules[0].created_by
-            if creator:
-                notifications.append(
-                    (creator, str(series_id), str(new_until))
-                )
-        if dry_run:
-            db.rollback()
-        else:
+            head = rules[0]
+            # Перепроверка предиката ПОСЛЕ блокировки — защита от двойного
+            # продления, если первый worker уже сдвинул effective_until.
+            if not (head.auto_extend and head.is_active
+                    and head.effective_until is not None
+                    and head.effective_until <= threshold):
+                continue
+            new_until = _add_months(head.effective_until, months)
+            changed = storage.auto_extend_series(
+                series_id, new_until, db, actor=Actor.system(), context=None
+            )
+            if changed:
+                extended += 1
+                if head.created_by:
+                    notifications.append(
+                        (head.created_by, str(series_id), str(new_until))
+                    )
             db.commit()
 
-    if dry_run:
-        return {"extended_series": extended, "notified": 0, "dry_run": True}
-
-    # System-уведомления — soft-fail, вне основной транзакции.
+    # System-уведомления — soft-fail, вне транзакций.
     notified = 0
     for creator_id, sid, new_until in notifications:
         if _notify_schedule_extended(creator_id, sid, new_until):
@@ -1076,18 +1322,30 @@ def list_schedule_breaks(psychologist_id: int) -> list[dict]:
         return storage.get_schedule_breaks(psychologist_id, db)
 
 
-def create_schedule_breaks(data: dict) -> list[dict]:
+def create_schedule_breaks(
+    data: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> list[dict]:
     """Bulk-создание повторяющихся перерывов (например обед)."""
     _validate_time_range(data.get("start_time"), data.get("end_time"))
     with SessionLocal() as db:
-        result = storage.create_schedule_breaks_bulk(data, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.create_schedule_breaks_bulk(
+            data, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
 
-def deactivate_schedule_break(break_id: int) -> None:
+def deactivate_schedule_break(
+    break_id: int, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> None:
     with SessionLocal() as db:
-        found = storage.deactivate_schedule_break(break_id, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        found = storage.deactivate_schedule_break(
+            break_id, db, actor=actor, context=ctx
+        )
         if not found:
             raise AppointmentError(
                 "Перерыв не найден", status_code=404
@@ -1100,7 +1358,20 @@ def deactivate_schedule_break(break_id: int) -> None:
 _EXCEPTION_TYPES = ("day_off", "unavailable", "extra_availability")
 
 
-def create_schedule_exception(data: dict) -> dict:
+def create_schedule_exception(
+    data: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Создать разовое исключение расписания.
+
+    Corrective (Stage 5C): выдуманный доменный 409 «Конфликт исключения
+    расписания» УДАЛЁН — у `schedule_exceptions` нет unique-констрейнтов
+    (уникальность снята миграцией 9e193b84bba8), поэтому такого конфликта не
+    существует. Под него маскировалась FK-ошибка на несуществующего психолога;
+    теперь она проверяется явно и даёт правдивый 422 (как в `create_schedule`).
+    IntegrityError больше не переименовывается в бизнес-конфликт;
+    `AuditError`/`AuditStorageError` по-прежнему всплывают и откатывают мутацию.
+    """
     etype = data.get("exception_type")
     if etype not in _EXCEPTION_TYPES:
         raise AppointmentError(
@@ -1111,14 +1382,13 @@ def create_schedule_exception(data: dict) -> dict:
     if etype in ("unavailable", "extra_availability"):
         _validate_time_range(data.get("start_time"), data.get("end_time"))
     with SessionLocal() as db:
-        try:
-            result = storage.create_schedule_exception(data, db)
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            raise AppointmentError(
-                "Конфликт исключения расписания", status_code=409
-            )
+        if not storage.is_psychologist(data["psychologist_id"], db):
+            raise AppointmentError("Психолог не найден", status_code=422)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.create_schedule_exception(
+            data, db, actor=actor, context=ctx
+        )
+        db.commit()
     return result
 
 
@@ -1143,8 +1413,6 @@ def list_group_sessions(
     open_only: bool = False,
 ) -> tuple[list[dict], int]:
     with SessionLocal() as db:
-        storage.complete_due_group_sessions(db, datetime.now(MOSCOW_TZ))
-        db.commit()
         return storage.get_group_sessions_list(
             db,
             page=page,
@@ -1166,8 +1434,6 @@ def list_group_sessions_psychologist(
 ) -> tuple[list[dict], int]:
     """Group sessions assigned to a given psychologist."""
     with SessionLocal() as db:
-        storage.complete_due_group_sessions(db, datetime.now(MOSCOW_TZ))
-        db.commit()
         return storage.get_group_sessions_list(
             db,
             page=page,
@@ -1181,7 +1447,10 @@ def list_group_sessions_psychologist(
         )
 
 
-def create_group_session(data: dict) -> dict:
+def create_group_session(
+    data: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     with SessionLocal() as db:
         mt = storage.get_meeting_type(data["meeting_type_id"], db)
         if mt is None:
@@ -1198,18 +1467,69 @@ def create_group_session(data: dict) -> dict:
                 "Психолог не найден", status_code=422
             )
         _validate_group_session_format(data.get("format"), mt)
-        result = storage.create_group_session(data, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.create_group_session(
+            data, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
 
-def update_group_session(uuid: str, updates: dict) -> dict:
+# Stage 5C-2: явный transition-контракт статуса группового занятия.
+# `completed` принадлежит system maintenance (5C-3) и через generic PATCH
+# запрещён; `cancelled→scheduled` (восстановление) требует отдельного
+# спроектированного события и молча не вводится.
+_GS_ALLOWED_STATUS_TRANSITIONS = {
+    ("scheduled", "cancelled"),
+}
+
+# NOT NULL-колонки group_sessions, представленные в GroupSessionUpdate. Явный
+# `null` для любой из них раньше доходил до setattr и падал NOT NULL violation
+# (500). Corrective: контролируемый 422 ДО мутации. `exclude_unset=True` не
+# отбрасывает явно переданный null — только неуказанные поля.
+_GS_NOT_NULL_FIELDS = (
+    "status", "booking_enabled", "meeting_type_id", "psychologist_id",
+    "starts_at", "format", "capacity",
+)
+
+
+def _reject_explicit_nulls(updates: dict) -> None:
+    """Явный null для NOT NULL-поля → 422 до любой мутации и до audit."""
+    for field in _GS_NOT_NULL_FIELDS:
+        if field in updates and updates[field] is None:
+            raise AppointmentError(
+                f"Поле '{field}' не может быть null", status_code=422
+            )
+
+
+def _validate_group_status_transition(current: str, target: str) -> None:
+    if current == target:
+        return                      # identical — no-op, проверять нечего
+    if target == "completed":
+        raise AppointmentError(
+            "Статус 'completed' выставляется только системным обслуживанием",
+            status_code=422,
+        )
+    if (current, target) not in _GS_ALLOWED_STATUS_TRANSITIONS:
+        raise AppointmentError(
+            f"Недопустимый переход статуса: {current} → {target}",
+            status_code=422,
+        )
+
+
+def update_group_session(
+    uuid: str, updates: dict, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     with SessionLocal() as db:
         gs = storage.get_group_session_by_uuid(uuid, db)
         if gs is None:
             raise AppointmentError(
                 "Групповое занятие не найдено", status_code=404
             )
+        _reject_explicit_nulls(updates)
+        if "status" in updates:
+            _validate_group_status_transition(gs.status, updates["status"])
         if "format" in updates or "meeting_type_id" in updates:
             mt_id = updates.get("meeting_type_id", gs.meeting_type_id)
             mt = storage.get_meeting_type(mt_id, db)
@@ -1229,7 +1549,10 @@ def update_group_session(uuid: str, updates: dict) -> dict:
                 raise AppointmentError(
                     "Психолог не найден", status_code=422
                 )
-        result = storage.update_group_session(gs, updates, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.update_group_session(
+            gs, updates, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
@@ -1250,14 +1573,20 @@ def _validate_group_session_format(fmt: Optional[str], mt) -> None:
         )
 
 
-def set_group_session_booking(uuid: str, enabled: bool) -> dict:
+def set_group_session_booking(
+    uuid: str, enabled: bool, *, actor_id, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
     with SessionLocal() as db:
         gs = storage.get_group_session_by_uuid(uuid, db)
         if gs is None:
             raise AppointmentError(
                 "Групповое занятие не найдено", status_code=404
             )
-        result = storage.set_group_session_booking(gs, enabled, db)
+        actor, ctx = _audit_actor_ctx(actor_id, actor_role, ip, user_agent)
+        result = storage.set_group_session_booking(
+            gs, enabled, db, actor=actor, context=ctx
+        )
         db.commit()
     return result
 
@@ -1270,8 +1599,6 @@ def list_group_sessions_student(
     size: int = 20,
 ) -> tuple[list[dict], int]:
     with SessionLocal() as db:
-        storage.complete_due_group_sessions(db, datetime.now(MOSCOW_TZ))
-        db.commit()
         return storage.get_group_sessions_list(
             db,
             page=page,
@@ -1283,10 +1610,45 @@ def list_group_sessions_student(
         )
 
 
-def student_register_group(uuid: str, student_user: dict) -> dict:
-    now_msk = datetime.now(MOSCOW_TZ)
-    cutoff = now_msk + timedelta(hours=1)
+def student_register_group(
+    uuid: str, student_user: dict, *, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Записать студента на групповое занятие.
 
+    Corrective (concurrency gap, Stage 5C): раньше `status`, `booking_enabled`,
+    lead time и тип встречи проверялись ОДИН РАЗ до `FOR UPDATE` и не
+    перепроверялись после. Под конкуренцией supervisor мог закрыть booking,
+    отменить занятие или сдвинуть `starts_at` внутрь lead time, пока студент
+    ждал блокировку строки, — регистрация проходила по устаревшему состоянию и
+    создавала ложное success audit-событие (`group_session_registered`) для
+    занятия, которое к моменту commit уже недоступно для записи.
+
+    Теперь состояние занятия читается РОВНО ОДИН РАЗ — тем же запросом, что
+    берёт `SELECT ... FOR UPDATE` (`storage.lock_group_session_by_uuid`,
+    обязательный `populate_existing()`) — и является ЕДИНСТВЕННЫМ источником
+    истины для всех проверок ниже: `status`, `booking_enabled`, lead time,
+    активность/бронируемость типа встречи, существующая регистрация студента,
+    заполненность. Ни один из этих фактов не читается заранее и повторно не
+    используется. Отказ на любой из проверок означает: мутации
+    `GroupSessionRegistration` не было, `group_session_registered` не
+    записан, commit не выполнен (сессия закрывается через `with` без
+    незакоммиченных изменений — эквивалент rollback).
+
+    Corrective (остаточный lead-time race): `datetime.now()` / `cutoff`
+    БОЛЬШЕ НЕ вычисляются до открытия сессии. Ожидание `FOR UPDATE` может
+    занять произвольное время — если бы "сейчас" было прочитано ДО него, а
+    строка пересекла бы границу `starts_at - 1h` за время ожидания, проверка
+    шла бы по устаревшему моменту времени. `now`/`cutoff` читаются ПОСЛЕ
+    получения лока И после остальных DB-проверок, вплотную к
+    `storage.register_student_group_session` — актуальнее эту границу
+    сделать уже нельзя без совмещения с самой мутацией.
+
+    Stage 5C-3: lazy-maintenance удалён отсюда — регистрация выполняется в ОДНОЙ
+    транзакции с единственным commit, и audit регистрации принадлежит именно ей.
+    Актуализация `status` перенесена в явный CLI-job — безопасно именно
+    благодаря lead time проверке ниже, читаемой из того же locked-состояния.
+    """
     # Только активный аккаунт студента может записываться на занятия.
     if not student_user.get("is_active", True):
         raise AppointmentError(
@@ -1294,9 +1656,9 @@ def student_register_group(uuid: str, student_user: dict) -> dict:
         )
 
     with SessionLocal() as db:
-        storage.complete_due_group_sessions(db, now_msk)
-        db.commit()
-        gs = storage.get_group_session_by_uuid(uuid, db)
+        # Единственное чтение состояния занятия — сразу под блокировкой строки.
+        # Всё, что решает исход регистрации, проверяется ТОЛЬКО по этому объекту.
+        gs = storage.lock_group_session_by_uuid(uuid, db)
         if gs is None:
             raise AppointmentError(
                 "Групповое занятие не найдено", status_code=404
@@ -1310,7 +1672,8 @@ def student_register_group(uuid: str, student_user: dict) -> dict:
                 "Запись на это занятие закрыта", status_code=422
             )
 
-        # Check meeting type is active and bookable
+        # Тип встречи читается ПОСЛЕ получения лока по gs.meeting_type_id —
+        # тоже мог измениться конкурентным PATCH группового занятия.
         from app.db.models import MeetingType
         mt = db.query(MeetingType).filter(
             MeetingType.id == gs.meeting_type_id
@@ -1325,13 +1688,6 @@ def student_register_group(uuid: str, student_user: dict) -> dict:
                 status_code=422,
             )
 
-        # Must register at least 1 hour before start
-        if gs.starts_at <= cutoff:
-            raise AppointmentError(
-                "Запись возможна минимум за 1 час до начала занятия",
-                status_code=422,
-            )
-
         existing = storage.get_student_registration(
             gs.id, int(student_user["id"]), db
         )
@@ -1341,23 +1697,51 @@ def student_register_group(uuid: str, student_user: dict) -> dict:
                 status_code=409,
             )
 
-        # Lock group session row to serialise concurrent registrations
-        gs_locked = storage.lock_group_session_for_update(gs.id, db)
-        count = storage.count_active_registrations(gs_locked.id, db)
-        if count >= gs_locked.capacity:
+        # capacity — из того же locked-объекта, count — свежий запрос под локом.
+        count = storage.count_active_registrations(gs.id, db)
+        if count >= gs.capacity:
             raise AppointmentError(
                 "Нет свободных мест", status_code=409
             )
 
-        result = storage.register_student_group_session(
-            gs_locked, int(student_user["id"]), db
+        # Lead time — читаем "сейчас" максимально поздно, вплотную к мутации:
+        # ожидание FOR UPDATE и предыдущие DB-checks могли занять произвольное
+        # время, и значение, прочитанное раньше (до лока), к этому моменту
+        # устарело бы. Проверяется по locked gs.starts_at — supervisor мог
+        # сдвинуть время занятия, пока эта транзакция ждала блокировку строки.
+        now_msk = datetime.now(MOSCOW_TZ)
+        cutoff = now_msk + timedelta(hours=1)
+        if gs.starts_at <= cutoff:
+            raise AppointmentError(
+                "Запись возможна минимум за 1 час до начала занятия",
+                status_code=422,
+            )
+
+        actor, ctx = _audit_actor_ctx(
+            student_user["id"], actor_role, ip, user_agent
         )
+        try:
+            result = storage.register_student_group_session(
+                gs, int(student_user["id"]), db, actor=actor, context=ctx
+            )
+        except storage.GroupRegistrationConflict:
+            # Конкурентная регистрация того же студента опережает эту
+            # транзакцию между re-check выше и условным UPDATE/insert; отказ
+            # приходит из условного UPDATE или partial unique ux_gsr_active.
+            # Ни мутации, ни audit не было.
+            db.rollback()
+            raise AppointmentError(
+                "Вы уже зарегистрированы на это занятие", status_code=409
+            ) from None
         db.commit()
 
     return result
 
 
-def student_cancel_group(uuid: str, student_user: dict) -> None:
+def student_cancel_group(
+    uuid: str, student_user: dict, *, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> None:
     now_msk = datetime.now(MOSCOW_TZ)
     today_msk = now_msk.date()
 
@@ -1374,8 +1758,11 @@ def student_cancel_group(uuid: str, student_user: dict) -> None:
                 "Отмена возможна только до дня занятия",
                 status_code=422,
             )
+        actor, ctx = _audit_actor_ctx(
+            student_user["id"], actor_role, ip, user_agent
+        )
         cancelled = storage.cancel_student_group_session(
-            uuid, int(student_user["id"]), db
+            uuid, int(student_user["id"]), db, actor=actor, context=ctx
         )
         if not cancelled:
             raise AppointmentError(
