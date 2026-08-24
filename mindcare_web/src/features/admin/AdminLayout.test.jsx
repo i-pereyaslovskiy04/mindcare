@@ -59,6 +59,35 @@ test('renders all four nav group headings', () => {
   expect(screen.getByText('Аккаунт')).toBeInTheDocument();
 });
 
+test('renders the audit log link in the "Система" group', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(<AdminLayout />);
+
+  const auditLink = screen.getByRole('link', { name: 'Журнал действий' });
+  expect(auditLink).toHaveAttribute('href', '/admin/audit');
+
+  // Пункт стоит именно в группе «Система», а не где-то ещё в sidebar.
+  // Структура групп и есть предмет проверки, поэтому обращение к DOM здесь
+  // осознанное (тот же приём, что в тестах chat-компонентов).
+  // eslint-disable-next-line testing-library/no-node-access
+  const group = screen.getByText('Система').parentElement;
+  expect(group).toContainElement(auditLink);
+});
+
+test('audit link is active on /admin/audit and drives the breadcrumb', () => {
+  mockPathname = '/admin/audit';
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(<AdminLayout />);
+
+  expect(screen.getByRole('link', { name: 'Журнал действий' })).toHaveClass('active');
+  expect(screen.getByRole('link', { name: 'Пользователи' })).not.toHaveClass('active');
+
+  // Breadcrumb берёт подпись из того же ADMIN_NAV_GROUPS: подпись встречается
+  // дважды — в sidebar и в хлебных крошках, а дефолтная «Панель» исчезает.
+  expect(screen.getAllByText('Журнал действий')).toHaveLength(2);
+  expect(screen.queryByText('Панель')).toBeNull();
+});
+
 test('renders links to the new email-domains and settings pages', () => {
   mockAuth({ roles: ['admin'], activeRole: 'admin' });
   render(<AdminLayout />);

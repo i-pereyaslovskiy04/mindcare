@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { render, screen } from '@testing-library/react';
 import { RoleRoute, DashboardRedirect } from './guards';
 import * as AuthContext from '../features/auth/AuthContext';
@@ -68,4 +70,50 @@ test('no roles redirects to /profile', () => {
   mockAuth({ user: { roles: [] }, activeRole: null });
   render(<DashboardRedirect />);
   expect(screen.getByText('NAV:/profile')).toBeInTheDocument();
+});
+
+// ── Дерево маршрутов ─────────────────────────────────────────────────────────
+//
+// Проверяется по исходнику, а не рендером <AppRouter />. Причина зафиксирована
+// в самом router.jsx (см. guards.jsx: «router.jsx тянет тяжёлые модули вроде
+// TiptapEditor»): импорт файла подтянул бы @tiptap/react — ESM-пакет вне
+// transformIgnorePatterns CRA — и десятки страниц. Структурная проверка даёт
+// тот же ответ детерминированно и без побочных импортов.
+
+const ROUTER_SOURCE = fs.readFileSync(
+  path.join(__dirname, 'router.jsx'),
+  'utf8',
+);
+
+/** Блок admin-Route: от `path="/admin"` до закрывающего его `</Route>`. */
+function adminRouteBlock() {
+  const start = ROUTER_SOURCE.indexOf('path="/admin"');
+  expect(start).toBeGreaterThan(-1);
+  const end = ROUTER_SOURCE.indexOf('</Route>', start);
+  expect(end).toBeGreaterThan(start);
+  return ROUTER_SOURCE.slice(start, end);
+}
+
+test('audit page is imported from its feature module', () => {
+  expect(ROUTER_SOURCE).toMatch(
+    /import\s+AuditLogsPage\s+from\s+'\.\.\/features\/admin\/audit\/pages\/AuditLogsPage';/,
+  );
+});
+
+test('/admin/audit is registered exactly once', () => {
+  const matches = ROUTER_SOURCE.match(/path="audit"/g) ?? [];
+  expect(matches).toHaveLength(1);
+});
+
+test('/admin/audit lives inside the admin RoleRoute and nowhere else', () => {
+  const block = adminRouteBlock();
+
+  // Родительский маршрут защищён именно ролью admin.
+  expect(block).toMatch(/element=\{<RoleRoute roles=\{\['admin'\]\}>/);
+  // Дочерний маршрут — внутри этого блока.
+  expect(block).toMatch(/path="audit"\s+element=\{<AuditLogsPage \/>\}/);
+
+  // За пределами admin-блока маршрута нет.
+  const outside = ROUTER_SOURCE.replace(block, '');
+  expect(outside).not.toContain('path="audit"');
 });

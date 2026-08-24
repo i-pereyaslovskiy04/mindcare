@@ -33,6 +33,7 @@ const ADMIN_NAV_GROUPS = [
       { label: 'Темы',               path: '/admin/tags',          icon: 'tag' },
       { label: 'Типы встреч',        path: '/admin/meeting-types', icon: 'calendar' },
       { label: 'Домены регистрации', path: '/admin/email-domains', icon: 'mail' },
+      { label: 'Журнал действий',    path: '/admin/audit',         icon: 'file' },
     ],
   },
   {
