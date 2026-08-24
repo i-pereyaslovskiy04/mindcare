@@ -26,6 +26,7 @@ mindcare_web/
     │   ├── auth.api.js
     │   ├── users.api.js       ← /api/admin/users/* (CRUD пользователей)
     │   ├── domains.api.js     ← /api/admin/email-domains (allowlist регистрации)
+    │   ├── audit.api.js       ← /api/admin/audit/* (read-only журналы аудита)
     │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (UI: «Темы»)
     │   ├── categories.api.js  ← /api/admin/categories/* (UI: «Типы материалов»)
     │   ├── news.api.js
@@ -130,6 +131,16 @@ mindcare_web/
     │       │   ├── hooks/useAllowedDomains.js
     │       │   ├── components/EmailDomainsSection.jsx + .module.css
     │       │   └── pages/EmailDomainsPage.jsx + .module.css
+    │       ├── audit/                    ← read-only просмотр журналов аудита
+    │       │   ├── lib/auditLabels.js + auditFormatters.js + auditFilters.js
+    │       │   ├── hooks/useAdminAuditLogs.js + useAuditOptions.js
+    │       │   │        + useAuditActorSearch.js
+    │       │   ├── components/AuditTabs.jsx + AuditFilters.jsx
+    │       │   │        + AuditActorPicker.jsx + AuditTableShell.jsx
+    │       │   │        + AuditEventsTable.jsx + AuthEventsTable.jsx
+    │       │   │        + DataChangesTable.jsx + AuditDetailsModal.jsx
+    │       │   │        + AuditPagination.jsx
+    │       │   └── pages/AuditLogsPage.jsx + .module.css
     │       └── settings/
     │           └── pages/AdminSettingsPage.jsx + .module.css
     │
@@ -391,6 +402,7 @@ src/data/
 | `/admin/news` | `AdminNewsPage` | — |
 | `/admin/articles` | `AdminArticlesPage` | — |
 | `/admin/email-domains` | `EmailDomainsPage` | Admin-only; список и управление allowlist регистрации |
+| `/admin/audit` | `AuditLogsPage` | Admin-only; read-only просмотр трёх журналов аудита |
 | `/admin/settings` | `AdminSettingsPage` | Admin-only; безопасность / смена пароля |
 | `*` | `NotFound` | Public |
 
@@ -560,7 +572,8 @@ scalar-only edit остаётся доступным.
 ```text
 Управление → Пользователи
 Контент    → Материалы, Новости, Тесты
-Система    → Типы материалов, Темы, Типы встреч, Домены регистрации
+Система    → Типы материалов, Темы, Типы встреч, Домены регистрации,
+             Журнал действий
 Аккаунт    → Безопасность
 ```
 
@@ -574,6 +587,57 @@ reactivate, loading/error/empty states и показывает backend 409 ро�
 пароля (рабочая ширина 520 px). Разделы allowlist и account security не смешиваются.
 Прямой вход и reload на `/admin/email-domains` должны проходить через обычный
 `RoleRoute` с membership-ролью `admin`.
+
+### Admin Audit Viewer
+
+`/admin/audit` — read-only просмотр трёх журналов аудита (backend Stage 8,
+ADR-023). Feature-модуль `features/admin/audit/`: `api/audit.api.js` (HTTP),
+`hooks/` (состояние), `pages/AuditLogsPage.jsx` (композиция),
+`components/` (UI), `lib/` (подписи и чистое форматирование).
+
+Три вкладки — три отдельных эндпоинта; журналы **не** объединяются в одну ленту:
+у них разные контракты, разные безопасные DTO и нет надёжного correlation_id
+между `audit_log` и `data_change_log`.
+
+| Вкладка | Endpoint | Специфичные фильтры |
+|---|---|---|
+| Действия | `GET /api/admin/audit/events` | категория (frontend-only), событие, результат, роль действия, тип объекта, точный id объекта, «показывать просмотры журнала» |
+| Входы и безопасность | `GET /api/admin/audit/auth-events` | событие, успех/отказ |
+| Изменённые поля | `GET /api/admin/audit/data-changes` | таблица, операция, роль действия, точный id записи |
+
+Справочник значений — `GET /api/admin/audit/options` (`useAuditOptions`),
+отдельным hook'ом: его ошибка не подменяет ошибку списка, при недоступном
+справочнике таблица работает на базовых фильтрах, а registry-зависимые селекты
+отключаются.
+
+**Фильтры хранятся по журналам, а не одним плоским объектом** (`lib/auditFilters.js`):
+наборы допустимых значений у журналов разные (`actor_kind=system` существует для
+`audit_log` и отсутствует у двух других; у `auth_log` нет фильтра роли вовсе),
+поэтому общий объект при переключении вкладки унёс бы чужое значение и получил
+422. `setFilters` маршрутизирует патч по срезам, неизвестный ключ отбрасывается.
+
+**Выбранный участник живёт в `useAdminAuditLogs`**, а `AuditActorPicker` полностью
+controlled (`value` + `resetKey`): иначе после сброса фильтров подпись осталась бы
+на экране при уже снятом `actor_uuid`. В API уходит только `actor_uuid` — ни
+введённый текст, ни ФИО, ни email в запрос журнала не попадают.
+
+Ограничения контракта, которые обязан соблюдать UI:
+
+- точный `entity_id` доступен только с явным не-пользовательским `entity_type`,
+  `record_id` — только с не-`users` таблицей (иначе backend отвечает 422:
+  целочисленный id без типа цели неоднозначен и превращал бы `users.id` в ключ
+  поиска);
+- обе даты либо ни одной, окно ≤ 90 дней; по умолчанию — последние 7 календарных
+  дней по Москве, всегда отправляются явными датами;
+- пагинация ограничена `max_result_window`: `totalPages =
+  min(ceil(total/size), floor(window/size))`;
+- `entry_id` — строка (BIGINT), к `Number` не приводится.
+
+Состояние страницы **не** синхронизируется с query string и не пишется в
+`localStorage`. Polling, export, copy-all и detail-запрос отсутствуют; модалка
+подробностей строится из уже загруженной строки. Рендеринг закрытый: компоненты
+достают из DTO только разрешённые поля, `details` обходится по закрытой карте
+`DETAIL_KEY_ORDER`, неизвестный ключ не показывается. Email везде маскируется.
 
 ### Modal System
 

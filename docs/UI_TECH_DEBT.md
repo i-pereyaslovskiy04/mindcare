@@ -188,6 +188,39 @@
 
 ---
 
+## Audit tabs (журнал действий)
+
+- **Где:** `features/admin/audit/components/AuditTabs.jsx`
+- **Похоже на:** shared Tabs (не существует)
+- **Почему оставлено:** shared Tabs в проекте нет. Ближайший аналог — inline-разметка вкладок в `pages/psychologist/Appointments/AppointmentsPage.jsx`: без `aria-controls`, без клавиатурной навигации и без roving tabIndex, переиспользовать там нечего. Реализация в audit — полный tablist (`role="tablist"/"tab"/"tabpanel"`, `aria-selected`, `aria-controls`, стрелки, Home/End).
+- **Что делать дальше:** при появлении второй страницы со вкладками — поднять `AuditTabs` в `components/UI/Tabs` и мигрировать на него разметку AppointmentsPage.
+- **Можно мигрировать позже:** да, кандидат №1 на shared-компонент
+- **Риск:** низкий
+
+---
+
+## Audit actor picker (поиск участника)
+
+- **Где:** `features/admin/audit/components/AuditActorPicker.jsx`
+- **Похоже на:** `Select`, `MultiSelect`
+- **Почему оставлено:** обоим shared-контролам нужен готовый статический список опций; `MultiSelect` к тому же фильтрует локально и вешает `role="combobox"` на `div`. Здесь нужен серверный асинхронный поиск по admin users API с debounce и защитой от устаревших ответов — такого shared-контрола в проекте нет.
+- **Что делать дальше:** не мигрировать в `Select`. Если асинхронный поиск понадобится второй раз — выносить общий `AsyncCombobox`.
+- **Можно мигрировать позже:** нет без AsyncCombobox
+- **Риск:** средний (собственная a11y-реализация combobox)
+
+---
+
+## Audit tables и pagination
+
+- **Где:** `features/admin/audit/components/AuditTableShell.jsx`, `AuditEventsTable.jsx`, `AuthEventsTable.jsx`, `DataChangesTable.jsx`, `AuditPagination.jsx`
+- **Похоже на:** таблицы и пагинация admin-разделов (`users/components/UsersTable.jsx`, локальный `Pagination` в `users/pages/UsersPage.jsx`)
+- **Почему оставлено:** shared DataTable/Pagination в проекте нет, каждый admin-раздел держит свои. У журналов вдобавок свои требования: `<caption>`, `<th scope="col">`, горизонтальный скролл и пагинация с поправкой на `max_result_window` (обычный `ceil(total/size)` предложил бы страницу, которую backend отвергает 422). Рефакторить чужие admin-страницы задача не предполагала.
+- **Что делать дальше:** при задаче на shared DataTable взять `AuditTableShell` за основу — у него уже есть доступная разметка и состояния loading/error/empty.
+- **Можно мигрировать позже:** да, вместе с UsersTable
+- **Риск:** низкий
+
+---
+
 ## Что добавлять в этот файл
 
 Любой элемент, который:

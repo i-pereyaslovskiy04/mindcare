@@ -3,6 +3,10 @@
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
 Актуальный handoff по последнему крупному блоку работ:
+`docs/HANDOFFS/2026-08-21-admin-audit-viewer-api-complete.md`
+— read-only admin API просмотра трёх журналов (Stage 8, ADR-023). Предыдущий
+блок — `docs/HANDOFFS/2026-08-20-audit-hardening-stages-1-7-complete.md`
+(запись журналов). Handoff от 2026-07-16
 `docs/HANDOFFS/2026-07-16-email-domain-policy-self-admin-complete.md`
 — управляемый allowlist доменов для создания новых аккаунтов, защита собственной
 роли `admin` и реорганизация admin-навигации. Handoff по multi-role модели от
@@ -654,7 +658,9 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 | **Ветка minimized data_change_log (Stage 6):** | |
 | `d4a7b2c9f6e1` | harden_data_change_log (Stage 6-A): превращает application-контракт минимизированного журнала в DB-инварианты. `record_id` и `changed_fields` → NOT NULL; три CHECK — `ck_dcl_operation` (`operation IN ('INSERT','UPDATE','DELETE')`), `ck_dcl_changed_fields_nonempty` (`cardinality(changed_fields) > 0`), `ck_dcl_record_id_positive` (`record_id > 0`). Все DDL — на partitioned parent (наследуются существующими и будущими партициями). Fail-closed preflight ДО первого DDL: 5 счётчиков нарушителей будущих инвариантов + зависимости legacy-функции; диагностика — только стабильный код и счётчик (`preflight failed: code=<code> count=<n>`), без значений строк и имён объектов. Удаляет legacy `public.log_data_change(integer, character varying, character varying, integer, character varying, jsonb, jsonb, inet)` — идентификация строго по OID через `to_regprocedure()`, `DROP FUNCTION IF EXISTS` schema-qualified, **без `CASCADE`** (default RESTRICT — зависимость роняет миграцию, а не удаляет зависимые объекты). **downgrade намеренно НЕ полный round-trip**: снимает три CHECK и два NOT NULL (STRICT, без `IF EXISTS`), но функцию НЕ восстанавливает — её контракт (`p_old_values`/`p_new_values` полными JSONB-строками) противоречит минимизации |
 | **Ветка IP-анонимизации (Stage 7):** | |
-| `c8e2b5f7a3d1` | adopt_ip_anonymization (Stage 7A): переносит IP-анонимизацию из legacy bootstrap-SQL (`db/sql/`, где она была недостижима для Alembic-БД и не имела ни consumer'а, ни планировщика) в Alembic-цепочку. Создаёт `public.anonymize_old_ips(integer) RETURNS bigint` (обнуляет `ip_address` старше границы в `audit_log`/`auth_log`/`data_change_log`) и `public.count_old_ips(integer) RETURNS bigint` (строго read-only счётчик тех же строк — основа dry-run). Обе: `SECURITY INVOKER`, `SET search_path = pg_catalog, public`, fail-fast `days_old IS NULL OR < 1` → SQLSTATE 22023, единый `cutoff = now() - make_interval(days => days_old)`; у `anonymize_old_ips` дополнительно `pg_try_advisory_xact_lock` (SQLSTATE 55P03 при конфликте, ключ ОТЛИЧАЕТСЯ от ключа `ensure_audit_partitions.py`). Legacy-тело НЕ копируется: при `days_old <= 0` оно уводило границу в будущее и стирало ВСЕ адреса. Порядок DDL: fail-closed preflight (точные сигнатуры, запрет любых других overload с теми же именами, зависимости по OID) → `DROP FUNCTION IF EXISTS` **без CASCADE** → `CREATE` (не `CREATE OR REPLACE`: тот сохранил бы явные grants и не смог бы сменить тип возврата `integer`→`bigint`) → `REVOKE ALL ... FROM PUBLIC`. `GRANT` именованным ролям не выдаётся, `SECURITY DEFINER` не вводится. **downgrade STRICT** (без `IF EXISTS`, без `CASCADE`) и намеренно НЕ полный round-trip: legacy-тело не восстанавливается. ⚠ Возвращает механизм, но НЕ данные — обнулённые `ip_address` невосстановимы — **head** |
+| `c8e2b5f7a3d1` | adopt_ip_anonymization (Stage 7A): переносит IP-анонимизацию из legacy bootstrap-SQL (`db/sql/`, где она была недостижима для Alembic-БД и не имела ни consumer'а, ни планировщика) в Alembic-цепочку. Создаёт `public.anonymize_old_ips(integer) RETURNS bigint` (обнуляет `ip_address` старше границы в `audit_log`/`auth_log`/`data_change_log`) и `public.count_old_ips(integer) RETURNS bigint` (строго read-only счётчик тех же строк — основа dry-run). Обе: `SECURITY INVOKER`, `SET search_path = pg_catalog, public`, fail-fast `days_old IS NULL OR < 1` → SQLSTATE 22023, единый `cutoff = now() - make_interval(days => days_old)`; у `anonymize_old_ips` дополнительно `pg_try_advisory_xact_lock` (SQLSTATE 55P03 при конфликте, ключ ОТЛИЧАЕТСЯ от ключа `ensure_audit_partitions.py`). Legacy-тело НЕ копируется: при `days_old <= 0` оно уводило границу в будущее и стирало ВСЕ адреса. Порядок DDL: fail-closed preflight (точные сигнатуры, запрет любых других overload с теми же именами, зависимости по OID) → `DROP FUNCTION IF EXISTS` **без CASCADE** → `CREATE` (не `CREATE OR REPLACE`: тот сохранил бы явные grants и не смог бы сменить тип возврата `integer`→`bigint`) → `REVOKE ALL ... FROM PUBLIC`. `GRANT` именованным ролям не выдаётся, `SECURITY DEFINER` не вводится. **downgrade STRICT** (без `IF EXISTS`, без `CASCADE`) и намеренно НЕ полный round-trip: legacy-тело не восстанавливается. ⚠ Возвращает механизм, но НЕ данные — обнулённые `ip_address` невосстановимы |
+| **Ветка read-only admin viewer журналов (Stage 8):** | |
+| `e6c3a9f1d574` | add_audit_chronological_indexes (Stage 8): по одному индексу `(created_at, id)` на каждый журнал — `idx_audit_created`, `idx_auth_created`, `idx_dcl_created`. Составной PK партиционированных журналов — `(id, created_at)` (требование PostgreSQL: ключ партиционирования обязан входить в PK), поэтому лента «последние события за период» им не обслуживается: остаются seq scan партиций и внешняя сортировка. Порядок столбцов повторяет `ORDER BY` эндпоинтов, поэтому индекс даёт и отсечение по периоду, и готовую сортировку с tie-break по `id`; отдельные DESC-варианты не нужны (B-tree сканируется в обе стороны). DDL — raw `op.execute` на partitioned parent: PostgreSQL сам материализует дочерние индексы на всех существующих и будущих партициях (`PARTITION OF` наследует), поэтому `ensure_audit_partitions.py` править не требуется, а `DROP INDEX` на parent каскадно снимает дочерние. `CONCURRENTLY` для partitioned table не поддерживается — миграция берёт короткое блокирующее окно. **downgrade STRICT** (без `IF EXISTS`, без `CASCADE`) и снимает ТОЛЬКО эти три индекса. Данные не меняются ни в одну сторону — **head** |
 
 **Ключевые таблицы:**
 
@@ -709,7 +715,7 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 93 события** (`AUTH_LOG=7`, `AUDIT_LOG=86`) — `app/audit/registry.py`,
+**Event REGISTRY: 94 события** (`AUTH_LOG=7`, `AUDIT_LOG=87`) — `app/audit/registry.py`,
 единый facade `record_event()`.
 
 **CHANGE_REGISTRY: 4 таблицы / 25 полей** (15 name-only, 10 value-enabled) + 1
@@ -779,6 +785,87 @@ derived-поле — `app/audit/change_registry.py`, отдельный writer `
 > integration-тесты совместного commit/rollback. `correlation_id` намеренно не
 > введён — связь восстанавливается по (`entity_type`/`table_name`, id, время).
 
+### Read-only просмотр журналов администратором (Stage 8)
+
+`GET /api/admin/audit/{events,auth-events,data-changes,options}` —
+`app/audit/routes_admin.py` → `admin_service.py` → `admin_storage.py`.
+Writer-facade `record_event()` остаётся отдельной публичной точкой записи.
+Множества, производные от registry (классы актора, допустимые цели, имена
+событий/таблиц), живут в `app/audit/admin_policy.py` и импортируются И
+storage (SQL-предикаты), И service (проекция DTO) — это структурная гарантия
+того, что фильтр и отображение классифицируют строку одинаково.
+
+```
+✅ Доступ — только активная membership-роль `admin` через router-level
+   require_role("admin"); acting role — resolve_role_or_403(allowed={"admin"}).
+   Seed-permissions `admin:audit` / `auth:view_logs` источником авторизации НЕ
+   являются: application-level permission enforcement отсутствует
+✅ Три журнала — три отдельных эндпоинта. UNION-ленты нет: у них разные
+   контракты, разные безопасные DTO, а надёжного correlation_id между
+   `audit_log` и `data_change_log` не существует
+✅ Окно обязательно: без дат берутся последние 7 календарных дней по
+   Europe/Moscow, максимум 90 дней, ровно одна из двух дат → 422. Фильтр по
+   `created_at` присутствует в КАЖДОМ запросе — иначе теряется partition pruning
+✅ Сортировка только `created_at`, затем `id` (детерминированный tie-break);
+   произвольный `sort` не принимается. `size` 1..100, глубина ≤ 100 000
+✅ `actor_kind` выводится из `ActorPolicy` конкретного EventSpec/TableSpec, а НЕ
+   из «user_id IS NULL ⇒ anonymous»: FK объявлен ON DELETE SET NULL, поэтому
+   после физического удаления аккаунта `login`/`logout`/`password_change` тоже
+   получают NULL. Для `audit_log`/`data_change_log` дополнительно проверяется,
+   что роль строки входит в `allowed_actor_roles` спеки
+✅ SQL-предикаты классов актора оборачиваются в `coalesce(expr, false)`:
+   без этого `role = 'system'` при NULL даёт NULL, `NOT(...)` — тоже NULL, и
+   строка молча выпадает из `unavailable`
+✅ `actor.kind = unavailable` ВСЕГДА даёт `details_redacted=true`: этот класс
+   возникает только при аномалии (обнулённый `ON DELETE SET NULL` actor_id,
+   отсутствующая строка `users`, роль вне allowlist, неизвестное событие).
+   `anonymous` и `system` — штатные классы и признака редактирования не дают
+✅ Target валидируется против конкретного EventSpec (TargetPolicy + ожидаемый
+   `entity_type` + положительный id). Target-фильтры отбирают только
+   семантически корректные строки, поэтому повреждённая строка не попадает в
+   выдачу и не показывается с пустым target
+✅ `validate_metadata()` — НЕ финальная DTO-проекция. Поверх неё закрытый
+   `_METADATA_DTO_POLICY`: `linked_user_id` → `linked_user_uuid` (батч-резолв на
+   страницу), неклассифицированный ключ отбрасывается. Полнота проверяется на
+   импорте модуля, как `build_registry`
+✅ Неизвестное/legacy/destination-mismatch событие → `event_code =
+   "legacy_unknown_event"`, `known_event=false`, `outcome=null`,
+   `failure_code=null`, `target=null`, `details={}`, `details_redacted=true`.
+   К `spec` в этой ветке обращаться нельзя — его нет
+✅ `/options` вычисляется из живых REGISTRY/CHANGE_REGISTRY: `operations` —
+   union реальных `allowed_operations` (сегодня ровно `["UPDATE"]`),
+   `actor_kinds` — per-journal producible-набор (для `data_change_log` сегодня
+   `["user","unavailable"]`, без `system`). Событие просмотра `/options` не пишет
+✅ Просмотр пишет `audit_logs_viewed` (AUDIT_LOG, USER_REQUIRED {admin}, target
+   FORBIDDEN, success-only, INDEPENDENT + RAISE) ПОСЛЕ выборки и ДО ответа.
+   metadata — только `journal` и `filter_keys` (стабильные ИМЕНА применённых
+   фильтров). Сбой записи → 503 без единой строки журнала
+✅ `filter_keys`: `date_range` присутствует всегда (окно применяется и по
+   умолчанию); применённость определяется через `is not None`, а не по
+   истинности — иначе `success=false` не попал бы в журнал; `access_events`
+   добавляется только при `include_access_events=true`
+✅ Все list-ответы отдают `Cache-Control: no-store, private`; ETag не ставится
+❌ Не отдавать внутренний `users.id` ни в ответе, ни в query: цель-человек
+   адресуется только `target_user_uuid`, а `entity_ref`/`record_id` для
+   пользователя равны null
+✅ Целочисленный идентификатор цели допускается ТОЛЬКО с явным
+   НЕ-пользовательским типом: `entity_id` требует `entity_type`, `record_id`
+   требует `table_name`. Без типа integer неоднозначен и сопоставляется в том
+   числе с пользовательскими строками, то есть превращает `users.id` в рабочий
+   ключ поиска — перебором можно получить UUID и текущее ФИО. Отдельно
+   запрещены `entity_type=user`+`entity_id` и `table_name=users`+`record_id`.
+   Все четыре нарушения → 422 ДО обращения к журналам и ДО access-события
+❌ Не выбирать из БД `description`, `ip_address`, `user_agent`, `session_id`,
+   `request_url`, `request_method`, `mfa_method`, `old_values`, `new_values` —
+   запрет структурный: этих полей нет ни в SELECT, ни в схемах DTO
+❌ Не отдавать полный email — только `mask_email()`; невалидное значение → `***`
+❌ Не добавлять свободный ILIKE по metadata, поиск по email/IP/UA, произвольную
+   колонку сортировки, export CSV/Excel/PDF и detail-эндпоинт
+❌ Не подставлять роль актора в `auth_log` — этот журнал её не хранит
+❌ Не вызывать `record_data_change` из viewer: чтение не является generic UPDATE
+❌ Не давать доступ supervisor/psychologist/student и не менять seed/RBAC
+```
+
 **Роли в системе:**
 
 | Роль | Кто | Как создаётся |
@@ -833,7 +920,7 @@ derived-поле — `app/audit/change_registry.py`, отдельный writer `
   Не подставлять фиктивную роль и не «чинить» logout отказом.
 - `internal_error` — только для настоящих внутренних сбоев; `invalid_credentials`
   — только для неверных credentials. Новое событие под `no_active_roles` не
-  заводится: это failure reason того же `failed_login` (registry остаётся 93).
+  заводится: это failure reason того же `failed_login` (счётчик registry этим не меняется).
 
 **Email-domain policy для новых аккаунтов (ADR-019):**
 - Через HTTP/API новый аккаунт можно создать только с точным нормализованным

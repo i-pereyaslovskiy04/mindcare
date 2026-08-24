@@ -94,6 +94,8 @@ mindcare/
 │   │   │   └── schemas.py           # Pydantic-схемы /api/auth/*
 │   │   ├── audit/
 │   │   │   ├── registry.py          # закрытый реестр auth_log/audit_log событий
+│   │   │   ├── admin_policy.py      # производные от registry множества (общие для SQL и DTO)
+│   │   │   ├── routes_admin.py      # GET /api/admin/audit/* (read-only)
 │   │   │   ├── service.py           # единый facade record_event()
 │   │   │   ├── failsafe.py          # best-effort failure writer
 │   │   │   ├── data_change.py       # минимизированный data_change_log writer
@@ -363,6 +365,7 @@ version_num
 | `c5d8a1b4e7f2` | otp_verifications.code VARCHAR(6→64) для SHA-256 хешей |
 | `f4b9e2c6a1d8` | Audit indexes + ARRAY(Text) fix |
 | `e9a3d7f2b5c0` | Rebuild audit indexes (согласованы с ORM) |
+| `e6c3a9f1d574` | Stage 8: хронологические индексы `(created_at, id)` трёх журналов для admin viewer |
 | `a8c3f1d9e2b5` | Tags tables: tags, article_tags, news_tags, test_tags |
 | `b3c5e7a9f1d2` | auth_log.event VARCHAR(50→150) |
 | `d2e5f8a1b4c7` | Supervisor engagement unique index |
@@ -581,6 +584,16 @@ npm run build
 registry. При разработке каждого нового backend-сценария обязателен audit-impact
 review: событие либо добавляется сразу вместе с тестами, либо отсутствие события
 явно обосновывается. ПДн, plaintext content, credentials и токены в audit запрещены.
+
+**Просмотр журналов (Stage 8, ADR-023).** `GET /api/admin/audit/*` — read-only
+API трёх журналов только для роли `admin`. Администратор получает безопасную
+проекцию, а не строки: `description`, сырая metadata, IP, User-Agent, session
+hash, request URL и `old_values`/`new_values` физически не выбираются из БД и
+отсутствуют в схемах ответа; email всегда маскируется; внутренний `users.id` не
+выходит наружу ни в ответе, ни в query (цель-человек адресуется UUID). Строка,
+противоречащая собственной спеке, редактируется с признаком `details_redacted`.
+Сам просмотр аудируется событием `audit_logs_viewed`, и его сбой гасит выдачу
+(503). Экспорт, detail-эндпоинт, raw IP и полный email не реализованы.
 
 **RBAC / multi-role (ADR-018).** Источник прав — активные membership-роли в
 `user_roles`; один пользователь может одновременно иметь несколько ролей. Backend
@@ -808,6 +821,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 | `/api/admin/news/*` + `/api/news/*` | CRUD news + public list/item | Admin, Supervisor / Public |
 | `/api/admin/articles/*` + `/api/articles/*` | CRUD articles + public list/item | Admin, Supervisor / Public |
 | `/api/media/upload` | POST upload image | Auth |
+| `/api/admin/audit/*` | Read-only просмотр `audit_log` / `auth_log` / `data_change_log`: bounded период и пагинация, безопасная проекция без raw PII и content; сам просмотр пишет `audit_logs_viewed` | Admin |
 | `/api/session-notes/*` | Session notes (enc:v1: ciphertext): psychologist — свои с content; supervisor — meta-list + audited content read; admin — metadata-only | Psychologist / Supervisor / Admin |
 | `/api/chat/*` | One-to-one чат (enc:v1: ciphertext): student — my-conversation; psychologist — conversations; polling `after=<id>`, read receipts, `peer_is_online` presence; attachments upload/download (private storage) | Student / Psychologist (admin/supervisor — 403) |
 | `/api/chat/system-conversation*` | Read-only system conversation (своя беседа): GET conversation/messages, POST read; write только internal publisher | Auth (любая роль — к своей беседе) |
