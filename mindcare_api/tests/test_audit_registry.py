@@ -76,6 +76,9 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "group_session_registered", "group_session_registration_cancelled",
     # Stage 5C-3 system maintenance (SYSTEM actor, ATOMIC/RAISE).
     "group_session_completed", "schedule_auto_extended",
+    # Stage 8 read-only admin viewer: привилегированное чтение журналов
+    # (target FORBIDDEN, success-only, INDEPENDENT + RAISE).
+    "audit_logs_viewed",
 })
 
 
@@ -90,8 +93,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 86
-    assert len(REGISTRY) == 93
+    assert len(audit_names) == 87
+    assert len(REGISTRY) == 94
 
 
 def test_unknown_event_rejected():
@@ -164,11 +167,11 @@ def test_other_chat_events_stay_student_psychologist_only():
 
 
 def test_registry_total_count_stage_5c3():
-    # Stage 5C-3 (финал Stage 5C): 7 auth + 86 audit = 93.
+    # Stage 8 (read-only admin viewer журналов): 7 auth + 87 audit = 94.
     # 5A-1 +3 lifecycle, 5A-2 +4 failure, 5B-1 +8 (appointments + walk-in card),
     # 5B-2 +5 durable failure, 5C-1 +14 (meeting types + schedules),
     # 5C-2 +7 (group sessions + registrations), 5C-3 +2 (system maintenance).
-    assert len(REGISTRY) == 93
+    assert len(REGISTRY) == 94
 
 
 def test_role_metadata_enum_excludes_system():

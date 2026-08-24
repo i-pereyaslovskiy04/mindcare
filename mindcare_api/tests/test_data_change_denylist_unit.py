@@ -3,7 +3,7 @@ Stage 6-0 — точечное расширение denylist и его посл�
 
 Расширение SENSITIVE_TOKENS обслуживает ИМЕНА полей data_change_log: через
 registry-инвариант поле с чувствительным именем может быть только NAME_ONLY.
-Обязательное условие — не задеть существующий событийный REGISTRY (93 события)
+Обязательное условие — не задеть существующий событийный REGISTRY (94 события)
 и его metadata-ключи.
 """
 import pytest
@@ -31,6 +31,9 @@ _LEGACY_TOKENS = frozenset({
 _EXISTING_METADATA_KEYS = frozenset({
     "roles_before", "roles_after", "added", "removed",
     "fields", "file_size", "mime_type", "linked_user_id",
+    # Stage 8: metadata события audit_logs_viewed — имя журнала и СТАБИЛЬНЫЕ
+    # ИМЕНА применённых фильтров (без единого значения фильтра).
+    "journal", "filter_keys",
 })
 
 
@@ -74,13 +77,13 @@ def test_metadata_keys_of_production_registry_are_exactly_expected():
 
 def test_production_event_registry_still_validates_after_extension():
     validate_registry(REGISTRY)
-    assert len(REGISTRY) == 93
+    assert len(REGISTRY) == 94
 
 
 def test_event_registry_can_still_be_rebuilt():
     rebuilt = build_registry(list(REGISTRY.values()))
     assert set(rebuilt) == set(REGISTRY)
-    assert len(rebuilt) == 93
+    assert len(rebuilt) == 94
 
 
 # ── Связка denylist ↔ CHANGE_REGISTRY ───────────────────────────────────────

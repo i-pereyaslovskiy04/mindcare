@@ -60,8 +60,8 @@ def test_student_events_stay_student_only():
 
 
 def test_registry_total_count_unchanged():
-    # 5A-1 (+3), 5A-2 (+4), 5B-1 (+8), 5B-2 (+5): TOTAL 70.
-    assert len(REGISTRY) == 93
+    # Актуальный счётчик registry: 7 auth + 87 audit = 94.
+    assert len(REGISTRY) == 94
 
 
 def test_content_test_consent_events_entity_types():

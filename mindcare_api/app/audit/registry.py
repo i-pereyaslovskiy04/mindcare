@@ -50,6 +50,35 @@ _ATTACH_UPLOAD_META = MappingProxyType({
     "mime_type": FieldSpec(type="str", fmt=StringFormat.MIME_TYPE, max_len=100),
 })
 _EMPTY: Mapping[str, FieldSpec] = MappingProxyType({})
+
+# ── Stage 8: read-only admin viewer журналов ─────────────────────────────────
+# Публичные закрытые множества: имя журнала и СТАБИЛЬНЫЕ ИМЕНА применённых
+# фильтров. Значения фильтров (даты, UUID, id, email) в metadata не попадают
+# никогда — только факт «фильтр такого рода был применён».
+AUDIT_JOURNALS: frozenset = frozenset({"audit_log", "auth_log", "data_change_log"})
+AUDIT_FILTER_KEYS: frozenset = frozenset({
+    "date_range",     # применён всегда: даже умолчание задаёт 7-дневное окно
+    "actor",          # actor_uuid
+    "actor_kind",
+    "actor_role",
+    "event",          # event_type (audit) / event (auth)
+    "outcome",
+    "entity",         # entity_type
+    "record",         # entity_id / record_id
+    "target",         # target_user_uuid
+    "success",
+    "table",          # table_name
+    "operation",
+    "access_events",  # только при include_access_events=true
+})
+_ACCESS_META = MappingProxyType({
+    "journal": FieldSpec(
+        type="str", fmt=StringFormat.ENUM, enum=AUDIT_JOURNALS, max_len=32,
+    ),
+    "filter_keys": FieldSpec(
+        type="str_list", fmt=StringFormat.ENUM, enum=AUDIT_FILTER_KEYS, max_len=32,
+    ),
+})
 # Stage 5B-1: linked-event несёт псевдонимный внутренний id субъекта (не ПДн:
 # email/UUID/ФИО не пишутся) для самостоятельной прослеживаемости card→user.
 _CARD_LINK_META = MappingProxyType({
@@ -335,6 +364,22 @@ _ALL += [
               actor_policy=ActorPolicy.SYSTEM),
     _audit_ok("schedule_auto_extended", frozenset(), "schedule_series",
               actor_policy=ActorPolicy.SYSTEM),
+]
+
+# ── AUDIT_LOG: Stage 8 — привилегированное чтение журналов ────────────────────
+# Просмотр журналов админом — массовое чтение чувствительной service-use
+# metadata, поэтому фиксируется отдельным событием. Контракт отличается от
+# _audit_ok/_audit_fail и задаётся напрямую:
+#   target FORBIDDEN — читается ВЫБОРКА, а не конкретная сущность;
+#   success-only     — 401/403/422 происходят ДО чтения и события не создают,
+#                      а сбой БД не должен порождать ложный исход;
+#   INDEPENDENT+RAISE — своя транзакция (read-путь бизнес-транзакции не имеет),
+#                      но fail-closed: не записали событие → не отдали данные.
+_ALL += [
+    _spec("audit_logs_viewed", Destination.AUDIT_LOG, ActorPolicy.USER_REQUIRED,
+          {"admin"}, TargetPolicy.FORBIDDEN, None,
+          {Outcome.SUCCESS}, frozenset(), _ACCESS_META,
+          TxMode.INDEPENDENT, FailurePolicy.RAISE),
 ]
 
 

@@ -34,6 +34,10 @@ class AuditLog(Base):
         Index("idx_audit_event",   "event_type", "created_at"),
         Index("idx_audit_entity",  "entity_type", "entity_id"),
         Index("idx_audit_outcome", "outcome",    "created_at"),
+        # Stage 8: хронологическая лента admin viewer.
+        # Порядок столбцов повторяет ORDER BY эндпоинтов, поэтому индекс
+        # даёт и отсечение по периоду, и готовую сортировку с tie-break по id.
+        Index("idx_audit_created", "created_at", "id"),
         CheckConstraint(
             "outcome IN ('success', 'failure')", name="ck_audit_outcome",
         ),
@@ -72,6 +76,7 @@ class AuthLog(Base):
         Index("idx_auth_user",     "user_id",    "created_at"),
         Index("idx_auth_ip",       "ip_address", "created_at"),
         Index("idx_auth_failures", "ip_address", "created_at"),
+        Index("idx_auth_created",  "created_at", "id"),   # Stage 8
     )
 
     id             = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -107,6 +112,7 @@ class DataChangeLog(Base):
         Index("idx_dcl_actor",     "actor_id",   "created_at"),
         Index("idx_dcl_table",     "table_name", "record_id"),
         Index("idx_dcl_operation", "operation",  "created_at"),
+        Index("idx_dcl_created",   "created_at", "id"),   # Stage 8
         CheckConstraint(
             "operation IN ('INSERT', 'UPDATE', 'DELETE')",
             name="ck_dcl_operation",
