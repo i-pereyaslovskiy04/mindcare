@@ -60,32 +60,6 @@
   margin: 0 auto;
 }
 
-.heroCta {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 32px;
-  padding: 12px 28px;
-  border: 1.5px solid var(--hero-accent);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--hero-accent);
-  font-size: var(--fs-ui);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s;
-}
-
-.heroCta:hover {
-  background: var(--hero-accent);
-  color: var(--hero-on-accent);
-}
-
-.heroCta:focus-visible {
-  outline: 2.5px solid var(--hero-accent);
-  outline-offset: 3px;
-}
-
 .heroArrow {
   position: absolute;
   top: 50%;
@@ -154,11 +128,18 @@
 .heroDot {
   width: 7px;
   height: 7px;
+  padding: 0;
+  border: none;
   border-radius: 50%;
   background: rgba(var(--hero-accent-rgb), 0.4);
   display: block;
   cursor: pointer;
   transition: width 0.3s ease, background 0.3s ease, border-radius 0.3s ease;
+}
+
+.heroDot:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .heroDot.active {
