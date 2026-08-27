@@ -42,7 +42,8 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 ```
 ✅ Цвета — ТОЛЬКО через CSS-переменные из src/styles/tokens/ (per-theme файлы,
    ключ — data-theme на <html>). Ни одного raw hex/rgba в компонентах
-✅ Палитры: coffee (по умолчанию, текущий дизайн), nature, classic, hc (AAA);
+✅ Палитры: dongu (по умолчанию, фирменная бело-синяя гамма ДонГУ), coffee
+   (прежний дизайн), nature, classic, hc (AAA);
    режимы: light / dark / system (следит за prefers-color-scheme вживую).
    Итог: data-theme="{palette}-{light|dark}"
 ✅ Новый код пишется на ролевых токенах (--surface, --primary, --on-surface,

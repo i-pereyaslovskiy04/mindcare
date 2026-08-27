@@ -35,7 +35,7 @@ describe('ThemeProvider ↔ профиль пользователя', () => {
     localStorage.setItem('app-theme-mode', 'dark');
     renderThemed();
     expect(authApi.getProfile).not.toHaveBeenCalled();
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-dark');
   });
 
   test('авторизованный: тема из профиля применяется и пишется в localStorage', async () => {
@@ -62,7 +62,7 @@ describe('ThemeProvider ↔ профиль пользователя', () => {
     });
     renderThemed();
     await waitFor(() => expect(authApi.getProfile).toHaveBeenCalled());
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-dark');
   });
 
   test('сбой запроса профиля не ломает тему (soft-fail)', async () => {
@@ -99,7 +99,7 @@ describe('ThemeProvider ↔ профиль пользователя', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
     await waitFor(() => expect(authApi.updateProfile).toHaveBeenCalled());
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-dark');
   });
 
   test('явный выбор в сессии имеет приоритет над темой из профиля', async () => {
@@ -115,7 +115,7 @@ describe('ThemeProvider ↔ профиль пользователя', () => {
     resolveProfile({ ui_theme_palette: 'nature', ui_theme_mode: 'dark' });
 
     await waitFor(() => expect(authApi.getProfile).toHaveBeenCalled());
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-light');
   });
 
   test('гость: выбор темы не шлёт PATCH', async () => {

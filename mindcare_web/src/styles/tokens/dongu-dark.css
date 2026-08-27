@@ -1,0 +1,95 @@
+/*
+ * dongu-dark.css — «ДонГУ», тёмный вариант (тёмно-синяя гамма).
+ *
+ * Инверсия фирменной темы ДонГУ (private/color_mode_kit.md, dark-колонка):
+ * тёмно-синий фон #001022/#00152E, светлый текст, синий акцент #6FB2FF.
+ * Легаси-алиасы инвертированы ПО РОЛИ, как в classic-dark / coffee-dark:
+ * espresso → светлый (доминирующая роль — текст), его пары milk / text-on-dark
+ * → тёмные; coffee/mocha → светло-синие акценты. Эти же алиасы (espresso/latte/
+ * fog/text-on-dark) определяют вид hero-баннера через наследуемые --hero-*.
+ */
+
+:root[data-theme='dongu-dark'] {
+  color-scheme: dark;
+
+  /* ── Легаси-палитра (инверсия по роли) ── */
+  --cream: #0A1626;
+  --warm-white: #00152E;
+  --latte: #34506F;
+  --coffee: #6FB2FF; /* фирменный синий ДонГУ, светлый (акцент/ссылки) */
+  --espresso: #E3ECF7;
+  --mocha: #93C4FF;
+  --milk: #041F3D;
+  --fog: #3A5578;
+  --sand: #0C2645;
+
+  /* ── Background colors ── */
+  --nav-bg: #041B36;
+  --nav-border: #1A3A5C;
+  --footer-bg: #041B36;
+  --footer-border: #1A3A5C;
+
+  /* ── Text colors ── */
+  --text-main: #E6EDF5;
+  --text-muted: #9FB3C8;
+  --text-light: #7E93AC;
+  --text-on-dark: #0A1A30;
+
+  /* ── Status colors ── */
+  --error: #E8938C;
+  --error-bg: #3A2422;
+  --on-error: #3A1210;
+  --success: #7FBF95;
+
+  /* ── Ролевые токены ── */
+  --on-primary: #06213F;
+  --secondary: #3E6394;
+  --on-secondary: #E3ECF7;
+  --outline: #8296AE;
+
+  /* ── Софт-статусы и вспомогательные роли ── */
+  --success-bg: #12301F;
+  --success-border: #2F4A3A;
+  --error-border: #5A302E;
+  --warning: #E0A34D;
+  --warning-bg: #3A3117;
+  --warning-text: #E4C86B;
+  --info-bg: #0E2745;
+  --info-text: #93C4FF;
+  --tag-bg: #241F45;
+  --tag-text: #C4B5FD;
+  --code-bg: #00101F;
+  --code-text: #C9D6E6;
+  --danger: #E58C82; /* красный ДонГУ, осветлён для тёмного фона */
+  --danger-hover: #EE9C93;
+  --danger-active: #D67A70;
+  --danger-rgb: 229, 140, 130;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #0A1F3A;
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --surface-glass-hover: rgba(255, 255, 255, 0.09);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --overlay-surface: rgba(0, 21, 46, 0.93);
+
+  /* ── RGB-триплеты ── */
+  --coffee-rgb: 111, 178, 255;
+  --latte-rgb: 52, 80, 111;
+  --espresso-rgb: 227, 236, 247;
+  --milk-rgb: 4, 31, 61;
+  --text-light-rgb: 126, 147, 172;
+  --text-muted-rgb: 159, 179, 200;
+  --success-rgb: 127, 191, 149;
+  --error-rgb: 232, 147, 140;
+  --shadow-rgb: 0, 0, 0;
+
+  /* ── Индикатор сложности пароля ── */
+  --strength-weak: #E8938C;
+  --strength-medium: #E0A34D;
+  --strength-strong: #7FBF95;
+
+  /* ── Тени ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.55);
+}

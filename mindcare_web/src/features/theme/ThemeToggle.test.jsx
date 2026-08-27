@@ -26,17 +26,31 @@ describe('ThemeToggle + ThemeProvider', () => {
       'aria-pressed',
       'true'
     );
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-light');
   });
 
-  test('клик «Тёмная тема» ставит data-theme=coffee-dark и сохраняет выбор', () => {
+  test('палитра по умолчанию — ДонГУ (чистый localStorage, без prefers-contrast)', () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>
+    );
+    // jsdom без matchMedia → нет prefers-contrast и prefers-color-scheme:
+    // дефолтная палитра dongu, режим system резолвится в light.
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-light');
+    expect(
+      screen.getByRole('button', { name: 'Цветовая тема: ДонГУ' })
+    ).toBeInTheDocument();
+  });
+
+  test('клик «Тёмная тема» ставит data-theme=dongu-dark и сохраняет выбор', () => {
     render(
       <ThemeProvider>
         <ThemeToggle />
       </ThemeProvider>
     );
     fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-dark');
     expect(localStorage.getItem('app-theme-mode')).toBe('dark');
     expect(screen.getByRole('button', { name: 'Тёмная тема' })).toHaveAttribute(
       'aria-pressed',
@@ -51,7 +65,7 @@ describe('ThemeToggle + ThemeProvider', () => {
         <ThemeToggle />
       </ThemeProvider>
     );
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-dark');
   });
 
   test('невалидное значение в localStorage игнорируется (fallback system)', () => {
@@ -61,7 +75,7 @@ describe('ThemeToggle + ThemeProvider', () => {
         <ThemeToggle />
       </ThemeProvider>
     );
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-light');
     expect(screen.getByRole('button', { name: /Системная тема/ })).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -76,13 +90,13 @@ describe('ThemeToggle + ThemeProvider', () => {
     );
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
 
-    const trigger = screen.getByRole('button', { name: 'Цветовая тема: Кофе' });
+    const trigger = screen.getByRole('button', { name: 'Цветовая тема: ДонГУ' });
     expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(trigger);
     const listbox = screen.getByRole('listbox', { name: 'Цветовая тема' });
-    expect(within(listbox).getAllByRole('option')).toHaveLength(4);
+    expect(within(listbox).getAllByRole('option')).toHaveLength(5);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -92,7 +106,7 @@ describe('ThemeToggle + ThemeProvider', () => {
         <ThemeToggle />
       </ThemeProvider>
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Цветовая тема: Кофе' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Цветовая тема: ДонГУ' }));
     fireEvent.mouseDown(
       screen.getByRole('option', { name: 'Палитра «Природное спокойствие»' })
     );
@@ -112,8 +126,9 @@ describe('ThemeToggle + ThemeProvider', () => {
         <ThemeToggle />
       </ThemeProvider>
     );
-    const trigger = screen.getByRole('button', { name: 'Цветовая тема: Кофе' });
-    fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // открывает меню на «Кофе»
+    const trigger = screen.getByRole('button', { name: 'Цветовая тема: ДонГУ' });
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // открывает меню на «ДонГУ»
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // Кофе
     fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // Природа
     fireEvent.keyDown(trigger, { key: 'ArrowDown' }); // Классика
     fireEvent.keyDown(trigger, { key: 'Enter' });
@@ -129,12 +144,12 @@ describe('ThemeToggle + ThemeProvider', () => {
         <ThemeToggle />
       </ThemeProvider>
     );
-    const trigger = screen.getByRole('button', { name: 'Цветовая тема: Кофе' });
+    const trigger = screen.getByRole('button', { name: 'Цветовая тема: ДонГУ' });
     fireEvent.click(trigger);
     fireEvent.keyDown(trigger, { key: 'Escape' });
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-light');
   });
 
   test('контрастная тема: hc-light, режим по-прежнему работает', () => {
@@ -143,7 +158,7 @@ describe('ThemeToggle + ThemeProvider', () => {
         <ThemeToggle />
       </ThemeProvider>
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Цветовая тема: Кофе' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Цветовая тема: ДонГУ' }));
     fireEvent.mouseDown(
       screen.getByRole('option', { name: 'Высококонтрастная тема (для слабовидящих)' })
     );
@@ -176,7 +191,7 @@ describe('ThemeToggle + ThemeProvider', () => {
     expect(screen.queryByRole('group', { name: 'Режим темы оформления' })).not.toBeInTheDocument();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
 
-    const trigger = screen.getByRole('button', { name: 'Оформление: Кофе' });
+    const trigger = screen.getByRole('button', { name: 'Оформление: ДонГУ' });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(trigger);
@@ -185,7 +200,7 @@ describe('ThemeToggle + ThemeProvider', () => {
     expect(
       within(panel).getAllByRole('button', { name: /тема/i }).length
     ).toBeGreaterThanOrEqual(3);
-    expect(within(panel).getAllByRole('option')).toHaveLength(4);
+    expect(within(panel).getAllByRole('option')).toHaveLength(5);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -196,9 +211,9 @@ describe('ThemeToggle + ThemeProvider', () => {
       </ThemeProvider>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Оформление: Кофе' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Оформление: ДонГУ' }));
     fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-dark');
 
     fireEvent.mouseDown(
       screen.getByRole('option', { name: 'Палитра «Природное спокойствие»' })
@@ -214,12 +229,12 @@ describe('ThemeToggle + ThemeProvider', () => {
       </ThemeProvider>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Оформление: Кофе' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Оформление: ДонГУ' }));
     expect(screen.getByRole('dialog', { name: 'Оформление' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-light');
   });
 
   test('переключение обратно на «Светлая» работает', () => {
@@ -230,7 +245,7 @@ describe('ThemeToggle + ThemeProvider', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
     fireEvent.click(screen.getByRole('button', { name: 'Светлая тема' }));
-    expect(document.documentElement.getAttribute('data-theme')).toBe('coffee-light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dongu-light');
     expect(localStorage.getItem('app-theme-mode')).toBe('light');
   });
 });

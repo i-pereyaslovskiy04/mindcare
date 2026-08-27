@@ -49,7 +49,7 @@ class UserResponse(BaseModel):
 
 
 # Оформление UI. Списки синхронизированы с mindcare_web/src/features/theme/ThemeContext.jsx.
-ThemePalette = Literal["coffee", "nature", "classic", "hc"]
+ThemePalette = Literal["dongu", "coffee", "nature", "classic", "hc"]
 ThemeMode = Literal["light", "dark", "system"]
 
 

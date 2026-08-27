@@ -26,7 +26,7 @@ import * as authApi from '../../api/auth.api';
 // 'hc' — высококонтрастный набор (AAA). Технически это тоже палитра:
 // resolvedTheme = `${palette}-${resolvedMode}` → hc-light / hc-dark,
 // поэтому режим (в т.ч. «Системная») работает и для контраста.
-export const PALETTES = ['coffee', 'nature', 'classic', 'hc'];
+export const PALETTES = ['dongu', 'coffee', 'nature', 'classic', 'hc'];
 export const MODES = ['light', 'dark', 'system'];
 
 const STORAGE_PALETTE = 'app-theme-palette';
@@ -69,11 +69,11 @@ function systemPrefersContrast() {
   return typeof window.matchMedia === 'function' && window.matchMedia(CONTRAST_MQ).matches;
 }
 
-/** Палитра при первом визите: prefers-contrast: more → hc, иначе coffee. */
+/** Палитра при первом визите: prefers-contrast: more → hc, иначе dongu (дефолт). */
 function initialPalette() {
   const stored = readStored(STORAGE_PALETTE, PALETTES, null);
   if (stored) return stored;
-  return systemPrefersContrast() ? 'hc' : 'coffee';
+  return systemPrefersContrast() ? 'hc' : 'dongu';
 }
 
 export const ThemeContext = createContext(null);
@@ -127,7 +127,7 @@ export function ThemeProvider({ children }) {
     document.documentElement.setAttribute('data-theme', resolvedTheme);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', resolvedMode === 'dark' ? '#1A1512' : '#4A3728');
+      meta.setAttribute('content', resolvedMode === 'dark' ? '#00152E' : '#2454A6');
     }
   }, [resolvedTheme, resolvedMode]);
 

@@ -27,6 +27,8 @@ const THEMES = [
   'nature-dark',
   'classic-light',
   'classic-dark',
+  'dongu-light',
+  'dongu-dark',
   'hc-light',
   'hc-dark',
 ];

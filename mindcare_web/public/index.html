@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
-    <meta name="theme-color" content="#4A3728" />
+    <meta name="theme-color" content="#2454A6" />
     <meta
       name="description"
       content="Центр психологической помощи при Донецком государственном университете"
@@ -20,13 +20,13 @@
       // Списки палитр/режимов синхронизированы с src/features/theme/ThemeContext.jsx.
       (function () {
         try {
-          var palettes = ['coffee', 'nature', 'classic', 'hc'];
+          var palettes = ['dongu', 'coffee', 'nature', 'classic', 'hc'];
           var p = localStorage.getItem('app-theme-palette');
           if (palettes.indexOf(p) === -1) {
-            // Первый визит: учитываем системное требование контраста.
+            // Первый визит: учитываем системное требование контраста, иначе — дефолт ДонГУ.
             var wantsContrast =
               window.matchMedia && window.matchMedia('(prefers-contrast: more)').matches;
-            p = wantsContrast ? 'hc' : 'coffee';
+            p = wantsContrast ? 'hc' : 'dongu';
           }
           var m = localStorage.getItem('app-theme-mode');
           if (m !== 'light' && m !== 'dark' && m !== 'system') m = 'system';
@@ -37,7 +37,7 @@
               window.matchMedia('(prefers-color-scheme: dark)').matches);
           document.documentElement.setAttribute('data-theme', p + '-' + (dark ? 'dark' : 'light'));
         } catch (e) {
-          /* остаёмся на дефолтной coffee-light */
+          /* остаёмся на дефолтной dongu-light */
         }
       })();
     </script>

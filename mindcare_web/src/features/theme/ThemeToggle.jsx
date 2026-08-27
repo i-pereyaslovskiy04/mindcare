@@ -89,6 +89,7 @@ const MODE_OPTIONS = [
 ];
 
 const PALETTE_OPTIONS = [
+  { value: 'dongu', short: 'ДонГУ', label: 'Тема ДонГУ (Донецкий государственный университет)' },
   { value: 'coffee', short: 'Кофе', label: 'Кофейная палитра' },
   { value: 'nature', short: 'Природа', label: 'Палитра «Природное спокойствие»' },
   { value: 'classic', short: 'Классика', label: 'Классическая (академическая) палитра' },
