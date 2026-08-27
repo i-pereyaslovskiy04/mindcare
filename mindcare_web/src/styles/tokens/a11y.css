@@ -116,6 +116,7 @@
      и подзаголовок брали --hero-accent/--hero-muted (тоже → --a11y-fg) —
      текст сливался с фоном. В режиме герой — обычный блок схемы. */
   --hero-bg: var(--a11y-bg);
+  --hero-bg-rgb: var(--a11y-bg-rgb);
   --hero-fg: var(--a11y-fg);
   --hero-muted: var(--a11y-fg);
   --hero-accent: var(--a11y-fg);

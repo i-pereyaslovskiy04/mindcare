@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
-import PageHero from '../../components/Hero/PageHero';
+// Баннер общий с главной (banner_slides CMS, placement='services') —
+// не отдельная копия PageHero.
+import Hero from '../home/components/Hero';
 import ServicesSlider from './components/ServicesSlider';
 import ProcessBlock from './components/ProcessBlock';
 import PrinciplesBlock from './components/PrinciplesBlock';
@@ -16,11 +18,7 @@ export default function Services() {
     <>
       <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
 
-      <PageHero
-        eyebrow="Донецкий государственный университет"
-        title={<>Центр психологической<br />помощи ДонГУ</>}
-        sub="Поддержка, развитие и психологическое благополучие студентов и сотрудников университета. Мы помогаем справляться с трудностями и находить внутренние ресурсы."
-      />
+      <Hero placement="services" />
 
       <section className="section-wrap alt">
         <div className="container">

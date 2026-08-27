@@ -37,7 +37,7 @@ _APPT_EVENTS = {
 
 
 def test_registry_events_and_count():
-    assert len(REGISTRY) == 94
+    assert len(REGISTRY) == 99
     for name, roles in _APPT_EVENTS.items():
         s = REGISTRY[name]
         assert s.destination.value == "audit_log"

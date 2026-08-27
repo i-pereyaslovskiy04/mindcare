@@ -5,6 +5,7 @@
   ArticleCategory — M:N статьи ↔ категории
   News            — новости
   HelpResource    — справочник ресурсов помощи
+  BannerSlide     — слайды баннера главной страницы
   QuestionsAnswers — Q&A (вопрос студента → ответ психолога)
 """
 
@@ -109,6 +110,27 @@ class HelpResource(Base):
     updated_at    = Column(DateTime(timezone=True), server_default=func.now())
 
     category = relationship("Category")
+
+
+class BannerSlide(Base):
+    __tablename__ = "banner_slides"
+
+    id            = Column(Integer, primary_key=True)
+    uuid          = Column(UUID(as_uuid=True), unique=True, nullable=False, default=_uuid.uuid4)
+    label         = Column(String(255))
+    title         = Column(String(255), nullable=False)
+    highlight     = Column(String(255))
+    sub           = Column(Text)
+    image_id      = Column(Integer, ForeignKey("media_files.id", ondelete="SET NULL"))
+    link_url      = Column(String(2048))
+    # Страница, на которой показывается слайд: 'home' | 'services' (расширяется
+    # по мере переноса других PageHero-страниц на этот же механизм — см.
+    # app/banner_slides/schemas.py::BANNER_PLACEMENTS).
+    placement     = Column(String(50), nullable=False, server_default="home")
+    display_order = Column(Integer, default=0)
+    is_active     = Column(Boolean, default=True)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at    = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Tag(Base):

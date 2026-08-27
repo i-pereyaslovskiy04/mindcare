@@ -101,6 +101,12 @@
      отключает (hc), остаётся читаемая сплошная подложка, а не прозрачный фон.
      Дефолты ссылаются на легаси-токены → у coffee/nature/classic вид прежний. */
   --hero-bg: var(--espresso);
+  /* rgb-версия hero-bg — для полупрозрачных подложек (фон-картинка слайда,
+     Hero.module.css .heroSlideBg/.heroSlide.hasImage). Обычный --scrim сюда
+     не годится: он не привязан к --espresso и не переворачивается вместе с
+     --hero-fg в тёмных темах — на подложке из --scrim текст слился бы
+     с фоном именно там, где сама тема тёмная. */
+  --hero-bg-rgb: var(--espresso-rgb);
   --hero-fg: var(--text-on-dark);
   --hero-muted: var(--fog);
   --hero-accent: var(--latte);

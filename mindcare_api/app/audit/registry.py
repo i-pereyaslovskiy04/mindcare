@@ -313,6 +313,16 @@ _ALL += [
     _audit_ok("meeting_type_activated", {"supervisor", "admin"}, "meeting_type"),
     _audit_ok("meeting_type_deactivated",
               {"supervisor", "admin"}, "meeting_type"),
+    # Слайды баннера главной страницы — та же admin+supervisor форма, что и
+    # meeting_types: is_active выделен в отдельные activated/deactivated,
+    # а не смешан с generic updated.
+    _audit_ok("banner_slide_created", {"supervisor", "admin"}, "banner_slide"),
+    _audit_ok("banner_slide_updated", {"supervisor", "admin"}, "banner_slide"),
+    _audit_ok("banner_slide_activated", {"supervisor", "admin"}, "banner_slide"),
+    _audit_ok("banner_slide_deactivated",
+              {"supervisor", "admin"}, "banner_slide"),
+    # Физическое удаление (не soft) — у banner_slide нет входящих FK.
+    _audit_ok("banner_slide_deleted", {"supervisor", "admin"}, "banner_slide"),
     _audit_ok("schedule_created", {"supervisor", "admin"}, "schedule_series"),
     _audit_ok("schedule_updated", {"supervisor", "admin"}, "schedule_series"),
     _audit_ok("schedule_deactivated",

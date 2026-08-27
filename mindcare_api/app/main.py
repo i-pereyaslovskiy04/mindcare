@@ -140,6 +140,8 @@ from app.appointments.routes_supervisor import router as appointments_supervisor
 from app.diary.routes import router as diary_router                        # noqa: E402
 from app.email_domains.routes_admin import router as admin_email_domains_router  # noqa: E402
 from app.audit.routes_admin import router as admin_audit_router          # noqa: E402
+from app.banner_slides.routes_supervisor import router as supervisor_banner_slides_router  # noqa: E402
+from app.banner_slides.routes_public import router as public_banner_slides_router  # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
@@ -168,6 +170,8 @@ app.include_router(appointments_supervisor_router,             prefix="/api")
 app.include_router(diary_router,              prefix="/api")
 app.include_router(admin_email_domains_router, prefix="/api")
 app.include_router(admin_audit_router,        prefix="/api")
+app.include_router(supervisor_banner_slides_router, prefix="/api")
+app.include_router(public_banner_slides_router,     prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

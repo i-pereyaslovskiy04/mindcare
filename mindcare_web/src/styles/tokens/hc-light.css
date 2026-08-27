@@ -85,6 +85,7 @@
 
   /* ── Hero-баннер: градиент в hc отключён (hc-rules), остаётся сплошной чёрный ── */
   --hero-bg: #000000;
+  --hero-bg-rgb: 0, 0, 0;
   --hero-fg: #FFFFFF;
   --hero-muted: #E5E5E5;
   --hero-accent: #C8E6CF;

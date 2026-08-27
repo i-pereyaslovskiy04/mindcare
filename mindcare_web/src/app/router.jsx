@@ -75,6 +75,7 @@ import SupervisorLayout    from '../pages/supervisor/SupervisorLayout';
 import SupervisorHome      from '../pages/supervisor/SupervisorHome';
 import EngagementsPage     from '../pages/supervisor/EngagementsPage';
 import MeetingTypesPage    from '../pages/supervisor/MeetingTypesPage';
+import BannerSlidesPage    from '../pages/supervisor/BannerSlidesPage';
 import GroupSessionsPage   from '../pages/supervisor/GroupSessionsPage';
 import SchedulePage        from '../pages/supervisor/SchedulePage';
 import BookingPage         from '../pages/supervisor/BookingPage';
@@ -150,6 +151,7 @@ export default function AppRouter() {
         <Route index                          element={<SupervisorHome />} />
         <Route path="engagements"           element={<EngagementsPage />} />
         <Route path="meeting-types"         element={<MeetingTypesPage cabinetRole="supervisor" />} />
+        <Route path="banner-slides"         element={<BannerSlidesPage cabinetRole="supervisor" />} />
         <Route path="schedule"              element={<SchedulePage />} />
         <Route path="booking"               element={<BookingPage />} />
         <Route path="group-sessions"        element={<GroupSessionsPage />} />
@@ -171,6 +173,7 @@ export default function AppRouter() {
         <Route path="tests/new"    element={<TestFormPage />} />
         <Route path="tests/:uuid"  element={<TestFormPage />} />
         <Route path="meeting-types" element={<MeetingTypesPage cabinetRole="admin" />} />
+        <Route path="banner-slides" element={<BannerSlidesPage cabinetRole="admin" />} />
         <Route path="email-domains" element={<EmailDomainsPage />} />
         <Route path="audit"        element={<AuditLogsPage />} />
         <Route path="settings"   element={<AdminSettingsPage />} />

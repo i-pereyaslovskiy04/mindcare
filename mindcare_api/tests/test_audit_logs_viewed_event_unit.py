@@ -56,7 +56,7 @@ def test_metadata_schema_is_two_closed_enums():
 def test_registry_counters_after_the_new_event():
     audit = {n for n, s in REGISTRY.items() if s.destination is Destination.AUDIT_LOG}
     auth = {n for n, s in REGISTRY.items() if s.destination is Destination.AUTH_LOG}
-    assert (len(auth), len(audit), len(REGISTRY)) == (7, 87, 94)
+    assert (len(auth), len(audit), len(REGISTRY)) == (7, 92, 99)
 
 
 # ── Инфраструктура ────────────────────────────────────────────────────────────

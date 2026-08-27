@@ -37,6 +37,7 @@
    вида .heroAvatar/.heroCard (карточка студента и т.п.), где под градиентом
    нет запасного фона — текст/иконка становились невидимы. */
 :root[data-theme^='hc-'] [data-hero-banner],
-:root[data-theme^='hc-'] [data-hero-banner]::before {
+:root[data-theme^='hc-'] [data-hero-banner]::before,
+:root[data-theme^='hc-'] [data-hero-slide-bg] {
   background-image: none;
 }

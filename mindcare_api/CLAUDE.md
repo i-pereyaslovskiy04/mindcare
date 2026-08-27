@@ -448,7 +448,10 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | **Ветка IP-анонимизации (Stage 7):** | |
 | `c8e2b5f7a3d1` | adopt_ip_anonymization — создаёт `anonymize_old_ips`/`count_old_ips`, ⚠ необратимо (см. «О проекте») |
 | **Ветка read-only admin viewer журналов (Stage 8):** | |
-| `e6c3a9f1d574` | add_audit_chronological_indexes — **head** |
+| `e6c3a9f1d574` | add_audit_chronological_indexes |
+| **Ветка баннера главной (Hero CMS):** | |
+| `0531e37e2f95` | add_banner_slides |
+| `72bfade01121` | add_banner_slide_link — **head** |
 
 **Ключевые таблицы:**
 
@@ -467,6 +470,7 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `appointments` | Записи на консультации |
 | `unregistered_student_cards` | Карточки walk-in клиентов без аккаунта: минимальные ПДн, consent_source/created_by, archived, optional linked_user_id. Используются supervisor manual booking через `unregistered_student_card_id`; при регистрации/создании аккаунта могут привязаться по normalized_email |
 | `meeting_types` | Типы встреч; владеют `duration_minutes` + `buffer_minutes` (по ним строятся слоты), `description`, форматами, `is_group/is_active/is_bookable` |
+| `banner_slides` | Слайды переиспользуемого баннера-слайдера (`Hero.jsx`, компонент общий для нескольких страниц): `label`/`title`(обяз.)/`highlight`/`sub` — текст, `image_id` — опц. картинка (FK → `media_files`), `link_url` — опц. CTA-переход, `placement` — какая страница показывает слайд (`home`/`services`, расширяется правкой кода без миграции — `app/banner_slides/schemas.py::BannerPlacement`), `display_order`, `is_active`. Управление — `/api/supervisor/banner-slides` (admin+supervisor, как `meeting_types`; `DELETE` — физическое удаление, у таблицы нет входящих FK); публичное чтение активных по странице — `GET /api/banner-slides?placement=...` без auth. Исходные текстовые слайды главной и слайд страницы `/services` (бывший статичный `PageHero`) перенесены из хардкода в строки таблицы сразу в исходной миграции `0531e37e2f95` |
 | `schedule_rules` | Рабочие окна психолога (только доступность; `meeting_type_id` опционален/legacy и НЕ ограничивает тип встречи в schedule v3, `period`, `series_id` для серии rules+breaks, `auto_extend`, `created_by`). Длительность/буфер — НЕ здесь, а в `meeting_types`. Soft-delete/restore расписания — через `is_active` на уровне серии (не трогает Appointment) |
 | `schedule_breaks` | Повторяющиеся перерывы по дню недели (например обед 13:00–14:00); вырезают пересекающиеся слоты. Перерыв, созданный вместе с расписанием, разделяет `series_id` и период с правилами |
 | `schedule_exceptions` | Разовые изменения на дату: `day_off` / `unavailable` / `extra_availability`; на одну дату допускается несколько (без уникальности) |
@@ -503,7 +507,7 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 94 события** (`AUTH_LOG=7`, `AUDIT_LOG=87`) — `app/audit/registry.py`,
+**Event REGISTRY: 99 событий** (`AUTH_LOG=7`, `AUDIT_LOG=92`) — `app/audit/registry.py`,
 единый facade `record_event()`.
 
 **CHANGE_REGISTRY: 4 таблицы / 25 полей** (15 name-only, 10 value-enabled) + 1

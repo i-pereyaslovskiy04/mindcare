@@ -116,7 +116,7 @@ def test_event_groups_match_the_registry_partition(options):
 
     assert options.audit_events == sorted(audit)
     assert options.auth_events == sorted(auth)
-    assert len(options.audit_events) == 87
+    assert len(options.audit_events) == 92
     assert len(options.auth_events) == 7
 
 

@@ -24,6 +24,7 @@ const ADMIN_NAV_GROUPS = [
       { label: 'Материалы', path: '/admin/articles', icon: 'articles' },
       { label: 'Новости',   path: '/admin/news',     icon: 'news' },
       { label: 'Тесты',     path: '/admin/tests',    icon: 'tests' },
+      { label: 'Баннер',    path: '/admin/banner-slides', icon: 'image' },
     ],
   },
   {

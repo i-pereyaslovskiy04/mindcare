@@ -80,6 +80,7 @@
   /* ── Hero-баннер: градиент в hc отключён (hc-rules); подложка чуть светлее
      фона страницы (#0B0D0C), чтобы баннер отделялся от контента ── */
   --hero-bg: #1A1A1A;
+  --hero-bg-rgb: 26, 26, 26;
   --hero-fg: #FFFFFF;
   --hero-muted: #E5E5E5;
   --hero-accent: #C8E6CF;

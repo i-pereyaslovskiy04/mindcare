@@ -19,6 +19,12 @@ from app.db.models.audit import AuditLog, AuthLog, DataChangeLog
 PREDECESSOR = "c8e2b5f7a3d1"
 REVISION = "e6c3a9f1d574"
 
+# Текущий global alembic head — обновляется каждой следующей миграцией
+# (последняя правка: 72bfade01121_add_banner_slide_link). REVISION выше —
+# это собственная неизменная идентичность ревизии Stage 8, а не текущий
+# head; их совпадение было верно только до появления следующей миграции.
+CURRENT_HEAD = "72bfade01121"
+
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 
 _EXPECTED = {
@@ -78,7 +84,7 @@ def test_alembic_has_exactly_one_head_and_it_is_this_revision():
     from tests.alembic_script import script_directory
 
     heads = script_directory().get_heads()
-    assert list(heads) == [REVISION], heads
+    assert list(heads) == [CURRENT_HEAD], heads
 
 
 @pytest.mark.parametrize("index_name,table", list(_EXPECTED.values()))

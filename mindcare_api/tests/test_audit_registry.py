@@ -64,6 +64,9 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     # Stage 5C-1 meeting types + schedules (success lifecycle).
     "meeting_type_created", "meeting_type_updated",
     "meeting_type_activated", "meeting_type_deactivated",
+    "banner_slide_created", "banner_slide_updated",
+    "banner_slide_activated", "banner_slide_deactivated",
+    "banner_slide_deleted",
     "schedule_created", "schedule_updated", "schedule_deactivated",
     "schedule_restored", "schedule_extended",
     "schedule_rule_created", "schedule_rule_deactivated",
@@ -93,8 +96,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 87
-    assert len(REGISTRY) == 94
+    assert len(audit_names) == 92
+    assert len(REGISTRY) == 99
 
 
 def test_unknown_event_rejected():
@@ -171,7 +174,9 @@ def test_registry_total_count_stage_5c3():
     # 5A-1 +3 lifecycle, 5A-2 +4 failure, 5B-1 +8 (appointments + walk-in card),
     # 5B-2 +5 durable failure, 5C-1 +14 (meeting types + schedules),
     # 5C-2 +7 (group sessions + registrations), 5C-3 +2 (system maintenance).
-    assert len(REGISTRY) == 94
+    # Hero CMS (banner_slides, вне стадийной нумерации): +5
+    # (created/updated/activated/deactivated/deleted) → 7 auth + 92 audit = 99.
+    assert len(REGISTRY) == 99
 
 
 def test_role_metadata_enum_excludes_system():
