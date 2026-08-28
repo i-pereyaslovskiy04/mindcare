@@ -249,6 +249,20 @@ describe('Hero', () => {
     expect(screen.queryAllByRole('button', { name: /^Слайд \d+$/ })).toHaveLength(0);
   });
 
+  test.each([
+    ['about',     'Баннер страницы «О центре»',      'Ресурсный центр'],
+    ['materials', 'Баннер страницы материалов',      'Материалы'],
+  ])('placement=%s — свой fallback и aria-label', (placement, ariaLabel, title) => {
+    useHeroSlides.mockImplementation(() => ({ slides: [], loading: true }));
+    render(<Hero placement={placement} />);
+
+    expect(useHeroSlides).toHaveBeenCalledWith(placement);
+    expect(screen.getByRole('region', { name: ariaLabel })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: new RegExp(title) })).toBeInTheDocument();
+    // Один слайд — управление не рендерится.
+    expect(screen.queryAllByRole('button', { name: /^Слайд \d+$/ })).toHaveLength(0);
+  });
+
   test('без placement — прежнее поведение по умолчанию (home)', () => {
     useHeroSlides.mockImplementation(() => ({ slides: [], loading: true }));
     render(<Hero />);

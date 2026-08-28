@@ -5,8 +5,9 @@ from pydantic import BaseModel, Field
 
 # Известные страницы-получатели баннера. Добавление новой страницы —
 # правка кода (новое значение здесь + опция в admin-select на фронте),
-# без миграции схемы: сама колонка — обычная строка.
-BannerPlacement = Literal["home", "services"]
+# без миграции схемы: сама колонка — обычная строка. Миграция нужна только
+# чтобы перенести в БД уже существующий на странице статичный текст.
+BannerPlacement = Literal["home", "services", "about", "materials"]
 
 
 class BannerSlideCreate(BaseModel):

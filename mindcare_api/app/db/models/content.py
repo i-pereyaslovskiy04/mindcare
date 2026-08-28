@@ -124,9 +124,9 @@ class BannerSlide(Base):
     sub           = Column(Text)
     image_id      = Column(Integer, ForeignKey("media_files.id", ondelete="SET NULL"))
     link_url      = Column(String(2048))
-    # Страница, на которой показывается слайд: 'home' | 'services' (расширяется
-    # по мере переноса других PageHero-страниц на этот же механизм — см.
-    # app/banner_slides/schemas.py::BANNER_PLACEMENTS).
+    # Страница, на которой показывается слайд: 'home' | 'services' | 'about' |
+    # 'materials' (расширяется по мере переноса других PageHero-страниц на этот
+    # же механизм — см. app/banner_slides/schemas.py::BannerPlacement).
     placement     = Column(String(50), nullable=False, server_default="home")
     display_order = Column(Integer, default=0)
     is_active     = Column(Boolean, default=True)

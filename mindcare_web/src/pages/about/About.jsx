@@ -2,7 +2,9 @@ import { useState } from 'react';
 import Navbar from '../../components/Navbar/Navbar';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
-import PageHero from '../../components/Hero/PageHero';
+// Баннер общий с главной (banner_slides CMS, placement='about') —
+// не отдельная копия PageHero.
+import Hero from '../home/components/Hero';
 import AboutIntro from './components/AboutIntro';
 import AboutMission from './components/AboutMission';
 import AboutServicesPreview from './components/AboutServicesPreview';
@@ -16,11 +18,7 @@ export default function About() {
   return (
     <>
       <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
-      <PageHero
-        eyebrow="Донецкий государственный университет"
-        title={<>Ресурсный центр<br />практической психологии</>}
-        sub="Психологическая помощь и поддержка студентов, преподавателей и сотрудников ДонГУ"
-      />
+      <Hero placement="about" />
       <AboutIntro />
       <AboutMission />
       <AboutServicesPreview />

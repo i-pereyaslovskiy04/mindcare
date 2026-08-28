@@ -33,9 +33,10 @@ class TestBannerSlideCreate:
         with pytest.raises(ValidationError):
             BannerSlideCreate(title="Заголовок", placement="unknown-page")
 
-    def test_placement_accepts_services(self):
-        slide = BannerSlideCreate(title="Заголовок", placement="services")
-        assert slide.placement == "services"
+    @pytest.mark.parametrize("placement", ["home", "services", "about", "materials"])
+    def test_placement_accepts_every_known_page(self, placement):
+        slide = BannerSlideCreate(title="Заголовок", placement=placement)
+        assert slide.placement == placement
 
     def test_all_optional_fields_can_be_set(self):
         slide = BannerSlideCreate(

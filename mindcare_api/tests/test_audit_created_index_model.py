@@ -20,10 +20,11 @@ PREDECESSOR = "c8e2b5f7a3d1"
 REVISION = "e6c3a9f1d574"
 
 # Текущий global alembic head — обновляется каждой следующей миграцией
-# (последняя правка: d14143842079_add_service_cards). REVISION выше —
-# это собственная неизменная идентичность ревизии Stage 8, а не текущий
-# head; их совпадение было верно только до появления следующей миграции.
-CURRENT_HEAD = "d14143842079"
+# (последняя правка: 27b44fcf4865_seed_about_materials_banner_slides).
+# REVISION выше — это собственная неизменная идентичность ревизии Stage 8,
+# а не текущий head; их совпадение было верно только до появления следующей
+# миграции.
+CURRENT_HEAD = "27b44fcf4865"
 
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 

@@ -20,6 +20,8 @@ import styles from './BannerSlidesPage.module.css';
 const PLACEMENT_OPTIONS = [
   { value: 'home', label: 'Главная' },
   { value: 'services', label: 'Услуги' },
+  { value: 'about', label: 'О центре' },
+  { value: 'materials', label: 'Материалы' },
 ];
 const PLACEMENT_LABELS = Object.fromEntries(
   PLACEMENT_OPTIONS.map(o => [o.value, o.label])

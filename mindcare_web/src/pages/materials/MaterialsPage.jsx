@@ -3,7 +3,9 @@ import Navbar from '../../components/Navbar/Navbar';
 import Button from '../../components/UI/Button/Button';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
-import PageHero from '../../components/Hero/PageHero';
+// Баннер общий с главной (banner_slides CMS, placement='materials') —
+// не отдельная копия PageHero.
+import Hero from '../home/components/Hero';
 import SearchBar from './components/SearchBar';
 import MaterialsGrid from './components/MaterialsGrid';
 import { useMaterials } from '../../hooks/useMaterials';
@@ -29,11 +31,7 @@ export default function MaterialsPage() {
   return (
     <>
       <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
-      <PageHero
-        eyebrow="Ресурсный центр практической психологии"
-        title="Материалы"
-        sub="Статьи, вебинары и упражнения для поддержки психологического здоровья"
-      />
+      <Hero placement="materials" />
 
       <section className="section-wrap alt">
         <div className="container">
