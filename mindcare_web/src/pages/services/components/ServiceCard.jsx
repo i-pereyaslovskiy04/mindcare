@@ -10,10 +10,15 @@ const CheckIcon = () => (
 
 export default function ServiceCard({ service, index }) {
   const accentClass = styles[ACCENTS[index % ACCENTS.length]];
+  const hasImage = Boolean(service.image_url);
+  const benefits = service.benefits ?? [];
 
   return (
     <article className={styles.card}>
-      <div className={`${styles.cardVisual} ${accentClass}`}>
+      <div
+        className={`${styles.cardVisual} ${accentClass} ${hasImage ? styles.hasImage : ''}`}
+        style={hasImage ? { '--card-image': `url("${service.image_url}")` } : undefined}
+      >
         <span className={styles.cardNum} aria-hidden="true">
           {String(index + 1).padStart(2, '0')}
         </span>
@@ -23,18 +28,22 @@ export default function ServiceCard({ service, index }) {
         <h3 className={styles.cardTitle}>{service.title}</h3>
         <p className={styles.cardDesc}>{service.description}</p>
 
-        <ul className={styles.benefits}>
-          {service.benefits.map((b) => (
-            <li key={b} className={styles.benefit}>
-              <CheckIcon />
-              <span>{b}</span>
-            </li>
-          ))}
-        </ul>
+        {benefits.length > 0 && (
+          <ul className={styles.benefits}>
+            {benefits.map((b) => (
+              <li key={b} className={styles.benefit}>
+                <CheckIcon />
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        )}
 
-        <button className={styles.cardBtn} type="button">
-          Записаться
-        </button>
+        {service.link_url && (
+          <a className={styles.cardBtn} href={service.link_url}>
+            Записаться
+          </a>
+        )}
       </div>
     </article>
   );

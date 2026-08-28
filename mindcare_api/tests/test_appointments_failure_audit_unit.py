@@ -44,7 +44,7 @@ _FAIL_EVENTS = {
 
 
 def test_registry_failure_events_contract_and_count():
-    assert len(REGISTRY) == 99
+    assert len(REGISTRY) == 104
     for name, (roles, codes) in _FAIL_EVENTS.items():
         s = REGISTRY[name]
         assert s.destination.value == "audit_log"

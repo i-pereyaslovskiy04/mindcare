@@ -142,6 +142,8 @@ from app.email_domains.routes_admin import router as admin_email_domains_router 
 from app.audit.routes_admin import router as admin_audit_router          # noqa: E402
 from app.banner_slides.routes_supervisor import router as supervisor_banner_slides_router  # noqa: E402
 from app.banner_slides.routes_public import router as public_banner_slides_router  # noqa: E402
+from app.service_cards.routes_supervisor import router as supervisor_service_cards_router  # noqa: E402
+from app.service_cards.routes_public import router as public_service_cards_router  # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
@@ -172,6 +174,8 @@ app.include_router(admin_email_domains_router, prefix="/api")
 app.include_router(admin_audit_router,        prefix="/api")
 app.include_router(supervisor_banner_slides_router, prefix="/api")
 app.include_router(public_banner_slides_router,     prefix="/api")
+app.include_router(supervisor_service_cards_router, prefix="/api")
+app.include_router(public_service_cards_router,     prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

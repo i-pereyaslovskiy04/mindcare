@@ -25,6 +25,7 @@ const ADMIN_NAV_GROUPS = [
       { label: 'Новости',   path: '/admin/news',     icon: 'news' },
       { label: 'Тесты',     path: '/admin/tests',    icon: 'tests' },
       { label: 'Баннер',    path: '/admin/banner-slides', icon: 'image' },
+      { label: 'Карточки услуг', path: '/admin/service-cards', icon: 'image' },
     ],
   },
   {

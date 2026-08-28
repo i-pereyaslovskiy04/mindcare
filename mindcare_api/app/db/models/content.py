@@ -6,6 +6,7 @@
   News            — новости
   HelpResource    — справочник ресурсов помощи
   BannerSlide     — слайды баннера главной страницы
+  ServiceCard     — карточки услуг страницы /services
   QuestionsAnswers — Q&A (вопрос студента → ответ психолога)
 """
 
@@ -15,7 +16,7 @@ from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey,
     Integer, String, Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -127,6 +128,25 @@ class BannerSlide(Base):
     # по мере переноса других PageHero-страниц на этот же механизм — см.
     # app/banner_slides/schemas.py::BANNER_PLACEMENTS).
     placement     = Column(String(50), nullable=False, server_default="home")
+    display_order = Column(Integer, default=0)
+    is_active     = Column(Boolean, default=True)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at    = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ServiceCard(Base):
+    __tablename__ = "service_cards"
+
+    id            = Column(Integer, primary_key=True)
+    uuid          = Column(UUID(as_uuid=True), unique=True, nullable=False, default=_uuid.uuid4)
+    title         = Column(String(255), nullable=False)
+    description   = Column(Text, nullable=False)
+    # Список пунктов-преимуществ услуги; редактируется в форме админки как
+    # textarea (по строке на пункт). Единственная страница-получатель —
+    # /services, поэтому, в отличие от BannerSlide, нет поля placement.
+    benefits      = Column(JSONB, nullable=False, default=list)
+    image_id      = Column(Integer, ForeignKey("media_files.id", ondelete="SET NULL"))
+    link_url      = Column(String(2048))
     display_order = Column(Integer, default=0)
     is_active     = Column(Boolean, default=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())

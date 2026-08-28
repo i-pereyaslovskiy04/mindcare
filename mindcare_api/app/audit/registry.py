@@ -323,6 +323,15 @@ _ALL += [
               {"supervisor", "admin"}, "banner_slide"),
     # Физическое удаление (не soft) — у banner_slide нет входящих FK.
     _audit_ok("banner_slide_deleted", {"supervisor", "admin"}, "banner_slide"),
+    # Карточки услуг страницы /services — та же admin+supervisor форма, что и
+    # banner_slide: is_active выделен в отдельные activated/deactivated,
+    # физическое удаление (не soft) — нет входящих FK.
+    _audit_ok("service_card_created", {"supervisor", "admin"}, "service_card"),
+    _audit_ok("service_card_updated", {"supervisor", "admin"}, "service_card"),
+    _audit_ok("service_card_activated", {"supervisor", "admin"}, "service_card"),
+    _audit_ok("service_card_deactivated",
+              {"supervisor", "admin"}, "service_card"),
+    _audit_ok("service_card_deleted", {"supervisor", "admin"}, "service_card"),
     _audit_ok("schedule_created", {"supervisor", "admin"}, "schedule_series"),
     _audit_ok("schedule_updated", {"supervisor", "admin"}, "schedule_series"),
     _audit_ok("schedule_deactivated",

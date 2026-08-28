@@ -77,13 +77,13 @@ def test_metadata_keys_of_production_registry_are_exactly_expected():
 
 def test_production_event_registry_still_validates_after_extension():
     validate_registry(REGISTRY)
-    assert len(REGISTRY) == 99
+    assert len(REGISTRY) == 104
 
 
 def test_event_registry_can_still_be_rebuilt():
     rebuilt = build_registry(list(REGISTRY.values()))
     assert set(rebuilt) == set(REGISTRY)
-    assert len(rebuilt) == 99
+    assert len(rebuilt) == 104
 
 
 # ── Связка denylist ↔ CHANGE_REGISTRY ───────────────────────────────────────

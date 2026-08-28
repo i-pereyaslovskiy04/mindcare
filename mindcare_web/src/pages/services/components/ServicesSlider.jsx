@@ -1,8 +1,12 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import ServiceCard from './ServiceCard';
+import { useServiceCards } from './useServiceCards';
 import styles from './ServicesSlider.module.css';
 
-const SERVICES = [
+// Fallback — показывается, пока не загружены карточки с API или пока в БД
+// нет ни одной активной карточки (например, сразу после деплоя). Те же
+// тексты, что перенесены в БД начальной миграцией service_cards.
+const DEFAULT_SERVICE_CARDS = [
   {
     id: 1,
     title: 'Психологическое консультирование',
@@ -73,6 +77,9 @@ const ArrowIcon = ({ dir }) => (
 );
 
 export default function ServicesSlider() {
+  const { cards: fetchedCards, loading } = useServiceCards();
+  const cards = (!loading && fetchedCards.length > 0) ? fetchedCards : DEFAULT_SERVICE_CARDS;
+
   const trackRef = useRef(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -84,11 +91,13 @@ export default function ServicesSlider() {
     setCanNext(t.scrollLeft < t.scrollWidth - t.clientWidth - 4);
   }, []);
 
+  // cards.length в зависимостях — иначе стрелки не пересчитаются после
+  // асинхронной подгрузки карточек с API (track изначально пуст/короче).
   useEffect(() => {
     syncArrows();
     window.addEventListener('resize', syncArrows);
     return () => window.removeEventListener('resize', syncArrows);
-  }, [syncArrows]);
+  }, [syncArrows, cards.length]);
 
   const scroll = (dir) => {
     const track = trackRef.current;
@@ -129,8 +138,8 @@ export default function ServicesSlider() {
         ref={trackRef}
         onScroll={syncArrows}
       >
-        {SERVICES.map((service, i) => (
-          <ServiceCard key={service.id} service={service} index={i} />
+        {cards.map((card, i) => (
+          <ServiceCard key={i} service={card} index={i} />
         ))}
       </div>
     </div>

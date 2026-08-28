@@ -64,6 +64,7 @@ from app.db.models.content import (  # noqa: F401
     News,
     HelpResource,
     BannerSlide,
+    ServiceCard,
     QuestionsAnswers,
     Tag,
     ArticleTag,
@@ -141,7 +142,7 @@ __all__ = [
     # media
     "MediaFile", "MediaVersion",
     # content
-    "Category", "Article", "ArticleCategory", "News", "HelpResource", "BannerSlide", "QuestionsAnswers",
+    "Category", "Article", "ArticleCategory", "News", "HelpResource", "BannerSlide", "ServiceCard", "QuestionsAnswers",
     "Tag", "ArticleTag", "NewsTag", "TestTag",
     # diagnostics
     "Test", "TestCategory", "TestInterpretation", "Question", "Option",

@@ -34,6 +34,21 @@
 .accent4 { background: linear-gradient(135deg, #3A3020 0%, #6B5530 100%); }
 .accent5 { background: linear-gradient(135deg, #2A3838 0%, #3A5850 100%); }
 
+/* Опциональная картинка карточки: та же осознанная причина, что у accent1–5 —
+   фиксированное (не токен-based) тёмное затемнение поверх фото нужно, чтобы
+   .cardNum оставался читаемым независимо от содержимого картинки и темы.
+   Токен --espresso-rgb здесь не подходит: в тёмных темах он инвертируется в
+   светлый (роль "текст на тёмной поверхности"), что дало бы засветку вместо
+   затемнения. accentN-фон остаётся под градиентом как fallback до загрузки
+   изображения. */
+.cardVisual.hasImage {
+  background-image:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.75)),
+    var(--card-image);
+  background-size: cover;
+  background-position: center;
+}
+
 .cardNum {
   font-family: 'Cormorant Garamond', serif;
   font-size: 56px;
@@ -98,9 +113,11 @@
 /* ── Button ────────────────────────────── */
 
 .cardBtn {
+  display: block;
   margin-top: auto;
   width: 100%;
   text-align: center;
+  text-decoration: none;
   background: var(--espresso);
   color: var(--text-on-dark);
   font-family: 'Nunito', sans-serif;
@@ -111,6 +128,7 @@
   border-radius: 8px;
   border: none;
   cursor: pointer;
+  box-sizing: border-box;
   transition: background 0.17s, transform 0.14s;
 }
 

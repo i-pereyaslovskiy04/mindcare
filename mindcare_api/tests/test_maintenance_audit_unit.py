@@ -42,7 +42,7 @@ _SYS_EVENTS = {
 
 
 def test_registry_system_events_and_count():
-    assert len(REGISTRY) == 99
+    assert len(REGISTRY) == 104
     for name, entity in _SYS_EVENTS.items():
         s = REGISTRY[name]
         assert s.destination.value == "audit_log", name

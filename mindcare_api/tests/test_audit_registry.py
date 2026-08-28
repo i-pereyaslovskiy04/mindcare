@@ -67,6 +67,9 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "banner_slide_created", "banner_slide_updated",
     "banner_slide_activated", "banner_slide_deactivated",
     "banner_slide_deleted",
+    "service_card_created", "service_card_updated",
+    "service_card_activated", "service_card_deactivated",
+    "service_card_deleted",
     "schedule_created", "schedule_updated", "schedule_deactivated",
     "schedule_restored", "schedule_extended",
     "schedule_rule_created", "schedule_rule_deactivated",
@@ -96,8 +99,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 92
-    assert len(REGISTRY) == 99
+    assert len(audit_names) == 97
+    assert len(REGISTRY) == 104
 
 
 def test_unknown_event_rejected():
@@ -176,7 +179,9 @@ def test_registry_total_count_stage_5c3():
     # 5C-2 +7 (group sessions + registrations), 5C-3 +2 (system maintenance).
     # Hero CMS (banner_slides, вне стадийной нумерации): +5
     # (created/updated/activated/deactivated/deleted) → 7 auth + 92 audit = 99.
-    assert len(REGISTRY) == 99
+    # Карточки услуг (service_cards, вне стадийной нумерации): +5
+    # (created/updated/activated/deactivated/deleted) → 7 auth + 97 audit = 104.
+    assert len(REGISTRY) == 104
 
 
 def test_role_metadata_enum_excludes_system():
