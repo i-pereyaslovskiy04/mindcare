@@ -10,8 +10,10 @@
 `2026-08-28-decorative-overlay-dark-theme-color-tokens-note.md` (решение по
 decorative-затемнению карточки, отличное от принятого здесь).
 
-Документ описывает баннер целиком: изначальный перенос вшитых в JSX слайдов
-в БД, механику картинок на слайдах и две доработки, сделанные 2026-08-28.
+Документ описывает баннер целиком: перенос вшитых в JSX слайдов в БД (сначала
+главная и услуги, затем `/about` и `/materials`), механику картинок на слайдах
+и доработки от 2026-08-28. На сегодня статичных баннеров на публичных
+страницах не осталось — все четыре редактируются через админку.
 
 ---
 
@@ -48,6 +50,36 @@ decorative-затемнению карточки, отличное от прин
 страницы услуг: его собственный компонент с `/services` убран, вместо него
 тот же `Hero` с `placement="services"`.
 
+### 2.1а Второй заход: `/about` и `/materials` (2026-08-28)
+
+Миграция `27b44fcf4865_seed_about_materials_banner_slides` — чистый
+data-перенос (схему не трогает) ещё двух статичных `PageHero`:
+
+| Источник в коде | `placement` | Как лёг в поля слайда |
+|---|---|---|
+| `About.jsx` | `about` | `label` ← eyebrow; `title` = «Ресурсный центр»; **`highlight` = «практической психологии»**; `sub` ← sub |
+| `MaterialsPage.jsx` | `materials` | `label` ← eyebrow; `title` = «Материалы»; `highlight` = `NULL`; `sub` ← sub |
+
+**Единственное осознанное изменение вида — заголовок `/about`.** В `PageHero`
+он был двухстрочным через жёсткий `<br />`, обе строки одного цвета. В модели
+слайда вторая строка — это `highlight`, а `Hero` рендерит его курсивом
+акцентным цветом (`.heroTitleHighlight`). Согласовано с владельцем задачи:
+структура заголовка ровно та, ради которой поле и заведено (как «Забота о
+вашей» / «душевной гармонии» на главной), и обе строки остаются раздельно
+редактируемыми в админке. Альтернатива — положить весь заголовок в `title`
+(как сделано для `/services`) — сохранила бы цвет, но потеряла бы жёсткий
+перенос строки; отклонена.
+
+У `materials` заголовок односложный, `highlight` пуст — вид не меняется.
+
+`downgrade()` этой миграции удаляет строки **по `placement`**, а не по id:
+за время жизни ревизии админ мог добавить свои слайды для этих страниц, и
+«удалить первые две вставленные записи» было бы неверно.
+
+После переноса `PageHero` не используется ни одной страницей. Компонент
+**оставлен в коде** по решению владельца задачи — на случай, если понадобится
+статичный баннер без CMS.
+
 ### 2.2 Почему сид лежит в самой миграции, а не в `seed.py`
 
 Это разовый перенос конкретного существующего контента, а не справочные
@@ -77,11 +109,29 @@ const slides = (!slidesLoading && fetchedSlides.length > 0)
 ### 2.4 `placement` — одна страница = одно значение, расширяется без миграции
 
 Колонка `placement` — обычный `String(50)`, допустимые значения задаёт
-`app/banner_slides/schemas.py::BannerPlacement` (`Literal["home",
-"services"]`). Добавление новой страницы-получателя — правка кода (значение
-в `Literal` + опция в admin-select), **без миграции схемы**. Backend
-валидирует значение и на запись, и на публичном чтении (неизвестный
-`placement` → 422, а не молчаливо пустой список).
+`app/banner_slides/schemas.py::BannerPlacement` (сейчас `Literal["home",
+"services", "about", "materials"]`). Добавление новой страницы-получателя —
+правка кода (значение в `Literal` + опция в admin-select), **без миграции
+схемы**. Backend валидирует значение и на запись, и на публичном чтении
+(неизвестный `placement` → 422, а не молчаливо пустой список).
+
+Миграция при подключении новой страницы нужна только тогда, когда у неё уже
+есть статичный текст, который надо перенести в БД, — и это data-миграция
+(`bulk_insert`), а не изменение схемы. Так сделано для `about`/`materials`
+(§2.1а).
+
+**Чек-лист подключения страницы к баннеру:**
+
+1. значение в `BannerPlacement` (`app/banner_slides/schemas.py`);
+2. опция в `PLACEMENT_OPTIONS` (`BannerSlidesPage.jsx`) — попадает и в
+   фильтр списка, и в select формы, и в сортировку списка по странице;
+3. `DEFAULT_SLIDES_BY_PLACEMENT` + `ARIA_LABEL_BY_PLACEMENT` в `Hero.jsx`
+   (без aria-label баннер получит подпись главной страницы);
+4. на самой странице `<Hero placement="…" />` вместо статичного блока;
+5. data-миграция с `bulk_insert`, если переносится существующий текст, —
+   и сразу `CURRENT_HEAD` в `tests/test_audit_created_index_model.py`
+   (любая ревизия двигает alembic head, даже не меняющая схему);
+6. комментарий-перечисление в модели `BannerSlide` (`content.py`).
 
 ---
 
@@ -201,7 +251,7 @@ banner_slides: id · uuid · label · title(NOT NULL) · highlight · sub
 
 | Метод | Путь | Доступ |
 |---|---|---|
-| `GET` | `/api/banner-slides?placement=home` | без auth, только активные |
+| `GET` | `/api/banner-slides?placement=home\|services\|about\|materials` | без auth, только активные |
 | `GET` | `/api/supervisor/banner-slides?include_inactive=&placement=` | admin+supervisor |
 | `POST` / `PATCH` / `DELETE` | `/api/supervisor/banner-slides[/{id}]` | admin+supervisor |
 
@@ -236,16 +286,24 @@ mindcare_web/src/styles/tokens/{coffee-light,hc-light,hc-dark,a11y,hc-rules}.css
 
 **Доработки 2026-08-28:**
 ```
-mindcare_web/src/pages/home/components/Hero.jsx        — условный рендер стрелок/точек
-mindcare_web/src/pages/home/components/Hero.test.jsx   — новый тест + правка существующего
-mindcare_web/src/pages/supervisor/BannerSlidesPage.jsx — PLACEMENT_ORDER + byPlacement
+mindcare_web/src/pages/home/components/Hero.jsx        — условный рендер стрелок/точек;
+                                                          fallback + aria-label для about/materials
+mindcare_web/src/pages/home/components/Hero.test.jsx   — 4 новых теста + правка существующего
+mindcare_web/src/pages/supervisor/BannerSlidesPage.jsx — PLACEMENT_ORDER + byPlacement;
+                                                          2 новые опции placement
+mindcare_web/src/pages/about/About.jsx                 — PageHero → Hero placement="about"
+mindcare_web/src/pages/materials/MaterialsPage.jsx     — PageHero → Hero placement="materials"
+mindcare_api/app/banner_slides/schemas.py              — BannerPlacement +about +materials
+mindcare_api/app/db/models/content.py                  — комментарий-перечисление placement
+mindcare_api/alembic/versions/27b44fcf4865_seed_about_materials_banner_slides.py
+mindcare_api/tests/test_banner_slides_schema_unit.py   — параметризация по всем placement
 ```
 
 ---
 
 ## 7. Тесты и проверки
 
-`Hero.test.jsx` (18 тестов после доработок): автопрокрутка и пауза по
+`Hero.test.jsx` (20 тестов после доработок): автопрокрутка и пауза по
 hover/focus раздельно, `prefers-reduced-motion`, fallback при загрузке и при
 пустой БД, синхронность фонового слоя картинки с `activeIndex`, класс
 `hasImage`, CTA и его `tabIndex` у неактивного слайда, `placement` →
@@ -254,7 +312,14 @@ hover/focus раздельно, `prefers-reduced-motion`, fallback при заг
 - поправлен тест `placement передаётся в useHeroSlides…` — fallback для
   `services` состоит из одного слайда, значит точки-индикаторы теперь не
   рендерятся (`toHaveLength(0)` вместо `1`);
-- добавлен `один слайд — стрелки и точки-индикаторы не рендерятся`.
+- добавлен `один слайд — стрелки и точки-индикаторы не рендерятся`;
+- параметризованный `placement=about|materials — свой fallback и aria-label`
+  (проверяет и передачу placement в хук, и собственный aria-label, и заголовок
+  из fallback, и отсутствие управления при одном слайде).
+
+Backend: `test_banner_slides_schema_unit.py` — проверка `placement`
+параметризована по всем четырём известным страницам, чтобы новое значение в
+`Literal` без теста не проходило.
 
 Для `BannerSlidesPage.jsx` frontend-теста нет — CRUD-страница баннера не
 покрыта тестами с момента внедрения (осознанная асимметрия с backend, где
@@ -263,11 +328,14 @@ integration-набор).
 
 | Проверка | Результат |
 |---|---|
-| `npm test -- --testPathPattern=Hero.test.jsx` | 18 passed (было 16) |
-| Полный `npm test -- --watchAll=false` | 1075 passed, 81 suites |
+| `npm test -- --testPathPattern=Hero.test.jsx` | 20 passed (было 16 до доработок) |
+| Полный `npm test -- --watchAll=false` | 1077 passed, 81 suites |
+| `pytest tests/` (изолированная БД) | 2746 passed, 69 skipped; первый прогон поймал незамеченный `CURRENT_HEAD` — см. §8 |
 | `npm run lint` | чисто |
-| `npm run build` | Compiled successfully |
+| `npm run build` | Compiled successfully (−151 B js, −254 B css: два статичных блока убраны) |
 | `npm run test:contrast` | 254 проверки, 0 нарушений |
+| `alembic upgrade/downgrade` roundtrip | обе стороны проверены на dev-БД |
+| Живой стенд | `/about`, `/materials`, `/services`, `/` — 200; публичный API отдаёт по 1 слайду для about/materials и 4 для home |
 
 ---
 
@@ -285,3 +353,20 @@ integration-набор).
   (`aria-hidden="true"`), поля для alt в CMS нет. Если картинка когда-нибудь
   станет содержательной (а не фоном под текстом), потребуется отдельное поле
   и пересмотр `aria-hidden`.
+- **`PageHero` не удалён**, хотя после переноса `/about` и `/materials` не
+  используется ни одной страницей. Решение владельца задачи — оставить на
+  случай, если понадобится статичный баннер без CMS. Компонент и его
+  `.module.css` остаются мёртвым кодом; упоминания в `a11y.css`/`hc-rules.css`
+  (селекторы `[data-hero-banner]`) при этом продолжают работать — они
+  общие с `Hero` и не привязаны к `PageHero`.
+- **Новых `placement` «про запас» не добавлялось** — только страницы, у
+  которых баннер реально есть. Список остаётся закрытым `Literal`, чтобы
+  опечатка в query давала 422, а не пустую выдачу.
+
+**Замечание по процессу.** Первый полный backend-прогон после этой правки
+упал на `test_audit_created_index_model.py::CURRENT_HEAD` — константа
+привязана к последней alembic-ревизии, а data-миграция её тоже двигает.
+Ловушка была описана в `docs/MODULES/content_cms_implementation.md` §6 ещё
+до этой задачи, но формулировка «при добавлении audit-событий» не читалась
+как относящаяся к миграции без единого нового события. Формулировка
+уточнена (§4.1 того же документа) и продублирована в чек-листе §2.4 здесь.
