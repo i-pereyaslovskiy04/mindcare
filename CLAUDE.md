@@ -3,6 +3,15 @@
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
 Актуальный handoff по последнему крупному блоку работ:
+`docs/HANDOFFS/2026-08-28-service-cards-cms-complete.md` — карточки услуг
+`/services` как CMS (модуль `service_cards`); предыдущий блок того же паттерна —
+`docs/HANDOFFS/2026-08-27-hero-banner-cms-complete.md` (баннер Hero,
+`banner_slides`). **Общая архитектура обоих CMS-модулей и инструкция «как
+добавить третий» — `docs/MODULES/content_cms_implementation.md`** (читать её,
+а не копировать код, при следующей задаче «вынести вшитый в JSX блок витрины
+в админку»).
+
+Предшествующий крупный блок:
 `docs/HANDOFFS/2026-08-21-admin-audit-viewer-api-complete.md`
 — read-only admin API просмотра трёх журналов (Stage 8, ADR-023). Предыдущий
 блок — `docs/HANDOFFS/2026-08-20-audit-hardening-stages-1-7-complete.md`
