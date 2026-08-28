@@ -28,6 +28,18 @@ const PLACEMENT_FILTER_OPTIONS = [
   { value: '', label: 'Все страницы' },
   ...PLACEMENT_OPTIONS,
 ];
+const PLACEMENT_ORDER = Object.fromEntries(
+  PLACEMENT_OPTIONS.map((o, i) => [o.value, i])
+);
+
+// Список сортируется по принадлежности к странице (порядок PLACEMENT_OPTIONS),
+// внутри страницы — по display_order, как показывает сам слайдер.
+function byPlacement(a, b) {
+  const pa = PLACEMENT_ORDER[a.placement] ?? PLACEMENT_OPTIONS.length;
+  const pb = PLACEMENT_ORDER[b.placement] ?? PLACEMENT_OPTIONS.length;
+  if (pa !== pb) return pa - pb;
+  return a.display_order - b.display_order;
+}
 
 function useBannerSlides(placement) {
   const [items, setItems]     = useState([]);
@@ -67,7 +79,8 @@ const COLS = 6;
 
 export default function BannerSlidesPage({ cabinetRole = 'supervisor' }) {
   const [placementFilter, setPlacementFilter] = useState('');
-  const { items, loading, error, refetch } = useBannerSlides(placementFilter);
+  const { items: fetchedItems, loading, error, refetch } = useBannerSlides(placementFilter);
+  const items = [...fetchedItems].sort(byPlacement);
   const [modal, setModal]   = useState(null); // null | 'create' | item
   const [form, setForm]     = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);

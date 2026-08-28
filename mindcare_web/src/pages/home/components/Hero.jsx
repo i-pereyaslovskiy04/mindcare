@@ -160,16 +160,18 @@ export default function Hero({ placement = 'home' }) {
         />
       ))}
 
-      <button
-        className={`${styles.heroArrow} ${styles.heroArrowLeft}`}
-        onClick={prev}
-        aria-label="Предыдущий слайд"
-        type="button"
-      >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M11 4L6 9l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
+      {slides.length > 1 && (
+        <button
+          className={`${styles.heroArrow} ${styles.heroArrowLeft}`}
+          onClick={prev}
+          aria-label="Предыдущий слайд"
+          type="button"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M11 4L6 9l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      )}
 
       <div className={styles.heroInner}>
         <div className={styles.heroSlider}>
@@ -214,29 +216,33 @@ export default function Hero({ placement = 'home' }) {
 
       </div>
 
-      <button
-        className={`${styles.heroArrow} ${styles.heroArrowRight}`}
-        onClick={next}
-        aria-label="Следующий слайд"
-        type="button"
-      >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
+      {slides.length > 1 && (
+        <button
+          className={`${styles.heroArrow} ${styles.heroArrowRight}`}
+          onClick={next}
+          aria-label="Следующий слайд"
+          type="button"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M7 4l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      )}
 
-      <div className={styles.heroDots}>
-        {slides.map((_, i) => (
-          <button
-            key={i}
-            type="button"
-            className={`${styles.heroDot} ${i === activeIndex ? styles.active : ''}`}
-            onClick={() => goTo(i)}
-            aria-label={`Слайд ${i + 1}`}
-            aria-current={i === activeIndex ? 'true' : undefined}
-          />
-        ))}
-      </div>
+      {slides.length > 1 && (
+        <div className={styles.heroDots}>
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              className={`${styles.heroDot} ${i === activeIndex ? styles.active : ''}`}
+              onClick={() => goTo(i)}
+              aria-label={`Слайд ${i + 1}`}
+              aria-current={i === activeIndex ? 'true' : undefined}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

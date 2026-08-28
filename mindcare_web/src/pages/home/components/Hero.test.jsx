@@ -232,8 +232,21 @@ describe('Hero', () => {
     expect(
       screen.getByRole('region', { name: 'Баннер страницы услуг' })
     ).toBeInTheDocument();
-    // Fallback для 'services' — один слайд (не 3, как у 'home').
-    expect(screen.getAllByRole('button', { name: /^Слайд \d+$/ })).toHaveLength(1);
+    // Fallback для 'services' — один слайд (не 3, как у 'home'), поэтому
+    // точки-индикаторы не рендерятся (см. отдельный тест ниже).
+    expect(screen.queryAllByRole('button', { name: /^Слайд \d+$/ })).toHaveLength(0);
+  });
+
+  test('один слайд — стрелки и точки-индикаторы не рендерятся', () => {
+    useHeroSlides.mockReturnValue({
+      slides: [{ title: 'Единственный слайд' }],
+      loading: false,
+    });
+    render(<Hero />);
+
+    expect(screen.queryByRole('button', { name: 'Следующий слайд' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Предыдущий слайд' })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: /^Слайд \d+$/ })).toHaveLength(0);
   });
 
   test('без placement — прежнее поведение по умолчанию (home)', () => {
