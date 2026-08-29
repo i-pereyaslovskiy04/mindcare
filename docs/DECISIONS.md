@@ -886,3 +886,68 @@ ADR не утверждает, что такой viewer прямо требуе�
 admin-members к чувствительной service-use metadata; retention/архив/DROP и
 erasure строк журналов; раскрытие raw IP и полного email; export; отдельная
 роль compliance/supervisor для чтения журналов; cursor pagination.
+
+---
+
+### ADR-024 — Роль `student` для staff: функциональный доступ к кабинету, отклонение от role-policy
+
+**Дата:** 2026-08-29
+
+**Статус:** Принято (продуктовое решение владельца платформы). Опирается на
+multi-role модель ADR-018. Handoff:
+`docs/HANDOFFS/2026-08-29-staff-student-role-admin-nav-dark-theme.md`.
+
+**Контекст.** Потребовалось, чтобы staff (admin/supervisor/psychologist) мог
+зайти в кабинет студента (посмотреть/использовать студенческий опыт). Кабинет и
+все студенческие эндпоинты закрыты `require_role("student")`, поэтому UI-хак не
+работает — нужна **реальная** роль в `user_roles`.
+
+**Проблема.** `student_profiles` в коде не создаётся нигде — студент
+определяется **только по роли**. Прямая массовая выдача student staff-аккаунтам:
+1. засветила бы staff в списках реальных студентов супервизора
+   (`supervisor.get_students` фильтрует по `Role.name == "student"`) и в
+   admin-фильтре `/admin/users?role=student`;
+2. противоречит документированной role-policy (`mindcare_api/CLAUDE.md`):
+   student назначается только через self-registration или staff-created student
+   flow с личным согласием (`consent_records`), не через admin role control без
+   отдельного compliance-решения;
+3. даёт staff доступ под своим аккаунтом к студенческим функциям (дневник,
+   тесты, запись на консультацию).
+
+**Решение.**
+
+1. **student выдаётся всем staff, но как функциональная роль без legal basis.**
+   `users.storage.create_user` выдаёт student каждому новому staff в той же
+   транзакции; `scripts/backfill_student_role.py` — существующим;
+   `scripts/create_admin.py` — bootstrap-админам. `consent_records` и
+   `user_legal_basis_records` для этой роли НЕ пишутся: это не смена основания
+   обработки ПДн, а функциональный доступ к собственному кабинету.
+
+2. **Изоляция на уровне запросов.** Реальные списки студентов исключают
+   аккаунты с любой активной не-student ролью: предикат `~has_other_active_role`
+   в `supervisor.get_students` и в `find_users(role='student')`. Так «student для
+   staff» не смешивается с настоящими студентами.
+
+3. **student скрыт при логине и в перечне ролей, но доступен как кабинет.**
+   `selectableRoles` убирает student из выбора кабинета (RoleChooser,
+   DashboardRedirect) и из бэджей `/admin/users`. `CabinetSwitcher` student
+   сохраняет — это точка входа staff в кабинет студента.
+
+**Осознанные следствия.**
+
+- **Отклонение от прежней формулировки role-policy** зафиксировано осознанно.
+  Оценка соответствия ФЗ-152 — за DPO/ответственным лицом; ADR не утверждает
+  соответствия. Основание обработки студенческих данных, создаваемых самим
+  staff-пользователем в его кабинете, — открытый вопрос для DPO.
+- **Демотация staff:** т.к. у staff всегда есть student, `roles:[]` в
+  `/admin/users` допустим (остаётся активная роль student) — админ может снять
+  все служебные роли, аккаунт станет «чистым студентом». Согласуется с ADR-018
+  (`roles:[]` допустим при остающейся активной роли). Дополнительную защиту
+  решено **не** добавлять.
+- **student по-прежнему не selectable** в admin create/edit-чекбоксах — эта
+  граница сохранена; выдача идёт только автоматически (create_user/backfill/
+  create_admin), не как target роли из admin UI.
+
+**Что НЕ делалось.** Отдельный признак «staff-student» в БД (роль общая);
+изоляция `_get_user_with_role(..., "student")` (точечная выборка по id, вне
+списков) — остаточный риск; ретроактивная фиксация legal basis.

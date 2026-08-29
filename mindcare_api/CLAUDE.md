@@ -188,11 +188,17 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    целевой пустой набор staff-ролей: он снимает все staff-роли только если после
    операции остаётся другая активная роль (например, `student`), иначе backend
    отклоняет запрос с 422. Удаление всегда фиксируется в audit trail.
-✅ student НЕ selectable в admin role control. Студенты появляются через
-   self-registration ИЛИ через staff-created student flow (`POST /api/supervisor/students`);
-   существующая роль student показывается read-only badge и не удаляется случайно.
-   student как target роли из admin edit UI/API не отправляется без отдельного
-   compliance-решения
+✅ student НЕ selectable в admin role control (в create/edit-чекбоксах). Как
+   target роли из admin edit UI/API student по-прежнему не отправляется.
+   НО (ADR-024, 2026-08-29): роль student **автоматически** выдаётся КАЖДОМУ
+   staff как функциональный доступ к кабинету студента — `create_user` (новым),
+   `scripts/backfill_student_role.py` (существующим), `scripts/create_admin.py`
+   (bootstrap). Для этой роли legal basis/consent НЕ пишется. Реальные списки
+   студентов изолируют staff предикатом «только student» (`get_students`,
+   `find_users(role='student')`). Настоящие студенты по-прежнему появляются через
+   self-registration ИЛИ staff-created student flow (`POST /api/supervisor/students`)
+   с личным согласием. Отклонение от прежней role-policy зафиксировано в ADR-024;
+   оценка ФЗ-152 — за DPO
 ✅ Администратор не может снять у самого себя membership-роль admin. Backend
    сравнивает actor_id и target user id; frontend lock — только UX-дублирование.
    Другой администратор может изменить роли пользователя.
