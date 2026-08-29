@@ -25,18 +25,8 @@ DEV_PIDS="$LOG_DIR/dev.pids"
 
 die() { echo "ОШИБКА: $*" >&2; exit 1; }
 
-# node_modules/.bin/react-scripts может отсутствовать даже после успешного
-# npm install: /media/data2 смонтирован как exFAT, который не поддерживает
-# symlink'и — npm падает (EPERM) на их создании для части бинарников
-# (например node_modules/.bin/parser у @babel/parser), из-за чего
-# react-scripts тоже не долинкован. `npm install --no-bin-links` обходит
-# сам EPERM, но .bin/react-scripts тогда не создаётся вообще. Вызываем
-# JS-файл react-scripts напрямую через node — не зависит от .bin в любом
-# случае. Дочерний процесс (build/start.js) react-scripts всё равно
-# порождает через spawn, так что pkill -f "react-scripts/scripts/start"
-# в stop_dev ниже продолжает его находить.
 run_react_scripts() {
-    (cd "$WEB_DIR" && node node_modules/react-scripts/bin/react-scripts.js "$@")
+    (cd "$WEB_DIR" && node_modules/.bin/react-scripts "$@")
 }
 
 stop_dev() {
@@ -79,7 +69,7 @@ case "${1:-status}" in
         (cd "$API_DIR" && nohup .venv/bin/uvicorn app.main:app --reload --port 8000 \
             > "$DEV_API_LOG" 2>&1 & echo $! >> "$DEV_PIDS")
         echo "==> Frontend: react-scripts start (:3000)"
-        (cd "$WEB_DIR" && BROWSER=none nohup node node_modules/react-scripts/bin/react-scripts.js start \
+        (cd "$WEB_DIR" && BROWSER=none nohup node_modules/.bin/react-scripts start \
             > "$DEV_WEB_LOG" 2>&1 & echo $! >> "$DEV_PIDS")
         echo "Логи: $DEV_API_LOG · $DEV_WEB_LOG"
         echo "Остановить: scripts/mindcare-mode.sh stop"
