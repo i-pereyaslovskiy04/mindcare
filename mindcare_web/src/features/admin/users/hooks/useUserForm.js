@@ -275,6 +275,10 @@ export function useUserForm({ mode, uuid, onSuccess, currentUserId }) {
         values, errors, loading, submitting,
         handleChange, handleSubmit, toggleRole,
         initialStaffRoles, hasStudent, editNeedsBasis, isSelf,
+        // student теперь неявно выдан всем staff — read-only student badge
+        // показываем только для чистого студента (у которого нет staff-ролей),
+        // иначе для каждого сотрудника висел бы ложный «назначена при регистрации».
+        isPureStudent: hasStudent && initialStaffRoles.length === 0,
         canManageStaffRoles: canManageStaffRoles(initialStaffRoles),
       };
 }

@@ -310,6 +310,28 @@
 .search input::placeholder {
   color: var(--text-light);
 }
+/* Ссылка «На главную» (публичный /) — тот же стиль, что в AdminLayout. */
+.homeLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.homeLink:hover {
+  background: rgba(var(--espresso-rgb), 0.08);
+  color: var(--espresso);
+}
+.homeLink:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
 .iconBtn {
   width: 36px;
   height: 36px;

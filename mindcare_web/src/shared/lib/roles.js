@@ -51,6 +51,22 @@ export function normalizeRoles(source) {
 }
 
 /**
+ * Роли, среди которых пользователь выбирает кабинет при логине.
+ *
+ * Роль student неявно выдаётся всем staff-пользователям (backend), поэтому при
+ * входе staff НЕ должен видеть «Студент» как вариант выбора: если есть хотя бы
+ * одна не-student роль — student отбрасывается. У чистого студента (единственная
+ * роль student) она остаётся. Используется в RoleChooser и DashboardRedirect;
+ * CabinetSwitcher намеренно этим НЕ пользуется — там student остаётся точкой
+ * входа в кабинет студента.
+ */
+export function selectableRoles(source) {
+  const all = normalizeRoles(source);
+  const staff = all.filter((r) => r !== 'student');
+  return staff.length ? staff : all;
+}
+
+/**
  * Primary/default роль по глобальному приоритету, или null для пустого набора.
  * НЕ маскирует отсутствие ролей как 'student'.
  */

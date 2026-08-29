@@ -2,7 +2,7 @@ import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Badge from '../../../../components/UI/Badge/Badge';
 import { ROLE_LABELS, ROLE_BADGE_TONES } from '../roleLabels';
-import { normalizeRoles } from '../../../../shared/lib/roles';
+import { selectableRoles as rolesForBadges } from '../../../../shared/lib/roles';
 import styles from './UsersTable.module.css';
 
 const SKELETON_ROWS = 7;
@@ -66,7 +66,10 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
               <td className={styles.email}>{item.email}</td>
               <td>
                 <div className={styles.roles}>
-                  {normalizeRoles(item).map((role) => (
+                  {/* Роль student неявно выдана всем staff — в перечне ролей
+                      /admin/users её не показываем (шум). Чистый студент имеет
+                      только student, для него бэдж остаётся. */}
+                  {rolesForBadges(item).map((role) => (
                     <Badge key={role} tone={ROLE_BADGE_TONES[role] ?? 'neutral'}>
                       {ROLE_LABELS[role] ?? role}
                     </Badge>

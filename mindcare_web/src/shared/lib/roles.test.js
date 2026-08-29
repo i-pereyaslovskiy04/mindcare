@@ -1,4 +1,4 @@
-import { normalizeRoles, primaryRole, ROLE_PRIORITY } from './roles';
+import { normalizeRoles, primaryRole, selectableRoles, ROLE_PRIORITY } from './roles';
 
 describe('normalizeRoles', () => {
   test('explicit roles[] is source of truth (even empty)', () => {
@@ -30,6 +30,24 @@ describe('primaryRole', () => {
 
   test('accepts a user-like object', () => {
     expect(primaryRole({ roles: ['psychologist', 'admin'] })).toBe('admin');
+  });
+});
+
+describe('selectableRoles', () => {
+  test('staff: student скрыт, если есть другие роли', () => {
+    expect(selectableRoles({ roles: ['admin', 'student'] })).toEqual(['admin']);
+    expect(selectableRoles({ roles: ['student', 'psychologist', 'supervisor'] }))
+      .toEqual(['supervisor', 'psychologist']);
+  });
+
+  test('чистый студент: student остаётся', () => {
+    expect(selectableRoles({ roles: ['student'] })).toEqual(['student']);
+    expect(selectableRoles({ role: 'student' })).toEqual(['student']);
+  });
+
+  test('пустой набор — пустой список', () => {
+    expect(selectableRoles({ roles: [] })).toEqual([]);
+    expect(selectableRoles(null)).toEqual([]);
   });
 });
 

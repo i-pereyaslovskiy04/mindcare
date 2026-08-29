@@ -181,10 +181,15 @@ class TestUsersStorageEmailNormalization:
         # Stage 5A-2: duplicate-check — один .filter() (все User) → no existing.
         mock_db.query.return_value.filter.return_value.first.return_value = None
         # Role-lookup query (multi-role create): Role + one .filter() + .all()
-        # → все запрошенные роли существуют.
+        # → все запрошенные роли существуют. create_user подтягивает тем же
+        # запросом неявную роль student (выдаётся каждому staff).
         role_obj = MagicMock(id=99)
         role_obj.name = "psychologist"  # name — reserved Mock kwarg, ставим явно
-        mock_db.query.return_value.filter.return_value.all.return_value = [role_obj]
+        student_obj = MagicMock(id=4)
+        student_obj.name = "student"
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            role_obj, student_obj,
+        ]
 
         mock_new_user = MagicMock()
         mock_new_user.id = 1

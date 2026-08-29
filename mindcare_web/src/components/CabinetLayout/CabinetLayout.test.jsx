@@ -9,6 +9,9 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => jest.fn(),
   Outlet: () => <div>OUTLET</div>,
   NavLink: ({ children }) => <div>{children}</div>,
+  Link: ({ children, to, 'aria-label': ariaLabel, title }) => (
+    <a href={to} aria-label={ariaLabel} title={title}>{children}</a>
+  ),
 }), { virtual: true });
 jest.mock('../../features/auth/AuthContext', () => ({
   useAuth: jest.fn(),

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLocation, Outlet, NavLink } from 'react-router-dom';
+import { useLocation, Outlet, NavLink, Link } from 'react-router-dom';
 import { useAuth, useLogout } from '../auth/AuthContext';
 import CabinetSwitcher from '../auth/CabinetSwitcher';
 import Icon from '../../components/Icon/Icon';
@@ -131,6 +131,14 @@ export default function AdminLayout() {
             <div className={styles.topbarSwitcher}>
               <CabinetSwitcher currentRole="admin" />
             </div>
+            <Link
+              to="/"
+              className={styles.homeLink}
+              aria-label="На главную"
+              title="На главную"
+            >
+              <Icon name="home" size={16} />
+            </Link>
             <A11yToggle compact />
             <ThemeToggle compact />
             <Button

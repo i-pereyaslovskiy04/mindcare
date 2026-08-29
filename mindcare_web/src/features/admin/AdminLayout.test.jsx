@@ -17,6 +17,11 @@ jest.mock('react-router-dom', () => ({
       </a>
     );
   },
+  Link: ({ children, to, 'aria-label': ariaLabel, className, title }) => (
+    <a href={to} aria-label={ariaLabel} className={className} title={title}>
+      {children}
+    </a>
+  ),
 }), { virtual: true });
 jest.mock('../auth/AuthContext', () => ({
   useAuth: jest.fn(),
@@ -97,6 +102,14 @@ test('renders links to the new email-domains and settings pages', () => {
 
   const securityLink = screen.getByRole('link', { name: 'Безопасность' });
   expect(securityLink).toHaveAttribute('href', '/admin/settings');
+});
+
+test('renders a "На главную" link to the public home (/)', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(<AdminLayout />);
+
+  const homeLink = screen.getByRole('link', { name: 'На главную' });
+  expect(homeLink).toHaveAttribute('href', '/');
 });
 
 test('active link matches current pathname (/admin/users)', () => {

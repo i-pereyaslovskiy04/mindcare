@@ -301,6 +301,27 @@
   flex-shrink: 0;
 }
 
+/* Ссылка «На главную» (публичный /) — визуально как icon-кнопки топбара. */
+.homeLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.homeLink:hover {
+  background: rgba(var(--espresso-rgb), 0.08);
+  color: var(--espresso);
+}
+.homeLink:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
 /* Скрыт на desktop (>980px) — там switcher виден в sidebar .userInfo.
    Показывается только когда sidebar сворачивается в icon-rail. */
 .topbarSwitcher {

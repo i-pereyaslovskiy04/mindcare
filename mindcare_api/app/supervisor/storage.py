@@ -50,10 +50,26 @@ def get_students(
     with SessionLocal() as db:
         PsychUser = aliased(User)
 
+        now = datetime.now(timezone.utc)
+        # Изоляция staff: роль student неявно выдаётся всем staff-пользователям
+        # (см. users.storage.create_user / scripts/backfill_student_role.py),
+        # поэтому список реальных студентов супервизора должен исключать аккаунты
+        # с любой активной не-student ролью.
+        has_other_active_role = (
+            db.query(UserRole.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .filter(
+                UserRole.user_id == User.id,
+                Role.name != "student",
+                or_(UserRole.expires_at.is_(None), UserRole.expires_at > now),
+            )
+            .exists()
+        )
         base_filter = [
             Role.name == "student",
             User.is_active.is_(True),
             User.deleted_at.is_(None),
+            ~has_other_active_role,
         ]
         if search:
             pattern = f"%{search.strip()}%"

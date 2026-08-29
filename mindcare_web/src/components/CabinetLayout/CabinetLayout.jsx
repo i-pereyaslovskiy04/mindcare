@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, Outlet, NavLink } from 'react-router-dom';
+import { useLocation, Outlet, NavLink, Link } from 'react-router-dom';
 import { useAuth, useLogout } from '../../features/auth/AuthContext';
 import CabinetSwitcher from '../../features/auth/CabinetSwitcher';
 import Icon from '../Icon/Icon';
@@ -141,6 +141,14 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
               <Icon name="search" size={14} />
               <input type="text" placeholder="Поиск по материалам, записям…" readOnly />
             </div>
+            <Link
+              to="/"
+              className={styles.homeLink}
+              aria-label="На главную"
+              title="На главную"
+            >
+              <Icon name="home" size={16} />
+            </Link>
             <A11yToggle compact />
             <ThemeToggle compact />
             <button

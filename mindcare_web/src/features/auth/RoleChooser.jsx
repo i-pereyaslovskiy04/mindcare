@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { ROLE_PRIORITY, ROLE_LABELS, normalizeRoles } from '../../shared/lib/roles';
+import { ROLE_PRIORITY, ROLE_LABELS, selectableRoles } from '../../shared/lib/roles';
 import { getRoleHome } from '../../shared/lib/routes';
 import styles from './RoleChooser.module.css';
 
@@ -14,8 +14,10 @@ export default function RoleChooser({ roles }) {
   const navigate = useNavigate();
   const { user, setActiveRole } = useAuth();
 
-  // Источник истины — нормализованные роли пользователя; проп roles — подсказка.
-  const memberRoles = normalizeRoles(user);
+  // Источник истины — роли пользователя для выбора кабинета (у staff роль
+  // student скрыта); проп roles — подсказка. student не предлагается при логине,
+  // но остаётся доступен через CabinetSwitcher уже внутри кабинета.
+  const memberRoles = selectableRoles(user);
   const list = ROLE_PRIORITY.filter(
     (r) => memberRoles.includes(r) && (!roles || roles.includes(r)),
   );

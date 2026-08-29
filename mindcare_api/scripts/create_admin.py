@@ -111,6 +111,9 @@ def add_admin_role_to_existing_user(email: str) -> bool:
         ))
         db.commit()
 
+    # Гарантируем неявную роль student и этому staff-аккаунту (идемпотентно).
+    ensure_student_role(int(user["id"]))
+
     print(f"[OK] Роль admin добавлена пользователю {email}")
     return True
 
@@ -136,6 +139,34 @@ def save_legal_basis_for_user(user_id: int) -> None:
         db.commit()
 
 
+def ensure_student_role(user_id: int) -> None:
+    """
+    Идемпотентно выдаёт пользователю роль student (не дублирует, реактивирует
+    просроченную). Продуктовое решение: каждый staff-пользователь неявно
+    получает роль student для доступа к кабинету студента — так же, как это
+    делает users.storage.create_user для admin-created staff и backfill-скрипт
+    для существующих. Иначе новый bootstrap-админ остался бы без student, а
+    backfill одноразовый и повторно не запускается. Legal basis для student НЕ
+    пишется (это не staff-роль).
+    """
+    with SessionLocal() as db:
+        student_role = db.query(Role).filter(Role.name == "student").first()
+        if not student_role:
+            print("[WARN] Роль 'student' не найдена — пропускаю выдачу student.")
+            return
+        existing = (
+            db.query(UserRole)
+            .filter(UserRole.user_id == user_id,
+                    UserRole.role_id == student_role.id)
+            .first()
+        )
+        if existing is not None:
+            existing.expires_at = None
+        else:
+            db.add(UserRole(user_id=user_id, role_id=student_role.id))
+        db.commit()
+
+
 def create_new_admin(data: dict) -> None:
     """Создаёт нового админа с нуля."""
     user = storage.save_user({
@@ -146,6 +177,7 @@ def create_new_admin(data: dict) -> None:
     })
 
     save_legal_basis_for_user(int(user["id"]))
+    ensure_student_role(int(user["id"]))
 
     print(f"\n[OK] Администратор создан:")
     print(f"     ID:    {user['id']}")

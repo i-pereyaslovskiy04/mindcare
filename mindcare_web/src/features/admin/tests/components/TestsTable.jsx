@@ -22,7 +22,7 @@ function SkeletonRow() {
   );
 }
 
-export default function TestsTable({ items, loading, error, onEdit, onDelete }) {
+export default function TestsTable({ items, loading, error, onPreview, onEdit, onDelete }) {
   return (
     <div className={styles.wrapper}>
       <table className={styles.table}>
@@ -78,6 +78,15 @@ export default function TestsTable({ items, loading, error, onEdit, onDelete }) 
               <td className={styles.date}>{formatDate(item.created_at)}</td>
               <td className={styles.actionsCell}>
                 <div className={styles.actions}>
+                  <Button
+                    type="button"
+                    variant="icon"
+                    size="sm"
+                    onClick={() => onPreview(item)}
+                    aria-label={`Предпросмотр «${item.title}»`}
+                  >
+                    <Icon name="eye" size={15} />
+                  </Button>
                   <Button
                     variant="icon"
                     size="sm"

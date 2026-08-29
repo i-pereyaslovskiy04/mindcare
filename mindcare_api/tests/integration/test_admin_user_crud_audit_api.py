@@ -595,9 +595,27 @@ def test_update_self_admin_writes_self_admin_protected(client):
     _assert_failure_contract(rows[-1], admin_id, "self_admin_protected")
 
 
+def _strip_student_role(user_id):
+    """Убирает у пользователя неявную роль student (её теперь выдаёт create_user
+    каждому staff). Нужно там, где тест проверяет сценарий «после операции не
+    остаётся ни одной активной роли»: без снятия student roles: [] был бы
+    допустим (student остаётся активной)."""
+    from app.db.models import Role, UserRole
+    with SessionLocal() as db:
+        student = db.query(Role).filter(Role.name == "student").first()
+        db.query(UserRole).filter(
+            UserRole.user_id == user_id,
+            UserRole.role_id == student.id,
+        ).delete(synchronize_session=False)
+        db.commit()
+
+
 def test_update_role_policy_writes_role_policy_violation(client):
     token, admin_id, _ = create_multi_role_user(client, ["admin"])
     target_id = _make_staff_target(client, token)   # psychologist-only
+    # create_user выдаёт staff неявную роль student; снимаем её, чтобы roles: []
+    # действительно оставлял 0 активных ролей и срабатывал guard (422).
+    _strip_student_role(target_id)
     before = len(_failure_rows("admin_user_update_failed", admin_id))
     r = client.patch(
         f"/api/admin/users/{_uuid_for(target_id)}",

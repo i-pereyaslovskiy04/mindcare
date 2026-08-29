@@ -44,9 +44,11 @@ def _create_user_db(role_name="psychologist", role_id=99):
     db = MagicMock(name="db")
     # Stage 5A-2: duplicate-check — один filter (все User, вкл. soft-deleted).
     db.query.return_value.filter.return_value.first.return_value = None
-    # Role-lookup for the requested role.
+    # Role-lookup: запрошенная staff-роль + неявная student (create_user выдаёт
+    # student каждому staff, подтягивая её тем же Role.name.in_(...) запросом).
     role_obj = SimpleNamespace(id=role_id, name=role_name)
-    db.query.return_value.filter.return_value.all.return_value = [role_obj]
+    student_obj = SimpleNamespace(id=4, name="student")
+    db.query.return_value.filter.return_value.all.return_value = [role_obj, student_obj]
     return db
 
 

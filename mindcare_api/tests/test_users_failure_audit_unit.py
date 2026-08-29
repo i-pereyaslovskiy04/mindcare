@@ -160,8 +160,10 @@ def _mk_orig(constraint_name):
 def _create_storage_db(existing, flush_exc=None):
     db = MagicMock(name="db")
     db.query.return_value.filter.return_value.first.return_value = existing
+    # create_user подтягивает staff-роль + неявную student тем же .all()-запросом.
     role_obj = SimpleNamespace(id=99, name="psychologist")
-    db.query.return_value.filter.return_value.all.return_value = [role_obj]
+    student_obj = SimpleNamespace(id=4, name="student")
+    db.query.return_value.filter.return_value.all.return_value = [role_obj, student_obj]
     if flush_exc is not None:
         db.flush.side_effect = flush_exc
     return db
@@ -349,7 +351,8 @@ def _setup_create(monkeypatch, *, commit_exc=None, refresh_exc=None,
         SimpleNamespace(id=9) if duplicate else None
     )
     role_obj = SimpleNamespace(id=99, name="psychologist")
-    db.query.return_value.filter.return_value.all.return_value = [role_obj]
+    student_obj = SimpleNamespace(id=4, name="student")
+    db.query.return_value.filter.return_value.all.return_value = [role_obj, student_obj]
     if commit_exc is not None:
         db.commit.side_effect = commit_exc
     if refresh_exc is not None:

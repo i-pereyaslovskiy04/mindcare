@@ -18,7 +18,7 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
   const { user: authUser } = useAuth();
   const {
     values, errors, loading, submitting, handleChange, handleSubmit, toggleRole,
-    hasStudent, editNeedsBasis, canManageStaffRoles, isSelf,
+    isPureStudent, editNeedsBasis, canManageStaffRoles, isSelf,
   } = useUserForm({
     mode: 'edit',
     uuid,
@@ -79,7 +79,7 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
                 label="Роли пользователя"
                 value={values.roles}
                 onToggle={toggleRole}
-                hasStudent={hasStudent}
+                hasStudent={isPureStudent}
                 disabled={!canManageStaffRoles}
                 disabledHint={
                   !canManageStaffRoles

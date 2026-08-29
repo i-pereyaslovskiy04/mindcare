@@ -161,6 +161,18 @@ def find_users(
             )
             query = query.filter(User.id.in_(role_filter_subq))
 
+            # Изоляция staff: роль student неявно выдаётся всем staff, поэтому
+            # фильтр «студенты» должен показывать только реальных студентов —
+            # аккаунты, у которых НЕТ активной не-student роли.
+            if role == "student":
+                other_role_subq = (
+                    select(UserRole.user_id)
+                    .join(Role, Role.id == UserRole.role_id)
+                    .where(Role.name != "student")
+                    .where(_active_role)
+                )
+                query = query.filter(User.id.notin_(other_role_subq))
+
         if is_active is not None:
             query = query.filter(User.is_active == is_active)
 
@@ -878,14 +890,18 @@ def create_user(
                 "Пользователь с таким email уже существует"
             )
 
-        # Все роли обязаны существовать в справочнике (один запрос).
+        # Все роли обязаны существовать в справочнике (один запрос). Роль student
+        # подтягивается тем же запросом: каждому staff-пользователю она неявно
+        # выдаётся (см. ниже), но staff-ролью НЕ считается — legal basis для неё
+        # не пишется, в списки реальных студентов такой аккаунт не попадает.
         # Отсутствие Role — configuration/internal failure (RoleConfigError →
         # internal_error), НЕ пользовательский invalid_role.
-        role_objs = db.query(Role).filter(Role.name.in_(deduped)).all()
+        lookup_names = deduped + (["student"] if "student" not in deduped else [])
+        role_objs = db.query(Role).filter(Role.name.in_(lookup_names)).all()
         by_name = {r.name: r for r in role_objs}
-        missing = [r for r in deduped if r not in by_name]
+        missing = [r for r in lookup_names if r not in by_name]
         if missing:
-            raise RoleConfigError("required staff role missing in seed/DB")
+            raise RoleConfigError("required role missing in seed/DB")
 
         new_user = User(
             email=normalize_email(email),
@@ -926,6 +942,15 @@ def create_user(
                     "roles_after":  sorted_roles,
                 },
             ))
+
+        # Продуктовое решение: каждому staff-пользователю неявно выдаётся роль
+        # student, чтобы он мог зайти в кабинет студента (переход через
+        # CabinetSwitcher). Это НЕ staff-роль, поэтому legal_basis/consent_records
+        # для неё не пишутся; в списках реальных студентов такой аккаунт
+        # изолируется предикатом «только student» (см. find_users / get_students).
+        # Отклонение от документированной role-policy зафиксировано осознанно.
+        if "student" not in deduped:
+            db.add(UserRole(user_id=new_user.id, role_id=by_name["student"].id))
 
         # ATOMIC audit через единый facade: та же caller-транзакция (db=db),
         # facade только db.add (без commit/rollback/close). actor=admin,
