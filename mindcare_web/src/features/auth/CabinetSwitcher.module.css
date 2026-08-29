@@ -69,11 +69,15 @@
   min-width: 180px;
   max-width: 240px;
   padding: 6px;
-  background: var(--surface, #ffffff);
-  color: var(--text, #1c1c1c);
-  border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  /* Theme-aware токены (как в Select-дропдауне): в тёмных темах панель и текст
+     переопределяются по ролям, поэтому текст остаётся читаемым. Прежние
+     --surface/--text/--border в проекте не определены и откатывались на
+     хардкод #1c1c1c → тёмное на тёмном в dark-темах. */
+  background: var(--warm-white);
+  color: var(--text-main);
+  border: 1px solid var(--nav-border);
   border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), 0.18);
 }
 
 .panelTitle {
@@ -82,7 +86,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted, rgba(0, 0, 0, 0.5));
+  color: var(--text-light);
 }
 
 .option {
@@ -92,7 +96,7 @@
   padding: 8px 10px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text, #1c1c1c);
+  color: var(--text-main);
   background: transparent;
   border: none;
   border-radius: 8px;
@@ -100,15 +104,15 @@
 }
 
 .option:hover {
-  background: var(--surface-2, rgba(139, 111, 71, 0.1));
+  background: rgba(var(--espresso-rgb), 0.08);
 }
 
 .option:focus-visible {
-  outline: 2px solid var(--accent, rgba(139, 111, 71, 0.8));
+  outline: 2px solid var(--coffee);
   outline-offset: -2px;
 }
 
 .current {
   font-weight: 700;
-  color: var(--accent-strong, #5a7d3a);
+  color: var(--coffee);
 }

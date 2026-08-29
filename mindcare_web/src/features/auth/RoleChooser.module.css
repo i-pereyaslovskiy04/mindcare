@@ -9,11 +9,14 @@
 .card {
   width: 100%;
   max-width: 480px;
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  /* Theme-aware токены: прежние --surface/--border/--text/--surface-2/--accent
+     в проекте не определены и откатывались на хардкод #1c1c1c → тёмный текст
+     на тёмной карточке в dark-темах. */
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
   border-radius: 16px;
   padding: 28px 24px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 30px rgba(var(--shadow-rgb), 0.10);
   text-align: center;
 }
 
@@ -21,13 +24,14 @@
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 700;
+  color: var(--text-main);
 }
 
 .subtitle {
   margin: 0 0 20px;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-muted, rgba(0, 0, 0, 0.6));
+  color: var(--text-muted);
 }
 
 .grid {
@@ -41,17 +45,17 @@
   padding: 14px 16px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--text, #1c1c1c);
-  background: var(--surface-2, rgba(139, 111, 71, 0.06));
-  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  color: var(--text-main);
+  background: rgba(var(--espresso-rgb), 0.06);
+  border: 1px solid var(--nav-border);
   border-radius: 12px;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
 }
 
 .option:hover {
-  background: var(--surface-3, rgba(139, 111, 71, 0.12));
-  border-color: var(--accent, rgba(139, 111, 71, 0.5));
+  background: rgba(var(--espresso-rgb), 0.12);
+  border-color: var(--coffee);
 }
 
 .option:active {
@@ -59,6 +63,6 @@
 }
 
 .option:focus-visible {
-  outline: 2px solid var(--accent, rgba(139, 111, 71, 0.8));
+  outline: 2px solid var(--coffee);
   outline-offset: 2px;
 }

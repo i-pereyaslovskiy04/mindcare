@@ -112,6 +112,12 @@
   --hero-accent: var(--latte);
   --hero-accent-rgb: var(--latte-rgb);
   --hero-on-accent: var(--hero-bg);
+  /* Три опорных цвета фонового градиента Hero — вынесены в токены, чтобы тёмные
+     палитры могли зафиксировать баннер на светлых брендовых значениях и НЕ
+     инвертировать слайды (Hero.module.css .hero). Дефолт — прежние легаси-токены. */
+  --hero-grad-1: var(--espresso);
+  --hero-grad-2: var(--mocha);
+  --hero-grad-3: var(--coffee);
 
   /* ── Тени ── */
   --shadow-sm: 0 1px 3px rgba(46, 35, 24, 0.08);

@@ -77,6 +77,19 @@
   --scrim: rgba(0, 0, 0, 0.6);
   --overlay-surface: rgba(26, 21, 18, 0.93);
 
+  /* ── Hero-баннер: НЕ инвертировать в тёмной теме ──
+     Фиксируем баннер на СВЕТЛЫХ брендовых значениях coffee (вид как в light). */
+  --hero-grad-1: #4A3728;
+  --hero-grad-2: #6B4F35;
+  --hero-grad-3: #8B6F47;
+  --hero-bg: #4A3728;
+  --hero-bg-rgb: 74, 55, 40;
+  --hero-fg: #EDE4D3;
+  --hero-muted: #D9CFC0;
+  --hero-accent: #C9B99A;
+  --hero-accent-rgb: 201, 185, 154;
+  --hero-on-accent: #4A3728;
+
   /* ── RGB-триплеты ── */
   --coffee-rgb: 201, 174, 133;
   --latte-rgb: 78, 67, 54;

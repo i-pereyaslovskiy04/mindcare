@@ -72,6 +72,21 @@
   --scrim: rgba(0, 0, 0, 0.6);
   --overlay-surface: rgba(0, 21, 46, 0.93);
 
+  /* ── Hero-баннер: НЕ инвертировать в тёмной теме ──
+     Базовые --hero-* (coffee-light :root) выведены из --espresso/--text-on-dark/…,
+     которые в тёмной палитре переворачиваются, из-за чего слайды инвертировались.
+     Фиксируем баннер на СВЕТЛЫХ брендовых значениях dongu — вид как в light. */
+  --hero-grad-1: #16233D;
+  --hero-grad-2: #1F4A8C;
+  --hero-grad-3: #2454A6;
+  --hero-bg: #16233D;
+  --hero-bg-rgb: 22, 35, 61;
+  --hero-fg: #EAF1FB;
+  --hero-muted: #D3DAE6;
+  --hero-accent: #C3D2E6;
+  --hero-accent-rgb: 195, 210, 230;
+  --hero-on-accent: #16233D;
+
   /* ── RGB-триплеты ── */
   --coffee-rgb: 111, 178, 255;
   --latte-rgb: 52, 80, 111;

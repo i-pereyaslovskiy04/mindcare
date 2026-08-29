@@ -69,6 +69,19 @@
   --scrim: rgba(0, 0, 0, 0.6);
   --overlay-surface: rgba(19, 23, 21, 0.93);
 
+  /* ── Hero-баннер: НЕ инвертировать в тёмной теме ──
+     Фиксируем баннер на СВЕТЛЫХ брендовых значениях nature (вид как в light). */
+  --hero-grad-1: #2E3A36;
+  --hero-grad-2: #4E6B5C;
+  --hero-grad-3: #587867;
+  --hero-bg: #2E3A36;
+  --hero-bg-rgb: 46, 58, 54;
+  --hero-fg: #E8EFE9;
+  --hero-muted: #D4D9D2;
+  --hero-accent: #B9C4BA;
+  --hero-accent-rgb: 185, 196, 186;
+  --hero-on-accent: #2E3A36;
+
   /* ── RGB-триплеты ── */
   --coffee-rgb: 166, 203, 176;
   --latte-rgb: 60, 69, 63;

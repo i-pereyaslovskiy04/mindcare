@@ -2,7 +2,7 @@
   /* Сплошная подложка + декоративный градиент поверх неё: если тема отключает
      background-image (hc), герой остаётся читаемым, а не прозрачным. */
   background-color: var(--hero-bg);
-  background-image: linear-gradient(135deg, var(--espresso) 0%, var(--mocha) 50%, var(--coffee) 100%);
+  background-image: linear-gradient(135deg, var(--hero-grad-1) 0%, var(--hero-grad-2) 50%, var(--hero-grad-3) 100%);
   min-height: clamp(420px, 50vh, 700px);
   display: flex;
   align-items: center;
