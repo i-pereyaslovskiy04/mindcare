@@ -9,6 +9,11 @@ import {
  * статуса при создании (всегда draft — бэк это и так форсирует, форма просто не
  * предлагает выбор), без «Активен» (бессмысленно до публикации), без
  * дублирования (вне цикла F2 — тест с результатами психологу недоступен).
+ * warnOnPublishedEdit (Этап F2.1) — предупреждающий баннер при редактировании
+ * СВОЕГО published-теста: сохранение снимет его с публикации (status → draft) и
+ * потребует повторной модерации; основное предупреждение — диалог-подтверждение
+ * ДО входа в форму (PsychologistTestsPage), баннер здесь — на случай прямого
+ * перехода по ссылке.
  */
 const PSYCHOLOGIST_CONFIG = {
   mode: 'psychologist',
@@ -17,6 +22,7 @@ const PSYCHOLOGIST_CONFIG = {
   showStatusSelect: false,
   showIsActiveToggle: false,
   showDuplicate: false,
+  warnOnPublishedEdit: true,
   analyzeFn: analyzeMyTest,
   previewFn: previewMyScore,
 };

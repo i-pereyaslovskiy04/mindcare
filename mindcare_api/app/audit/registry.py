@@ -287,6 +287,11 @@ _ALL += [
     _audit_ok("test_submitted_for_review", {"psychologist"}, "test"),
     _audit_ok("test_published", {"admin", "supervisor"}, "test"),
     _audit_ok("test_returned_for_changes", {"admin", "supervisor"}, "test"),
+    # Этап F2.1 (ADR-016): автор правит СВОЙ published тест — storage.update_test
+    # атомарно снимает публикацию (status → draft) той же транзакцией, что и
+    # content-правку (test_updated), доп. событие фиксирует ИМЕННО смену статуса
+    # (снятие с публикации требует повторной модерации супервизором).
+    _audit_ok("test_unpublished_for_edit", {"psychologist"}, "test"),
 ]
 
 # ── AUDIT_LOG: Stage 5A-2 durable failure события (INDEPENDENT/SOFT) ──────────

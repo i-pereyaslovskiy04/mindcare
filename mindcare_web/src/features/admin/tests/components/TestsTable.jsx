@@ -38,15 +38,28 @@ function SkeletonRow() {
  * не admin-специфика. Действия модерации: onPublish/onReturn — admin/supervisor
  * (роутер их и так гейтит); onSubmitForReview — автор отправляет свой
  * draft/needs_changes на проверку. `restrictEditToStatuses` (если передан) —
- * набор статусов, при которых видны «Редактировать»/«Удалить» (для psychologist
- * — только draft/needs_changes); без пропа ограничений нет (admin).
+ * набор статусов, при которых видна «Редактировать» (без пропа ограничений нет
+ * — admin). `restrictDeleteToStatuses` — отдельный набор для «Удалить» (по
+ * умолчанию берёт restrictEditToStatuses, если не передан отдельно). Психолог
+ * (Этап F2.1): редактировать можно draft/needs_changes/published (правка
+ * published снимает его с публикации — предупреждение показывает вызывающая
+ * страница перед onEdit), удалять — только draft/needs_changes.
+ * `onToggleActive` (admin/supervisor-контекст, психологу не передаётся) —
+ * быстрое скрытие/показ теста в каталоге без захода в редактор; не гейтится
+ * статусом — видимость и так требует published, а переключать is_active
+ * заранее (пока тест ещё draft) безопасно и не имеет эффекта до публикации.
  */
 export default function TestsTable({
   items, loading, error, onPreview, onEdit, onDelete,
-  onPublish, onReturn, onSubmitForReview, restrictEditToStatuses,
+  onPublish, onReturn, onSubmitForReview, onToggleActive,
+  restrictEditToStatuses, restrictDeleteToStatuses,
 }) {
   const canEditRow = (item) =>
     !restrictEditToStatuses || restrictEditToStatuses.includes(item.status);
+  const canDeleteRow = (item) => {
+    const allowed = restrictDeleteToStatuses ?? restrictEditToStatuses;
+    return !allowed || allowed.includes(item.status);
+  };
 
   return (
     <div className={styles.wrapper}>
@@ -157,6 +170,23 @@ export default function TestsTable({
                   >
                     <Icon name="eye" size={15} />
                   </Button>
+                  {onToggleActive && (
+                    <Button
+                      type="button"
+                      variant="icon"
+                      size="sm"
+                      tone={item.is_active ? 'danger' : 'success'}
+                      onClick={() => onToggleActive(item)}
+                      aria-label={
+                        item.is_active
+                          ? `Скрыть «${item.title}» из каталога`
+                          : `Показать «${item.title}» в каталоге`
+                      }
+                      title={item.is_active ? 'Скрыть из каталога' : 'Показать в каталоге'}
+                    >
+                      <Icon name="power" size={15} />
+                    </Button>
+                  )}
                   {canEditRow(item) && (
                     <Button
                       variant="icon"
@@ -168,7 +198,7 @@ export default function TestsTable({
                       <Icon name="edit" size={15} />
                     </Button>
                   )}
-                  {canEditRow(item) && (
+                  {canDeleteRow(item) && (
                     <Button
                       variant="icon"
                       size="sm"

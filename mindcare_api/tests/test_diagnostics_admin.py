@@ -635,3 +635,62 @@ def test_delete_my_test_blocked_when_not_editable():
         with pytest.raises(service.TestNotEditable):
             service.delete_my_test("u", actor_id=7)
     m.assert_not_called()
+
+
+# ── Этап F2.1: автор дорабатывает свой published тест (снимается с публикации) ─
+
+@pytest.mark.parametrize("status_", ["draft", "needs_changes", "published"])
+def test_own_updatable_test_ok_for_updatable_statuses(status_):
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": status_, "created_by": 7},
+    ):
+        found = service._own_updatable_test("u", 7)
+    assert found["status"] == status_
+
+
+def test_own_updatable_test_rejects_in_review():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "in_review", "created_by": 7},
+    ):
+        with pytest.raises(service.TestNotEditable):
+            service._own_updatable_test("u", 7)
+
+
+def test_own_updatable_test_wrong_owner_is_404_not_403():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "published", "created_by": 999},
+    ):
+        with pytest.raises(ValueError, match="не найден"):
+            service._own_updatable_test("u", 7)
+
+
+def test_update_my_test_of_published_passes_unpublish_event():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "published", "created_by": 7},
+    ), patch.object(service.storage, "update_test", return_value={"uuid": "u"}) as m:
+        service.update_my_test("u", {"title": "X"}, actor_id=7)
+    assert m.call_args.kwargs["unpublish_event"] == "test_unpublished_for_edit"
+
+
+@pytest.mark.parametrize("status_", ["draft", "needs_changes"])
+def test_update_my_test_of_draft_like_does_not_unpublish(status_):
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": status_, "created_by": 7},
+    ), patch.object(service.storage, "update_test", return_value={"uuid": "u"}) as m:
+        service.update_my_test("u", {"title": "X"}, actor_id=7)
+    assert m.call_args.kwargs["unpublish_event"] is None
+
+
+def test_update_my_test_of_in_review_still_blocked():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "in_review", "created_by": 7},
+    ), patch.object(service.storage, "update_test") as m:
+        with pytest.raises(service.TestNotEditable):
+            service.update_my_test("u", {"title": "X"}, actor_id=7)
+    m.assert_not_called()

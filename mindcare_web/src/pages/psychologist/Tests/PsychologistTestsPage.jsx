@@ -44,9 +44,12 @@ const STATUS_OPTIONS = [
   { value: 'needs_changes', label: 'Нужны правки' },
 ];
 
-// Редактировать/удалить можно только пока тест draft/needs_changes — на
-// проверке или опубликован решение уже не за автором (ADR-016).
-const EDITABLE_STATUSES = ['draft', 'needs_changes'];
+// Редактировать можно draft/needs_changes и published (Этап F2.1 — правка
+// published снимает его с публикации, требуется повторная модерация); удалять —
+// только draft/needs_changes. На проверке (in_review) решение уже не за автором
+// (ADR-016) — ни правка, ни удаление недоступны.
+const EDITABLE_STATUSES = ['draft', 'needs_changes', 'published'];
+const DELETABLE_STATUSES = ['draft', 'needs_changes'];
 
 export default function PsychologistTestsPage() {
   const navigate = useNavigate();
@@ -56,6 +59,10 @@ export default function PsychologistTestsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]         = useState(false);
   const [deleteError, setDeleteError]   = useState('');
+
+  // Предупреждение перед правкой ОПУБЛИКОВАННОГО теста — сохранение снимет его
+  // с публикации (status → draft), потребуется повторная отправка на модерацию.
+  const [editWarnTarget, setEditWarnTarget] = useState(null);
 
   const [preview, setPreview]           = useState(null);
   const [previewLoadingUuid, setPreviewLoadingUuid] = useState(null);
@@ -109,6 +116,20 @@ export default function PsychologistTestsPage() {
     }
   }
 
+  function handleEditClick(item) {
+    if (item.status === 'published') {
+      setEditWarnTarget(item);
+    } else {
+      navigate(`/psychologist/tests/${item.uuid}`);
+    }
+  }
+
+  function confirmEditPublished() {
+    if (!editWarnTarget) return;
+    navigate(`/psychologist/tests/${editWarnTarget.uuid}`);
+    setEditWarnTarget(null);
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -142,10 +163,11 @@ export default function PsychologistTestsPage() {
         loading={loading}
         error={error}
         onPreview={handlePreview}
-        onEdit={(item) => navigate(`/psychologist/tests/${item.uuid}`)}
+        onEdit={handleEditClick}
         onDelete={(item) => { setDeleteTarget(item); setDeleteError(''); }}
         onSubmitForReview={handleSubmitForReview}
         restrictEditToStatuses={EDITABLE_STATUSES}
+        restrictDeleteToStatuses={DELETABLE_STATUSES}
       />
 
       {pageCount > 1 && (
@@ -170,6 +192,28 @@ export default function PsychologistTestsPage() {
               </Button>
               <Button variant="danger" onClick={handleDeleteConfirm} disabled={deleting}>
                 {deleting ? 'Удаление…' : 'Удалить'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editWarnTarget && (
+        <div className={styles.overlay} onClick={() => setEditWarnTarget(null)}>
+          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.dialogTitle}>Редактировать опубликованный тест?</h3>
+            <p className={styles.dialogBody}>
+              «{editWarnTarget.title}» сейчас опубликован и виден студентам. При
+              сохранении изменений тест снимется с публикации и перейдёт в статус
+              «Черновик» — потребуется повторно отправить его на модерацию
+              супервизору, прежде чем он снова станет виден студентам.
+            </p>
+            <div className={styles.dialogActions}>
+              <Button variant="secondary" onClick={() => setEditWarnTarget(null)}>
+                Отмена
+              </Button>
+              <Button variant="primary" onClick={confirmEditPublished}>
+                Редактировать
               </Button>
             </div>
           </div>

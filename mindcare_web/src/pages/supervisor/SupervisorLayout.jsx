@@ -9,6 +9,7 @@ const NAV_SECTIONS = [
       { key: 'meeting-types', label: 'Типы встреч',          icon: 'calendar', to: '/supervisor/meeting-types',      end: true,  disabled: false },
       { key: 'banner-slides', label: 'Баннер',               icon: 'image',    to: '/supervisor/banner-slides',      end: true,  disabled: false },
       { key: 'service-cards', label: 'Карточки услуг',       icon: 'image',    to: '/supervisor/service-cards',      end: true,  disabled: false },
+      { key: 'tests',         label: 'Тесты',                icon: 'tests',    to: '/supervisor/tests',                          disabled: false },
       { key: 'schedule',      label: 'Расписание',           icon: 'calendar', to: '/supervisor/schedule',           end: true,  disabled: false },
       { key: 'booking',       label: 'Запись',               icon: 'calendar', to: '/supervisor/booking',            end: true,  disabled: false },
       { key: 'group-sessions',label: 'Групповые занятия',    icon: 'users',    to: '/supervisor/group-sessions',     end: true,  disabled: false },
@@ -30,12 +31,24 @@ const CRUMB_LABELS = {
   '/supervisor/meeting-types':    'Типы встреч',
   '/supervisor/banner-slides':    'Баннер',
   '/supervisor/service-cards':    'Карточки услуг',
+  '/supervisor/tests':            'Тесты',
   '/supervisor/schedule':         'Расписание',
   '/supervisor/booking':          'Запись',
   '/supervisor/group-sessions':   'Групповые занятия',
   '/supervisor/settings':         'Настройки',
 };
 
+const DYNAMIC_CRUMBS = [
+  { prefix: '/supervisor/tests/', label: 'Тест' },
+];
+
 export default function SupervisorLayout() {
-  return <CabinetLayout cabinetRole="supervisor" navSections={NAV_SECTIONS} crumbLabels={CRUMB_LABELS} />;
+  return (
+    <CabinetLayout
+      cabinetRole="supervisor"
+      navSections={NAV_SECTIONS}
+      crumbLabels={CRUMB_LABELS}
+      dynamicCrumbs={DYNAMIC_CRUMBS}
+    />
+  );
 }

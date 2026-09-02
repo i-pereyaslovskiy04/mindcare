@@ -52,6 +52,7 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "test_created", "test_updated", "test_duplicated", "test_deleted",
     "test_consent_accepted", "test_submitted", "test_result_content_read",
     "test_submitted_for_review", "test_published", "test_returned_for_changes",
+    "test_unpublished_for_edit",
     # Stage 5A-2 durable failure события (INDEPENDENT/SOFT).
     "admin_user_create_failed", "admin_user_update_failed",
     "admin_user_delete_failed", "profile_update_failed",
@@ -102,8 +103,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 103
-    assert len(REGISTRY) == 110
+    assert len(audit_names) == 104
+    assert len(REGISTRY) == 111
 
 
 def test_unknown_event_rejected():
@@ -189,7 +190,8 @@ def test_registry_total_count_stage_5c3():
     # Этап F (moderation: submitted_for_review/published/returned_for_changes):
     # +3 → 102 audit = 109.
     # ADR-025 (impersonation: admin_user_impersonated): +1 → 103 audit = 110.
-    assert len(REGISTRY) == 110
+    # Этап F2.1 (автор снимает published с публикации правкой): +1 → 104 audit = 111.
+    assert len(REGISTRY) == 111
 
 
 def test_role_metadata_enum_excludes_system():

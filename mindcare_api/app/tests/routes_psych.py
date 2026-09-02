@@ -1,13 +1,17 @@
 """
 Psychologist-scoped роуты психодиагностики (Этап F, ADR-016).
 
-Психолог создаёт и редактирует ТОЛЬКО свои тесты (tests.created_by == actor_id),
-и только пока они draft/needs_changes — публикация/возврат на доработку доступны
-только admin/supervisor (routes_admin.py). Владение и editable-статус проверяются
-в service (`_own_editable_test`) — router-уровень require_role("psychologist")
-гарантирует только роль, не авторство конкретного теста; чужой тест → 404
-(«чужого неотличимо от несуществующего», как session_notes), не editable-статус
-(на проверке/опубликован) → 409.
+Психолог создаёт и редактирует ТОЛЬКО свои тесты (tests.created_by == actor_id).
+Правка (PATCH) допустима в draft/needs_changes/published (Этап F2.1) — правка
+published-теста атомарно снимает его с публикации (status → draft) и требует
+повторной отправки на модерацию; удаление (DELETE) остаётся ограничено
+draft/needs_changes. in_review для обоих действий заблокирован — решение уже не
+за автором, пока идёт проверка. Публикация/возврат на доработку по-прежнему
+доступны только admin/supervisor (routes_admin.py). Владение и статус-гейт
+проверяются в service (`_own_updatable_test`/`_own_editable_test`) — router-уровень
+require_role("psychologist") гарантирует только роль, не авторство конкретного
+теста; чужой тест → 404 («чужого неотличимо от несуществующего», как
+session_notes), не редактируемый в данный момент статус → 409.
 
 analyze/preview-score продублированы здесь (не в routes_admin.py): они чистые
 stateless-вычисления без ownership-семантики, но router-level dependencies
@@ -130,7 +134,8 @@ def update_my_test(
     request: Request,
     current_user: dict = Depends(require_role("psychologist")),
 ):
-    """Правка своего теста — только пока draft/needs_changes."""
+    """Правка своего теста — draft/needs_changes/published (F2.1: правка
+    published снимает его с публикации, см. service.update_my_test)."""
     ip, ua = _client(request)
     try:
         return service.update_my_test(
@@ -142,8 +147,9 @@ def update_my_test(
     except TestNotEditable as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except TestHasResults as exc:
-        # Практически недостижимо для draft/needs_changes (результаты — только у
-        # published), но storage.update_test — источник истины, оставляем маппинг.
+        # Достижимо для published с результатами: вопросы менять нельзя (FK из
+        # student_answers), метаданные/интерпретацию — можно. storage.update_test
+        # остаётся источником истины.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except ValueError as exc:
         msg = str(exc)

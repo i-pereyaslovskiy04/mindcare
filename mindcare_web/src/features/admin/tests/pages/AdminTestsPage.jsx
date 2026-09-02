@@ -4,7 +4,7 @@ import { useAdminTests } from '../hooks/useAdminTests';
 import TestsTable from '../components/TestsTable';
 import TestPreviewModal from '../components/TestPreviewModal';
 import { fromBackendQuestion } from '../lib/testShape';
-import { deleteTest, getAdminTest, publishTest, returnTest } from '../../../../api/tests.api';
+import { deleteTest, getAdminTest, publishTest, returnTest, updateTest } from '../../../../api/tests.api';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
 import styles from './AdminTestsPage.module.css';
@@ -52,8 +52,16 @@ const MODERATION_STATUS_OPTIONS = [
   { value: 'needs_changes', label: 'Нужны правки' },
 ];
 
-export default function AdminTestsPage() {
+/**
+ * Список тестов с модерацией (публикация/возврат) и полным CRUD. Переиспользуется
+ * и в /admin/tests, и в /supervisor/tests — backend разрешает обе роли одинаково
+ * (require_role("admin","supervisor") на всём routes_admin.py), различается
+ * только базовый путь навигации (cabinetRole), как у MeetingTypesPage/
+ * ServiceCardsPage.
+ */
+export default function AdminTestsPage({ cabinetRole = 'admin' }) {
   const navigate = useNavigate();
+  const basePath = `/${cabinetRole}/tests`;
   const { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch } =
     useAdminTests();
 
@@ -67,6 +75,7 @@ export default function AdminTestsPage() {
 
   const [actionError, setActionError]   = useState('');
   const [publishingUuid, setPublishingUuid] = useState(null);
+  const [togglingUuid, setTogglingUuid] = useState(null);
   const [returnTarget, setReturnTarget] = useState(null);   // item для диалога возврата
   const [returnReason, setReturnReason] = useState('');
   const [returning, setReturning]       = useState(false);
@@ -117,6 +126,20 @@ export default function AdminTestsPage() {
     }
   }
 
+  async function handleToggleActive(item) {
+    if (togglingUuid) return;
+    setActionError('');
+    setTogglingUuid(item.uuid);
+    try {
+      await updateTest(item.uuid, { is_active: !item.is_active });
+      refetch();
+    } catch (err) {
+      setActionError(err.message || 'Не удалось изменить видимость теста');
+    } finally {
+      setTogglingUuid(null);
+    }
+  }
+
   function openReturnDialog(item) {
     setReturnTarget(item);
     setReturnReason('');
@@ -142,7 +165,7 @@ export default function AdminTestsPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Тесты</h1>
-        <Button variant="primary" onClick={() => navigate('/admin/tests/new')}>
+        <Button variant="primary" onClick={() => navigate(`${basePath}/new`)}>
           + Создать тест
         </Button>
       </div>
@@ -182,10 +205,11 @@ export default function AdminTestsPage() {
         loading={loading}
         error={error}
         onPreview={handlePreview}
-        onEdit={(item) => navigate(`/admin/tests/${item.uuid}`)}
+        onEdit={(item) => navigate(`${basePath}/${item.uuid}`)}
         onDelete={(item) => { setDeleteTarget(item); setDeleteError(''); }}
         onPublish={handlePublish}
         onReturn={openReturnDialog}
+        onToggleActive={handleToggleActive}
       />
 
       {pageCount > 1 && (

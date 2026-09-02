@@ -159,6 +159,9 @@ export default function AppRouter() {
         <Route path="meeting-types"         element={<MeetingTypesPage cabinetRole="supervisor" />} />
         <Route path="banner-slides"         element={<BannerSlidesPage cabinetRole="supervisor" />} />
         <Route path="service-cards"         element={<ServiceCardsPage cabinetRole="supervisor" />} />
+        <Route path="tests"                 element={<AdminTestsPage cabinetRole="supervisor" />} />
+        <Route path="tests/new"             element={<TestFormPage cabinetRole="supervisor" />} />
+        <Route path="tests/:uuid"           element={<TestFormPage cabinetRole="supervisor" />} />
         <Route path="schedule"              element={<SchedulePage />} />
         <Route path="booking"               element={<BookingPage />} />
         <Route path="group-sessions"        element={<GroupSessionsPage />} />

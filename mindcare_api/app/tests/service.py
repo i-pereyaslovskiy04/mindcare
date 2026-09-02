@@ -484,23 +484,39 @@ def return_for_changes(
 # ══════════════════════════════════════════════════════════════════════════════
 
 _EDITABLE_STATUSES = {"draft", "needs_changes"}
+# Этап F2.1 (ADR-016): автор может дорабатывать и СВОЙ published тест — правка
+# снимает его с публикации (update_my_test передаёт unpublish_event в
+# storage.update_test). in_review остаётся заблокирован — решение уже не за
+# автором, пока идёт проверка супервизором.
+_UPDATABLE_STATUSES = _EDITABLE_STATUSES | {"published"}
 
 
 class TestNotEditable(Exception):
-    """Тест не в draft/needs_changes (на проверке или уже опубликован) — сейчас
-    его нельзя редактировать/удалить → route мапит на 409."""
+    """Тест не в редактируемом для этого действия статусе → route мапит на 409."""
 
 
 def _own_editable_test(uuid: str, actor_id: int) -> dict:
-    """{"status","created_by"} — если тест существует, принадлежит actor_id и
-    редактируем; иначе исключение. Чужой/несуществующий → ValueError (404,
-    «чужого неотличимо от несуществующего», как session_notes). Свой, но не в
-    editable-статусе → TestNotEditable (409)."""
+    """Гейт для DELETE — только draft/needs_changes (published/in_review нельзя
+    удалить автору). {"status","created_by"} — если тест существует, принадлежит
+    actor_id и редактируем; иначе исключение. Чужой/несуществующий → ValueError
+    (404, «чужого неотличимо от несуществующего», как session_notes). Свой, но
+    не в editable-статусе → TestNotEditable (409)."""
     found = storage.get_status_and_author(uuid)
     if found is None or found["created_by"] != actor_id:
         raise ValueError("Тест не найден")
     if found["status"] not in _EDITABLE_STATUSES:
-        raise TestNotEditable("Тест на проверке или опубликован — редактировать нельзя")
+        raise TestNotEditable("Тест на проверке или опубликован — удалить нельзя")
+    return found
+
+
+def _own_updatable_test(uuid: str, actor_id: int) -> dict:
+    """Гейт для UPDATE — draft/needs_changes/published (F2.1); только in_review
+    заблокирован. Та же ownership-семантика 404 vs 409, что и _own_editable_test."""
+    found = storage.get_status_and_author(uuid)
+    if found is None or found["created_by"] != actor_id:
+        raise ValueError("Тест не найден")
+    if found["status"] not in _UPDATABLE_STATUSES:
+        raise TestNotEditable("Тест на проверке — редактировать нельзя")
     return found
 
 
@@ -542,14 +558,22 @@ def update_my_test(
     uuid: str, data: dict, *, actor_id: int, actor_role: str = "psychologist",
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
-    _own_editable_test(uuid, actor_id)
+    """Правка своего теста — draft/needs_changes/published (F2.1). Правка
+    published-теста атомарно снимает его с публикации (unpublish_event) — тест
+    возвращается в draft и требует повторной отправки на модерацию (submit-for-
+    review). has_results-проверка на вопросах теперь ДОСТИЖИМА (published может
+    иметь результаты) — storage.update_test её выполняет и остаётся единственным
+    источником истины; она срабатывает ДО unpublish-мутации (см. storage), так
+    что неуспешная правка вопросов не снимает тест с публикации попутно."""
+    found = _own_updatable_test(uuid, actor_id)
     data = _normalize(data)
-    # has_results-проверка не нужна: тест уже гарантированно draft/needs_changes
-    # (_own_editable_test), а результаты бывают только у published (storage.
-    # update_test всё равно перепроверит это внутри — единственный источник истины).
+    unpublish_event = (
+        "test_unpublished_for_edit" if found["status"] == "published" else None
+    )
     result = storage.update_test(
         uuid, data,
         actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+        unpublish_event=unpublish_event,
     )
     if result is None:
         raise ValueError("Тест не найден")

@@ -3,8 +3,14 @@ Integration: авторство psychologist в психодиагностике
 
 Покрывает:
   - psychologist создаёт тест ВСЕГДА как draft (даже если прислал status=published);
-  - редактирует/удаляет свой draft/needs_changes — 200/204;
-  - редактирует/удаляет свой in_review/published → 409 (TestNotEditable);
+  - редактирует свой draft/needs_changes/published — 200 (Этап F2.1: published
+    после правки снимается с публикации — status → draft, пишет
+    test_unpublished_for_edit ПОВЕРХ test_updated); удаляет — только draft/
+    needs_changes;
+  - редактирует/удаляет свой in_review → 409 (TestNotEditable); удаляет
+    published → 409;
+  - published с результатами: правка вопросов → 409 (has_results, тест
+    остаётся published), правка метаданных без вопросов → 200 (снимается);
   - редактирует/удаляет чужой тест → 404 (не 403 — чужого не отличить от
     несуществующего, как session_notes);
   - список — только свои тесты, все статусы;
@@ -22,7 +28,8 @@ from PIL import Image
 
 from app.auth import storage as auth_storage
 from app.db.session import SessionLocal
-from app.db.models import Test as TestModel
+from app.db.models import AuditLog, Test as TestModel, TestResult as TestResultModel
+from tests.integration.conftest import create_test_user
 
 PASSWORD = "SecurePass42!"
 
@@ -57,9 +64,17 @@ def _payload(title, status="published"):
 def _hard_delete_test(test_uuid):
     with SessionLocal() as db:
         t = db.query(TestModel).filter(TestModel.uuid == _uuid.UUID(test_uuid)).first()
-        if t:
-            db.delete(t)
-            db.commit()
+        if not t:
+            return
+        # student_answers.option_id — ON DELETE RESTRICT, поэтому если у теста
+        # уже есть результат (F2.1-тесты сабмитят его), сначала удаляем
+        # TestResult (каскадно тянет student_answers), иначе ORM-каскад на
+        # options упрётся в FK-нарушение.
+        db.query(TestResultModel).filter(
+            TestResultModel.test_id == t.id
+        ).delete(synchronize_session=False)
+        db.delete(t)
+        db.commit()
 
 
 def _set_status(test_uuid, new_status):
@@ -68,6 +83,36 @@ def _set_status(test_uuid, new_status):
             TestModel.uuid == _uuid.UUID(test_uuid)
         ).update({"status": new_status})
         db.commit()
+
+
+def _internal_id(test_uuid: str) -> int:
+    with SessionLocal() as db:
+        return db.query(TestModel).filter(TestModel.uuid == _uuid.UUID(test_uuid)).first().id
+
+
+def _audit_rows(event_type: str, entity_id: int):
+    with SessionLocal() as db:
+        return (
+            db.query(AuditLog)
+            .filter(AuditLog.event_type == event_type, AuditLog.entity_id == entity_id)
+            .all()
+        )
+
+
+def _submit_result(client, email, test):
+    """Студент проходит опубликованный тест психолога → у теста появляется результат."""
+    create_test_user(email, PASSWORD)
+    r = client.post("/api/auth/login", json={"email": email, "password": PASSWORD})
+    assert r.status_code == 200, r.text
+    headers = {"Authorization": f"Bearer {r.json()['session_token']}"}
+    client.post("/api/tests/consent/accept", headers=headers)
+    q = test["questions"][0]
+    r = client.post(
+        f"/api/tests/{test['uuid']}/submit",
+        json={"answers": [{"question_id": q["id"], "option_id": q["options"][1]["id"]}]},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
 
 
 # ── create: всегда draft ────────────────────────────────────────────────────
@@ -107,8 +152,10 @@ def test_psychologist_edits_own_draft(client):
         _hard_delete_test(test["uuid"])
 
 
-@pytest.mark.parametrize("blocked_status", ["in_review", "published"])
+@pytest.mark.parametrize("blocked_status", ["in_review"])
 def test_psychologist_edit_blocked_when_not_editable(client, blocked_status):
+    # published больше НЕ в этом списке (Этап F2.1) — автор может дорабатывать
+    # свой опубликованный тест, см. test_psychologist_edit_published_unpublishes_it.
     headers, _ = _staff(client, "psychologist")
     r = client.post(
         "/api/psychologist/tests",
@@ -140,6 +187,90 @@ def test_psychologist_cannot_edit_others_test(client):
             json={"title": "X"}, headers=other_headers,
         )
         assert r.status_code == 404, r.text
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
+# ── Этап F2.1: правка published снимает его с публикации ──────────────────────
+
+def test_psychologist_edit_published_unpublishes_it(client):
+    headers, _ = _staff(client, "psychologist")
+    r = client.post(
+        "/api/psychologist/tests",
+        json=_payload(f"PSYCH {_uuid.uuid4().hex[:6]}"), headers=headers,
+    )
+    test = r.json()
+    _set_status(test["uuid"], "published")
+    try:
+        r = client.patch(
+            f"/api/psychologist/tests/{test['uuid']}",
+            json={"title": "Доработано после публикации"}, headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "draft"
+        assert r.json()["title"] == "Доработано после публикации"
+
+        entity_id = _internal_id(test["uuid"])
+        assert len(_audit_rows("test_updated", entity_id)) == 1
+        assert len(_audit_rows("test_unpublished_for_edit", entity_id)) == 1
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
+def test_psychologist_edit_draft_does_not_write_unpublish_event(client):
+    headers, _ = _staff(client, "psychologist")
+    r = client.post(
+        "/api/psychologist/tests",
+        json=_payload(f"PSYCH {_uuid.uuid4().hex[:6]}"), headers=headers,
+    )
+    test = r.json()
+    try:
+        r = client.patch(
+            f"/api/psychologist/tests/{test['uuid']}",
+            json={"title": "X"}, headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "draft"
+
+        entity_id = _internal_id(test["uuid"])
+        assert len(_audit_rows("test_unpublished_for_edit", entity_id)) == 0
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
+def test_psychologist_edit_published_with_results_blocks_questions_but_allows_metadata(
+    client, test_email,
+):
+    headers, _ = _staff(client, "psychologist")
+    r = client.post(
+        "/api/psychologist/tests",
+        json=_payload(f"PSYCH {_uuid.uuid4().hex[:6]}"), headers=headers,
+    )
+    test = r.json()
+    _set_status(test["uuid"], "published")
+    try:
+        _submit_result(client, test_email, test)
+
+        # правка вопросов теста, по которому уже есть результат — 409, тест
+        # остаётся published (unpublish не применился к неуспешной правке)
+        bad_payload = _payload("x")
+        bad_payload["questions"][0]["question_text"] = "Изменённый вопрос"
+        r = client.patch(
+            f"/api/psychologist/tests/{test['uuid']}",
+            json={"questions": bad_payload["questions"]}, headers=headers,
+        )
+        assert r.status_code == 409, r.text
+
+        r = client.get(f"/api/psychologist/tests/{test['uuid']}", headers=headers)
+        assert r.json()["status"] == "published"
+
+        # правка метаданных (без вопросов) — ok, снимается с публикации
+        r = client.patch(
+            f"/api/psychologist/tests/{test['uuid']}",
+            json={"description": "Обновлённое описание"}, headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "draft"
     finally:
         _hard_delete_test(test["uuid"])
 

@@ -582,6 +582,7 @@ def update_test(
     actor_role: Optional[str] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    unpublish_event: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Частичное обновление. Скалярные поля — по наличию ключа.
@@ -593,6 +594,12 @@ def update_test(
     поэтому замена дерева физически невозможна — нужна копия методики
     (`duplicate_test`). Метаданные и пороги интерпретации менять можно:
     на них FK из результатов нет, а расшифровка снапшотится в момент submit.
+
+    unpublish_event (Этап F2.1) — если задан, тест атомарно снимается с
+    публикации (status → "draft") этим же вызовом, и пишется дополнительное
+    audit-событие с этим именем поверх обычного test_updated (одна транзакция,
+    один commit). Применяется ПОСЛЕ проверки has_results на вопросах — неуспешная
+    правка (TestHasResults) не должна снимать тест с публикации попутно.
     """
     if actor_id is None or actor_role is None:
         raise RuntimeError(
@@ -633,6 +640,18 @@ def update_test(
             _replace_questions(test.id, data["questions"], db)
         if "interpretations" in data and data["interpretations"] is not None:
             _replace_interpretations(test.id, data["interpretations"], db)
+
+        if unpublish_event is not None:
+            test.status = "draft"
+            record_event(
+                event=unpublish_event,
+                actor=Actor.user(actor_id, actor_role),
+                target=Target("test", test.id),
+                outcome=Outcome.SUCCESS,
+                metadata={},
+                context=safe_ctx,
+                db=db,
+            )
 
         test.updated_at = datetime.now(timezone.utc)
         record_event(

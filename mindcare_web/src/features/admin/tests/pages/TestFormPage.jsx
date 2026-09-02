@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
@@ -53,26 +53,34 @@ const EMPTY = {
 };
 
 /**
- * Admin-конфигурация по умолчанию. Второй конкретный потребитель этой формы —
- * PsychologistTestFormPage (Этап F2) передаёт свой config через проп: та же
- * форма/валидация/QuestionBuilder, другие api-вызовы и урезанный набор полей
- * (без статуса при создании, без «Активен», без дублирования — psychologist
- * управляет только своими draft/needs_changes тестами).
+ * Admin-конфигурация по умолчанию (параметризована cabinetRole — тем же путём,
+ * что и AdminTestsPage, для /supervisor/tests: backend разрешает admin и
+ * supervisor одинаково на всём routes_admin.py, отличается только базовый
+ * путь навигации). Второй, ownership-иной конкретный потребитель этой формы —
+ * PsychologistTestFormPage (Этап F2) передаёт СВОЙ config явно через проп: та
+ * же форма/валидация/QuestionBuilder, другие api-вызовы и урезанный набор
+ * полей (без статуса при создании, без «Активен», без дублирования —
+ * psychologist управляет только своими draft/needs_changes тестами).
  */
-const ADMIN_CONFIG = {
-  mode: 'admin',
-  api: { get: getAdminTest, create: createTest, update: updateTest },
-  backPath: '/admin/tests',
-  showStatusSelect: true,
-  showIsActiveToggle: true,
-  // Гейтит и кнопку «Дублировать», и 409-баннер «есть результаты, создайте
-  // копию» — для psychologist эта ветка недостижима (их правка заперта на
-  // draft/needs_changes, где результатов не бывает), поэтому оба скрываются
-  // одним флагом, а не заводятся отдельно ради единственного edge-case.
-  showDuplicate: true,
-};
+function adminConfig(cabinetRole) {
+  return {
+    mode: 'admin',
+    api: { get: getAdminTest, create: createTest, update: updateTest },
+    backPath: `/${cabinetRole}/tests`,
+    showStatusSelect: true,
+    showIsActiveToggle: true,
+    // Гейтит и кнопку «Дублировать», и 409-баннер «есть результаты, создайте
+    // копию» — для psychologist эта ветка недостижима (их правка заперта на
+    // draft/needs_changes, где результатов не бывает), поэтому оба скрываются
+    // одним флагом, а не заводятся отдельно ради единственного edge-case.
+    showDuplicate: true,
+  };
+}
 
-export default function TestFormPage({ config = ADMIN_CONFIG }) {
+export default function TestFormPage({ config, cabinetRole = 'admin' }) {
+  // adminConfig() строит новый объект — без memo effectiveConfig.api менял бы
+  // identity на каждом рендере и зацикливал useEffect ниже (dependency array).
+  const effectiveConfig = useMemo(() => config || adminConfig(cabinetRole), [config, cabinetRole]);
   const { uuid } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(uuid);
@@ -99,7 +107,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
     scoring: form.scoring,
     questions: form.questions,
     interpretations: form.interpretations,
-    analyzeFn: config.analyzeFn,
+    analyzeFn: effectiveConfig.analyzeFn,
   });
 
   // справочники категорий/тегов
@@ -121,7 +129,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
     // поэтому баннер «есть результаты» и ошибку сбрасываем вручную.
     setLocked(false);
     setError('');
-    config.api.get(uuid)
+    effectiveConfig.api.get(uuid)
       .then((t) => {
         if (!alive) return;
         const questions = (t.questions || [])
@@ -155,7 +163,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
       .catch((err) => { if (alive) setError(`Не удалось загрузить тест: ${err.message}`); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [isEdit, uuid, nextKey, config.api]);
+  }, [isEdit, uuid, nextKey, effectiveConfig.api]);
 
   const set = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -194,15 +202,15 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
     }
 
     try {
-      if (isEdit) await config.api.update(uuid, payload);
-      else await config.api.create(payload);
-      navigate(config.backPath);
+      if (isEdit) await effectiveConfig.api.update(uuid, payload);
+      else await effectiveConfig.api.create(payload);
+      navigate(effectiveConfig.backPath);
     } catch (err) {
       // Баннер «есть результаты, создайте копию» осмыслен только там, где есть
-      // duplicate (admin): psychologist-редактирование заперто на draft/
-      // needs_changes гейтом списка, там 409 значит «статус сменился» — просто
-      // текст ошибки, без спецбаннера и кнопки дублирования.
-      if (err?.status === 409 && config.showDuplicate) setLocked(true);
+      // duplicate (admin/supervisor). У психолога такой кнопки нет (F2 scope) —
+      // 409 (has_results на правке вопросов ИЛИ смена статуса гонкой) показывается
+      // обычным текстом ошибки без спецбаннера.
+      if (err?.status === 409 && effectiveConfig.showDuplicate) setLocked(true);
       setError(err.message || 'Не удалось сохранить тест');
       setSubmitting(false);
     }
@@ -214,7 +222,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
     setError('');
     try {
       const copy = await duplicateTest(uuid);
-      navigate(`${config.backPath}/${copy.uuid}`);
+      navigate(`${effectiveConfig.backPath}/${copy.uuid}`);
     } catch (err) {
       setError(err.message || 'Не удалось создать копию теста');
       setDuplicating(false);
@@ -227,7 +235,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
 
   return (
     <div className={styles.page}>
-      <button className={styles.back} type="button" onClick={() => navigate(config.backPath)}>
+      <button className={styles.back} type="button" onClick={() => navigate(effectiveConfig.backPath)}>
         <Icon name="chevron-left" size={14} /> К списку тестов
       </button>
 
@@ -235,7 +243,17 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
 
       {error && !locked && <p className={styles.error}>{error}</p>}
 
-      {locked && config.showDuplicate && (
+      {isEdit && effectiveConfig.warnOnPublishedEdit && form.status === 'published' && (
+        <div className={styles.lockedNotice} role="alert">
+          <p className={styles.lockedText}>
+            Этот тест опубликован и виден студентам. При сохранении изменений он
+            снимется с публикации (статус «Черновик») и потребует повторной
+            отправки на модерацию, прежде чем снова станет виден студентам.
+          </p>
+        </div>
+      )}
+
+      {locked && effectiveConfig.showDuplicate && (
         <div className={styles.lockedNotice} role="alert">
           <p className={styles.lockedText}>
             По этому тесту уже есть пройденные результаты, поэтому его вопросы
@@ -327,7 +345,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
             </div>
             <p className={styles.muted}>Изменить статус можно из списка тестов.</p>
           </div>
-        ) : config.showStatusSelect ? (
+        ) : effectiveConfig.showStatusSelect ? (
           <div className={styles.field}>
             <Select
               label="Статус"
@@ -342,7 +360,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
           </p>
         )}
 
-        {config.showIsActiveToggle && (
+        {effectiveConfig.showIsActiveToggle && (
           <div className={styles.field}>
             <Checkbox
               checked={form.is_active}
@@ -401,7 +419,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
       </section>
 
       <div className={styles.footer}>
-        <Button variant="secondary" onClick={() => navigate(config.backPath)} disabled={submitting}>
+        <Button variant="secondary" onClick={() => navigate(effectiveConfig.backPath)} disabled={submitting}>
           Отмена
         </Button>
         <Button
@@ -411,7 +429,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
         >
           Предпросмотр
         </Button>
-        {isEdit && config.showDuplicate && (
+        {isEdit && effectiveConfig.showDuplicate && (
           <Button variant="secondary" onClick={handleDuplicate} loading={duplicating}>
             Дублировать
           </Button>
@@ -429,7 +447,7 @@ export default function TestFormPage({ config = ADMIN_CONFIG }) {
           questions={form.questions}
           interpretations={form.interpretations}
           onClose={() => setPreviewOpen(false)}
-          previewFn={config.previewFn}
+          previewFn={effectiveConfig.previewFn}
         />
       )}
     </div>
