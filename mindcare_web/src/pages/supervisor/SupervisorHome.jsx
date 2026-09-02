@@ -24,7 +24,7 @@ export default function SupervisorHome() {
 
       {/* Welcome + hint */}
       <div className={`${styles.grid} ${styles.g21}`} style={{ marginBottom: 16 }}>
-        <div className={styles.darkCard}>
+        <div className={styles.darkCard} data-hero-banner>
           <div className={styles.darkCardTitle}>
             Кабинет<br /><em>супервизора</em>
           </div>

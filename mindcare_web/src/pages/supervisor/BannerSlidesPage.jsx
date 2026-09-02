@@ -261,6 +261,7 @@ export default function BannerSlidesPage({ cabinetRole = 'supervisor' }) {
                       size="sm"
                       onClick={() => openEdit(item)}
                       aria-label={`Изменить слайд «${item.title}»`}
+                      title="Изменить"
                     >
                       <Icon name="edit" size={15} />
                     </Button>
@@ -277,6 +278,7 @@ export default function BannerSlidesPage({ cabinetRole = 'supervisor' }) {
                       tone="danger"
                       onClick={() => { setDeleteTarget(item); setDeleteError(''); }}
                       aria-label={`Удалить слайд «${item.title}»`}
+                      title="Удалить"
                     >
                       <Icon name="trash" size={15} />
                     </Button>

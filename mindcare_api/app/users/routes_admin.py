@@ -7,7 +7,10 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from typing import Optional, Literal
 
 from app.auth.deps import require_role, get_current_user, resolve_role_or_403
-from app.audit import Actor
+from app.auth import service as auth_service
+from app.auth.security import hash_session_token
+from app.audit import Actor, Target, record_event
+from app.audit.contracts import AuditError
 from app.audit.failsafe import record_secondary_failure
 from app.audit.request_context import build_request_context
 from app.users import service
@@ -18,6 +21,7 @@ from app.users.schemas import (
     AdminUserCreateResponse,
     AdminUserUpdate,
     AdminUserRead,
+    ImpersonateResponse,
 )
 
 
@@ -107,6 +111,67 @@ def create_user(
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return user
+
+
+@router.post("/{uuid}/impersonate", response_model=ImpersonateResponse)
+def impersonate_user(
+    request: Request,
+    uuid: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Вход администратора «под именем» пользователя (ADR-025).
+
+    Создаёт сессию целевого пользователя с серверной отметкой
+    impersonator_user_id (для атрибуции) и возвращает её токен. Запрещено:
+    вход под самим собой, под другим admin, под заблокированным пользователем
+    и под аккаунтом без активных ролей (guard в service.impersonate_target).
+    Аудит: admin_user_impersonated (target — целевой пользователь).
+    """
+    actor = _admin_actor(current_user)
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
+    try:
+        target = service.impersonate_target(uuid, actor_id=actor.user_id)
+    except service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    session_token, expires_at = auth_service.create_session(
+        user_id=target["id"],
+        ip=ip,
+        user_agent=ua,
+        impersonator_user_id=actor.user_id,
+    )
+
+    # session_id_hash новой сессии = user_sessions.id impersonation-сессии:
+    # связывает audit-строку с конкретной созданной сессией.
+    # Fail-closed (RAISE): если аудит не записался — отзываем уже созданную
+    # сессию (raw-токен ещё не отдан клиенту, станет непригоден) и отдаём 503,
+    # чтобы привилегированный вход не остался без следа.
+    try:
+        record_event(
+            event="admin_user_impersonated",
+            actor=actor,
+            target=Target("user", int(target["id"])),
+            context=build_request_context(
+                ip=ip, user_agent=ua,
+                session_id_hash=hash_session_token(session_token),
+            ),
+        )
+    except AuditError:
+        auth_service.terminate_session(session_token)
+        raise HTTPException(
+            status_code=503,
+            detail="Не удалось зафиксировать вход. Попробуйте позже.",
+        )
+
+    return {
+        "session_token": session_token,
+        "expires_at":    expires_at,
+        "roles":         target["roles"],
+        "role":          target["role"],
+        "name":          target["full_name"],
+    }
 
 
 @router.get("/{uuid}", response_model=AdminUserRead)

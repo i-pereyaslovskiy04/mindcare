@@ -130,6 +130,8 @@ from app.chat.routes import router as chat_router                          # noq
 from app.chat.routes import system_router as chat_system_router            # noqa: E402
 from app.tests.routes_admin import router as admin_tests_router            # noqa: E402
 from app.tests.routes import router as tests_router                        # noqa: E402
+from app.tests.routes_staff import router as staff_tests_router            # noqa: E402
+from app.tests.routes_psych import router as psych_tests_router            # noqa: E402
 from app.appointments.routes_student import router as appointments_student_router      # noqa: E402
 from app.appointments.routes_student import group_router as group_sessions_student_router  # noqa: E402
 from app.appointments.routes_psychologist import router as appointments_psychologist_router  # noqa: E402
@@ -162,6 +164,8 @@ app.include_router(chat_router,               prefix="/api")
 app.include_router(chat_system_router,        prefix="/api")
 app.include_router(admin_tests_router,        prefix="/api")
 app.include_router(tests_router,              prefix="/api")
+app.include_router(staff_tests_router,        prefix="/api")
+app.include_router(psych_tests_router,        prefix="/api")
 app.include_router(appointments_student_router,      prefix="/api")
 app.include_router(group_sessions_student_router,    prefix="/api")
 app.include_router(appointments_psychologist_router, prefix="/api")
@@ -202,4 +206,5 @@ def public_config():
     """
     return {
         "newsImageMaxSizeMb": settings.NEWS_IMAGE_MAX_SIZE_MB,
+        "mediaAvMaxSizeMb": settings.MEDIA_AV_MAX_SIZE_MB,
     }

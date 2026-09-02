@@ -160,6 +160,22 @@ def test_required_question_missing_returns_422(client, test_email, made_test):
     assert r.status_code == 422, r.text
 
 
+def test_timed_out_submit_accepts_partial_answers(client, test_email, made_test):
+    """Тайм-лимит (клиентский): авто-submit с пропущенными обязательными → 201,
+    неотвеченный вопрос даёт 0 (а не 422 с потерей ответов)."""
+    headers = _login(client, test_email)
+    client.post("/api/tests/consent/accept", headers=headers)
+    q1 = made_test["questions"][0]
+    body = {
+        "answers": [{"question_id": q1["id"], "option_id": q1["options"][1]["id"]}],
+        "timed_out": True,   # Q2 пропущен намеренно
+    }
+    r = client.post(f"/api/tests/{made_test['uuid']}/submit", json=body, headers=headers)
+    assert r.status_code == 201, r.text
+    # только Q1 (3 балла) засчитан, Q2 = 0
+    assert r.json()["total_score"] == 3
+
+
 def test_result_is_private_to_owner(client, test_email, made_test):
     owner_headers = _login(client, test_email)
     client.post("/api/tests/consent/accept", headers=owner_headers)

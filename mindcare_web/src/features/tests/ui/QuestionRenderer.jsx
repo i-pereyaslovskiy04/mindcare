@@ -12,8 +12,9 @@ import styles from './QuestionRenderer.module.css';
  * onChange(nextValue) — обновляет ответ в родителе.
  */
 export default function QuestionRenderer({ question, index, value, onChange, invalid, total }) {
-  const { question_type: type, question_text, is_required, options, config } = question;
+  const { question_type: type, question_text, is_required, options, config, media } = question;
   const titleId = `q-title-${question.id}`;
+  const questionImages = media || [];
 
   return (
     <div className={[styles.card, invalid && styles.cardInvalid].filter(Boolean).join(' ')}>
@@ -34,6 +35,41 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
         </h3>
       </div>
 
+      {questionImages.map((m, i) => {
+        if (m.kind === 'video') {
+          return (
+            <video
+              key={m.uuid || i}
+              className={styles.qMedia}
+              src={m.url}
+              controls
+              preload="metadata"
+              aria-label={m.caption || question_text}
+            />
+          );
+        }
+        if (m.kind === 'audio') {
+          return (
+            <audio
+              key={m.uuid || i}
+              className={styles.qAudio}
+              src={m.url}
+              controls
+              preload="metadata"
+              aria-label={m.caption || question_text}
+            />
+          );
+        }
+        return (
+          <img
+            key={m.uuid || i}
+            className={styles.qImage}
+            src={m.url}
+            alt={m.caption || question_text}
+          />
+        );
+      })}
+
       {type === 'single_choice' && (
         <div className={styles.options} role="radiogroup" aria-labelledby={titleId}>
           {options.map((opt) => (
@@ -45,7 +81,7 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
                 checked={value === opt.id}
                 onChange={() => onChange(opt.id)}
               />
-              <span className={styles.optText}>{opt.option_text}</span>
+              <OptionContent option={opt} />
             </label>
           ))}
         </div>
@@ -68,7 +104,7 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
                     )
                   }
                 />
-                <span className={styles.optText}>{opt.option_text}</span>
+                <OptionContent option={opt} />
               </label>
             );
           })}
@@ -95,6 +131,29 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Текст варианта + необязательное изображение. Картинка декоративна: доступное
+ * имя даёт текст варианта, поэтому alt="" и aria-hidden (у option_media нет
+ * подписи, ГОСТ Р 52872-2019 требует именно так для дублирующей текст картинки).
+ */
+function OptionContent({ option }) {
+  const images = option.media || [];
+  return (
+    <span className={styles.optBody}>
+      {images.map((img, i) => (
+        <img
+          key={img.uuid || i}
+          className={styles.optImage}
+          src={img.url}
+          alt=""
+          aria-hidden="true"
+        />
+      ))}
+      <span className={styles.optText}>{option.option_text}</span>
+    </span>
   );
 }
 

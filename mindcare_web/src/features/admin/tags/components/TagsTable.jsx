@@ -75,6 +75,7 @@ export default function TagsTable({ items, loading, error, onEdit, onDelete }) {
                       size="sm"
                       onClick={() => onEdit?.(item)}
                       aria-label={`Переименовать ${item.name}`}
+                      title="Переименовать"
                     >
                       <Icon name="edit" size={15} />
                     </Button>
@@ -84,6 +85,7 @@ export default function TagsTable({ items, loading, error, onEdit, onDelete }) {
                       tone="danger"
                       onClick={() => onDelete?.(item, totalUsages)}
                       aria-label={`Удалить ${item.name}`}
+                      title="Удалить"
                     >
                       <Icon name="trash" size={15} />
                     </Button>

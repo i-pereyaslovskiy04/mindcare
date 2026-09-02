@@ -280,6 +280,122 @@ def test_duplicate_test_returns_copy():
     )
 
 
+# ── медиа в вопросах/вариантах (изображения) ──────────────────────────────────
+# Явно прикреплённое изображение обязано существовать: в отличие от категорий/
+# тегов НЕ пропускаем молча, иначе автор сохранит и потеряет картинку.
+
+def test_question_media_valid_uuid_ok():
+    q = _choice_question()
+    q["media"] = [{"media_uuid": "abc", "caption": "подпись"}]
+    with patch.object(service.storage, "media_exists", return_value=True) as m:
+        service._validate_questions([q])   # no raise
+    m.assert_called_with("abc")
+
+
+def test_question_media_missing_uuid_rejected():
+    q = _choice_question()
+    q["media"] = [{"media_uuid": "gone", "caption": None}]
+    with patch.object(service.storage, "media_exists", return_value=False):
+        with pytest.raises(ValueError, match="изображение не найдено"):
+            service._validate_questions([q])
+
+
+def test_option_media_missing_uuid_rejected():
+    q = _choice_question()
+    q["options"][0]["media"] = [{"media_uuid": "gone"}]
+    with patch.object(service.storage, "media_exists", return_value=False):
+        with pytest.raises(ValueError, match=r"вариант #1.*изображение не найдено"):
+            service._validate_questions([q])
+
+
+def test_no_media_does_not_call_resolver():
+    # обычный тест без картинок не должен трогать медиатеку
+    with patch.object(service.storage, "media_exists") as m:
+        service._validate_questions([_choice_question()])
+    m.assert_not_called()
+
+
+# ── staff-доступ к результатам: резолв acting-роли (Этап E) ───────────────────
+
+def test_staff_result_role_single_supervisor():
+    assert service._resolve_staff_result_role(["supervisor", "student"], None) == "supervisor"
+
+
+def test_staff_result_role_single_psychologist():
+    assert service._resolve_staff_result_role(["psychologist", "student"], None) == "psychologist"
+
+
+def test_staff_result_role_multi_defaults_conservative():
+    # без X-Active-Role при обеих ролях — консервативно psychologist (scoped)
+    assert service._resolve_staff_result_role(
+        ["supervisor", "psychologist"], None,
+    ) == "psychologist"
+
+
+def test_staff_result_role_honours_valid_active_role():
+    assert service._resolve_staff_result_role(
+        ["supervisor", "psychologist"], "supervisor",
+    ) == "supervisor"
+
+
+def test_staff_result_role_rejects_active_role_outside_holder():
+    with pytest.raises(service.ResultAccessError):
+        service._resolve_staff_result_role(["psychologist"], "supervisor")
+
+
+def test_staff_result_role_rejects_no_holder():
+    # admin вне ролей результатов (ADR-016) — доступа нет
+    with pytest.raises(service.ResultAccessError):
+        service._resolve_staff_result_role(["admin", "student"], None)
+
+
+# ── случайный порядок (shuffle) в проекции для прохождения ────────────────────
+
+def _take_tree(shuffle_q=False, shuffle_o=False):
+    def _opt(i, order):
+        return {"id": i, "option_text": f"o{i}", "option_order": order,
+                "value_score": order, "media": []}
+    def _q(i, order):
+        return {"id": i, "question_text": f"q{i}", "question_order": order,
+                "question_type": "single_choice", "is_required": True,
+                "config": {}, "media": [],
+                "options": [_opt(i * 10 + 1, 0), _opt(i * 10 + 2, 1)]}
+    return {
+        "uuid": "u", "title": "t", "description": None, "time_limit_min": None,
+        "shuffle_questions": shuffle_q, "shuffle_options": shuffle_o,
+        "questions": [_q(1, 1), _q(2, 2)],
+    }
+
+
+def test_strip_take_no_shuffle_preserves_order():
+    out = service._strip_take(_take_tree())
+    assert [q["id"] for q in out["questions"]] == [1, 2]
+    assert [o["id"] for o in out["questions"][0]["options"]] == [11, 12]
+
+
+def test_strip_take_shuffle_questions(monkeypatch):
+    monkeypatch.setattr(service._random, "shuffle", lambda lst: lst.reverse())
+    out = service._strip_take(_take_tree(shuffle_q=True))
+    assert [q["id"] for q in out["questions"]] == [2, 1]         # порядок вопросов перевёрнут
+    assert [o["id"] for o in out["questions"][0]["options"]] == [21, 22]  # варианты не тронуты
+
+
+def test_strip_take_shuffle_options(monkeypatch):
+    monkeypatch.setattr(service._random, "shuffle", lambda lst: lst.reverse())
+    out = service._strip_take(_take_tree(shuffle_o=True))
+    assert [q["id"] for q in out["questions"]] == [1, 2]         # вопросы не тронуты
+    assert [o["id"] for o in out["questions"][0]["options"]] == [12, 11]  # варианты перевёрнуты
+
+
+def test_strip_take_shuffle_never_leaks_value_score():
+    out = service._strip_take(_take_tree(shuffle_q=True, shuffle_o=True))
+    ids = {q["id"] for q in out["questions"]}
+    assert ids == {1, 2}                                          # состав сохранён
+    for q in out["questions"]:
+        for o in q["options"]:
+            assert "value_score" not in o
+
+
 # ── анализ покрытия порогов интерпретации ─────────────────────────────────────
 # Пороги валидируются на пересечения, но НЕ на покрытие: балл, не попавший ни в
 # один диапазон, молча даёт recommendations=null. analyze_test это показывает.
@@ -371,3 +487,151 @@ def test_analyze_multi_scale_gaps_are_per_scale():
     assert issues == [
         {"scale_name": "B", "min_score": 2, "max_score": 3, "kind": "gap", "label": None},
     ]
+
+
+# ── moderation workflow: _validate_transition (Этап F, ADR-016) ───────────────
+# Легальные переходы: draft/needs_changes → in_review (только автор);
+# draft/in_review/needs_changes → published (только staff);
+# in_review → needs_changes (только staff). published не имеет исходящих
+# переходов (снятие с публикации — существующий is_active toggle).
+
+@pytest.mark.parametrize("current", ["draft", "needs_changes"])
+def test_transition_to_in_review_by_author_ok(current):
+    event = service._validate_transition(current, "in_review", "psychologist", True)
+    assert event == "test_submitted_for_review"
+
+
+@pytest.mark.parametrize("current", ["draft", "needs_changes"])
+def test_transition_to_in_review_by_non_author_forbidden(current):
+    with pytest.raises(service.TestTransitionForbidden):
+        service._validate_transition(current, "in_review", "psychologist", False)
+
+
+@pytest.mark.parametrize("current", ["draft", "in_review", "needs_changes"])
+@pytest.mark.parametrize("role", ["admin", "supervisor"])
+def test_transition_to_published_by_staff_ok(current, role):
+    event = service._validate_transition(current, "published", role, False)
+    assert event == "test_published"
+
+
+@pytest.mark.parametrize("current", ["draft", "in_review", "needs_changes"])
+def test_transition_to_published_by_non_staff_forbidden(current):
+    # даже автор-психолог не может публиковать напрямую — только admin/supervisor
+    with pytest.raises(service.TestTransitionForbidden):
+        service._validate_transition(current, "published", "psychologist", True)
+
+
+@pytest.mark.parametrize("role", ["admin", "supervisor"])
+def test_transition_in_review_to_needs_changes_by_staff_ok(role):
+    event = service._validate_transition("in_review", "needs_changes", role, False)
+    assert event == "test_returned_for_changes"
+
+
+def test_transition_in_review_to_needs_changes_by_non_staff_forbidden():
+    with pytest.raises(service.TestTransitionForbidden):
+        service._validate_transition("in_review", "needs_changes", "psychologist", False)
+
+
+@pytest.mark.parametrize("current,target", [
+    ("draft", "needs_changes"),        # нет прямого пути, минуя review
+    ("draft", "draft"),                # no-op не определён
+    ("published", "draft"),            # unpublish — не через status
+    ("published", "in_review"),
+    ("published", "needs_changes"),
+    ("in_review", "draft"),
+    ("needs_changes", "needs_changes"),
+])
+def test_illegal_transitions_rejected_regardless_of_role(current, target):
+    # роль/авторство не спасают нелегальный переход — 409, не 403
+    with pytest.raises(service.TestTransitionError):
+        service._validate_transition(current, target, "admin", True)
+
+
+# ── авторство psychologist: create_my_test / _own_editable_test (Этап F2) ─────
+
+def test_create_my_test_forces_draft_even_if_client_sends_published():
+    data = _base_test(status="published")
+    with patch.object(service.storage, "create_test", return_value={"uuid": "x"}) as m:
+        service.create_my_test(data, created_by=7)
+    called_data = m.call_args.args[0]
+    assert called_data["status"] == "draft"
+    assert m.call_args.kwargs["created_by"] == 7
+
+
+def test_create_my_test_default_actor_role_is_psychologist():
+    with patch.object(service.storage, "create_test", return_value={"uuid": "x"}) as m:
+        service.create_my_test(_base_test(), created_by=7)
+    assert m.call_args.kwargs["actor_role"] == "psychologist"
+
+
+@pytest.mark.parametrize("status_", ["draft", "needs_changes"])
+def test_own_editable_test_ok_for_editable_statuses(status_):
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": status_, "created_by": 7},
+    ):
+        found = service._own_editable_test("u", 7)
+    assert found["status"] == status_
+
+
+@pytest.mark.parametrize("status_", ["in_review", "published"])
+def test_own_editable_test_rejects_non_editable_status(status_):
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": status_, "created_by": 7},
+    ):
+        with pytest.raises(service.TestNotEditable):
+            service._own_editable_test("u", 7)
+
+
+def test_own_editable_test_not_found_is_404():
+    with patch.object(service.storage, "get_status_and_author", return_value=None):
+        with pytest.raises(ValueError, match="не найден"):
+            service._own_editable_test("u", 7)
+
+
+def test_own_editable_test_wrong_owner_is_404_not_403():
+    # чужой тест неотличим от несуществующего (как session_notes) — 404, не 403
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "draft", "created_by": 999},
+    ):
+        with pytest.raises(ValueError, match="не найден"):
+            service._own_editable_test("u", 7)
+
+
+def test_get_my_test_wrong_owner_is_404():
+    with patch.object(
+        service.storage, "get_test_by_uuid",
+        return_value={"uuid": "u", "created_by": 999},
+    ):
+        with pytest.raises(ValueError, match="не найден"):
+            service.get_my_test("u", author_id=7)
+
+
+def test_get_my_test_own_ok():
+    with patch.object(
+        service.storage, "get_test_by_uuid",
+        return_value={"uuid": "u", "created_by": 7},
+    ):
+        assert service.get_my_test("u", author_id=7)["uuid"] == "u"
+
+
+def test_update_my_test_blocked_when_not_editable():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "in_review", "created_by": 7},
+    ), patch.object(service.storage, "update_test") as m:
+        with pytest.raises(service.TestNotEditable):
+            service.update_my_test("u", {"title": "X"}, actor_id=7)
+    m.assert_not_called()
+
+
+def test_delete_my_test_blocked_when_not_editable():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "published", "created_by": 7},
+    ), patch.object(service.storage, "delete_test") as m:
+        with pytest.raises(service.TestNotEditable):
+            service.delete_my_test("u", actor_id=7)
+    m.assert_not_called()

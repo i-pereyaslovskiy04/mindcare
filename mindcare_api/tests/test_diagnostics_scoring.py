@@ -37,6 +37,66 @@ def _test(questions, scoring_method="sum", interpretations=None):
     }
 
 
+# ── weighted scoring ──────────────────────────────────────────────────────────
+# weighted = взвешенная сумма: балл вопроса × config["weight"]. Границы
+# (score_bounds) обязаны масштабироваться так же, иначе пороги analyze_test врут.
+
+def _wq(id_, opts, weight, order):
+    return _q(id_, "single_choice", opts, config={"weight": weight}, order=order)
+
+
+def test_weighted_total_and_max_scale_by_weight():
+    q1 = _wq(1, [_opt(10, 0), _opt(11, 3)], weight=2, order=1)
+    q2 = _wq(2, [_opt(20, 0), _opt(21, 5)], weight=3, order=2)
+    t = _test([q1, q2], scoring_method="weighted")
+    r = scoring.compute_result(t, [{"question_id": 1, "option_id": 11},
+                                   {"question_id": 2, "option_id": 21}])
+    assert r["total_score"] == 3 * 2 + 5 * 3      # 21
+    assert r["max_possible"] == 3 * 2 + 5 * 3      # 21 (макс. опция каждого)
+    assert r["scoring_used"] == "weighted"
+
+
+def test_weighted_default_weight_is_one():
+    # без config["weight"] weighted эквивалентен sum
+    q1 = _q(1, "single_choice", [_opt(10, 0), _opt(11, 3)], order=1)
+    q2 = _q(2, "single_choice", [_opt(20, 0), _opt(21, 5)], order=2)
+    weighted = scoring.compute_result(
+        _test([q1, q2], "weighted"),
+        [{"question_id": 1, "option_id": 11}, {"question_id": 2, "option_id": 21}],
+    )
+    assert weighted["total_score"] == 8
+
+
+def test_weighted_score_bounds_match_scoring():
+    q1 = _wq(1, [_opt(10, 0), _opt(11, 3)], weight=2, order=1)
+    q2 = _wq(2, [_opt(20, 0), _opt(21, 5)], weight=3, order=2)
+    bounds = scoring.score_bounds(_test([q1, q2], "weighted"))
+    assert bounds == [{"scale_name": None, "min_score": 0, "max_score": 21}]
+
+
+def test_weighted_multi_scale_applies_weight_per_scale():
+    q1 = _q(1, "single_choice", [_opt(10, 0), _opt(11, 3)],
+            config={"scale": "A", "weight": 2}, order=1)
+    q2 = _q(2, "single_choice", [_opt(20, 0), _opt(21, 4)],
+            config={"scale": "B", "weight": 1}, order=2)
+    r = scoring.compute_result(
+        _test([q1, q2], "weighted"),
+        [{"question_id": 1, "option_id": 11}, {"question_id": 2, "option_id": 21}],
+    )
+    scales = {s["scale_name"]: s for s in r["scales"]}
+    assert scales["A"]["score"] == 6   # 3 × 2
+    assert scales["B"]["score"] == 4   # 4 × 1
+
+
+def test_weight_of_ignores_garbage():
+    assert scoring._weight_of({"config": {"weight": 0}}) == 1
+    assert scoring._weight_of({"config": {"weight": -3}}) == 1
+    assert scoring._weight_of({"config": {"weight": True}}) == 1
+    assert scoring._weight_of({"config": {"weight": "x"}}) == 1
+    assert scoring._weight_of({"config": {"weight": 4}}) == 4
+    assert scoring._weight_of({"config": {}}) == 1
+
+
 # ── score_question ────────────────────────────────────────────────────────────
 
 def test_single_choice_score():
@@ -140,7 +200,9 @@ def test_strip_take_hides_value_score_and_interpretations():
     assert "interpretations" not in stripped
     opt = stripped["questions"][0]["options"][0]
     assert "value_score" not in opt
-    assert set(opt.keys()) == {"id", "option_text", "option_order"}
+    # media проброшено (изображение — не ключ теста), value_score по-прежнему скрыт
+    assert set(opt.keys()) == {"id", "option_text", "option_order", "media"}
+    assert opt["media"] == []
 
 
 # ── валидация ответов submit ──────────────────────────────────────────────────

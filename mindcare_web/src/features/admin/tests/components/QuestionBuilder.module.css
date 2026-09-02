@@ -91,6 +91,40 @@
   margin-bottom: 12px;
 }
 
+/* ── медиа вопроса ── */
+.qMedia {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mediaList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mediaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.addMediaToggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--coffee);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.addMediaToggle:hover { text-decoration: underline; }
+
 /* ── options ── */
 .options {
   border-top: 1px dashed var(--nav-border);
@@ -113,12 +147,26 @@
 
 .scoreLabel { text-align: center; }
 
+.optionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .optionRow {
   display: grid;
   grid-template-columns: 1fr 90px 34px;
   gap: 8px;
   align-items: center;
 }
+
+/* Загрузчик картинки варианта — уже колонки текста, без правой кнопки-корзины */
+.optionMedia {
+  padding-left: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--nav-border);
+}
+.optionBlock:last-of-type .optionMedia { border-bottom: none; }
 
 .scoreInput { text-align: center; }
 

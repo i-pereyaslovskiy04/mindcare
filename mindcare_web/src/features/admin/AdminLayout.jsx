@@ -146,6 +146,7 @@ export default function AdminLayout() {
               variant="icon"
               size="sm"
               aria-label="Выйти"
+              title="Выйти"
               onClick={logout}
             >
               <Icon name="logout" size={16} />

@@ -184,6 +184,30 @@ def test_integrity_error_also_maps_to_409(client, admin, created_test):
     assert r.status_code == 409, r.text
 
 
+# ── случайный порядок (shuffle) round-trip ────────────────────────────────────
+
+def test_shuffle_flags_roundtrip(client, admin, test_email):
+    payload = _test_payload(f"SHUFFLE {_uuid.uuid4().hex[:6]}")
+    payload["shuffle_questions"] = True
+    payload["shuffle_options"] = True
+    r = client.post("/api/admin/tests", json=payload, headers=admin)
+    assert r.status_code == 201, r.text
+    test = r.json()
+    try:
+        assert test["shuffle_questions"] is True
+        assert test["shuffle_options"] is True
+        # admin single-read сохраняет флаги
+        r = client.get(f"/api/admin/tests/{test['uuid']}", headers=admin)
+        assert r.json()["shuffle_questions"] is True
+        # take-проекция студента отдаёт тот же состав вопросов (порядок может отличаться)
+        headers = _student_headers(client, test_email)
+        r = client.get(f"/api/tests/{test['uuid']}", headers=headers)
+        assert r.status_code == 200, r.text
+        assert len(r.json()["questions"]) == len(payload["questions"])
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
 # ── валидация шкал на уровне API ──────────────────────────────────────────────
 
 def test_partial_scales_rejected_by_api(client, admin):
@@ -240,6 +264,105 @@ def test_duplicate_requires_staff_role(client, test_email, created_test):
     headers = _student_headers(client, test_email)
     r = client.post(f"/api/admin/tests/{created_test['uuid']}/duplicate", headers=headers)
     assert r.status_code == 403, r.text
+
+
+# ── медиа в вопросах/вариантах (изображения) ──────────────────────────────────
+
+@pytest.fixture
+def media_file():
+    """Один активный медиафайл в БД; убирается после теста (cascade чистит связки)."""
+    from app.db.models import MediaFile
+    with SessionLocal() as db:
+        mf = MediaFile(
+            file_name="t.webp", file_path="/media/uploads/test/t.webp",
+            file_type="image", mime_type="image/webp",
+            file_size_bytes=100, width_px=10, height_px=10, is_active=True,
+        )
+        db.add(mf)
+        db.commit()
+        db.refresh(mf)
+        info = {"uuid": str(mf.uuid), "url": mf.file_path, "id": mf.id}
+    try:
+        yield info
+    finally:
+        with SessionLocal() as db:
+            row = db.query(MediaFile).filter(MediaFile.id == info["id"]).first()
+            if row:
+                db.delete(row)
+                db.commit()
+
+
+def _payload_with_media(media_uuid, caption="рис. 1"):
+    payload = _test_payload(f"MEDIA {_uuid.uuid4().hex[:6]}")
+    payload["questions"][0]["media"] = [{"media_uuid": media_uuid, "caption": caption}]
+    payload["questions"][0]["options"][0]["media"] = [{"media_uuid": media_uuid}]
+    return payload
+
+
+def test_create_with_media_roundtrip(client, admin, media_file):
+    r = client.post(
+        "/api/admin/tests", json=_payload_with_media(media_file["uuid"]), headers=admin,
+    )
+    assert r.status_code == 201, r.text
+    test = r.json()
+    try:
+        q = test["questions"][0]
+        assert q["media"][0]["url"] == media_file["url"]
+        assert q["media"][0]["uuid"] == media_file["uuid"]
+        assert q["media"][0]["caption"] == "рис. 1"
+        assert q["options"][0]["media"][0]["url"] == media_file["url"]
+        assert q["options"][1]["media"] == []   # второй вариант без картинки
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
+def test_take_projection_includes_media_without_scores(client, admin, test_email, media_file):
+    r = client.post(
+        "/api/admin/tests", json=_payload_with_media(media_file["uuid"]), headers=admin,
+    )
+    assert r.status_code == 201, r.text
+    test = r.json()
+    try:
+        headers = _student_headers(client, test_email)
+        r = client.get(f"/api/tests/{test['uuid']}", headers=headers)
+        assert r.status_code == 200, r.text
+        q = r.json()["questions"][0]
+        assert q["media"][0]["url"] == media_file["url"]
+        assert q["media"][0]["kind"] == "image"   # MediaOut.kind по file_type
+        assert q["options"][0]["media"][0]["url"] == media_file["url"]
+        # изображение отдаётся студенту, но ключ теста — нет
+        assert "value_score" not in q["options"][0]
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
+def test_create_with_unknown_media_uuid_returns_422(client, admin):
+    payload = _test_payload(f"MEDIA bad {_uuid.uuid4().hex[:6]}")
+    payload["questions"][0]["media"] = [{"media_uuid": str(_uuid.uuid4()), "caption": None}]
+    r = client.post("/api/admin/tests", json=payload, headers=admin)
+    assert r.status_code == 422, r.text
+    assert "изображение не найдено" in r.json()["detail"]
+
+
+def test_duplicate_copies_media_links(client, admin, media_file):
+    r = client.post(
+        "/api/admin/tests", json=_payload_with_media(media_file["uuid"]), headers=admin,
+    )
+    assert r.status_code == 201, r.text
+    src = r.json()
+    copy = None
+    try:
+        r = client.post(f"/api/admin/tests/{src['uuid']}/duplicate", headers=admin)
+        assert r.status_code == 201, r.text
+        copy = r.json()
+        q = copy["questions"][0]
+        assert q["media"][0]["url"] == media_file["url"]
+        assert q["media"][0]["caption"] == "рис. 1"
+        assert q["options"][0]["media"][0]["url"] == media_file["url"]
+    finally:
+        _hard_delete_test(src["uuid"])
+        if copy:
+            _hard_delete_test(copy["uuid"])
 
 
 # ── POST /api/admin/tests/analyze ─────────────────────────────────────────────
@@ -353,6 +476,21 @@ def test_preview_score_partial_answers_allowed(client, admin):
     )
     assert r.status_code == 200, r.text
     assert r.json()["total_score"] == 3
+
+
+def test_preview_score_weighted(client, admin):
+    """weighted: балл вопроса × config.weight; границы и итог масштабируются."""
+    body = _preview_body([{"question_order": 0, "option_order": 1},
+                          {"question_order": 1, "option_order": 1}], scoring="weighted")
+    body["questions"][0]["config"] = {"weight": 2}   # опция «да» = 3 → 6
+    body["questions"][1]["config"] = {"weight": 3}   # опция «да» = 3 → 9
+    body["interpretations"] = []
+    r = client.post("/api/admin/tests/preview-score", json=body, headers=admin)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["scoring_used"] == "weighted"
+    assert data["total_score"] == 3 * 2 + 3 * 3      # 15
+    assert data["max_possible"] == 3 * 2 + 3 * 3      # 15
 
 
 def test_preview_score_multi_scale(client, admin):

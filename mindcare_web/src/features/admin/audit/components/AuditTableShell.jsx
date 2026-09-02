@@ -159,7 +159,7 @@ export function TargetCell({ target }) {
 /** Кнопка «Подробнее». Кликабельна только она — не вся строка. */
 export function DetailsButton({ onClick, label }) {
   return (
-    <Button type="button" variant="icon" size="sm" onClick={onClick} aria-label={label}>
+    <Button type="button" variant="icon" size="sm" onClick={onClick} aria-label={label} title={label}>
       <Icon name="eye" size={15} />
     </Button>
   );

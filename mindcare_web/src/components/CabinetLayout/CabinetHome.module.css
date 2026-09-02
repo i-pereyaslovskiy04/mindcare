@@ -54,9 +54,17 @@
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
 }
 
-/* ---- dark card (welcome banner) ---- */
+/* ---- dark card (welcome banner) ----
+   Цвета — фиксированные --hero-* токены (та же роль, что у публичного Hero:
+   pages/home/components/Hero.module.css), НЕ легаси --espresso/--mocha/--milk/
+   --latte. Те переопределяются темой ПО РОЛИ и в тёмных палитрах меняются
+   местами (espresso/mocha светлеют, milk/latte темнеют) — карточка,
+   задуманная как ПОСТОЯННО тёмная плашка с светлым текстом, на тёмной теме
+   инвертировалась бы в светлую. --hero-* пины дают фиксированно тёмный фон
+   в любой теме (см. --hero-grad-1/2 в styles/tokens/*-dark.css). */
 .darkCard {
-  background: linear-gradient(135deg, var(--espresso), var(--mocha));
+  background-color: var(--hero-bg);
+  background-image: linear-gradient(135deg, var(--hero-grad-1), var(--hero-grad-2));
   border-radius: 16px;
   padding: 28px 30px;
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.08), 0 8px 24px rgba(var(--shadow-rgb), 0.14);
@@ -68,16 +76,16 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: 30px;
   font-weight: 300;
-  color: var(--milk);
+  color: var(--hero-fg);
   line-height: 1.2;
 }
 .darkCardTitle em {
   font-style: italic;
-  color: var(--latte);
+  color: var(--hero-accent);
 }
 .darkCardSub {
   font-size: 13.5px;
-  color: rgba(var(--milk-rgb), 0.75);
+  color: var(--hero-muted);
   line-height: 1.6;
 }
 .darkCardBtns {
@@ -214,20 +222,23 @@
   font-family: 'Nunito', sans-serif;
   white-space: nowrap;
 }
+/* Кнопки на .darkCard — тоже на --hero-* (та же причина, см. комментарий
+   у .darkCard выше): --latte/--espresso/--milk переворачиваются в тёмных
+   палитрах и кнопка потеряла бы контраст с фиксированно тёмной карточкой. */
 .btnLatte {
-  background: var(--latte);
-  color: var(--espresso);
+  background: var(--hero-accent);
+  color: var(--hero-on-accent);
 }
 .btnLatte:hover {
-  background: var(--fog);
+  background: rgba(var(--hero-accent-rgb), 0.85);
 }
 .btnGhostDark {
   background: transparent;
-  color: var(--milk);
-  border: 1px solid rgba(var(--latte-rgb), 0.35);
+  color: var(--hero-fg);
+  border: 1px solid rgba(var(--hero-accent-rgb), 0.35);
 }
 .btnGhostDark:hover {
-  background: rgba(var(--latte-rgb), 0.1);
+  background: rgba(var(--hero-accent-rgb), 0.1);
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────── */

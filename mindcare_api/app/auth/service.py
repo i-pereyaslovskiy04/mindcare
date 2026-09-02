@@ -277,9 +277,18 @@ def create_session(
     user_id: str,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    impersonator_user_id: Optional[int] = None,
 ) -> tuple[str, datetime]:
-    """Создаёт сессию, возвращает (session_token, expires_at)."""
-    return storage.create_session(user_id, ip=ip, user_agent=user_agent)
+    """Создаёт сессию, возвращает (session_token, expires_at).
+
+    impersonator_user_id (ADR-025) — id администратора при входе «под именем».
+    """
+    return storage.create_session(
+        user_id,
+        ip=ip,
+        user_agent=user_agent,
+        impersonator_user_id=impersonator_user_id,
+    )
 
 
 def change_password(

@@ -51,3 +51,14 @@
   min-width: 110px;
   text-align: center;
 }
+
+/* Ошибка входа «под именем» (ADR-025). */
+.impersonateError {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error-border);
+  border-radius: 8px;
+  font-size: 14px;
+}

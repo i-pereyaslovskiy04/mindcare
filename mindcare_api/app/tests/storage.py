@@ -10,14 +10,16 @@ import uuid as _uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 
 from app.core.encryption import encrypt_text
 from app.db.session import SessionLocal
 from app.db.models import (
     Test, TestCategory, TestTag, TestInterpretation,
-    Question, Option, TestResult, TestResultScale, StudentAnswer,
-    Category, Tag, User, Consent, ConsentRecord,
+    Question, Option, QuestionMedia, OptionMedia, MediaFile,
+    TestResult, TestResultScale, StudentAnswer,
+    Category, Tag, User, Role, UserRole, TherapyEngagement,
+    Consent, ConsentRecord,
 )
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
@@ -61,6 +63,52 @@ def _author_name(created_by: Optional[int], db) -> Optional[str]:
     return user.full_name if user else None
 
 
+def _question_media_to_list(links) -> list[dict]:
+    """Связки вопрос↔медиа → [{uuid, url, caption}] по display_order."""
+    out = []
+    for link in sorted(links, key=lambda m: m.display_order):
+        mf: Optional[MediaFile] = link.media
+        if mf is None:
+            continue   # осиротевшая связка (файл удалён) — не отдаём
+        out.append({
+            "uuid":    str(mf.uuid),
+            "url":     mf.file_path,
+            "kind":    mf.file_type,
+            "caption": link.caption,
+        })
+    return out
+
+
+def _option_media_to_list(links) -> list[dict]:
+    """Связки вариант↔медиа → [{uuid, url, caption=None}] по display_order.
+
+    У option_media нет колонки caption (варианты декоративны) — поле включаем
+    для единообразия формы, всегда None.
+    """
+    out = []
+    for link in sorted(links, key=lambda m: m.display_order):
+        mf: Optional[MediaFile] = link.media
+        if mf is None:
+            continue
+        out.append({
+            "uuid":    str(mf.uuid),
+            "url":     mf.file_path,
+            "kind":    mf.file_type,
+            "caption": None,
+        })
+    return out
+
+
+def _option_to_dict(o: Option) -> dict:
+    return {
+        "id":           o.id,
+        "option_text":  o.option_text,
+        "option_order": o.option_order,
+        "value_score":  o.value_score,
+        "media":        _option_media_to_list(o.media),
+    }
+
+
 def _question_to_dict(q: Question) -> dict:
     options = sorted(q.options, key=lambda o: o.option_order)
     return {
@@ -70,15 +118,8 @@ def _question_to_dict(q: Question) -> dict:
         "question_type":  q.question_type,
         "is_required":    q.is_required,
         "config":         q.config or {},
-        "options": [
-            {
-                "id":           o.id,
-                "option_text":  o.option_text,
-                "option_order": o.option_order,
-                "value_score":  o.value_score,
-            }
-            for o in options
-        ],
+        "media":          _question_media_to_list(q.media),
+        "options":        [_option_to_dict(o) for o in options],
     }
 
 
@@ -108,14 +149,40 @@ def _test_to_dict(test: Test, db) -> dict:
         "max_score":       test.max_score,
         "time_limit_min":  test.time_limit_min,
         "is_active":       test.is_active,
+        "status":          test.status,
+        "shuffle_questions": test.shuffle_questions,
+        "shuffle_options":   test.shuffle_options,
         "created_at":      test.created_at,
         "updated_at":      test.updated_at,
+        "created_by":      test.created_by,
         "created_by_name": _author_name(test.created_by, db),
         "categories":      _categories_of(test.id, db),
         "tags":            _tags_of(test.id, db),
         "questions":       [_question_to_dict(q) for q in questions],
         "interpretations": [_interpretation_to_dict(i) for i in interpretations],
     }
+
+
+# ── helpers: медиа ────────────────────────────────────────────────────────────
+
+def resolve_media(uuid_str: str, db) -> Optional[int]:
+    """media_files.id по UUID или None (в т.ч. для is_active=false / битого UUID)."""
+    try:
+        uuid_obj = _uuid.UUID(uuid_str)
+    except (ValueError, TypeError, AttributeError):
+        return None
+    row = (
+        db.query(MediaFile.id)
+        .filter(MediaFile.uuid == uuid_obj, MediaFile.is_active.is_(True))
+        .first()
+    )
+    return row.id if row else None
+
+
+def media_exists(uuid_str: str) -> bool:
+    """Активный медиафайл с таким UUID существует. Для валидации в service."""
+    with SessionLocal() as db:
+        return resolve_media(uuid_str, db) is not None
 
 
 # ── helpers: запись вложенных коллекций ───────────────────────────────────────
@@ -157,13 +224,38 @@ def _replace_questions(test_id: int, questions: list[dict], db) -> None:
         )
         db.add(question)
         db.flush()
+        for mi, m in enumerate(q.get("media", []) or []):
+            media_id = resolve_media(m["media_uuid"], db)
+            if media_id is None:
+                continue   # уже отвергнуто валидацией service; страховка
+            db.add(QuestionMedia(
+                question_id=question.id,
+                media_id=media_id,
+                media_role="main",
+                display_order=mi + 1,
+                caption=m.get("caption"),
+            ))
         for o in q.get("options", []):
-            db.add(Option(
+            option = Option(
                 question_id=question.id,
                 option_text=o["option_text"],
                 option_order=o["option_order"],
                 value_score=o["value_score"],
-            ))
+            )
+            db.add(option)
+            option_media = o.get("media", []) or []
+            if option_media:
+                db.flush()   # нужен option.id для связки
+                for mi, m in enumerate(option_media):
+                    media_id = resolve_media(m["media_uuid"], db)
+                    if media_id is None:
+                        continue
+                    db.add(OptionMedia(
+                        option_id=option.id,
+                        media_id=media_id,
+                        media_role="icon",
+                        display_order=mi + 1,
+                    ))
 
 
 def _replace_interpretations(test_id: int, interpretations: list[dict], db) -> None:
@@ -188,11 +280,16 @@ def find_tests(
     size: int = 20,
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    status: Optional[str] = None,
 ) -> tuple[list[dict], int]:
+    """Admin-список. status=None (по умолчанию) — ВСЕ статусы: иначе тесты,
+    переведённые data-миграцией в draft, пропали бы из вида админа."""
     with SessionLocal() as db:
         q = db.query(Test).filter(Test.deleted_at.is_(None))
         if is_active is not None:
             q = q.filter(Test.is_active.is_(is_active))
+        if status is not None:
+            q = q.filter(Test.status == status)
         if search:
             q = q.filter(Test.title.ilike(f"%{search.strip()}%"))
 
@@ -216,10 +313,60 @@ def find_tests(
                 "scoring":         t.scoring,
                 "version":         t.version,
                 "is_active":       t.is_active,
+                "status":          t.status,
                 "question_count":  qcount or 0,
                 "categories":      _categories_of(t.id, db),
                 "tags":            _tags_of(t.id, db),
                 "created_at":      t.created_at,
+                "created_by_name": _author_name(t.created_by, db),
+            })
+    return items, total
+
+
+def find_my_tests(
+    author_id: int,
+    page: int = 1,
+    size: int = 20,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+) -> tuple[list[dict], int]:
+    """Psychologist-scoped список (Этап F2): только свои тесты. status=None
+    (по умолчанию) — ВСЕ статусы, автор должен видеть, где сейчас каждый его
+    draft/in_review/needs_changes/published."""
+    with SessionLocal() as db:
+        q = db.query(Test).filter(
+            Test.deleted_at.is_(None), Test.created_by == author_id,
+        )
+        if status is not None:
+            q = q.filter(Test.status == status)
+        if search:
+            q = q.filter(Test.title.ilike(f"%{search.strip()}%"))
+
+        total = q.count()
+        tests = (
+            q.order_by(desc(Test.created_at))
+            .offset((page - 1) * size)
+            .limit(size)
+            .all()
+        )
+        items = []
+        for t in tests:
+            qcount = (
+                db.query(func.count(Question.id))
+                .filter(Question.test_id == t.id)
+                .scalar()
+            )
+            items.append({
+                "uuid":           str(t.uuid),
+                "title":          t.title,
+                "scoring":        t.scoring,
+                "version":        t.version,
+                "is_active":      t.is_active,
+                "status":         t.status,
+                "question_count": qcount or 0,
+                "categories":     _categories_of(t.id, db),
+                "tags":           _tags_of(t.id, db),
+                "created_at":     t.created_at,
                 "created_by_name": _author_name(t.created_by, db),
             })
     return items, total
@@ -263,6 +410,9 @@ def create_test(
             max_score=data.get("max_score"),
             time_limit_min=data.get("time_limit_min"),
             is_active=data.get("is_active", True),
+            status=data.get("status", "published"),
+            shuffle_questions=data.get("shuffle_questions", False),
+            shuffle_options=data.get("shuffle_options", False),
             version=1,
             created_by=created_by,
         )
@@ -317,8 +467,8 @@ def duplicate_test(
 ) -> Optional[dict]:
     """
     Копия методики: вопросы/варианты/пороги/категории/темы переносятся,
-    результаты — нет. Копия создаётся как черновик (is_active=False, version=1),
-    чтобы её можно было доработать до публикации.
+    результаты — нет. Копия создаётся как черновик (is_active=False,
+    status='draft', version=1), чтобы её можно было доработать до публикации.
     """
     # created_by — единственный actor id (не вводим второй actor_id).
     if created_by is None or actor_role is None:
@@ -346,7 +496,10 @@ def duplicate_test(
             scoring=src.scoring,
             max_score=src.max_score,
             time_limit_min=src.time_limit_min,
+            shuffle_questions=src.shuffle_questions,
+            shuffle_options=src.shuffle_options,
             is_active=False,
+            status="draft",
             version=1,
             created_by=created_by,
         )
@@ -369,13 +522,32 @@ def duplicate_test(
             )
             db.add(question)
             db.flush()
+            # медиа вопроса: тот же media_id (физический файл общий)
+            for qm in q.media:
+                db.add(QuestionMedia(
+                    question_id=question.id,
+                    media_id=qm.media_id,
+                    media_role=qm.media_role,
+                    display_order=qm.display_order,
+                    caption=qm.caption,
+                ))
             for o in sorted(q.options, key=lambda x: x.option_order):
-                db.add(Option(
+                option = Option(
                     question_id=question.id,
                     option_text=o.option_text,
                     option_order=o.option_order,
                     value_score=o.value_score,
-                ))
+                )
+                db.add(option)
+                if o.media:
+                    db.flush()   # нужен option.id
+                    for om in o.media:
+                        db.add(OptionMedia(
+                            option_id=option.id,
+                            media_id=om.media_id,
+                            media_role=om.media_role,
+                            display_order=om.display_order,
+                        ))
 
         for i in src.interpretations:
             db.add(TestInterpretation(
@@ -442,7 +614,8 @@ def update_test(
             return None
 
         for field in ("title", "description", "scoring", "max_score",
-                      "time_limit_min", "is_active"):
+                      "time_limit_min", "is_active",
+                      "shuffle_questions", "shuffle_options"):
             if field in data and data[field] is not None:
                 setattr(test, field, data[field])
 
@@ -517,16 +690,85 @@ def delete_test(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Moderation workflow (Этап F, ADR-016)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def get_status_and_author(uuid_str: str) -> Optional[dict]:
+    """{"status": str, "created_by": Optional[int]} теста или None (не
+    найден/удалён). created_by может быть NULL — автор аккаунта удалён
+    (FK ON DELETE SET NULL); service трактует это как «нет автора» (is_author
+    всегда False), но admin/supervisor по-прежнему могут publish напрямую."""
+    try:
+        uuid_obj = _uuid.UUID(uuid_str)
+    except ValueError:
+        return None
+    with SessionLocal() as db:
+        test = db.query(Test).filter(
+            Test.uuid == uuid_obj, Test.deleted_at.is_(None)
+        ).first()
+        if not test:
+            return None
+        return {"status": test.status, "created_by": test.created_by}
+
+
+def set_status(
+    uuid_str: str,
+    new_status: str,
+    *,
+    event: str,
+    actor_id: int,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
+    """
+    Меняет tests.status и атомарно пишет audit-событие перехода. Легальность
+    перехода (кто → откуда → куда) уже проверена в service._validate_transition —
+    здесь только мутация, как в update_test/delete_test. event — конкретное имя
+    события (test_submitted_for_review / test_published / test_returned_for_changes),
+    выбранное вызывающей стороной по целевому статусу.
+    """
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+    try:
+        uuid_obj = _uuid.UUID(uuid_str)
+    except ValueError:
+        return None
+    with SessionLocal() as db:
+        test = db.query(Test).filter(
+            Test.uuid == uuid_obj, Test.deleted_at.is_(None)
+        ).first()
+        if not test:
+            return None
+        test.status = new_status
+        test.updated_at = datetime.now(timezone.utc)
+        record_event(
+            event=event,
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("test", test.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+        db.commit()
+        db.refresh(test)
+        return _test_to_dict(test, db)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Student-facing: прохождение, submit, результаты, consent (Этап B)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def find_active_tests(
     page: int = 1, size: int = 20, search: Optional[str] = None,
 ) -> tuple[list[dict], int]:
-    """Список активных тестов для студента (без вопросов и баллов)."""
+    """Список тестов для студента (без вопросов и баллов). Видимость (Этап F,
+    ADR-016): status='published' И is_active=True — публично виден только
+    опубликованный и включённый тест."""
     with SessionLocal() as db:
         q = db.query(Test).filter(
-            Test.deleted_at.is_(None), Test.is_active.is_(True)
+            Test.deleted_at.is_(None), Test.is_active.is_(True),
+            Test.status == "published",
         )
         if search:
             q = q.filter(Test.title.ilike(f"%{search.strip()}%"))
@@ -554,7 +796,10 @@ def find_active_tests(
 
 
 def get_active_test_full(uuid_str: str) -> Optional[dict]:
-    """Активный тест целиком (включая баллы/пороги) — для скоринга на сервере."""
+    """Опубликованный тест целиком (включая баллы/пороги) — для скоринга на
+    сервере. Используется и для отдачи студенту (get_test_for_take), и при submit
+    (save_result грузит тест повторно тем же путём) — оба места защищены
+    status='published' И is_active=True."""
     try:
         uuid_obj = _uuid.UUID(uuid_str)
     except ValueError:
@@ -564,6 +809,7 @@ def get_active_test_full(uuid_str: str) -> Optional[dict]:
             Test.uuid == uuid_obj,
             Test.deleted_at.is_(None),
             Test.is_active.is_(True),
+            Test.status == "published",
         ).first()
         if not test:
             return None
@@ -598,10 +844,14 @@ def save_result(
         return None
 
     with SessionLocal() as db:
+        # Отдельный запрос от get_active_test_full (не переиспользует его сессию) —
+        # тот же гейт видимости: status='published' И is_active=True, иначе submit
+        # мог бы сохраниться после того, как тест сняли с публикации/увели в модерацию.
         test = db.query(Test).filter(
             Test.uuid == uuid_obj,
             Test.deleted_at.is_(None),
             Test.is_active.is_(True),
+            Test.status == "published",
         ).first()
         if not test:
             return None
@@ -708,6 +958,97 @@ def get_user_result(user_id: int, result_uuid: str) -> Optional[dict]:
         if not result:
             return None
         return _result_to_dict(result, db)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Staff-доступ к результатам (Этап E, ADR-016)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def resolve_student_id(student_uuid: str) -> Optional[int]:
+    """
+    users.id по uuid, ТОЛЬКО если это реальный студент: активная роль student и
+    НИ ОДНОЙ активной не-student роли. Роль student неявно выдана всем staff
+    (ADR-024), поэтому staff-аккаунты исключаем — иначе staff мог бы читать
+    результаты самотестирования другого staff. Предикат совпадает с
+    supervisor.storage.get_students.
+    """
+    try:
+        uuid_obj = _uuid.UUID(student_uuid)
+    except (ValueError, TypeError, AttributeError):
+        return None
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        user = db.query(User).filter(
+            User.uuid == uuid_obj,
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        ).first()
+        if not user:
+            return None
+
+        def _has_role(is_student: bool) -> bool:
+            q = (
+                db.query(UserRole.id)
+                .join(Role, Role.id == UserRole.role_id)
+                .filter(
+                    UserRole.user_id == user.id,
+                    (Role.name == "student") if is_student else (Role.name != "student"),
+                    or_(UserRole.expires_at.is_(None), UserRole.expires_at > now),
+                )
+            )
+            return db.query(q.exists()).scalar()
+
+        return user.id if (_has_role(True) and not _has_role(False)) else None
+
+
+def psychologist_has_engagement(psychologist_id: int, client_id: int) -> bool:
+    """Есть ли у психолога active/past назначенная консультация с этим студентом
+    (ADR-016). Любой статус engagement — по psychologist_id (не transferred_to:
+    после перевода доступ имеет уже новый психолог по своей строке engagement)."""
+    with SessionLocal() as db:
+        return db.query(
+            db.query(TherapyEngagement.id).filter(
+                TherapyEngagement.psychologist_id == psychologist_id,
+                TherapyEngagement.client_id == client_id,
+            ).exists()
+        ).scalar()
+
+
+def find_results_for_student(
+    student_id: int, page: int = 1, size: int = 20,
+) -> tuple[list[dict], int]:
+    """Metadata-список результатов студента для staff: uuid/test_title/submitted_at
+    БЕЗ баллов (баллы — только в detail под audit, как content session_notes)."""
+    with SessionLocal() as db:
+        q = db.query(TestResult).filter(TestResult.user_id == student_id)
+        total = q.count()
+        rows = (
+            q.order_by(desc(TestResult.submitted_at))
+            .offset((page - 1) * size).limit(size).all()
+        )
+        items = []
+        for r in rows:
+            test = db.query(Test).filter(Test.id == r.test_id).first()
+            items.append({
+                "uuid": str(r.uuid),
+                "test_title": test.title if test else None,
+                "submitted_at": r.submitted_at,
+            })
+    return items, total
+
+
+def get_result_with_owner(result_uuid: str) -> Optional[tuple[dict, int, int]]:
+    """(полный result-dict, owner user_id, result.id) или None. owner_id — для
+    scope-проверки, result.id — target аудита."""
+    try:
+        uuid_obj = _uuid.UUID(result_uuid)
+    except (ValueError, TypeError, AttributeError):
+        return None
+    with SessionLocal() as db:
+        result = db.query(TestResult).filter(TestResult.uuid == uuid_obj).first()
+        if not result:
+            return None
+        return _result_to_dict(result, db), result.user_id, result.id
 
 
 # ── consent (ФЗ-152) ──────────────────────────────────────────────────────────

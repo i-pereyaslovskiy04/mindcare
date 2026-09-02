@@ -4,8 +4,11 @@ Pydantic-схемы модуля психодиагностики (Этап A �
 Тест редактируется как единая вложенная структура: тест + вопросы + варианты +
 пороги интерпретации. Это соответствует UI-конструктору (одна форма — один сабмит).
 
-MVP-ограничения (см. docs/MODULES/psychodiagnostics-spec-draft.md):
-  - scoring: только sum / average (enum БД допускает weighted/custom — позже);
+Ограничения (см. docs/MODULES/psychodiagnostics-spec-draft.md):
+  - scoring: sum / average / weighted (weighted — взвешенная сумма по
+    config["weight"]). Колонка tests.scoring — свободный VARCHAR(20) без
+    CHECK/enum, ограничение задаётся ТОЛЬКО здесь. custom не поддержан (нет
+    спецификации);
   - question_type: single_choice / multiple_choice / scale / free_text
     (free_text хранится, но в скоринг не входит).
 """
@@ -15,9 +18,25 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-# MVP-подмножества enum'ов БД
-ScoringMethod = Literal["sum", "average"]
+# Подмножества значений свободных VARCHAR-колонок БД (ограничение только тут)
+ScoringMethod = Literal["sum", "average", "weighted"]
 QuestionType  = Literal["single_choice", "multiple_choice", "scale", "free_text"]
+# Moderation workflow (Этап F). При создании admin/supervisor допустимы только
+# draft/published (in_review/needs_changes — результат переходов, не выставляются напрямую).
+TestStatus       = Literal["draft", "in_review", "published", "needs_changes"]
+TestCreateStatus = Literal["draft", "published"]
+
+
+# ── медиа в вопросах/вариантах (изображения) ──────────────────────────────────
+
+class MediaRef(BaseModel):
+    """
+    Ссылка на изображение из медиатеки. Автор адресует его по UUID (media_files.uuid);
+    backend резолвит UUID → media_files.id при сохранении. caption используется
+    только для вопроса (alt/подпись); у варианта поле игнорируется (декоративен).
+    """
+    media_uuid: str           = Field(min_length=1)
+    caption:    Optional[str] = None
 
 
 # ── вложенные create-схемы ────────────────────────────────────────────────────
@@ -26,6 +45,7 @@ class OptionCreate(BaseModel):
     option_text:  str = Field(min_length=1)
     option_order: int = Field(ge=0)
     value_score:  int = 0
+    media:        list[MediaRef] = Field(default_factory=list)
 
 
 class QuestionCreate(BaseModel):
@@ -34,6 +54,7 @@ class QuestionCreate(BaseModel):
     question_type:  QuestionType  = "single_choice"
     is_required:    bool          = True
     config:         dict          = Field(default_factory=dict)
+    media:          list[MediaRef]     = Field(default_factory=list)
     options:        list[OptionCreate] = Field(default_factory=list)
 
 
@@ -54,6 +75,9 @@ class TestCreate(BaseModel):
     max_score:      Optional[int] = None
     time_limit_min: Optional[int] = Field(default=None, ge=0)
     is_active:      bool          = True
+    status:         TestCreateStatus = "published"
+    shuffle_questions: bool       = False
+    shuffle_options:   bool       = False
     category_ids:   list[int]     = Field(default_factory=list)
     tag_uuids:      list[str]     = Field(default_factory=list)
     questions:      list[QuestionCreate]       = Field(default_factory=list)
@@ -68,6 +92,8 @@ class TestUpdate(BaseModel):
     max_score:      Optional[int]           = None
     time_limit_min: Optional[int]           = Field(default=None, ge=0)
     is_active:      Optional[bool]          = None
+    shuffle_questions: Optional[bool]       = None
+    shuffle_options:   Optional[bool]       = None
     category_ids:   Optional[list[int]]     = None
     tag_uuids:      Optional[list[str]]     = None
     questions:      Optional[list[QuestionCreate]]       = None
@@ -86,11 +112,21 @@ class TagRef(BaseModel):
     name: str
 
 
+class MediaOut(BaseModel):
+    """Медиа вопроса/варианта в read-выдаче. url = media_files.file_path;
+    kind (image/audio/video) — по media_files.file_type, фронт выбирает тег."""
+    uuid:    str
+    url:     str
+    kind:    str           = "image"
+    caption: Optional[str] = None
+
+
 class OptionRead(BaseModel):
     id:           int
     option_text:  str
     option_order: int
     value_score:  int
+    media:        list[MediaOut] = Field(default_factory=list)
 
 
 class QuestionRead(BaseModel):
@@ -100,6 +136,7 @@ class QuestionRead(BaseModel):
     question_type:  str
     is_required:    bool
     config:         dict
+    media:          list[MediaOut] = Field(default_factory=list)
     options:        list[OptionRead]
 
 
@@ -168,6 +205,9 @@ class TestRead(BaseModel):
     max_score:      Optional[int]
     time_limit_min: Optional[int]
     is_active:      bool
+    status:         str
+    shuffle_questions: bool
+    shuffle_options:   bool
     created_at:     datetime
     updated_at:     datetime
     created_by_name: Optional[str]
@@ -184,6 +224,7 @@ class TestListItem(BaseModel):
     scoring:         str
     version:         int
     is_active:       bool
+    status:          str
     question_count:  int
     categories:      list[CategoryRef]
     tags:            list[TagRef]
@@ -196,6 +237,14 @@ class PaginatedTestsResponse(BaseModel):
     total: int
     page:  int
     size:  int
+
+
+# ── moderation workflow (Этап F) ──────────────────────────────────────────────
+
+class TestReturnIn(BaseModel):
+    """Возврат теста на доработку (in_review → needs_changes). reason необязателен —
+    свободный текст в response не логируется (audit metadata пустая)."""
+    reason: Optional[str] = None
 
 
 # ── student-facing (Этап B) ───────────────────────────────────────────────────
@@ -222,6 +271,7 @@ class TakeOptionRead(BaseModel):
     id:           int
     option_text:  str
     option_order: int
+    media:        list[MediaOut] = Field(default_factory=list)
 
 
 class TakeQuestionRead(BaseModel):
@@ -231,6 +281,7 @@ class TakeQuestionRead(BaseModel):
     question_type:  str
     is_required:    bool
     config:         dict
+    media:          list[MediaOut] = Field(default_factory=list)
     options:        list[TakeOptionRead]
 
 
@@ -253,6 +304,11 @@ class AnswerIn(BaseModel):
 
 class SubmitIn(BaseModel):
     answers: list[AnswerIn] = Field(default_factory=list)
+    # Клиентский тайм-лимит: при истечении фронт авто-отправляет то, что успели
+    # ответить. Тогда проверка обязательности пропускается (неотвеченные вопросы
+    # дают 0), иначе частичные ответы потерялись бы на 422. Флаг клиентский
+    # (не защита от обмана): позволяет студенту лишь досрочно сдать с пропусками.
+    timed_out: bool = False
 
 
 class ScaleResultRead(BaseModel):
@@ -299,6 +355,23 @@ class ResultListItem(BaseModel):
 
 class PaginatedResultsResponse(BaseModel):
     items: list[ResultListItem]
+    total: int
+    page:  int
+    size:  int
+
+
+# ── staff-доступ к результатам (Этап E) ───────────────────────────────────────
+
+class StaffResultListItem(BaseModel):
+    """Metadata результата студента для staff — БЕЗ баллов (баллы только в
+    detail под audit)."""
+    uuid:         str
+    test_title:   Optional[str]
+    submitted_at: datetime
+
+
+class PaginatedStaffResultsResponse(BaseModel):
+    items: list[StaffResultListItem]
     total: int
     page:  int
     size:  int

@@ -44,7 +44,7 @@ _STUDENT_EVENTS = {
 
 
 def test_registry_contract_and_count():
-    assert len(REGISTRY) == 104
+    assert len(REGISTRY) == 110
     for name in _STAFF_EVENTS | _STUDENT_EVENTS:
         s = REGISTRY[name]
         assert s.destination.value == "audit_log", name

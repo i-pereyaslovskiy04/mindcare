@@ -22,8 +22,18 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('ru-RU');
 }
 
-export default function UsersTable({ items, loading, error, onEdit, onDelete }) {
+export default function UsersTable({
+  items, loading, error, onEdit, onDelete, onImpersonate, currentUserId,
+}) {
   const cols = 7; // ФИО, Email, Роль, Статус, Регистрация, Вход, Действия
+
+  // «Зайти под именем» доступно только для активного не-удалённого не-админа
+  // и не самого себя (backend дублирует guard — defense-in-depth, ADR-025).
+  const canImpersonate = (item) =>
+    !item.deleted_at &&
+    item.is_active &&
+    !(item.roles || []).includes('admin') &&
+    item.id !== currentUserId;
 
   return (
     <div className={styles.wrapper}>
@@ -91,11 +101,23 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
                 <div className={styles.actions}>
                   {!item.deleted_at && (
                     <>
+                      {canImpersonate(item) && (
+                        <Button
+                          variant="icon"
+                          size="sm"
+                          onClick={() => onImpersonate?.(item)}
+                          aria-label={`Зайти под именем ${item.full_name}`}
+                          title="Зайти под именем"
+                        >
+                          <Icon name="arrow-right" size={15} />
+                        </Button>
+                      )}
                       <Button
                         variant="icon"
                         size="sm"
                         onClick={() => onEdit?.(item)}
                         aria-label={`Редактировать ${item.full_name}`}
+                        title="Редактировать"
                       >
                         <Icon name="edit" size={15} />
                       </Button>
@@ -105,6 +127,7 @@ export default function UsersTable({ items, loading, error, onEdit, onDelete }) 
                         tone="danger"
                         onClick={() => onDelete?.(item)}
                         aria-label={`Удалить ${item.full_name}`}
+                        title="Удалить"
                       >
                         <Icon name="trash" size={15} />
                       </Button>

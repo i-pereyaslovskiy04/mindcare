@@ -121,6 +121,7 @@ def submit_test(
             [a.model_dump() for a in body.answers],
             ip=ip, user_agent=ua,
             actor_role=_acting_role(current_user),
+            timed_out=body.timed_out,
         )
     except ConsentRequired as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))

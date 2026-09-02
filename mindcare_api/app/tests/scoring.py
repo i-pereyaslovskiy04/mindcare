@@ -1,8 +1,9 @@
 """
 Подсчёт результата теста (Этап B) — чистые функции, без БД и HTTP.
 
-Поддерживает (MVP):
-  - агрегацию sum / average;
+Поддерживает:
+  - агрегацию sum / average / weighted (weighted = взвешенная сумма: балл вопроса
+    умножается на config["weight"], затем суммируется);
   - 4 типа вопросов: single_choice, multiple_choice, scale, free_text
     (free_text в скоринг не входит);
   - одношкальные и многошкальные тесты (шкала вопроса — в config["scale"]);
@@ -82,6 +83,21 @@ def min_question_score(question: dict) -> Optional[int]:
     return None  # free_text
 
 
+# ── вес вопроса (weighted) ────────────────────────────────────────────────────
+
+def _weight_of(question: dict) -> int:
+    """Вес вопроса из config["weight"] (целое ≥ 1, default 1). Мусор → 1."""
+    w = (question.get("config") or {}).get("weight", 1)
+    if isinstance(w, bool) or not isinstance(w, int) or w < 1:
+        return 1
+    return w
+
+
+def _apply_weight(value: int, question: dict, method: str) -> int:
+    """Для weighted — масштабировать балл/границу на вес вопроса; иначе как есть."""
+    return value * _weight_of(question) if method == "weighted" else value
+
+
 # ── агрегация ─────────────────────────────────────────────────────────────────
 
 def _aggregate(values: list[int], method: str) -> int:
@@ -89,7 +105,7 @@ def _aggregate(values: list[int], method: str) -> int:
         return 0
     if method == "average":
         return round(sum(values) / len(values))
-    return sum(values)  # sum (по умолчанию)
+    return sum(values)  # sum и weighted: значения уже взвешены в _apply_weight
 
 
 def _interpret(interpretations: list[dict], scale_name: Optional[str], score: int) -> Optional[dict]:
@@ -124,8 +140,8 @@ def score_bounds(test: dict) -> list[dict]:
             lo, hi = min_question_score(q), max_question_score(q)
             if lo is None or hi is None:   # free_text не участвует
                 continue
-            los.append(lo)
-            his.append(hi)
+            los.append(_apply_weight(lo, q, method))
+            his.append(_apply_weight(hi, q, method))
         if not los:
             return None
         return _aggregate(los, method), _aggregate(his, method)
@@ -178,8 +194,8 @@ def compute_result(test: dict, answers: list[dict]) -> dict:
             if sc is None:  # free_text внутри шкалы игнорируем
                 continue
             bucket = scales.setdefault(sname, {"scores": [], "maxes": []})
-            bucket["scores"].append(sc)
-            bucket["maxes"].append(mx or 0)
+            bucket["scores"].append(_apply_weight(sc, q, method))
+            bucket["maxes"].append(_apply_weight(mx or 0, q, method))
 
         scale_rows = []
         for sname, b in scales.items():
@@ -209,8 +225,8 @@ def compute_result(test: dict, answers: list[dict]) -> dict:
         sc = score_question(q, ans) if ans else 0
         if sc is None:  # free_text
             continue
-        scores.append(sc)
-        maxes.append(max_question_score(q) or 0)
+        scores.append(_apply_weight(sc, q, method))
+        maxes.append(_apply_weight(max_question_score(q) or 0, q, method))
 
     total = _aggregate(scores, method)
     max_possible = _aggregate(maxes, method)

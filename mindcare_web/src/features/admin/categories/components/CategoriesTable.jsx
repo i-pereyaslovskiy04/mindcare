@@ -92,6 +92,7 @@ export default function CategoriesTable({
                     size="sm"
                     onClick={() => onEdit(item)}
                     aria-label={`Редактировать «${item.name}»`}
+                    title="Редактировать"
                     disabled={editLoadingId === item.id}
                   >
                     {editLoadingId === item.id
@@ -104,6 +105,7 @@ export default function CategoriesTable({
                     tone="danger"
                     onClick={() => onDelete(item)}
                     aria-label={`Деактивировать «${item.name}»`}
+                    title="Деактивировать"
                   >
                     <Icon name="trash" size={15} />
                   </Button>

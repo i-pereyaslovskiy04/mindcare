@@ -23,7 +23,10 @@ import styles from './TestPreviewModal.module.css';
  * Подсчёт считает бэкенд (POST /api/admin/tests/preview-score), ничего не
  * сохраняя: дублировать scoring в JS означало бы два источника правды.
  */
-export default function TestPreviewModal({ title, description, scoring, questions, interpretations, onClose }) {
+export default function TestPreviewModal({
+  title, description, scoring, questions, interpretations, onClose,
+  previewFn = previewScore,
+}) {
   const previewQuestions = useMemo(() => toPreviewQuestions(questions), [questions]);
   const skipped = questions.length - previewQuestions.length;
 
@@ -42,7 +45,7 @@ export default function TestPreviewModal({ title, description, scoring, question
     setScoringNow(true);
     setError('');
     try {
-      const data = await previewScore({
+      const data = await previewFn({
         scoring,
         questions: questions.filter(isQuestionComplete).map(toBackendQuestion),
         interpretations: interpretations.filter((it) => it.label.trim()).map(toBackendInterp),

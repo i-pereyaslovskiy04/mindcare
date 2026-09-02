@@ -72,3 +72,12 @@ export function updateUser(uuid, data) {
 export function deleteUser(uuid) {
   return apiFetch(`${BASE}/${uuid}`, { method: 'DELETE' });
 }
+
+/**
+ * POST /api/admin/users/:uuid/impersonate — вход администратора «под именем»
+ * пользователя (ADR-025). Возвращает { session_token, expires_at, roles, role,
+ * name } — сессию целевого пользователя с серверной отметкой impersonator.
+ */
+export function impersonateUser(uuid) {
+  return apiFetch(`${BASE}/${uuid}/impersonate`, { method: 'POST' });
+}

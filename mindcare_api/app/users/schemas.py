@@ -207,3 +207,17 @@ class AdminUserRead(BaseModel):
     last_login: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class ImpersonateResponse(BaseModel):
+    """Ответ POST /api/admin/users/{uuid}/impersonate (ADR-025).
+
+    Токен сессии целевого пользователя + его роли, чтобы фронт переключил
+    активную сессию. Форма совместима с ответом логина.
+    """
+
+    session_token: str
+    expires_at: datetime
+    roles: list[str] = Field(default_factory=list)
+    role: Optional[str] = None
+    name: str

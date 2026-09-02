@@ -210,6 +210,7 @@ export default function ServiceCardsPage({ cabinetRole = 'supervisor' }) {
                       size="sm"
                       onClick={() => openEdit(item)}
                       aria-label={`Изменить карточку «${item.title}»`}
+                      title="Изменить"
                     >
                       <Icon name="edit" size={15} />
                     </Button>
@@ -226,6 +227,7 @@ export default function ServiceCardsPage({ cabinetRole = 'supervisor' }) {
                       tone="danger"
                       onClick={() => { setDeleteTarget(item); setDeleteError(''); }}
                       aria-label={`Удалить карточку «${item.title}»`}
+                      title="Удалить"
                     >
                       <Icon name="trash" size={15} />
                     </Button>

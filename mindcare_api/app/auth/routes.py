@@ -187,12 +187,15 @@ def logout(
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: dict = Depends(get_current_user)):
+    impersonator_id = current_user.get("impersonator_user_id")
     return {
         "id":    current_user["id"],
         "email": current_user["email"],
         "name":  current_user["name"],
         "roles": current_user["roles"],
         "role":  current_user["role"],
+        "impersonating":     impersonator_id is not None,
+        "impersonator_name": current_user.get("impersonator_name"),
     }
 
 

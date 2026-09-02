@@ -55,6 +55,18 @@ def get_current_user(token: str = Depends(get_session_token)) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Пользователь не найден",
         )
+
+    # Impersonation (ADR-025): единая точка, где сессия становится user dict.
+    # Если сессию создал администратор «под именем» — прокидываем отметку и имя
+    # админа, чтобы фронт показал баннер возврата, а /me отдал серверную правду.
+    impersonator_id = session.get("impersonator_user_id")
+    if impersonator_id is not None:
+        admin = storage.find_user_by_id(str(impersonator_id))
+        user = {
+            **user,
+            "impersonator_user_id": impersonator_id,
+            "impersonator_name": admin["name"] if admin else None,
+        }
     return user
 
 

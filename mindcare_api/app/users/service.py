@@ -170,6 +170,39 @@ def get_user(uuid: str) -> dict:
     return user
 
 
+def impersonate_target(uuid: str, actor_id: int) -> dict:
+    """
+    Проверяет допустимость входа администратора «под именем» пользователя uuid
+    (ADR-025) и возвращает dict целевого пользователя. Сессию НЕ создаёт —
+    это делает route (там же аудит + HTTP-контекст).
+
+    Отказы (AuthError):
+      * 404 — пользователь не найден / soft-deleted (get_user_by_uuid фильтрует);
+      * 400 — цель совпадает с самим администратором;
+      * 403 — цель имеет роль admin (запрет lateral-эскалации);
+      * 403 — цель заблокирована (is_active=False) или без активных ролей.
+    """
+    target = get_user(uuid)  # 404 если нет
+
+    if int(target["id"]) == int(actor_id):
+        raise AuthError(
+            "Нельзя войти под своим же аккаунтом", status_code=400,
+        )
+    if "admin" in (target.get("roles") or []):
+        raise AuthError(
+            "Нельзя войти под именем другого администратора", status_code=403,
+        )
+    if not target.get("is_active"):
+        raise AuthError(
+            "Нельзя войти под заблокированным пользователем", status_code=403,
+        )
+    if not (target.get("roles") or []):
+        raise AuthError(
+            "У пользователя нет активных ролей", status_code=403,
+        )
+    return target
+
+
 def delete_user(
     uuid: str,
     *,

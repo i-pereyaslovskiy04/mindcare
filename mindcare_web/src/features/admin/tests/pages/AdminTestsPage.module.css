@@ -30,6 +30,18 @@
 }
 .dialogTitle  { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
 .dialogBody   { font-size: 14px; color: var(--text-muted); margin: 0 0 16px; line-height: 1.5; }
+.returnReasonInput {
+  width: 100%;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-main);
+  background: var(--warm-white);
+  resize: vertical;
+  margin-bottom: 16px;
+}
 .dialogError  { font-size: 13px; color: var(--error); margin-bottom: 12px; }
 .dialogActions { display: flex; justify-content: flex-end; gap: 10px; }
 .previewError { font-size: 13px; color: var(--error); margin: 0 0 12px; }

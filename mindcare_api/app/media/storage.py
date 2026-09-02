@@ -14,16 +14,21 @@ def create_media_record(
     width_px: Optional[int],
     height_px: Optional[int],
     uploaded_by: int,
+    file_type: str = "image",
+    duration_seconds: Optional[int] = None,
+    thumbnail_path: Optional[str] = None,
 ) -> dict:
     with SessionLocal() as db:
         media = MediaFile(
             file_name=file_name,
             file_path=file_path,
-            file_type="image",
+            file_type=file_type,
             mime_type=mime_type,
             file_size_bytes=file_size_bytes,
             width_px=width_px,
             height_px=height_px,
+            duration_seconds=duration_seconds,
+            thumbnail_path=thumbnail_path,
             uploaded_by=uploaded_by,
         )
         db.add(media)
@@ -34,6 +39,7 @@ def create_media_record(
             "uuid":            str(media.uuid),
             "file_name":       media.file_name,
             "file_path":       media.file_path,
+            "file_type":       media.file_type,
             "mime_type":       media.mime_type,
             "file_size_bytes": media.file_size_bytes,
             "width_px":        media.width_px,

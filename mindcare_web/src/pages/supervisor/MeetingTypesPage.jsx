@@ -209,6 +209,7 @@ export default function MeetingTypesPage({ cabinetRole = 'supervisor' }) {
                       size="sm"
                       onClick={() => openEdit(item)}
                       aria-label={`Изменить ${item.name}`}
+                      title="Изменить"
                     >
                       <Icon name="edit" size={15} />
                     </Button>

@@ -26,10 +26,14 @@ import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { configureClient } from '../../api/client';
 import * as authApi from '../../api/auth.api';
+import { impersonateUser as apiImpersonate } from '../../api/users.api';
 import { normalizeRoles } from '../../shared/lib/roles';
 
 const SESSION_KEY = 'mindcare_session';
 const ACTIVE_ROLE_KEY = 'mindcare_active_role';
+// Impersonation (ADR-025): токен администратора, вошедшего «под именем».
+// Только клиент держит raw-токен админа, поэтому возврат — client-side.
+const IMPERSONATOR_KEY = 'mindcare_impersonator';
 
 function getStoredToken() {
   return localStorage.getItem(SESSION_KEY);
@@ -39,6 +43,20 @@ function setStoredToken(token) {
 }
 function clearStoredToken() {
   localStorage.removeItem(SESSION_KEY);
+}
+function getStoredImpersonator() {
+  try {
+    const raw = localStorage.getItem(IMPERSONATOR_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function setStoredImpersonator(obj) {
+  localStorage.setItem(IMPERSONATOR_KEY, JSON.stringify(obj));
+}
+function clearStoredImpersonator() {
+  localStorage.removeItem(IMPERSONATOR_KEY);
 }
 function getStoredActiveRole() {
   return localStorage.getItem(ACTIVE_ROLE_KEY);
@@ -101,12 +119,38 @@ export function AuthProvider({ children }) {
   const _clearSession = useCallback(() => {
     _clearToken();
     _clearActiveRole();
+    // Impersonation-токен админа тоже сбрасываем: иначе после разлогина
+    // остался бы «висящий» админский токен на устройстве.
+    clearStoredImpersonator();
     setUser(null);
   }, []);
 
   useEffect(() => {
     const currentUser = user;
     const handler = () => {
+      // Impersonation (ADR-025): если 401 пришёл на impersonation-сессии, а
+      // админский токен ещё сохранён — откатываемся к администратору, а не
+      // разлогиниваем полностью (иначе валидная админская сессия теряется).
+      const imp = getStoredImpersonator();
+      if (imp && imp.token) {
+        _saveToken(imp.token);
+        clearStoredImpersonator();
+        _clearActiveRole();
+        (async () => {
+          try {
+            const userData = await authApi.me();
+            setUser(normalizeUser(userData));
+            navigate('/admin/users', { replace: true });
+          } catch {
+            _clearSession();
+            navigate('/', {
+              replace: true,
+              state: { openAuth: 'login', message: 'Сессия истекла. Войдите снова.' },
+            });
+          }
+        })();
+        return;
+      }
       if (currentUser) {
         // User was logged in — navigate to home with login modal + message
         navigate('/', {
@@ -206,6 +250,67 @@ export function AuthProvider({ children }) {
     setStoredActiveRole(role);
   }, [user]);
 
+  // ── Impersonation (ADR-025) ────────────────────────────────────────────────
+
+  /**
+   * Вход администратора «под именем» пользователя uuid. Токен админа
+   * сохраняется в localStorage ДО подмены (для возврата), затем активной
+   * становится сессия целевого пользователя. Кабинет выберет DashboardRedirect.
+   */
+  const impersonate = useCallback(async (uuid) => {
+    const adminToken = tokenRef.current;
+    const adminName = user?.name ?? null;
+
+    const data = await apiImpersonate(uuid); // { session_token, ... }
+
+    setStoredImpersonator({ token: adminToken, name: adminName });
+    _saveToken(data.session_token);
+    _clearActiveRole(); // целевой кабинет ≠ админский
+
+    const userData = await authApi.me();
+    flushSync(() => { setUser(normalizeUser(userData)); });
+    return normalizeUser(userData);
+  }, [user]);
+
+  /**
+   * Возврат в профиль администратора. Отзывает impersonation-сессию, возвращает
+   * сохранённый токен админа и перезагружает /me. Если админская сессия успела
+   * истечь — полный сброс с приглашением войти заново.
+   */
+  const stopImpersonation = useCallback(async () => {
+    const imp = getStoredImpersonator();
+    if (!imp || !imp.token) {
+      // Нечего восстанавливать — безопасный полный выход.
+      try { await authApi.logout(); } catch { /* fire-and-forget */ }
+      _clearSession();
+      navigate('/', { replace: true });
+      return;
+    }
+
+    // Токен цели ещё активен — отзываем impersonation-сессию на сервере.
+    try { await authApi.logout(); } catch { /* fire-and-forget */ }
+
+    _saveToken(imp.token);
+    clearStoredImpersonator();
+    _clearActiveRole();
+
+    try {
+      const userData = await authApi.me();
+      flushSync(() => { setUser(normalizeUser(userData)); });
+      navigate('/admin/users', { replace: true });
+    } catch {
+      // Админская сессия истекла — возвращаться некуда.
+      _clearSession();
+      navigate('/', {
+        replace: true,
+        state: {
+          openAuth: 'login',
+          message: 'Сессия администратора истекла. Войдите снова.',
+        },
+      });
+    }
+  }, [_clearSession, navigate]);
+
   const value = {
     user,
     loading,
@@ -216,6 +321,12 @@ export function AuthProvider({ children }) {
     logout,
     refreshUser,
     getToken,
+    // Impersonation: серверная правда из /me (user.impersonating), возврат —
+    // client-side через сохранённый админский токен.
+    isImpersonating: !!user?.impersonating,
+    impersonatorName: user?.impersonator_name ?? null,
+    impersonate,
+    stopImpersonation,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

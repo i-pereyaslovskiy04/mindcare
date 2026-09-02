@@ -15,10 +15,12 @@ import '../styles/tokens/base.css';
 import '../styles/global.css';
 import Providers from './providers';
 import AppRouter from './router';
+import ImpersonationBanner from '../features/auth/ui/ImpersonationBanner';
 
 export default function App() {
   return (
     <Providers>
+      <ImpersonationBanner />
       <AppRouter />
     </Providers>
   );

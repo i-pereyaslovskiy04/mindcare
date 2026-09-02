@@ -91,6 +91,10 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
       return <svg {...props}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
     case 'plus':
       return <svg {...props}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    case 'check':
+      return <svg {...props}><path d="M20 6 9 17l-5-5" /></svg>;
+    case 'undo':
+      return <svg {...props}><path d="M3 7v6h6" /><path d="M3 13a9 9 0 1 0 3-6.7L3 9" /></svg>;
     default:
       return null;
   }

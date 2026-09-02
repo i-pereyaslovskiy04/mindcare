@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../auth/AuthContext';
 import { useAdminUsers } from '../hooks/useAdminUsers';
 import UsersFilters from '../components/UsersFilters';
 import UsersTable from '../components/UsersTable';
@@ -46,9 +48,30 @@ export default function UsersPage() {
     refetch,
   } = useAdminUsers();
 
+  const { user, impersonate } = useAuth();
+  const navigate = useNavigate();
+
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);   // user object for edit
   const [deleteTarget, setDeleteTarget] = useState(null); // user object for delete
+  const [impersonating, setImpersonating] = useState(null); // uuid in progress
+  const [impersonateError, setImpersonateError] = useState('');
+
+  const handleImpersonate = async (item) => {
+    if (impersonating) return;
+    setImpersonateError('');
+    setImpersonating(item.uuid);
+    try {
+      await impersonate(item.uuid);
+      // Кабинет целевого пользователя выберет DashboardRedirect.
+      navigate('/dashboard', { replace: true });
+    } catch (e) {
+      setImpersonateError(
+        e?.message || 'Не удалось войти под именем пользователя.'
+      );
+      setImpersonating(null);
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -69,12 +92,20 @@ export default function UsersPage() {
         onFiltersChange={setFilters}
       />
 
+      {impersonateError && (
+        <p className={styles.impersonateError} role="alert">
+          {impersonateError}
+        </p>
+      )}
+
       <UsersTable
         items={items}
         loading={loading}
         error={error}
-        onEdit={(user) => setEditTarget(user)}
-        onDelete={(user) => setDeleteTarget(user)}
+        currentUserId={user ? Number(user.id) : null}
+        onEdit={(u) => setEditTarget(u)}
+        onDelete={(u) => setDeleteTarget(u)}
+        onImpersonate={handleImpersonate}
       />
 
       <Pagination

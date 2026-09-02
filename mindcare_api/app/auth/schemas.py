@@ -46,6 +46,10 @@ class UserResponse(BaseModel):
     name: str
     roles: list[Role] = Field(default_factory=list)
     role: Optional[Role] = None
+    # Impersonation (ADR-025): выставлены только когда текущая сессия создана
+    # администратором «под именем». impersonating=False у обычных сессий.
+    impersonating: bool = False
+    impersonator_name: Optional[str] = None
 
 
 # Оформление UI. Списки синхронизированы с mindcare_web/src/features/theme/ThemeContext.jsx.

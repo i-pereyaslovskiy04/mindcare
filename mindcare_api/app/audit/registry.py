@@ -49,6 +49,16 @@ _ATTACH_UPLOAD_META = MappingProxyType({
     "file_size": FieldSpec(type="int", min_value=0, max_value=_ATTACHMENT_MAX_BYTES),
     "mime_type": FieldSpec(type="str", fmt=StringFormat.MIME_TYPE, max_len=100),
 })
+# Загрузка в общую медиатеку (media_files). Только нечувствительные метаданные:
+# file_name НЕ пишем (user-supplied, риск ПДн) — как и в _ATTACH_UPLOAD_META.
+_MEDIA_UPLOAD_META = MappingProxyType({
+    "file_type": FieldSpec(
+        type="str", fmt=StringFormat.ENUM,
+        enum=frozenset({"image", "audio", "video"}), max_len=20,
+    ),
+    "mime_type": FieldSpec(type="str", fmt=StringFormat.MIME_TYPE, max_len=100),
+    "file_size": FieldSpec(type="int", min_value=0, max_value=_ATTACHMENT_MAX_BYTES),
+})
 _EMPTY: Mapping[str, FieldSpec] = MappingProxyType({})
 
 # ── Stage 8: read-only admin viewer журналов ─────────────────────────────────
@@ -177,6 +187,14 @@ _ALL += [
     # admin_user_updated (тот — только full_name/phone). ATOMIC/RAISE, metadata пуст.
     _audit_ok("admin_user_activated", {"admin"}, "user"),
     _audit_ok("admin_user_deactivated", {"admin"}, "user"),
+    # ADR-025: admin вошёл «под именем» пользователя (impersonation). target —
+    # целевой пользователь; session_id_hash в context связывает строку с
+    # созданной impersonation-сессией. INDEPENDENT + RAISE (fail-closed, как
+    # audit_logs_viewed): привилегированный доступ, чья единственная гарантия —
+    # прослеживаемость; сбой записи не должен молча пропустить вход. Route при
+    # AuditError отзывает уже созданную сессию и отдаёт 503.
+    _audit_ok("admin_user_impersonated", {"admin"}, "user",
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
     # Восстановление soft-deleted аккаунта при self-registration (actor = сам
     # восстановленный student). Пишется только в reactivation-ветке.
     _audit_ok("user_reactivated", {"student"}, "user"),
@@ -228,6 +246,13 @@ _ALL += [
     _audit_ok("system_conversation_created", frozenset(), "chat_conversation",
               tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.SOFT,
               actor_policy=ActorPolicy.SYSTEM),
+    # Загрузка в общую медиатеку (изображения + audio/video). admin, supervisor И
+    # psychologist (Этап F2 — медиа в вопросах своих тестов; POST /api/media/
+    # upload* открыт всем трём); INDEPENDENT/SOFT — сбой audit не должен ломать
+    # загрузку файла (у неё свой commit в create_media_record).
+    _audit_ok("media_uploaded", {"admin", "supervisor", "psychologist"}, "media_file",
+              _MEDIA_UPLOAD_META,
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.SOFT),
 ]
 
 # ── AUDIT_LOG: контент CRUD (ATOMIC/RAISE) ───────────────────────────────────
@@ -238,13 +263,30 @@ for _base in ("article", "news", "tag", "category"):
 # (app/tests/routes_admin.py: require_role("admin","supervisor")) — роли widened
 # до {admin, supervisor}, чтобы supervisor-инициированная операция не падала в
 # validate_actor (Stage 4B-5B). Count не меняется — правка role-set.
-for _op in ("created", "updated", "duplicated", "deleted"):
-    _ALL.append(_audit_ok(f"test_{_op}", {"admin", "supervisor"}, "test"))
+# Этап F2 (ADR-016): psychologist управляет СВОИМИ draft/needs_changes тестами
+# (app/tests/routes_psych.py) — create/update/delete переиспользуют те же storage-
+# функции и те же audit-события, роли расширены до {admin,supervisor,psychologist}.
+# test_duplicated НЕ расширяем — psychologist duplicate не использует (F2 scope).
+for _op in ("created", "updated", "deleted"):
+    _ALL.append(_audit_ok(f"test_{_op}", {"admin", "supervisor", "psychologist"}, "test"))
+_ALL.append(_audit_ok("test_duplicated", {"admin", "supervisor"}, "test"))
 
 # ── AUDIT_LOG: психодиагностика (student) ────────────────────────────────────
 _ALL += [
     _audit_ok("test_consent_accepted", {"student"}, "consent_record"),
     _audit_ok("test_submitted", {"student"}, "test_result"),
+    # Этап E (ADR-016): staff-чтение результата студента. supervisor — любого,
+    # psychologist — только своего (active/past engagement); admin доступа НЕ имеет.
+    # INDEPENDENT/SOFT (provisional fail-open, как session_note_content_read).
+    _audit_ok("test_result_content_read", {"supervisor", "psychologist"},
+              "test_result",
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.SOFT),
+    # Этап F (ADR-016): moderation workflow. ATOMIC/RAISE (default _audit_ok) —
+    # storage.set_status пишет событие в той же транзакции, что и смену status
+    # (как test_created/test_updated). target — существующий entity_type "test".
+    _audit_ok("test_submitted_for_review", {"psychologist"}, "test"),
+    _audit_ok("test_published", {"admin", "supervisor"}, "test"),
+    _audit_ok("test_returned_for_changes", {"admin", "supervisor"}, "test"),
 ]
 
 # ── AUDIT_LOG: Stage 5A-2 durable failure события (INDEPENDENT/SOFT) ──────────

@@ -1,0 +1,126 @@
+.muted {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 4px 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--warm-white);
+}
+
+.row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.row:hover {
+  background: var(--milk);
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.date {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.detail {
+  padding: 12px 14px;
+  border-top: 1px dashed var(--nav-border);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scoreLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scoreLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.scoreVal {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--espresso);
+}
+
+.scoreMax,
+.pct {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.rec {
+  font-size: 14px;
+  color: var(--text-main);
+  margin: 2px 0 0;
+  line-height: 1.45;
+}
+
+.scales {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scale {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scaleName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.scaleScore {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.scaleTag {
+  align-self: flex-start;
+  font-size: 12px;
+  color: var(--coffee);
+  font-weight: 600;
+}

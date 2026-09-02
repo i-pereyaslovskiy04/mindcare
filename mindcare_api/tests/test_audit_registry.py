@@ -33,6 +33,7 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "admin_role_add", "admin_role_remove", "admin_role_update",
     "admin_user_created", "admin_user_updated", "admin_user_deleted",
     "admin_user_activated", "admin_user_deactivated", "user_reactivated",
+    "admin_user_impersonated",
     "profile_updated",
     "supervisor_create_student", "supervisor_assign_psychologist",
     "supervisor_reactivate_psychologist",
@@ -43,12 +44,14 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "chat_conversation_created", "chat_message_edited", "chat_message_deleted",
     "chat_attachment_uploaded", "chat_attachment_downloaded",
     "system_conversation_created",
+    "media_uploaded",
     "article_created", "article_updated", "article_deleted",
     "news_created", "news_updated", "news_deleted",
     "tag_created", "tag_updated", "tag_deleted",
     "category_created", "category_updated", "category_deleted",
     "test_created", "test_updated", "test_duplicated", "test_deleted",
-    "test_consent_accepted", "test_submitted",
+    "test_consent_accepted", "test_submitted", "test_result_content_read",
+    "test_submitted_for_review", "test_published", "test_returned_for_changes",
     # Stage 5A-2 durable failure события (INDEPENDENT/SOFT).
     "admin_user_create_failed", "admin_user_update_failed",
     "admin_user_delete_failed", "profile_update_failed",
@@ -99,8 +102,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 97
-    assert len(REGISTRY) == 104
+    assert len(audit_names) == 103
+    assert len(REGISTRY) == 110
 
 
 def test_unknown_event_rejected():
@@ -181,7 +184,12 @@ def test_registry_total_count_stage_5c3():
     # (created/updated/activated/deactivated/deleted) → 7 auth + 92 audit = 99.
     # Карточки услуг (service_cards, вне стадийной нумерации): +5
     # (created/updated/activated/deactivated/deleted) → 7 auth + 97 audit = 104.
-    assert len(REGISTRY) == 104
+    # media_uploaded (общая медиатека, admin+supervisor): +1 → 7 auth + 98 audit = 105.
+    # test_result_content_read (Этап E, staff-чтение результата): +1 → 99 audit = 106.
+    # Этап F (moderation: submitted_for_review/published/returned_for_changes):
+    # +3 → 102 audit = 109.
+    # ADR-025 (impersonation: admin_user_impersonated): +1 → 103 audit = 110.
+    assert len(REGISTRY) == 110
 
 
 def test_role_metadata_enum_excludes_system():

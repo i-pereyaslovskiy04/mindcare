@@ -5,6 +5,7 @@ import Button from '../../components/UI/Button/Button';
 import { getInitials } from '../../shared/lib/utils';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
 import { getPsychologistStudentChatPath } from '../../features/psychologist/chatLinks';
+import StudentTestResults from '../../features/tests/ui/StudentTestResults';
 import styles from './PsychologistStudentCardPage.module.css';
 
 function formatDate(iso) {
@@ -33,7 +34,6 @@ const FUTURE_ITEMS = [
   'История консультаций и сессий',
   'Рабочие заметки психолога',
   'Назначенные материалы и тесты',
-  'Результаты психодиагностики',
   'Запрос супервизии',
 ];
 
@@ -194,6 +194,12 @@ export default function PsychologistStudentCardPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Результаты психодиагностики (Этап E) */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Результаты психодиагностики</h3>
+            <StudentTestResults studentUuid={student.student_uuid} activeRole="psychologist" />
           </div>
 
           {/* Future block */}

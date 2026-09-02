@@ -2,7 +2,42 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff по последнему крупному блоку работ:
+Актуальный handoff: `docs/HANDOFFS/2026-09-01-admin-impersonation.md` —
+impersonation администратором («Зайти под именем» в `/admin/users`, **ADR-025**):
+`user_sessions.impersonator_user_id` (миграция `a1c2e3f4b5d6`), `/me` отдаёт
+`impersonating`/`impersonator_name`, `POST /api/admin/users/{uuid}/impersonate`,
+audit `admin_user_impersonated` (REGISTRY 110), фронт — `ImpersonationBanner`
+возврата в профиль админа, кнопка «Зайти» в `UsersTable`.
+
+Предыдущий крупный блок работ:
+`docs/HANDOFFS/2026-08-30-test-question-option-media-images.md` — медиа в вопросах/
+вариантах тестов + отложенные функции. **Блок 1:** изображения (связки
+`question_media`/`option_media` сквозь schemas/storage/service и фронт). **Блок 2**
+(тот же файл, §9): несколько медиа на вопрос; audio/video в вопросах (новый
+`POST /api/media/upload/av`, компонент `MediaUpload`, `MediaOut.kind`); upload
+расширен до supervisor + новое audit-событие `media_uploaded` (REGISTRY 105);
+`weighted` scoring (`config["weight"]`); CSV-экспорт результата; клиентский
+тайм-лимит (`SubmitIn.timed_out`); случайный порядок вопросов/вариантов (миграция
+`d9f2a1c7b3e4`, `tests.shuffle_questions`/`shuffle_options`). **Блок 3** (§ «Блок 3»):
+**Этап E** — staff-доступ к результатам (`GET /api/staff/test-results`,
+`app/tests/routes_staff.py`; supervisor любой, psychologist по `TherapyEngagement`,
+admin нет; audit `test_result_content_read`, REGISTRY 106; фронт —
+`StudentTestResults` в карточке психолога и модалке супервизора). **Блок 4**
+(§ «Блок 4»): **Этап F1** — moderation workflow тестов (миграция `e1b4c8f2a6d9`,
+`tests.status` draft/in_review/published/needs_changes; state-machine в
+`app/tests/service.py`; роуты `/admin/tests/{uuid}/publish`|`/return` и новый
+`app/tests/routes_psych.py` submit-for-review; 3 audit-события, REGISTRY 109;
+фронт — статус-бейдж/действия в `TestsTable`/`AdminTestsPage`, селектор статуса
+в `TestFormPage`). **Этап F2** — авторство psychologist: ownership-scoped CRUD
+(`routes_psych.py` расширен, `service._own_editable_test`/`create_my_test`
+форсирует draft), медиа-загрузка и `test_created/updated/deleted` audit
+расширены на psychologist (REGISTRY count не меняется — 109); фронт —
+`TestFormPage` параметризован через `config` (admin/psychologist один
+компонент), `PsychologistTestsPage`/`PsychologistTestFormPage`, nav «Тесты» в
+кабинете психолога. Отложены: caption вариантов, `duration_seconds`,
+PDF-экспорт, серверный тайм-лимит, `custom` scoring, duplicate для psychologist.
+
+Предыдущий крупный блок:
 `docs/HANDOFFS/2026-08-29-staff-student-role-admin-nav-dark-theme.md` — роль
 `student` всем staff (функциональный доступ к кабинету студента, изоляция от
 реальных списков студентов; **ADR-024**), скрытие student при логине и в
@@ -10,7 +45,7 @@
 кабинетов/админки, доводка тёмной темы (переключатель кабинетов, выбор роли,
 Hero-баннер не инвертируется в тёмных палитрах).
 
-Предыдущий крупный блок:
+Предшествующий крупный блок:
 `docs/HANDOFFS/2026-08-28-service-cards-cms-complete.md` — карточки услуг
 `/services` как CMS (модуль `service_cards`); предыдущий блок того же паттерна —
 `docs/HANDOFFS/2026-08-27-hero-banner-cms-complete.md` (баннер Hero,
@@ -19,7 +54,7 @@ Hero-баннер не инвертируется в тёмных палитра
 а не копировать код, при следующей задаче «вынести вшитый в JSX блок витрины
 в админку»).
 
-Предшествующий крупный блок:
+Ещё ранее:
 `docs/HANDOFFS/2026-08-21-admin-audit-viewer-api-complete.md`
 — read-only admin API просмотра трёх журналов (Stage 8, ADR-023). Предыдущий
 блок — `docs/HANDOFFS/2026-08-20-audit-hardening-stages-1-7-complete.md`

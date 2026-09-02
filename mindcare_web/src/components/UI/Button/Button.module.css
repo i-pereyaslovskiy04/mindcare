@@ -136,3 +136,19 @@
 .iconDanger:focus-visible {
   outline-color: var(--error);
 }
+
+/* ── icon success tone ── */
+
+.iconSuccess {
+  color: var(--success);
+  border-color: var(--success-bg);
+}
+
+.iconSuccess:hover:not(:disabled) {
+  background: var(--success-bg);
+  border-color: var(--success);
+}
+
+.iconSuccess:focus-visible {
+  outline-color: var(--success);
+}

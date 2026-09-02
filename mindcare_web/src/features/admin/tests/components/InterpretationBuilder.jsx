@@ -22,7 +22,7 @@ export default function InterpretationBuilder({ items, onChange, nextKey }) {
         <div key={it._key} className={styles.card}>
           <div className={styles.head}>
             <span className={styles.num}>Порог {idx + 1}</span>
-            <Button variant="icon" size="sm" tone="danger" aria-label="Удалить порог"
+            <Button variant="icon" size="sm" tone="danger" aria-label="Удалить порог" title="Удалить порог"
               onClick={() => remove(idx)}>
               <Icon name="trash" size={14} />
             </Button>

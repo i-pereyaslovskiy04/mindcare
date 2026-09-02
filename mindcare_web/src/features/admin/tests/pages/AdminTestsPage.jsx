@@ -4,7 +4,7 @@ import { useAdminTests } from '../hooks/useAdminTests';
 import TestsTable from '../components/TestsTable';
 import TestPreviewModal from '../components/TestPreviewModal';
 import { fromBackendQuestion } from '../lib/testShape';
-import { deleteTest, getAdminTest } from '../../../../api/tests.api';
+import { deleteTest, getAdminTest, publishTest, returnTest } from '../../../../api/tests.api';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
 import styles from './AdminTestsPage.module.css';
@@ -38,10 +38,18 @@ function toPreviewShape(test) {
   };
 }
 
-const STATUS_OPTIONS = [
-  { value: '',      label: 'Все статусы' },
+const VISIBILITY_OPTIONS = [
+  { value: '',      label: 'Все' },
   { value: 'true',  label: 'Активные' },
   { value: 'false', label: 'Скрытые' },
+];
+
+const MODERATION_STATUS_OPTIONS = [
+  { value: '',              label: 'Все статусы' },
+  { value: 'draft',         label: 'Черновик' },
+  { value: 'in_review',     label: 'На проверке' },
+  { value: 'published',     label: 'Опубликован' },
+  { value: 'needs_changes', label: 'Нужны правки' },
 ];
 
 export default function AdminTestsPage() {
@@ -56,6 +64,13 @@ export default function AdminTestsPage() {
   const [preview, setPreview]           = useState(null);   // shaped test
   const [previewLoadingUuid, setPreviewLoadingUuid] = useState(null);
   const [previewError, setPreviewError] = useState('');
+
+  const [actionError, setActionError]   = useState('');
+  const [publishingUuid, setPublishingUuid] = useState(null);
+  const [returnTarget, setReturnTarget] = useState(null);   // item для диалога возврата
+  const [returnReason, setReturnReason] = useState('');
+  const [returning, setReturning]       = useState(false);
+  const [returnError, setReturnError]   = useState('');
 
   const pageCount = Math.ceil(total / 20);
 
@@ -88,6 +103,41 @@ export default function AdminTestsPage() {
     }
   }
 
+  async function handlePublish(item) {
+    if (publishingUuid) return;
+    setActionError('');
+    setPublishingUuid(item.uuid);
+    try {
+      await publishTest(item.uuid);
+      refetch();
+    } catch (err) {
+      setActionError(err.message || 'Не удалось опубликовать тест');
+    } finally {
+      setPublishingUuid(null);
+    }
+  }
+
+  function openReturnDialog(item) {
+    setReturnTarget(item);
+    setReturnReason('');
+    setReturnError('');
+  }
+
+  async function handleReturnConfirm() {
+    if (!returnTarget || returning) return;
+    setReturning(true);
+    setReturnError('');
+    try {
+      await returnTest(returnTarget.uuid, returnReason.trim() || undefined);
+      setReturnTarget(null);
+      refetch();
+    } catch (err) {
+      setReturnError(err.message || 'Не удалось вернуть тест на доработку');
+    } finally {
+      setReturning(false);
+    }
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -105,16 +155,26 @@ export default function AdminTestsPage() {
           onChange={(e) => setQuery(e.target.value)}
         />
         <Select
-          style={{ minWidth: 160 }}
-          value={filters.is_active === null ? '' : String(filters.is_active)}
-          options={STATUS_OPTIONS}
-          onChange={(val) => setFilters({ is_active: val === '' ? null : val === 'true' })}
+          style={{ minWidth: 150 }}
+          value={filters.status ?? ''}
+          options={MODERATION_STATUS_OPTIONS}
+          onChange={(val) => setFilters({ status: val || null })}
           placeholder="Все статусы"
+        />
+        <Select
+          style={{ minWidth: 140 }}
+          value={filters.is_active === null ? '' : String(filters.is_active)}
+          options={VISIBILITY_OPTIONS}
+          onChange={(val) => setFilters({ is_active: val === '' ? null : val === 'true' })}
+          placeholder="Видимость"
         />
       </div>
 
       {previewError && (
         <p className={styles.previewError} role="alert">{previewError}</p>
+      )}
+      {actionError && (
+        <p className={styles.previewError} role="alert">{actionError}</p>
       )}
 
       <TestsTable
@@ -124,6 +184,8 @@ export default function AdminTestsPage() {
         onPreview={handlePreview}
         onEdit={(item) => navigate(`/admin/tests/${item.uuid}`)}
         onDelete={(item) => { setDeleteTarget(item); setDeleteError(''); }}
+        onPublish={handlePublish}
+        onReturn={openReturnDialog}
       />
 
       {pageCount > 1 && (
@@ -149,6 +211,33 @@ export default function AdminTestsPage() {
               </Button>
               <Button variant="danger" onClick={handleDeleteConfirm} disabled={deleting}>
                 {deleting ? 'Удаление…' : 'Удалить'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {returnTarget && (
+        <div className={styles.overlay} onClick={() => !returning && setReturnTarget(null)}>
+          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.dialogTitle}>Вернуть на доработку?</h3>
+            <p className={styles.dialogBody}>
+              «{returnTarget.title}» вернётся автору со статусом «Нужны правки».
+            </p>
+            <textarea
+              className={styles.returnReasonInput}
+              rows={3}
+              placeholder="Комментарий автору (необязательно)"
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+            />
+            {returnError && <p className={styles.dialogError}>{returnError}</p>}
+            <div className={styles.dialogActions}>
+              <Button variant="secondary" onClick={() => setReturnTarget(null)} disabled={returning}>
+                Отмена
+              </Button>
+              <Button variant="primary" onClick={handleReturnConfirm} disabled={returning}>
+                {returning ? 'Отправка…' : 'Вернуть на доработку'}
               </Button>
             </div>
           </div>

@@ -58,6 +58,20 @@
   margin-bottom: 12px;
 }
 
+.timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--coffee);
+  margin: 0 0 16px;
+}
+
+.timerLow {
+  color: var(--danger);
+}
+
 .questions {
   display: flex;
   flex-direction: column;

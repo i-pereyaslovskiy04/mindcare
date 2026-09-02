@@ -52,6 +52,32 @@
   font-weight: 500;
 }
 
+/* ---- медиа вопроса ---- */
+.qImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--nav-border);
+  margin: 0 0 16px;
+}
+
+.qMedia {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 12px;
+  border: 1px solid var(--nav-border);
+  background: #000;
+  margin: 0 0 16px;
+}
+
+.qAudio {
+  display: block;
+  width: 100%;
+  margin: 0 0 16px;
+}
+
 .options {
   display: flex;
   flex-direction: column;
@@ -81,6 +107,22 @@
   accent-color: var(--coffee);
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+.optBody {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.optImage {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--nav-border);
 }
 
 .optText {

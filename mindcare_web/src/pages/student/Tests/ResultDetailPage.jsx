@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../../../components/Icon/Icon';
 import Button from '../../../components/UI/Button/Button';
 import { getTestResult } from '../../../api/tests.api';
+import { saveBlobToDisk } from '../../../api/client';
 import styles from './ResultDetailPage.module.css';
 
 function formatDate(iso) {
@@ -10,6 +11,38 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('ru-RU', {
     day: 'numeric', month: 'long', year: 'numeric',
   });
+}
+
+// Экранирование поля CSV: кавычки, ; и переносы строк. Разделитель — ';'
+// (дружелюбно к Excel в RU-локали); данные уже на руках, бэкенд не нужен.
+function csvCell(v) {
+  const s = v == null ? '' : String(v);
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// CSV результата. Свободный текст ответов сюда НЕ входит (в result его нет —
+// это Fernet-шифрованный терапевтический контент).
+function buildResultCsv(result) {
+  const rows = [
+    ['Поле', 'Значение'],
+    ['Тест', result.test_title || ''],
+    ['Пройден', formatDate(result.submitted_at)],
+    ['Метод подсчёта', result.scoring_used || ''],
+  ];
+  if (result.total_score != null) {
+    rows.push(['Итоговый балл',
+      `${result.total_score}${result.max_possible != null ? ` / ${result.max_possible}` : ''}`]);
+  }
+  if (result.recommendations) rows.push(['Рекомендации', result.recommendations]);
+  if (result.scales?.length) {
+    rows.push([]);
+    rows.push(['Шкала', 'Балл', 'Максимум', 'Категория', 'Интерпретация']);
+    result.scales.forEach((s) => rows.push([
+      s.scale_name, s.score, s.max_score ?? '', s.label ?? '', s.interpretation ?? '',
+    ]));
+  }
+  const body = rows.map((r) => r.map(csvCell).join(';')).join('\r\n');
+  return `﻿${body}`;   // BOM — чтобы Excel прочитал кириллицу
 }
 
 function pct(score, max) {
@@ -48,6 +81,20 @@ export default function ResultDetailPage() {
   }
 
   const overallPct = pct(result.total_score, result.max_possible);
+
+  const handleExportCsv = async () => {
+    const csv = buildResultCsv(result);
+    const name = `результат-${(result.test_title || 'тест')
+      .replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.csv`;
+    try {
+      await saveBlobToDisk(
+        async () => new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+        name,
+      );
+    } catch (err) {
+      if (err?.name !== 'AbortError') setError(err.message || 'Не удалось выгрузить');
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -113,6 +160,9 @@ export default function ResultDetailPage() {
       <div className={styles.actions}>
         <Button variant="secondary" onClick={() => navigate('/student/tests/catalog')}>
           Пройти другой тест
+        </Button>
+        <Button variant="secondary" onClick={handleExportCsv}>
+          Экспорт CSV
         </Button>
       </div>
     </div>

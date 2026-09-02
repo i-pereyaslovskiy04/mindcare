@@ -91,7 +91,15 @@ def _user_exists(email: str) -> bool:
 
 
 def _role_names_for_email(email: str) -> list[str]:
-    """Все имена ролей пользователя (для проверки dedupe/rollback)."""
+    """
+    Staff-роли пользователя (для проверки dedupe/rollback legal basis).
+
+    ADR-024 (2026-08-29): роль ``student`` автоматически выдаётся КАЖДОМУ staff
+    как функциональный доступ к кабинету студента, и legal basis для неё не
+    пишется. Эти тесты рассуждают только о staff-ролях, для которых создаётся
+    ``user_legal_basis_records``, поэтому авто-``student`` здесь исключается —
+    иначе он засорял бы каждую проверку набора ролей.
+    """
     with SessionLocal() as db:
         user = db.query(User).filter(User.email == email).first()
         if user is None:
@@ -102,7 +110,7 @@ def _role_names_for_email(email: str) -> list[str]:
             .filter(UserRole.user_id == user.id)
             .all()
         )
-        return [r[0] for r in rows]
+        return [r[0] for r in rows if r[0] != "student"]
 
 
 # ─── 1. Валидация подтверждения ───────────────────────────────────────────────

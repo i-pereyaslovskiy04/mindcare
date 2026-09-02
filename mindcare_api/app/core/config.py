@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     SMTP_SSL: bool = False
     # --- MEDIA ---
     NEWS_IMAGE_MAX_SIZE_MB: int = 20
+    # Аудио/видео в вопросах тестов (без транскодирования и извлечения длительности)
+    MEDIA_AV_MAX_SIZE_MB: int = 50
     # --- CHAT FILES ---
     CHAT_FILE_MAX_SIZE_MB: int = 20
     CHAT_FILE_MAX_FILES_PER_MESSAGE: int = 5

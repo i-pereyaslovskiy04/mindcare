@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth.deps import require_role, resolve_role_or_403
 from app.tests import service
-from app.tests.service import TestHasResults
+from app.tests.service import TestHasResults, TestTransitionError, TestTransitionForbidden
 from app.tests.schemas import (
     TestCreate,
     TestUpdate,
@@ -14,6 +14,7 @@ from app.tests.schemas import (
     TestAnalysisRead,
     TestPreviewScoreIn,
     TestPreviewScoreRead,
+    TestReturnIn,
     PaginatedTestsResponse,
 )
 
@@ -43,10 +44,13 @@ def list_tests(
     size:      int            = Query(default=20, ge=1, le=100),
     search:    Optional[str]  = Query(default=None),
     is_active: Optional[bool] = Query(default=None),
+    status_:   Optional[str]  = Query(default=None, alias="status"),
     current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
+    # status не передан → ВСЕ статусы (иначе мигрированные в draft тесты
+    # пропали бы из вида админа после деплоя Этапа F).
     items, total = service.list_tests(
-        page=page, size=size, search=search, is_active=is_active,
+        page=page, size=size, search=search, is_active=is_active, status=status_,
     )
     return {"items": items, "total": total, "page": page, "size": size}
 
@@ -196,5 +200,57 @@ def delete_test(
             ip=ip,
             user_agent=ua,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ── moderation workflow (Этап F, ADR-016) ──────────────────────────────────────
+# Не литеральные сегменты на месте {uuid} — shadowing с /analyze, /preview-score
+# не грозит (та защита нужна только для литералов, совпадающих по позиции с uuid).
+
+@router.post("/{uuid}/publish", response_model=TestRead)
+def publish_test(
+    uuid: str,
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "supervisor")),
+):
+    """admin/supervisor публикуют тест (из draft/in_review/needs_changes)."""
+    ip, ua = _client(request)
+    try:
+        return service.publish_test(
+            uuid,
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=ip, user_agent=ua,
+        )
+    except TestTransitionForbidden as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except TestTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.post("/{uuid}/return", response_model=TestRead)
+def return_test(
+    uuid: str,
+    body: TestReturnIn,
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "supervisor")),
+):
+    """admin/supervisor возвращают тест на доработку (только из in_review).
+    body.reason не логируется (audit metadata пустая — свободный текст)."""
+    ip, ua = _client(request)
+    try:
+        return service.return_for_changes(
+            uuid,
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=ip, user_agent=ua,
+        )
+    except TestTransitionForbidden as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except TestTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

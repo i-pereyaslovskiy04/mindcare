@@ -96,7 +96,7 @@ export default function PsychologistHome() {
 
       {/* Welcome + hint */}
       <div className={`${styles.grid} ${styles.g21}`} style={{ marginBottom: 16 }}>
-        <div className={styles.darkCard}>
+        <div className={styles.darkCard} data-hero-banner>
           <div className={styles.darkCardTitle}>
             Ваш рабочий<br /><em>кабинет</em>
           </div>

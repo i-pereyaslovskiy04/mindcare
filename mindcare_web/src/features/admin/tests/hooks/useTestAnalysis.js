@@ -16,9 +16,13 @@ const DEBOUNCE_MS = 600;
  * Запрос дебаунсится и не уходит, пока в дереве нет ни одного готового
  * скорящегося вопроса: иначе автор ловил бы предупреждения, ещё набирая первый.
  *
+ * analyzeFn — какой backend-эндпоинт считает (admin `/admin/tests/analyze` по
+ * умолчанию; psychologist передаёt `analyzeMyTest` → `/psychologist/tests/analyze`
+ * — тот же service.analyze_test на бэке, другой роут ради ownership-изоляции).
+ *
  * @returns { data, loading, error } — data: { score_bounds, issues } | null
  */
-export function useTestAnalysis({ scoring, questions, interpretations }) {
+export function useTestAnalysis({ scoring, questions, interpretations, analyzeFn = analyzeTest }) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
@@ -45,13 +49,14 @@ export function useTestAnalysis({ scoring, questions, interpretations }) {
     const seq = ++seqRef.current;
     setLoading(true);
     const timer = setTimeout(() => {
-      analyzeTest(JSON.parse(payload))
+      analyzeFn(JSON.parse(payload))
         .then((result) => { if (seq === seqRef.current) { setData(result); setError(null); } })
         .catch((err) => { if (seq === seqRef.current) setError(err.message); })
         .finally(() => { if (seq === seqRef.current) setLoading(false); });
     }, DEBOUNCE_MS);
 
     return () => { clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analyzeFn стабилен по контракту вызова (module-level функция)
   }, [payload]);
 
   return { data, loading, error };

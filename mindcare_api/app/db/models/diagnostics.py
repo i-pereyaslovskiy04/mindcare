@@ -28,9 +28,18 @@ class Test(Base):
     title          = Column(String(255), nullable=False)
     description    = Column(Text)
     version        = Column(Integer, default=1)
-    scoring        = Column(String(20), default="sum")   # sum / average / scale
+    scoring        = Column(String(20), default="sum")   # sum / average / weighted
     max_score      = Column(Integer)
     time_limit_min = Column(Integer)
+    # Moderation workflow (Этап F, ADR-016): draft/in_review/published/needs_changes.
+    # Публично виден студенту только status='published' И is_active=True.
+    status         = Column(String(20), nullable=False,
+                            default="draft", server_default="draft")
+    # Случайный порядок при прохождении (презентационно; submit адресует по id)
+    shuffle_questions = Column(Boolean, default=False, nullable=False,
+                               server_default="false")
+    shuffle_options   = Column(Boolean, default=False, nullable=False,
+                               server_default="false")
     created_by     = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     is_active      = Column(Boolean, default=True)
     created_at     = Column(DateTime(timezone=True), server_default=func.now())

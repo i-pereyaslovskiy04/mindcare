@@ -10,6 +10,7 @@ function buildNavSections(messagesBadge) {
         { key: 'home',      label: 'Главная',      icon: 'home',     to: '/psychologist',           end: true,  disabled: false },
         { key: 'students',  label: 'Мои студенты', icon: 'users',    to: '/psychologist/students',  end: false, disabled: false },
         { key: 'sessions',  label: 'Сессии',       icon: 'calendar', to: '/psychologist/appointments',          disabled: false },
+        { key: 'tests',     label: 'Тесты',        icon: 'tests',    to: '/psychologist/tests',                 disabled: false },
         { key: 'chat',      label: 'Сообщения',    icon: 'chat',     to: '/psychologist/chat',      end: true,  disabled: false,
           badge: messagesBadge > 0 ? String(messagesBadge) : undefined },
         { key: 'materials', label: 'Материалы',    icon: 'articles', to: '/psychologist/materials',             disabled: true  },
@@ -28,12 +29,14 @@ const CRUMB_LABELS = {
   '/psychologist':               'Главная',
   '/psychologist/students':      'Мои студенты',
   '/psychologist/appointments':  'Сессии',
+  '/psychologist/tests':         'Тесты',
   '/psychologist/chat':          'Сообщения',
   '/psychologist/settings':      'Настройки',
 };
 
 const DYNAMIC_CRUMBS = [
   { prefix: '/psychologist/students/', label: 'Карточка студента' },
+  { prefix: '/psychologist/tests/', label: 'Тест' },
 ];
 
 export default function PsychologistLayout() {

@@ -41,9 +41,19 @@ def _mock_session(mock_db):
 # ══════════════════════════════════════════════════════════════════════════
 
 def test_test_events_widened_to_admin_supervisor():
-    for name in ("test_created", "test_updated", "test_duplicated", "test_deleted"):
+    # duplicate остаётся admin/supervisor-only (Этап F2: psychologist duplicate
+    # не использует — не входит в scope этого блока).
+    assert REGISTRY["test_duplicated"].allowed_actor_roles == frozenset(
+        {"admin", "supervisor"}
+    )
+
+
+def test_test_crud_events_widened_to_psychologist_stage_f2():
+    # Этап F2 (ADR-016): psychologist управляет своими draft/needs_changes тестами
+    # через те же storage/audit-пути, что admin/supervisor.
+    for name in ("test_created", "test_updated", "test_deleted"):
         assert REGISTRY[name].allowed_actor_roles == frozenset(
-            {"admin", "supervisor"}
+            {"admin", "supervisor", "psychologist"}
         ), name
 
 
@@ -61,7 +71,7 @@ def test_student_events_stay_student_only():
 
 def test_registry_total_count_unchanged():
     # Актуальный счётчик registry: 7 auth + 87 audit = 94.
-    assert len(REGISTRY) == 104
+    assert len(REGISTRY) == 110
 
 
 def test_content_test_consent_events_entity_types():
@@ -549,7 +559,8 @@ def test_duplicate_target_is_new_copy(monkeypatch):
 
     src = SimpleNamespace(
         id=1, title="Src", description="d", scoring="sum", max_score=6,
-        time_limit_min=None, questions=[], interpretations=[],
+        time_limit_min=None, shuffle_questions=False, shuffle_options=False,
+        questions=[], interpretations=[],
     )
     db = MagicMock(name="db")
     db.query.return_value.filter.return_value.first.return_value = src

@@ -34,6 +34,8 @@ _EXISTING_METADATA_KEYS = frozenset({
     # Stage 8: metadata события audit_logs_viewed — имя журнала и СТАБИЛЬНЫЕ
     # ИМЕНА применённых фильтров (без единого значения фильтра).
     "journal", "filter_keys",
+    # media_uploaded (общая медиатека): класс файла (image/audio/video).
+    "file_type",
 })
 
 
@@ -77,13 +79,13 @@ def test_metadata_keys_of_production_registry_are_exactly_expected():
 
 def test_production_event_registry_still_validates_after_extension():
     validate_registry(REGISTRY)
-    assert len(REGISTRY) == 104
+    assert len(REGISTRY) == 110
 
 
 def test_event_registry_can_still_be_rebuilt():
     rebuilt = build_registry(list(REGISTRY.values()))
     assert set(rebuilt) == set(REGISTRY)
-    assert len(rebuilt) == 104
+    assert len(rebuilt) == 110
 
 
 # ── Связка denylist ↔ CHANGE_REGISTRY ───────────────────────────────────────

@@ -93,7 +93,8 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     sessions = relationship(
-        "UserSession", back_populates="user", cascade="all, delete-orphan"
+        "UserSession", back_populates="user", cascade="all, delete-orphan",
+        foreign_keys="UserSession.user_id",
     )
     student_profile = relationship(
         "StudentProfile", back_populates="user", uselist=False,
@@ -144,8 +145,16 @@ class UserSession(Base):
     last_active = Column(DateTime(timezone=True), server_default=func.now())
     expires_at  = Column(DateTime(timezone=True), nullable=False)
     is_revoked  = Column(Boolean, default=False)
+    # Impersonation (ADR-025): id администратора, вошедшего «под именем» этого
+    # user_id. NULL — обычная сессия. ON DELETE SET NULL: удаление админа не
+    # рвёт сессию, лишь снимает отметку.
+    impersonator_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
-    user = relationship("User", back_populates="sessions")
+    user = relationship(
+        "User", back_populates="sessions", foreign_keys=[user_id]
+    )
 
 
 class RefreshToken(Base):

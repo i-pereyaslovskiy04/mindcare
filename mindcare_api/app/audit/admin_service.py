@@ -94,9 +94,11 @@ _METADATA_DTO_POLICY: Mapping[str, MetaPolicy] = {
     "removed": MetaPolicy.PASS,
     # self-profile — только имена изменённых полей
     "fields": MetaPolicy.PASS,
-    # вложение чата — размер и MIME, без имени файла и checksum
+    # вложение чата / загрузка в медиатеку — размер, MIME и класс файла,
+    # без имени файла и checksum
     "file_size": MetaPolicy.PASS,
     "mime_type": MetaPolicy.PASS,
+    "file_type": MetaPolicy.PASS,
     # само событие просмотра журналов
     "journal": MetaPolicy.PASS,
     "filter_keys": MetaPolicy.PASS,

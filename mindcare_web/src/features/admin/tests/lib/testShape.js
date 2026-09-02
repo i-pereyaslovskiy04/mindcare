@@ -15,6 +15,17 @@ export const SCORED_TYPES = ['single_choice', 'multiple_choice', 'scale'];
 
 export const hasOptions = (t) => t === 'single_choice' || t === 'multiple_choice';
 
+// Медиа вопроса/варианта в форме: список { media_uuid, url, kind, caption }.
+// url/kind нужны только фронту (превью/выбор тега); на бэк уходит media_uuid.
+function mediaFromBackend(list) {
+  return (list || []).map((m) => ({
+    media_uuid: m.uuid,
+    url: m.url,
+    kind: m.kind || 'image',
+    caption: m.caption || '',
+  }));
+}
+
 export function fromBackendQuestion(q, nextKey) {
   const cfg = q.config || {};
   return {
@@ -27,10 +38,17 @@ export function fromBackendQuestion(q, nextKey) {
       min: Number.isInteger(cfg.min) ? cfg.min : 0,
       max: Number.isInteger(cfg.max) ? cfg.max : 10,
       step: Number.isInteger(cfg.step) ? cfg.step : 1,
+      weight: Number.isInteger(cfg.weight) && cfg.weight > 0 ? cfg.weight : 1,
     },
+    media: mediaFromBackend(q.media),
     options: [...(q.options || [])]
       .sort((a, b) => a.option_order - b.option_order)
-      .map((o) => ({ _key: nextKey(), option_text: o.option_text, value_score: o.value_score })),
+      .map((o) => ({
+        _key: nextKey(),
+        option_text: o.option_text,
+        value_score: o.value_score,
+        media: mediaFromBackend(o.media),
+      })),
   };
 }
 
@@ -42,12 +60,15 @@ export function toBackendQuestion(q, index) {
     config.max = Number(q.config.max);
     if (q.config.step && Number(q.config.step) !== 1) config.step = Number(q.config.step);
   }
+  // Вес (weighted scoring): по умолчанию 1 — тогда не пишем в config.
+  if (Number(q.config?.weight) > 1) config.weight = Number(q.config.weight);
   const out = {
     question_text: q.question_text.trim(),
     question_order: index,
     question_type: q.question_type,
     is_required: q.is_required,
     config,
+    media: mediaToBackend(q.media, true),
     options: [],
   };
   if (hasOptions(q.question_type)) {
@@ -55,9 +76,20 @@ export function toBackendQuestion(q, index) {
       option_text: o.option_text.trim(),
       option_order: oi,
       value_score: Number(o.value_score) || 0,
+      media: mediaToBackend(o.media, false),
     }));
   }
   return out;
+}
+
+// Медиа формы → payload MediaRef[]. caption шлём только для вопроса (у варианта
+// изображение декоративно, подписи нет). Пустой список — если картинки нет.
+function mediaToBackend(list, withCaption) {
+  return (list || [])
+    .filter((m) => m && m.media_uuid)
+    .map((m) => (withCaption
+      ? { media_uuid: m.media_uuid, caption: (m.caption || '').trim() || null }
+      : { media_uuid: m.media_uuid }));
 }
 
 export function toBackendInterp(it) {
@@ -108,6 +140,15 @@ export function isQuestionComplete(q) {
  *
  * Порядок совпадает с тем, что уходит в toBackendQuestion (question_order = index).
  */
+// Медиа формы → вид для QuestionRenderer (url уже на руках, резолв не нужен).
+function mediaToPreview(list) {
+  return (list || [])
+    .filter((m) => m && m.url)
+    .map((m) => ({
+      uuid: m.media_uuid, url: m.url, kind: m.kind || 'image', caption: m.caption || null,
+    }));
+}
+
 export function toPreviewQuestions(questions) {
   return questions.filter(isQuestionComplete).map((q, qi) => ({
     id: qi + 1,
@@ -121,11 +162,13 @@ export function toPreviewQuestions(questions) {
         step: Number(q.config.step) || 1,
       }
       : {},
+    media: mediaToPreview(q.media),
     options: hasOptions(q.question_type)
       ? q.options.map((o, oi) => ({
         id: (qi + 1) * 1000 + oi,
         option_text: o.option_text.trim(),
         option_order: oi,
+        media: mediaToPreview(o.media),
       }))
       : [],
   }));

@@ -20,11 +20,11 @@ PREDECESSOR = "c8e2b5f7a3d1"
 REVISION = "e6c3a9f1d574"
 
 # Текущий global alembic head — обновляется каждой следующей миграцией
-# (последняя правка: 27b44fcf4865_seed_about_materials_banner_slides).
+# (последняя правка: a1c2e3f4b5d6_add_impersonator_to_user_sessions, ADR-025).
 # REVISION выше — это собственная неизменная идентичность ревизии Stage 8,
 # а не текущий head; их совпадение было верно только до появления следующей
 # миграции.
-CURRENT_HEAD = "27b44fcf4865"
+CURRENT_HEAD = "a1c2e3f4b5d6"
 
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 

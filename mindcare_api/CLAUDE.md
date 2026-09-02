@@ -387,9 +387,63 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    ответа в audit/logs
 ❌ Не считать «результаты тестов не шифруются» распространяющимся на free_text:
    решение опиралось на «не свободный терапевтический текст»
-❌ Не давать psychologist доступ к результатам тестов (в MVP закрыто осознанно);
-   supervisor-просмотр (Этап E) — отдельный этап, и чтение результата обязано писать
-   audit-событие по аналогии с session_note_content_read
+✅ Этап E (ADR-016) РЕАЛИЗОВАН: staff-доступ к результатам через
+   `GET /api/staff/test-results` (`app/tests/routes_staff.py`,
+   require_role supervisor+psychologist; admin ИСКЛЮЧЁН). supervisor — любой
+   студент; psychologist — только при active/past `TherapyEngagement`
+   (`storage.psychologist_has_engagement`). Список — metadata-only (без баллов,
+   без audit); деталь — полный результат + обязательный audit
+   `test_result_content_read` (INDEPENDENT/SOFT). `resolve_student_id` пускает
+   только ЧИСТОГО student (предикат «нет активной не-student роли»), иначе staff
+   читал бы самотесты другого staff. acting-роль — из `X-Active-Role` по
+   membership (`service._resolve_staff_result_role`)
+❌ Не давать admin доступ к результатам через staff-эндпоинты (ADR-016 — нет
+   регулярного доступа); не отдавать баллы в списке (только в detail под audit)
+✅ Этап F1 (ADR-016) РЕАЛИЗОВАН: moderation workflow тестов. `tests.status`
+   draft/in_review/published/needs_changes (миграция `e1b4c8f2a6d9`). Видимость
+   студенту = status='published' AND is_active=True — гейт стоит в ТРЁХ местах:
+   `find_active_tests`, `get_active_test_full` И отдельный запрос внутри
+   `save_result` (не переиспользует get_active_test_full — легко упустить при
+   правках). Переходы (`app/tests/service.py::_validate_transition`):
+   draft/needs_changes→in_review — только автор (tests.created_by==actor_id;
+   created_by NULL после удаления автора → недоступно никому, но admin/supervisor
+   всё равно публикуют напрямую); →published (из draft/in_review/needs_changes) и
+   in_review→needs_changes — только admin/supervisor. published не имеет
+   исходящих переходов status (unpublish — существующий is_active toggle,
+   отдельный от machine). Два разных исключения → разные коды:
+   TestTransitionError (перехода не существует в машине состояний) → 409;
+   TestTransitionForbidden (переход есть, но нет прав) → 403
+✅ status НЕ в TestUpdate (generic PATCH) — переходы только через выделенные
+   роуты `/admin/tests/{uuid}/publish`|`/return` и
+   `/api/psychologist/tests/{uuid}/submit-for-review` (`app/tests/routes_psych.py`,
+   require_role psychologist; владение проверяет service, не роутер). При
+   создании допустимы только draft|published (TestCreateStatus)
+✅ `GET /api/admin/tests` без `?status=` — ВСЕ статусы (не только published):
+   иначе тесты, переведённые data-миграцией в draft, пропали бы из вида админа
+✅ Этап F2 (ADR-016) РЕАЛИЗОВАН: авторство psychologist. `app/tests/routes_psych.py`
+   расширен до полного CRUD (`GET/POST ""`, `GET/PATCH/DELETE /{uuid}`) +
+   продублированы `analyze`/`preview-score` (не трогая `routes_admin.py` —
+   router-level dependency нельзя ослабить по одному роуту; вызывают те же
+   чистые stateless `service.analyze_test`/`preview_score`). Психолог управляет
+   ТОЛЬКО своими тестами (`tests.created_by==actor_id`) и ТОЛЬКО пока
+   `status IN (draft, needs_changes)` — гейт в `service._own_editable_test`.
+   Чужой тест → 404 (не 403 — «чужого неотличимо от несуществующего», как
+   session_notes); свой, но не editable-статус → 409 (`TestNotEditable`).
+   `create_my_test` ПРИНУДИТЕЛЬНО ставит status="draft", игнорируя присланный
+   статус (защита от прямого вызова с status=published — публикует только
+   admin/supervisor). `find_my_tests` фильтрует по статусу НА СЕРВЕРЕ (не на
+   клиенте — иначе ломается пагинация при >20 тестах)
+✅ Audit test_created/test_updated/test_deleted и media_uploaded роли расширены
+   `{admin,supervisor}` → `{admin,supervisor,psychologist}` (только role-set;
+   test_duplicated НЕ расширяется — psychologist duplicate не используется).
+   REGISTRY count не меняется (109)
+✅ Медиа-загрузка (`/api/media/upload`, `/upload/av`) открыта psychologist —
+   медиа в вопросах своих тестов
+❌ Не давать psychologist доступ к чужим тестам ни в каком статусе; не пускать
+   status в generic PATCH психолога (переходы — только через
+   submit-for-review/publish/return); не считать has_results-проверку в
+   update_my_test нужной — она недостижима для draft/needs_changes (результаты
+   только у published, а published не имеет исходящих переходов)
 ```
 
 ---
@@ -460,7 +514,12 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `72bfade01121` | add_banner_slide_link |
 | **Ветка карточек услуг (/services CMS):** | |
 | `d14143842079` | add_service_cards |
-| `27b44fcf4865` | seed_about_materials_banner_slides — **head** (data-only) |
+| `27b44fcf4865` | seed_about_materials_banner_slides (data-only) |
+| **Ветка отложенных функций тестов (vb):** | |
+| `d9f2a1c7b3e4` | add_test_shuffle_flags (`tests.shuffle_questions`/`shuffle_options`) |
+| `e1b4c8f2a6d9` | add_test_moderation_status (`tests.status` draft/in_review/published/needs_changes; Этап F1) |
+| **Ветка impersonation (vb, ADR-025):** | |
+| `a1c2e3f4b5d6` | add_impersonator_to_user_sessions (`user_sessions.impersonator_user_id`, nullable FK→users, ON DELETE SET NULL) — **head** |
 
 **Ключевые таблицы:**
 
@@ -469,7 +528,7 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `users` | Все пользователи системы. FK из всех модулей |
 | `roles`, `user_roles`, `permissions`, `role_permissions` | RBAC. Роли через M:N |
 | `student_profiles`, `psychologist_profiles` | Профили 1:1 с users |
-| `user_sessions` | Сессии (заменяют JWT). Soft-revoke через `is_revoked` |
+| `user_sessions` | Сессии (заменяют JWT). Soft-revoke через `is_revoked`. `impersonator_user_id` (ADR-025) — id админа при входе «под именем»; NULL у обычных сессий |
 | `otp_verifications` | OTP для регистрации и сброса пароля. code = SHA-256 хеш |
 | `consents`, `consent_records` | Согласия на ПДн (личное согласие субъекта). Обязательны при регистрации |
 | `user_legal_basis_records` | Документированное основание организации для admin-created staff-пользователей. Не путать с consent |
@@ -517,8 +576,17 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 104 события** (`AUTH_LOG=7`, `AUDIT_LOG=97`) — `app/audit/registry.py`,
-единый facade `record_event()`.
+**Event REGISTRY: 110 событий** (`AUTH_LOG=7`, `AUDIT_LOG=103`; среди последних —
+`media_uploaded` (admin+supervisor, target media_file, metadata
+file_type/mime_type/file_size), `test_result_content_read` (Этап E: staff-чтение
+результата, {supervisor,psychologist}, target test_result, INDEPENDENT/SOFT,
+metadata пустая), три Этапа F1 moderation workflow — `test_submitted_for_review`
+({psychologist}), `test_published`/`test_returned_for_changes`
+({admin,supervisor}), target `test`, ATOMIC/RAISE, metadata пустая, и
+`admin_user_impersonated` (ADR-025: вход админа «под именем», {admin}, target
+user, INDEPENDENT + RAISE fail-closed, session_id_hash в context; сбой аудита →
+route отзывает сессию + 503)) —
+`app/audit/registry.py`, единый facade `record_event()`.
 
 **CHANGE_REGISTRY: 4 таблицы / 25 полей** (15 name-only, 10 value-enabled) + 1
 derived-поле — `app/audit/change_registry.py`, отдельный writer `record_data_change()`:

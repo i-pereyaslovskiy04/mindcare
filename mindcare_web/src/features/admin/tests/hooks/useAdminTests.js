@@ -9,7 +9,7 @@ export function useAdminTests() {
   const [error, setError]     = useState(null);
   const [page, setPage]       = useState(1);
   const [query, setQueryRaw]  = useState('');
-  const [filters, setFilters] = useState({ is_active: null });
+  const [filters, setFilters] = useState({ is_active: null, status: null });
 
   const debouncedQuery = useDebounce(query, 300);
   const requestId = useRef(0);
@@ -24,6 +24,7 @@ export function useAdminTests() {
         size: 20,
         search: q || undefined,
         is_active: f.is_active,
+        status: f.status,
       });
       if (id !== requestId.current) return;
       setItems(data.items);

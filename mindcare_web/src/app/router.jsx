@@ -69,6 +69,8 @@ import PsychologistStudentsPage     from '../pages/psychologist/PsychologistStud
 import PsychologistStudentCardPage  from '../pages/psychologist/PsychologistStudentCardPage';
 import PsychologistChatPage         from '../pages/psychologist/Chat/PsychologistChatPage';
 import PsychologistAppointmentsPage from '../pages/psychologist/Appointments/AppointmentsPage';
+import PsychologistTestsPage        from '../pages/psychologist/Tests/PsychologistTestsPage';
+import PsychologistTestFormPage     from '../pages/psychologist/Tests/PsychologistTestFormPage';
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
 import SupervisorLayout    from '../pages/supervisor/SupervisorLayout';
@@ -140,6 +142,9 @@ export default function AppRouter() {
         <Route path="students"              element={<PsychologistStudentsPage />} />
         <Route path="students/:studentId"   element={<PsychologistStudentCardPage />} />
         <Route path="appointments"          element={<PsychologistAppointmentsPage />} />
+        <Route path="tests"                 element={<PsychologistTestsPage />} />
+        <Route path="tests/new"             element={<PsychologistTestFormPage />} />
+        <Route path="tests/:uuid"           element={<PsychologistTestFormPage />} />
         <Route path="chat"                  element={<PsychologistChatPage />} />
         <Route path="settings"              element={<CabinetSettingsPage cabinetRole="psychologist" />} />
       </Route>

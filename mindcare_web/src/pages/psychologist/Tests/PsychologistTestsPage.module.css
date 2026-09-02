@@ -1,0 +1,35 @@
+.page { display: flex; flex-direction: column; gap: 20px; }
+
+.header { display: flex; align-items: center; justify-content: space-between; }
+
+.title { font-size: 22px; font-weight: 700; color: var(--espresso); margin: 0; }
+
+.toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.search {
+  flex: 1; min-width: 200px;
+  padding: 9px 12px; border: 1px solid var(--nav-border);
+  border-radius: 8px; font-size: 14px; font-family: inherit;
+  background: var(--warm-white); color: var(--text-main); outline: none;
+  transition: border-color 0.15s;
+}
+.search:focus { border-color: var(--coffee); }
+.search::placeholder { color: var(--text-light); }
+
+.pagination {
+  display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 14px;
+}
+
+.overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 3000;
+}
+.dialog {
+  background: var(--warm-white); border-radius: 12px; padding: 24px; max-width: 440px; width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+.dialogTitle  { font-size: 18px; font-weight: 700; margin: 0 0 8px; color: var(--espresso); }
+.dialogBody   { font-size: 14px; color: var(--text-muted); margin: 0 0 16px; line-height: 1.5; }
+.dialogError  { font-size: 13px; color: var(--error); margin-bottom: 12px; }
+.dialogActions { display: flex; justify-content: flex-end; gap: 10px; }
+.actionError { font-size: 13px; color: var(--error); margin: 0 0 12px; }

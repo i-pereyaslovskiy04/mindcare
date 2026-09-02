@@ -5,8 +5,11 @@
 роутер транслирует в HTTP 422/404.
 """
 
+import random as _random
 from typing import Optional
 
+from app.audit import Actor, Outcome, Target, record_event
+from app.audit.request_context import build_request_context
 from app.tests import storage, scoring
 from app.tests.storage import TestHasResults  # noqa: F401  (ре-экспорт для routes)
 
@@ -55,6 +58,29 @@ def _validate_questions(questions: list[dict]) -> None:
                     f"Вопрос #{idx}: scale требует config с целыми min < max"
                 )
         # free_text — варианты/конфиг не требуются
+
+        # Вес вопроса (для scoring=weighted): если задан — целое ≥ 1.
+        weight = (q.get("config") or {}).get("weight")
+        if weight is not None and (
+            isinstance(weight, bool) or not isinstance(weight, int) or weight < 1
+        ):
+            raise ValueError(f"Вопрос #{idx}: вес (weight) должен быть целым ≥ 1")
+
+        # Изображения: явно прикреплённый файл обязан существовать. В отличие от
+        # категорий/тегов НЕ пропускаем молча — иначе автор сохранит и потеряет
+        # картинку без предупреждения.
+        for m in q.get("media", []) or []:
+            if not storage.media_exists(m["media_uuid"]):
+                raise ValueError(
+                    f"Вопрос #{idx}: изображение не найдено или недоступно"
+                )
+        for oi, o in enumerate(options, start=1):
+            for m in o.get("media", []) or []:
+                if not storage.media_exists(m["media_uuid"]):
+                    raise ValueError(
+                        f"Вопрос #{idx}, вариант #{oi}: "
+                        "изображение не найдено или недоступно"
+                    )
 
     _validate_scale_coverage(questions)
 
@@ -263,8 +289,12 @@ def preview_score(data: dict) -> dict:
 
 def list_tests(
     page: int, size: int, search: Optional[str], is_active: Optional[bool],
+    status: Optional[str] = None,
 ) -> tuple[list[dict], int]:
-    return storage.find_tests(page=page, size=size, search=search, is_active=is_active)
+    # status=None (по умолчанию) — все статусы, см. storage.find_tests.
+    return storage.find_tests(
+        page=page, size=size, search=search, is_active=is_active, status=status,
+    )
 
 
 def get_test(uuid: str) -> Optional[dict]:
@@ -343,6 +373,201 @@ def delete_test(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Moderation workflow (Этап F, ADR-016)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestTransitionError(Exception):
+    """Такого перехода не существует в машине состояний (напр. published→draft,
+    draft→needs_changes) → route мапит на 409 (конфликт состояния ресурса)."""
+
+
+class TestTransitionForbidden(Exception):
+    """Переход существует, но у актора нет прав (не автор / не staff) → route
+    мапит на 403 (как NotesAccessError в session_notes)."""
+
+
+# Легальные переходы: {текущий: {целевой: (кто может, audit-событие)}}.
+# "author" — только автор (tests.created_by == actor_id); "staff" — admin/supervisor.
+# published не имеет исходящих переходов здесь: «снять с публикации» — существующий
+# is_active toggle (update_test), не смена status (см. видимость: published AND is_active).
+_TRANSITIONS = {
+    "draft": {
+        "in_review": ("author", "test_submitted_for_review"),
+        "published": ("staff", "test_published"),
+    },
+    "needs_changes": {
+        "in_review": ("author", "test_submitted_for_review"),
+        "published": ("staff", "test_published"),
+    },
+    "in_review": {
+        "published":     ("staff", "test_published"),
+        "needs_changes": ("staff", "test_returned_for_changes"),
+    },
+}
+
+
+def _validate_transition(current: str, target: str, actor_role: str, is_author: bool) -> str:
+    """Возвращает имя audit-события для перехода или бросает TestTransitionError."""
+    rule = _TRANSITIONS.get(current, {}).get(target)
+    if rule is None:
+        raise TestTransitionError(f"Недопустимый переход статуса: {current} → {target}")
+    who, event = rule
+    if who == "author" and not is_author:
+        raise TestTransitionForbidden("Отправить на модерацию может только автор теста")
+    if who == "staff" and actor_role not in ("admin", "supervisor"):
+        raise TestTransitionForbidden(
+            "Публикация и возврат на доработку доступны только admin/supervisor"
+        )
+    return event
+
+
+def _apply_transition(
+    uuid: str, target: str,
+    *,
+    actor_id: int, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    found = storage.get_status_and_author(uuid)
+    if found is None:
+        raise ValueError("Тест не найден")
+    # created_by IS NULL (автор аккаунта удалён, ON DELETE SET NULL) → is_author
+    # всегда False: submit-for-review для такого черновика недоступен НИКОМУ, но
+    # admin/supervisor всё равно публикуют его напрямую (draft → published — их
+    # право, не завязано на авторство) — тупика нет.
+    is_author = found["created_by"] is not None and found["created_by"] == actor_id
+    event = _validate_transition(found["status"], target, actor_role, is_author)
+    result = storage.set_status(
+        uuid, target,
+        event=event, actor_id=actor_id, actor_role=actor_role,
+        ip=ip, user_agent=user_agent,
+    )
+    if result is None:
+        raise ValueError("Тест не найден")
+    return result
+
+
+def submit_for_review(
+    uuid: str, *, actor_id: int, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Автор отправляет свой draft/needs_changes тест на модерацию (in_review)."""
+    return _apply_transition(
+        uuid, "in_review",
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+
+
+def publish_test(
+    uuid: str, *, actor_id: int, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """admin/supervisor публикуют тест (из draft/in_review/needs_changes)."""
+    return _apply_transition(
+        uuid, "published",
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+
+
+def return_for_changes(
+    uuid: str, *, actor_id: int, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """admin/supervisor возвращают тест на доработку (только из in_review)."""
+    return _apply_transition(
+        uuid, "needs_changes",
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Авторство psychologist (Этап F2, ADR-016)
+# ══════════════════════════════════════════════════════════════════════════════
+
+_EDITABLE_STATUSES = {"draft", "needs_changes"}
+
+
+class TestNotEditable(Exception):
+    """Тест не в draft/needs_changes (на проверке или уже опубликован) — сейчас
+    его нельзя редактировать/удалить → route мапит на 409."""
+
+
+def _own_editable_test(uuid: str, actor_id: int) -> dict:
+    """{"status","created_by"} — если тест существует, принадлежит actor_id и
+    редактируем; иначе исключение. Чужой/несуществующий → ValueError (404,
+    «чужого неотличимо от несуществующего», как session_notes). Свой, но не в
+    editable-статусе → TestNotEditable (409)."""
+    found = storage.get_status_and_author(uuid)
+    if found is None or found["created_by"] != actor_id:
+        raise ValueError("Тест не найден")
+    if found["status"] not in _EDITABLE_STATUSES:
+        raise TestNotEditable("Тест на проверке или опубликован — редактировать нельзя")
+    return found
+
+
+def list_my_tests(
+    author_id: int, page: int, size: int,
+    search: Optional[str] = None, status: Optional[str] = None,
+) -> tuple[list[dict], int]:
+    return storage.find_my_tests(
+        author_id, page=page, size=size, search=search, status=status,
+    )
+
+
+def get_my_test(uuid: str, author_id: int) -> dict:
+    """Просмотр своего теста — ЛЮБОЙ статус (не только editable); правка отдельно
+    гейтится в update_my_test/delete_my_test."""
+    test = storage.get_test_by_uuid(uuid)
+    if test is None or test.get("created_by") != author_id:
+        raise ValueError("Тест не найден")
+    return test
+
+
+def create_my_test(
+    data: dict, created_by: int,
+    *, actor_role: str = "psychologist",
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Психолог создаёт тест ВСЕГДА как draft — присланный status игнорируется
+    (защита от прямого вызова API с status=published: публикует только
+    admin/supervisor, ADR-016)."""
+    data = {**data, "status": "draft"}
+    data = _normalize(data)
+    return storage.create_test(
+        data, created_by=created_by,
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+
+
+def update_my_test(
+    uuid: str, data: dict, *, actor_id: int, actor_role: str = "psychologist",
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    _own_editable_test(uuid, actor_id)
+    data = _normalize(data)
+    # has_results-проверка не нужна: тест уже гарантированно draft/needs_changes
+    # (_own_editable_test), а результаты бывают только у published (storage.
+    # update_test всё равно перепроверит это внутри — единственный источник истины).
+    result = storage.update_test(
+        uuid, data,
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+    if result is None:
+        raise ValueError("Тест не найден")
+    return result
+
+
+def delete_my_test(
+    uuid: str, *, actor_id: int, actor_role: str = "psychologist",
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> None:
+    _own_editable_test(uuid, actor_id)
+    if not storage.delete_test(
+        uuid, actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    ):
+        raise ValueError("Тест не найден")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Student-facing: прохождение, submit, результаты, consent (Этап B)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -354,31 +579,46 @@ def _strip_take(test: dict) -> dict:
     """
     Проекция теста для прохождения: БЕЗ value_score (ключа теста) и БЕЗ порогов
     интерпретации. config вопроса сохраняется (min/max шкалы нужны фронту).
+
+    Случайный порядок (флаги shuffle_questions/shuffle_options) применяется здесь
+    — он презентационный: submit и scoring адресуют по question_id/option_id,
+    поэтому перестановка ничего не ломает. question_order/option_order остаются в
+    выдаче как есть (клиент их игнорирует).
     """
+    questions = [
+        {
+            "id": q["id"],
+            "question_text": q["question_text"],
+            "question_order": q["question_order"],
+            "question_type": q["question_type"],
+            "is_required": q["is_required"],
+            "config": q["config"],
+            "media": q.get("media", []),   # изображение — не ключ теста
+            "options": [
+                {
+                    "id": o["id"],
+                    "option_text": o["option_text"],
+                    "option_order": o["option_order"],
+                    "media": o.get("media", []),
+                }
+                for o in q["options"]
+            ],
+        }
+        for q in test["questions"]
+    ]
+
+    if test.get("shuffle_options"):
+        for q in questions:
+            _random.shuffle(q["options"])
+    if test.get("shuffle_questions"):
+        _random.shuffle(questions)
+
     return {
         "uuid": test["uuid"],
         "title": test["title"],
         "description": test["description"],
         "time_limit_min": test["time_limit_min"],
-        "questions": [
-            {
-                "id": q["id"],
-                "question_text": q["question_text"],
-                "question_order": q["question_order"],
-                "question_type": q["question_type"],
-                "is_required": q["is_required"],
-                "config": q["config"],
-                "options": [
-                    {
-                        "id": o["id"],
-                        "option_text": o["option_text"],
-                        "option_order": o["option_order"],
-                    }
-                    for o in q["options"]
-                ],
-            }
-            for q in test["questions"]
-        ],
+        "questions": questions,
     }
 
 
@@ -424,13 +664,16 @@ def _ensure_consent(user_id: int) -> None:
 
 # ── submit ────────────────────────────────────────────────────────────────────
 
-def _validate_answers(test: dict, answers: list[dict]) -> None:
+def _validate_answers(test: dict, answers: list[dict], timed_out: bool = False) -> None:
     by_qid = {q["id"]: q for q in test["questions"]}
     answered = {a["question_id"] for a in answers}
 
-    for q in test["questions"]:
-        if q["is_required"] and q["id"] not in answered:
-            raise ValueError(f"Вопрос «{q['question_text'][:40]}» обязателен")
+    # При таймауте обязательность не проверяем: авто-submit сохраняет то, что
+    # успели ответить (неотвеченные вопросы дают 0 в compute_result).
+    if not timed_out:
+        for q in test["questions"]:
+            if q["is_required"] and q["id"] not in answered:
+                raise ValueError(f"Вопрос «{q['question_text'][:40]}» обязателен")
 
     for a in answers:
         q = by_qid.get(a["question_id"])
@@ -464,13 +707,14 @@ def submit_test(
     ip: Optional[str] = None, user_agent: Optional[str] = None,
     *,
     actor_role: Optional[str] = None,
+    timed_out: bool = False,
 ) -> dict:
     test = storage.get_active_test_full(uuid)
     if not test:
         raise ValueError("Тест не найден")
 
     _ensure_consent(user_id)          # ФЗ-152 gate
-    _validate_answers(test, answers)
+    _validate_answers(test, answers, timed_out=timed_out)
 
     computed = scoring.compute_result(test, answers)
     saved = storage.save_result(
@@ -488,3 +732,85 @@ def list_results(user_id: int, page: int, size: int) -> tuple[list[dict], int]:
 
 def get_result(user_id: int, result_uuid: str) -> Optional[dict]:
     return storage.get_user_result(user_id, result_uuid)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Staff-доступ к результатам (Этап E, ADR-016) — шаблон session_notes
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ResultAccessError(Exception):
+    """Невалидная active-роль или нет scope-доступа → route мапит на 403."""
+
+
+class ResultNotFound(Exception):
+    """Студент/результат не найден → route мапит на 404."""
+
+
+# Роли с доступом к результатам (admin ИСКЛЮЧЁН по ADR-016). Консервативный
+# порядок при multi-role без X-Active-Role: psychologist (scoped) < supervisor (любые).
+_STAFF_RESULT_ROLES = ("supervisor", "psychologist")
+_STAFF_RESULT_CONSERVATIVE = ("psychologist", "supervisor")
+
+
+def _resolve_staff_result_role(role_names, requested: Optional[str]) -> str:
+    """Детерминированная acting-роль из ролей пользователя (см. session_notes)."""
+    holder = [r for r in _STAFF_RESULT_ROLES if r in set(role_names)]
+    if not holder:
+        raise ResultAccessError("Нет подходящей роли для доступа к результатам")
+    if requested is not None:
+        if requested not in holder:
+            raise ResultAccessError("Указанная активная роль недоступна для этого действия")
+        return requested
+    if len(holder) == 1:
+        return holder[0]
+    for role in _STAFF_RESULT_CONSERVATIVE:
+        if role in holder:
+            return role
+    return holder[0]   # недостижимо
+
+
+def list_student_results(
+    *, current_user: dict, requested_role: Optional[str],
+    student_uuid: str, page: int, size: int,
+) -> tuple[list[dict], int]:
+    """Metadata-список результатов студента. supervisor — любой; psychologist —
+    только при active/past engagement. Без audit (баллов нет — как metadata-list
+    заметок)."""
+    role = _resolve_staff_result_role(current_user.get("roles") or [], requested_role)
+    student_id = storage.resolve_student_id(student_uuid)
+    if student_id is None:
+        raise ResultNotFound("Студент не найден")
+    if role == "psychologist" and not storage.psychologist_has_engagement(
+        int(current_user["id"]), student_id,
+    ):
+        raise ResultAccessError("Нет доступа к результатам этого студента")
+    return storage.find_results_for_student(student_id, page=page, size=size)
+
+
+def get_staff_result(
+    *, current_user: dict, requested_role: Optional[str], result_uuid: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Полный результат для staff + audit content-read. psychologist — только
+    результат своего студента (иначе 403 без audit)."""
+    role = _resolve_staff_result_role(current_user.get("roles") or [], requested_role)
+    found = storage.get_result_with_owner(result_uuid)
+    if found is None:
+        raise ResultNotFound("Результат не найден")
+    result, owner_id, result_id = found
+    if role == "psychologist" and not storage.psychologist_has_engagement(
+        int(current_user["id"]), owner_id,
+    ):
+        raise ResultAccessError("Нет доступа к этому результату")
+
+    # Staff-чтение результата — read trail (INDEPENDENT/SOFT, provisional fail-open;
+    # facade сам гасит storage-сбой без raise). db НЕ передаём.
+    record_event(
+        event="test_result_content_read",
+        actor=Actor.user(int(current_user["id"]), role),
+        target=Target("test_result", result_id),
+        outcome=Outcome.SUCCESS,
+        metadata={},
+        context=build_request_context(ip=ip, user_agent=user_agent),
+    )
+    return result

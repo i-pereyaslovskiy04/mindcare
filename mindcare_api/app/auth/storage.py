@@ -740,13 +740,18 @@ def create_session(
     user_id: str,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
-    expire_days: int = SESSION_EXPIRE_DAYS,
+    expire_days: float = SESSION_EXPIRE_DAYS,
+    impersonator_user_id: Optional[int] = None,
 ) -> tuple[str, datetime]:
     """
     Создаёт сессию в БД. Возвращает (session_token, expires_at).
 
     Клиенту возвращается raw token; в user_sessions.id хранится только
     SHA-256 hash — значение из дампа БД нельзя использовать как Bearer.
+
+    impersonator_user_id (ADR-025): если задан — это impersonation-сессия,
+    созданная администратором от имени user_id. Отметка серверная, для
+    атрибуции; сам токен по правам эквивалентен обычной сессии user_id.
     """
     token = generate_session_token()
     expires_at = datetime.now(timezone.utc) + timedelta(days=expire_days)
@@ -758,6 +763,7 @@ def create_session(
             ip_address=ip,
             user_agent=user_agent,
             expires_at=expires_at,
+            impersonator_user_id=impersonator_user_id,
         ))
         db.commit()
 
@@ -782,8 +788,9 @@ def find_session(token: str) -> Optional[dict]:
         if not session:
             return None
         return {
-            "user_id":    str(session.user_id),
-            "expires_at": session.expires_at,
+            "user_id":              str(session.user_id),
+            "expires_at":           session.expires_at,
+            "impersonator_user_id": session.impersonator_user_id,
         }
 
 

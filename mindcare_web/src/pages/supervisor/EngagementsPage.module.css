@@ -242,3 +242,38 @@
   .table thead th:nth-child(3),
   .table tbody td:nth-child(3) { display: none; }
 }
+
+/* ── Модалка результатов психодиагностики (Этап E) ── */
+.resultsBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  background: rgba(var(--shadow-rgb), 0.45);
+}
+.resultsModal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 12px 40px rgba(var(--shadow-rgb), 0.18);
+}
+.resultsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.resultsTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--espresso);
+  margin: 0;
+}

@@ -17,6 +17,7 @@ export default function Button({
     styles[variant] || styles.primary,
     variant !== 'icon' ? styles[size] : (size === 'sm' ? styles.iconSm : ''),
     variant === 'icon' && tone === 'danger' ? styles.iconDanger : '',
+    variant === 'icon' && tone === 'success' ? styles.iconSuccess : '',
     className,
   ].filter(Boolean).join(' ');
 

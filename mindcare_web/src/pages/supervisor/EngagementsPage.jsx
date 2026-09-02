@@ -4,6 +4,7 @@ import Button from '../../components/UI/Button/Button';
 import Badge from '../../components/UI/Badge/Badge';
 import { useStudents } from '../../features/supervisor/hooks/useStudents';
 import AssignModal from '../../features/supervisor/components/AssignModal';
+import StudentTestResults from '../../features/tests/ui/StudentTestResults';
 import {
   createEngagement,
   transferEngagement,
@@ -29,6 +30,7 @@ export default function EngagementsPage() {
 
   // modal: { mode, student } | null
   const [modal, setModal]     = useState(null);
+  const [resultsFor, setResultsFor] = useState(null); // студент для просмотра результатов
   const [notice, setNotice]   = useState(null); // { type: 'success'|'error', text }
 
   function showNotice(type, text) {
@@ -177,35 +179,44 @@ export default function EngagementsPage() {
 
                       {/* Actions */}
                       <td className={styles.actionsCell}>
-                        {!eng ? (
+                        <div className={styles.btnGroup}>
                           <Button
-                            variant="primary"
+                            variant="secondary"
                             size="sm"
-                            onClick={() => openModal('assign', student)}
+                            onClick={() => setResultsFor(student)}
                           >
-                            Назначить
+                            Результаты
                           </Button>
-                        ) : (
-                          <div className={styles.btnGroup}>
+                          {!eng ? (
                             <Button
-                              variant="secondary"
+                              variant="primary"
                               size="sm"
-                              onClick={() => openModal('transfer', student)}
+                              onClick={() => openModal('assign', student)}
                             >
-                              Переназначить
+                              Назначить
                             </Button>
-                            <Button
-                              variant="icon"
-                              size="sm"
-                              tone="danger"
-                              onClick={() => openModal('close', student)}
-                              title="Закрыть связь"
-                              aria-label="Закрыть связь"
-                            >
-                              <Icon name="trash" size={15} />
-                            </Button>
-                          </div>
-                        )}
+                          ) : (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openModal('transfer', student)}
+                              >
+                                Переназначить
+                              </Button>
+                              <Button
+                                variant="icon"
+                                size="sm"
+                                tone="danger"
+                                onClick={() => openModal('close', student)}
+                                title="Закрыть связь"
+                                aria-label="Закрыть связь"
+                              >
+                                <Icon name="trash" size={15} />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -257,6 +268,34 @@ export default function EngagementsPage() {
           onConfirm={handleConfirm}
           onClose={closeModal}
         />
+      )}
+
+      {/* Результаты психодиагностики студента (Этап E) */}
+      {resultsFor && (
+        <div
+          className={styles.resultsBackdrop}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Результаты тестов: ${resultsFor.full_name}`}
+          onClick={() => setResultsFor(null)}
+        >
+          <div className={styles.resultsModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.resultsHead}>
+              <h3 className={styles.resultsTitle}>
+                Результаты тестов · {resultsFor.full_name}
+              </h3>
+              <Button
+                variant="icon"
+                size="sm"
+                aria-label="Закрыть"
+                onClick={() => setResultsFor(null)}
+              >
+                <Icon name="x" size={16} />
+              </Button>
+            </div>
+            <StudentTestResults studentUuid={resultsFor.uuid} activeRole="supervisor" />
+          </div>
+        </div>
       )}
     </div>
   );

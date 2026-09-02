@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../../../components/Icon/Icon';
 import Button from '../../../components/UI/Button/Button';
@@ -18,6 +18,12 @@ function isAnswered(type, value) {
   if (type === 'scale') return value != null;
   if (type === 'free_text') return typeof value === 'string' && value.trim().length > 0;
   return false;
+}
+
+function formatClock(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function buildAnswer(question, value) {
@@ -43,6 +49,11 @@ export default function TestTakePage() {
   const [error, setError]     = useState(null);
   const [stale, setStale]     = useState(false);   // тест изменился, пока его проходили
   const [submitting, setSubmitting] = useState(false);
+  const [remaining, setRemaining] = useState(null); // секунды до конца (тайм-лимит)
+  const [timerOn, setTimerOn] = useState(false);
+  const deadlineRef = useRef(null);
+  const timedOutRef = useRef(false);
+  const submitRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -73,16 +84,21 @@ export default function TestTakePage() {
     (q) => isAnswered(q.question_type, answers[q.id]),
   ).length;
 
-  const submit = async () => {
-    const missing = test.questions
-      .filter((q) => q.is_required && !isAnswered(q.question_type, answers[q.id]))
-      .map((q) => q.id);
+  const submit = async (timedOut = false) => {
+    if (submitting) return;
 
-    if (missing.length) {
-      setInvalid(missing);
-      const el = document.getElementById(`q-${missing[0]}`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
+    // По таймауту не требуем обязательные — отправляем то, что успели ответить.
+    if (!timedOut) {
+      const missing = test.questions
+        .filter((q) => q.is_required && !isAnswered(q.question_type, answers[q.id]))
+        .map((q) => q.id);
+
+      if (missing.length) {
+        setInvalid(missing);
+        const el = document.getElementById(`q-${missing[0]}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
     }
 
     const payload = test.questions
@@ -92,7 +108,7 @@ export default function TestTakePage() {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await submitTest(uuid, payload);
+      const result = await submitTest(uuid, payload, timedOut);
       navigate(`/student/tests/results/${result.uuid}`, { replace: true });
     } catch (err) {
       // Тест могли отредактировать, пока страница была открыта: id вопросов
@@ -105,6 +121,35 @@ export default function TestTakePage() {
       setSubmitting(false);
     }
   };
+
+  // Всегда держим ссылку на актуальный submit — таймер должен видеть свежие ответы.
+  submitRef.current = submit;
+
+  // Старт тайм-лимита: один раз, когда тест загружен и согласие принято.
+  useEffect(() => {
+    const limit = Number(test?.time_limit_min) || 0;
+    if (timerOn || !test || !consent?.accepted || limit <= 0) return;
+    deadlineRef.current = Date.now() + limit * 60000;
+    setRemaining(limit * 60);
+    setTimerOn(true);
+  }, [test, consent, timerOn]);
+
+  // Тик раз в секунду; по достижении 0 — один авто-submit с флагом таймаута.
+  useEffect(() => {
+    if (!timerOn) return undefined;
+    const id = setInterval(() => {
+      const rem = Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000));
+      setRemaining(rem);
+      if (rem <= 0) {
+        clearInterval(id);
+        if (!timedOutRef.current) {
+          timedOutRef.current = true;
+          submitRef.current?.(true);
+        }
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [timerOn]);
 
   if (loading) return <div className={styles.page}><p className={styles.muted}>Загрузка…</p></div>;
 
@@ -146,6 +191,18 @@ export default function TestTakePage() {
         Отвечено {answeredCount} из {test.questions.length} вопросов
       </p>
 
+      {remaining != null && (
+        <p
+          className={[styles.timer, remaining <= 60 && styles.timerLow]
+            .filter(Boolean).join(' ')}
+          role="timer"
+          aria-live="off"
+        >
+          <Icon name="clock" size={14} aria-hidden="true" /> Осталось времени:{' '}
+          {formatClock(remaining)}
+        </p>
+      )}
+
       <div className={styles.questions}>
         {test.questions.map((q, i) => (
           <div id={`q-${q.id}`} key={q.id}>
@@ -178,7 +235,7 @@ export default function TestTakePage() {
             Обновить страницу
           </Button>
         ) : (
-          <Button variant="primary" loading={submitting} onClick={submit}>
+          <Button variant="primary" loading={submitting} onClick={() => submit()}>
             Завершить и узнать результат
           </Button>
         )}

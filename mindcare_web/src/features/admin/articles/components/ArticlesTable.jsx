@@ -100,6 +100,7 @@ export default function ArticlesTable({ items, loading, error, onEdit, onDelete,
                     size="sm"
                     onClick={() => onEdit(item)}
                     aria-label={`Редактировать «${item.title}»`}
+                    title="Редактировать"
                     disabled={editLoadingId === item.uuid}
                   >
                     {editLoadingId === item.uuid
@@ -112,6 +113,7 @@ export default function ArticlesTable({ items, loading, error, onEdit, onDelete,
                     tone="danger"
                     onClick={() => onDelete(item)}
                     aria-label={`Удалить «${item.title}»`}
+                    title="Удалить"
                   >
                     <Icon name="trash" size={15} />
                   </Button>
