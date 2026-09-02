@@ -59,8 +59,9 @@ const EMPTY = {
  * путь навигации). Второй, ownership-иной конкретный потребитель этой формы —
  * PsychologistTestFormPage (Этап F2) передаёт СВОЙ config явно через проп: та
  * же форма/валидация/QuestionBuilder, другие api-вызовы и урезанный набор
- * полей (без статуса при создании, без «Активен», без дублирования —
- * psychologist управляет только своими draft/needs_changes тестами).
+ * полей (без статуса при создании, без «Активен»). Дублирование (Этап F2.2)
+ * доступно и психологу — своё, через отдельный duplicateFn (иначе бьёт в
+ * /api/admin/tests/{uuid}/duplicate, недоступный психологу).
  */
 function adminConfig(cabinetRole) {
   return {
@@ -70,10 +71,10 @@ function adminConfig(cabinetRole) {
     showStatusSelect: true,
     showIsActiveToggle: true,
     // Гейтит и кнопку «Дублировать», и 409-баннер «есть результаты, создайте
-    // копию» — для psychologist эта ветка недостижима (их правка заперта на
-    // draft/needs_changes, где результатов не бывает), поэтому оба скрываются
-    // одним флагом, а не заводятся отдельно ради единственного edge-case.
+    // копию» (has_results на вопросах published-теста с результатами) — оба
+    // одним флагом, т.к. баннер без рабочей кнопки был бы бесполезен.
     showDuplicate: true,
+    duplicateFn: duplicateTest,
   };
 }
 
@@ -206,10 +207,9 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
       else await effectiveConfig.api.create(payload);
       navigate(effectiveConfig.backPath);
     } catch (err) {
-      // Баннер «есть результаты, создайте копию» осмыслен только там, где есть
-      // duplicate (admin/supervisor). У психолога такой кнопки нет (F2 scope) —
-      // 409 (has_results на правке вопросов ИЛИ смена статуса гонкой) показывается
-      // обычным текстом ошибки без спецбаннера.
+      // Баннер «есть результаты, создайте копию» показывается везде, где есть
+      // рабочий duplicateFn (admin/supervisor и, с Этапа F2.2, psychologist) —
+      // 409 здесь означает has_results на правке вопросов.
       if (err?.status === 409 && effectiveConfig.showDuplicate) setLocked(true);
       setError(err.message || 'Не удалось сохранить тест');
       setSubmitting(false);
@@ -221,7 +221,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
     setDuplicating(true);
     setError('');
     try {
-      const copy = await duplicateTest(uuid);
+      const copy = await effectiveConfig.duplicateFn(uuid);
       navigate(`${effectiveConfig.backPath}/${copy.uuid}`);
     } catch (err) {
       setError(err.message || 'Не удалось создать копию теста');

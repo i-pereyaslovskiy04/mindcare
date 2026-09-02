@@ -2,14 +2,27 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff: `docs/HANDOFFS/2026-09-01-admin-impersonation.md` —
+Актуальный handoff: `docs/HANDOFFS/2026-09-02-test-moderation-followups.md` —
+доработки модерации тестов поверх Этапов E/F1/F2: (1) модерация тестов открыта
+supervisor во фронтенде (`/supervisor/tests`, был только backend-доступ, UI
+отсутствовал — реальный баг, не недоделка; `AdminTestsPage`/`TestFormPage`
+параметризованы `cabinetRole`); (2) быстрая деактивация/активация теста из
+списка (иконка `power`); (3) **Этап F2.1** — психолог дорабатывает СВОЙ
+`published`-тест, правка атомарно снимает публикацию (`status→draft`, audit
+`test_unpublished_for_edit`), диалог-предупреждение перед редактированием;
+(4) **Этап F2.2** — психолог дублирует СВОЙ тест в ЛЮБОМ статусе источника
+(включая published/in_review — не мутирует оригинал), `test_duplicated`
+расширен на psychologist. REGISTRY 110 → 111.
+
+Предыдущий крупный блок работ:
+`docs/HANDOFFS/2026-09-01-admin-impersonation.md` —
 impersonation администратором («Зайти под именем» в `/admin/users`, **ADR-025**):
 `user_sessions.impersonator_user_id` (миграция `a1c2e3f4b5d6`), `/me` отдаёт
 `impersonating`/`impersonator_name`, `POST /api/admin/users/{uuid}/impersonate`,
 audit `admin_user_impersonated` (REGISTRY 110), фронт — `ImpersonationBanner`
 возврата в профиль админа, кнопка «Зайти» в `UsersTable`.
 
-Предыдущий крупный блок работ:
+Ещё раньше:
 `docs/HANDOFFS/2026-08-30-test-question-option-media-images.md` — медиа в вопросах/
 вариантах тестов + отложенные функции. **Блок 1:** изображения (связки
 `question_media`/`option_media` сквозь schemas/storage/service и фронт). **Блок 2**

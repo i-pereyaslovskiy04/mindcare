@@ -591,6 +591,35 @@ def delete_my_test(
         raise ValueError("Тест не найден")
 
 
+def _own_test_uuid(uuid: str, actor_id: int) -> None:
+    """Гейт владения для duplicate — БЕЗ ограничения по статусу: дублирование не
+    мутирует оригинал (read + insert новой независимой копии), поэтому любой
+    статус источника (включая published/in_review) допустим. Чужой/несуществующий
+    → ValueError (404, «чужого неотличимо от несуществующего», как session_notes)."""
+    found = storage.get_status_and_author(uuid)
+    if found is None or found["created_by"] != actor_id:
+        raise ValueError("Тест не найден")
+
+
+def duplicate_my_test(
+    uuid: str, *, actor_id: int, actor_role: str = "psychologist",
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Психолог дублирует СВОЙ тест (Этап F2.2) — переиспользует общий
+    storage.duplicate_test (тот же путь, что admin/supervisor): копия создаётся
+    как draft, is_active=False, version=1, created_by=этот же психолог. Оригинал
+    не меняется — в отличие от update_my_test('published'), дублирование не
+    снимает исходный тест с публикации."""
+    _own_test_uuid(uuid, actor_id)
+    result = storage.duplicate_test(
+        uuid, created_by=actor_id,
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+    if result is None:
+        raise ValueError("Тест не найден")
+    return result
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Student-facing: прохождение, submit, результаты, consent (Этап B)
 # ══════════════════════════════════════════════════════════════════════════════

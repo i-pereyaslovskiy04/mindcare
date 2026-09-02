@@ -318,6 +318,75 @@ def test_psychologist_cannot_delete_others_test(client):
         _hard_delete_test(test["uuid"])
 
 
+# ── Этап F2.2: дублирование своего теста (любой статус источника) ─────────────
+
+def test_psychologist_duplicates_own_draft(client):
+    headers, _ = _staff(client, "psychologist")
+    r = client.post(
+        "/api/psychologist/tests",
+        json=_payload(f"PSYCH {_uuid.uuid4().hex[:6]}"), headers=headers,
+    )
+    src = r.json()
+    copy = None
+    try:
+        r = client.post(f"/api/psychologist/tests/{src['uuid']}/duplicate", headers=headers)
+        assert r.status_code == 201, r.text
+        copy = r.json()
+        assert copy["uuid"] != src["uuid"]
+        assert copy["status"] == "draft"
+        assert copy["title"].startswith(src["title"])
+        assert copy["questions"][0]["question_text"] == src["questions"][0]["question_text"]
+    finally:
+        _hard_delete_test(src["uuid"])
+        if copy:
+            _hard_delete_test(copy["uuid"])
+
+
+@pytest.mark.parametrize("src_status", ["in_review", "published"])
+def test_psychologist_duplicates_without_touching_original_status(client, src_status):
+    """Ключевое отличие от update_my_test('published'): дублирование НЕ снимает
+    оригинал с публикации/проверки — это read-only копирование, не мутация."""
+    headers, _ = _staff(client, "psychologist")
+    r = client.post(
+        "/api/psychologist/tests",
+        json=_payload(f"PSYCH {_uuid.uuid4().hex[:6]}"), headers=headers,
+    )
+    src = r.json()
+    _set_status(src["uuid"], src_status)
+    copy = None
+    try:
+        r = client.post(f"/api/psychologist/tests/{src['uuid']}/duplicate", headers=headers)
+        assert r.status_code == 201, r.text
+        copy = r.json()
+        assert copy["status"] == "draft"
+
+        # оригинал остался в исходном статусе
+        with SessionLocal() as db:
+            still = db.query(TestModel).filter(
+                TestModel.uuid == _uuid.UUID(src["uuid"])
+            ).first()
+            assert still.status == src_status
+    finally:
+        _hard_delete_test(src["uuid"])
+        if copy:
+            _hard_delete_test(copy["uuid"])
+
+
+def test_psychologist_cannot_duplicate_others_test(client):
+    owner_headers, _ = _staff(client, "psychologist")
+    other_headers, _ = _staff(client, "psychologist")
+    r = client.post(
+        "/api/psychologist/tests",
+        json=_payload(f"PSYCH {_uuid.uuid4().hex[:6]}"), headers=owner_headers,
+    )
+    test = r.json()
+    try:
+        r = client.post(f"/api/psychologist/tests/{test['uuid']}/duplicate", headers=other_headers)
+        assert r.status_code == 404, r.text
+    finally:
+        _hard_delete_test(test["uuid"])
+
+
 # ── список: только свои, все статусы ────────────────────────────────────────
 
 def test_list_shows_only_own_tests_all_statuses(client):

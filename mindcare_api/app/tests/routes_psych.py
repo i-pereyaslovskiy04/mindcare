@@ -13,6 +13,12 @@ require_role("psychologist") гарантирует только роль, не 
 теста; чужой тест → 404 («чужого неотличимо от несуществующего», как
 session_notes), не редактируемый в данный момент статус → 409.
 
+Дублирование (Этап F2.2) — БЕЗ ограничения по статусу источника (read-only
+копирование, оригинал не мутируется): психолог может форкнуть свой тест в
+ЛЮБОМ статусе, включая published/in_review, не трогая исходный. Копия всегда
+draft, принадлежит тому же психологу (`service.duplicate_my_test`, тот же
+storage.duplicate_test, что у admin/supervisor).
+
 analyze/preview-score продублированы здесь (не в routes_admin.py): они чистые
 stateless-вычисления без ownership-семантики, но router-level dependencies
 routes_admin.py нельзя ослабить по одному роуту — проще и безопаснее дать
@@ -158,6 +164,27 @@ def update_my_test(
             else status.HTTP_422_UNPROCESSABLE_ENTITY
         )
         raise HTTPException(status_code=code, detail=msg)
+
+
+@router.post("/{uuid}/duplicate", response_model=TestRead, status_code=status.HTTP_201_CREATED)
+def duplicate_my_test(
+    uuid: str,
+    request: Request,
+    current_user: dict = Depends(require_role("psychologist")),
+):
+    """Дублирует СВОЙ тест (Этап F2.2) — любой статус источника, включая
+    published/in_review (read-only копирование, оригинал не меняется). Копия —
+    независимый черновик. Чужой тест → 404."""
+    ip, ua = _client(request)
+    try:
+        return service.duplicate_my_test(
+            uuid,
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user),
+            ip=ip, user_agent=ua,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)

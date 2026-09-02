@@ -40,14 +40,6 @@ def _mock_session(mock_db):
 # 1. Registry contract (no DB, no mocking)
 # ══════════════════════════════════════════════════════════════════════════
 
-def test_test_events_widened_to_admin_supervisor():
-    # duplicate остаётся admin/supervisor-only (Этап F2: psychologist duplicate
-    # не использует — не входит в scope этого блока).
-    assert REGISTRY["test_duplicated"].allowed_actor_roles == frozenset(
-        {"admin", "supervisor"}
-    )
-
-
 def test_test_crud_events_widened_to_psychologist_stage_f2():
     # Этап F2 (ADR-016): psychologist управляет своими draft/needs_changes тестами
     # через те же storage/audit-пути, что admin/supervisor.
@@ -55,6 +47,14 @@ def test_test_crud_events_widened_to_psychologist_stage_f2():
         assert REGISTRY[name].allowed_actor_roles == frozenset(
             {"admin", "supervisor", "psychologist"}
         ), name
+
+
+def test_test_duplicated_widened_to_psychologist_stage_f2_2():
+    # Этап F2.2: psychologist дублирует СВОЙ тест (любой статус источника) через
+    # тот же storage.duplicate_test, что admin/supervisor.
+    assert REGISTRY["test_duplicated"].allowed_actor_roles == frozenset(
+        {"admin", "supervisor", "psychologist"}
+    )
 
 
 def test_content_events_stay_admin_only():

@@ -694,3 +694,48 @@ def test_update_my_test_of_in_review_still_blocked():
         with pytest.raises(service.TestNotEditable):
             service.update_my_test("u", {"title": "X"}, actor_id=7)
     m.assert_not_called()
+
+
+# ── Этап F2.2: автор дублирует свой тест (любой статус источника) ──────────────
+
+@pytest.mark.parametrize("status_", ["draft", "needs_changes", "in_review", "published"])
+def test_duplicate_my_test_ok_for_any_status(status_):
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": status_, "created_by": 7},
+    ), patch.object(
+        service.storage, "duplicate_test", return_value={"uuid": "copy"},
+    ) as m:
+        result = service.duplicate_my_test("u", actor_id=7)
+    assert result == {"uuid": "copy"}
+    assert m.call_args.kwargs["created_by"] == 7
+
+
+def test_duplicate_my_test_wrong_owner_is_404_not_403():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "draft", "created_by": 999},
+    ), patch.object(service.storage, "duplicate_test") as m:
+        with pytest.raises(ValueError, match="не найден"):
+            service.duplicate_my_test("u", actor_id=7)
+    m.assert_not_called()
+
+
+def test_duplicate_my_test_not_found_is_404():
+    with patch.object(
+        service.storage, "get_status_and_author", return_value=None,
+    ), patch.object(service.storage, "duplicate_test") as m:
+        with pytest.raises(ValueError, match="не найден"):
+            service.duplicate_my_test("u", actor_id=7)
+    m.assert_not_called()
+
+
+def test_duplicate_my_test_default_actor_role_is_psychologist():
+    with patch.object(
+        service.storage, "get_status_and_author",
+        return_value={"status": "draft", "created_by": 7},
+    ), patch.object(
+        service.storage, "duplicate_test", return_value={"uuid": "copy"},
+    ) as m:
+        service.duplicate_my_test("u", actor_id=7)
+    assert m.call_args.kwargs["actor_role"] == "psychologist"

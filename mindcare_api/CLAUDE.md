@@ -425,25 +425,44 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    продублированы `analyze`/`preview-score` (не трогая `routes_admin.py` —
    router-level dependency нельзя ослабить по одному роуту; вызывают те же
    чистые stateless `service.analyze_test`/`preview_score`). Психолог управляет
-   ТОЛЬКО своими тестами (`tests.created_by==actor_id`) и ТОЛЬКО пока
-   `status IN (draft, needs_changes)` — гейт в `service._own_editable_test`.
-   Чужой тест → 404 (не 403 — «чужого неотличимо от несуществующего», как
-   session_notes); свой, но не editable-статус → 409 (`TestNotEditable`).
+   ТОЛЬКО своими тестами (`tests.created_by==actor_id`).
    `create_my_test` ПРИНУДИТЕЛЬНО ставит status="draft", игнорируя присланный
    статус (защита от прямого вызова с status=published — публикует только
    admin/supervisor). `find_my_tests` фильтрует по статусу НА СЕРВЕРЕ (не на
    клиенте — иначе ломается пагинация при >20 тестах)
-✅ Audit test_created/test_updated/test_deleted и media_uploaded роли расширены
-   `{admin,supervisor}` → `{admin,supervisor,psychologist}` (только role-set;
-   test_duplicated НЕ расширяется — psychologist duplicate не используется).
-   REGISTRY count не меняется (109)
+✅ Этап F2.1 РЕАЛИЗОВАН: правка (PATCH) СВОЕГО теста допустима в
+   draft/needs_changes/published (гейт `service._own_updatable_test`, отдельный
+   от delete-гейта). Правка published атомарно снимает публикацию
+   (`storage.update_test(unpublish_event="test_unpublished_for_edit")` — status
+   → draft той же транзакцией/commit, что и content-правка/`test_updated`);
+   требует повторной отправки на модерацию. `has_results` на вопросах ТЕПЕРЬ
+   ДОСТИЖИМА для published с результатами (метаданные/интерпретацию менять
+   можно, вопросы — нет, 409) — раньше была недостижима, когда правка была
+   заперта на draft/needs_changes. Удаление (DELETE) осталось на отдельном
+   гейте `service._own_editable_test`: только draft/needs_changes. `in_review`
+   заблокирован для ОБОИХ действий — решение уже не за автором, пока идёт
+   проверка. Чужой тест → 404 (не 403 — «чужого неотличимо от несуществующего»,
+   как session_notes); не редактируемый в данный момент статус → 409
+   (`TestNotEditable`)
+✅ Этап F2.2 РЕАЛИЗОВАН: дублирование СВОЕГО теста
+   (`service.duplicate_my_test`, гейт `service._own_test_uuid`) — БЕЗ
+   ограничения по статусу источника (read-only копирование, оригинал не
+   мутируется — можно дублировать даже published/in_review, в отличие от
+   update/delete). Переиспользует общий `storage.duplicate_test`, тот же путь,
+   что admin/supervisor. Копия — всегда draft, is_active=False, version=1,
+   created_by=этот же психолог
+✅ Audit: test_created/test_updated/test_deleted/test_duplicated роли
+   расширены `{admin,supervisor}` → `{admin,supervisor,psychologist}` (только
+   role-set). Новое событие `test_unpublished_for_edit` ({psychologist}, F2.1,
+   ATOMIC/RAISE — та же транзакция, что смена status). REGISTRY: актуальный
+   счётчик — `test_audit_registry.py::test_registry_exact_contract`, меняется
+   с каждой правкой набора событий; НЕ хардкодить число здесь без сверки
 ✅ Медиа-загрузка (`/api/media/upload`, `/upload/av`) открыта psychologist —
    медиа в вопросах своих тестов
 ❌ Не давать psychologist доступ к чужим тестам ни в каком статусе; не пускать
    status в generic PATCH психолога (переходы — только через
-   submit-for-review/publish/return); не считать has_results-проверку в
-   update_my_test нужной — она недостижима для draft/needs_changes (результаты
-   только у published, а published не имеет исходящих переходов)
+   submit-for-review/publish/return/duplicate); has_results-проверка в
+   update_my_test ДОСТИЖИМА начиная с F2.1 — не считать её мёртвым кодом
 ```
 
 ---

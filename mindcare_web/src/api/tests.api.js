@@ -152,6 +152,15 @@ export function deleteMyTest(uuid) {
   return apiFetch(`/api/psychologist/tests/${uuid}`, { method: 'DELETE' });
 }
 
+/**
+ * Копия своего теста (черновик) — Этап F2.2. Работает для любого статуса
+ * источника (включая published/in_review): не мутирует оригинал, в отличие от
+ * updateMyTest на published (та снимает исходный тест с публикации).
+ */
+export function duplicateMyTest(uuid) {
+  return apiFetch(`/api/psychologist/tests/${uuid}/duplicate`, { method: 'POST' });
+}
+
 /** Автор отправляет свой draft/needs_changes тест на модерацию. */
 export function submitTestForReview(uuid) {
   return apiFetch(`/api/psychologist/tests/${uuid}/submit-for-review`, { method: 'POST' });

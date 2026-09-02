@@ -266,10 +266,11 @@ for _base in ("article", "news", "tag", "category"):
 # Этап F2 (ADR-016): psychologist управляет СВОИМИ draft/needs_changes тестами
 # (app/tests/routes_psych.py) — create/update/delete переиспользуют те же storage-
 # функции и те же audit-события, роли расширены до {admin,supervisor,psychologist}.
-# test_duplicated НЕ расширяем — psychologist duplicate не использует (F2 scope).
+# Этап F2.2: psychologist дублирует СВОЙ тест (любой статус) через тот же
+# storage.duplicate_test — роль добавлена, только role-set, count не меняется.
 for _op in ("created", "updated", "deleted"):
     _ALL.append(_audit_ok(f"test_{_op}", {"admin", "supervisor", "psychologist"}, "test"))
-_ALL.append(_audit_ok("test_duplicated", {"admin", "supervisor"}, "test"))
+_ALL.append(_audit_ok("test_duplicated", {"admin", "supervisor", "psychologist"}, "test"))
 
 # ── AUDIT_LOG: психодиагностика (student) ────────────────────────────────────
 _ALL += [
