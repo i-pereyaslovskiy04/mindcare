@@ -5,13 +5,14 @@
 import uuid as _uuid
 
 from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, ForeignKey,
+    BigInteger, Boolean, CheckConstraint, Column, DateTime, ForeignKey,
     Index, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import INET, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func, text as sa_text
 
+from app.core.normalization import normalize_email
 from app.db.base import Base
 
 
@@ -76,6 +77,14 @@ class User(Base):
             "ux_users_email_normalized", sa_text("lower(TRIM(BOTH FROM email))"),
             unique=True,
         ),
+        # email хранится только нормализованным (migration f3b8d1e6a4c2).
+        # Поиск по email — точное сравнение с normalize_email(), поэтому
+        # ненормализованная строка сделала бы аккаунт «ненаходимым» при логине.
+        # Путь через ORM нормализует сам (_normalize_email ниже); CHECK ловит
+        # запись в обход ORM (raw SQL, bulk update, psql).
+        CheckConstraint(
+            "email = lower(trim(email))", name="ck_users_email_normalized",
+        ),
     )
 
     id            = Column(Integer, primary_key=True)
@@ -95,6 +104,13 @@ class User(Base):
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at    = Column(DateTime(timezone=True))
+
+    @validates("email")
+    def _normalize_email(self, key, value):
+        # Любая запись email через ORM (User(email=...), user.email = ...)
+        # сохраняет нормализованную форму, даже если вызывающий код забыл.
+        # None не трогаем — пусть сработает NOT NULL.
+        return normalize_email(value) if value is not None else value
 
     # ── relationships (строковые ссылки → нет циклических импортов) ──
     user_roles = relationship(

@@ -150,6 +150,10 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ Все эндпоинты — def (не async def)
 ✅ Роли проверяются на бэке через require_role — не только на фронте
 ✅ Email всегда нормализуется: email.lower().strip()
+   users.email нормализуется автоматически (@validates в модели User) и
+   защищён CHECK ck_users_email_normalized — запись в обход ORM (raw SQL,
+   bulk update) с ненормализованным email отклоняется базой. Поиск по email —
+   точное сравнение с normalize_email(); не делать bulk update email без неё
 ✅ Пароли — bcrypt через passlib. Никакого sha256, md5
 ✅ OTP-коды — SHA-256 хеш в БД, plaintext только в email. Никакого plaintext.
 ✅ Токены сброса пароля — хранятся как хеш, не plaintext
@@ -546,7 +550,8 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `d9f2a1c7b3e4` | add_test_shuffle_flags (`tests.shuffle_questions`/`shuffle_options`) |
 | `e1b4c8f2a6d9` | add_test_moderation_status (`tests.status` draft/in_review/published/needs_changes; Этап F1) |
 | **Ветка impersonation (vb, ADR-025):** | |
-| `a1c2e3f4b5d6` | add_impersonator_to_user_sessions (`user_sessions.impersonator_user_id`, nullable FK→users, ON DELETE SET NULL) — **head** |
+| `a1c2e3f4b5d6` | add_impersonator_to_user_sessions (`user_sessions.impersonator_user_id`, nullable FK→users, ON DELETE SET NULL) |
+| `f3b8d1e6a4c2` | add_users_email_normalized_check (CHECK `ck_users_email_normalized`: `email = lower(trim(email))`; pre-check падает, если есть ненормализованные email) — **head** |
 
 **Ключевые таблицы:**
 
