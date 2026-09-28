@@ -41,3 +41,24 @@ os.environ["DATABASE_URL"] = resolve_pytest_database_url(os.environ)
 #    валидный ключ). Не наследуем DEBUG/EMAIL_MODE/ключ из локального .env.
 for _k, _v in SAFE_TEST_ENV.items():
     os.environ[_k] = _v
+
+# 3. Быстрый bcrypt ТОЛЬКО в тестах. Production-стоимость (12 rounds, ~200 ms
+#    на hash и столько же на checkpw при логине) делала integration-набор
+#    ~1 час: почти каждый тест создаёт пользователей и логинит их. Минимальная
+#    стоимость 4 (~1 ms) не меняет семантику: hashpw/checkpw те же, стоимость
+#    записана в самом хеше, поэтому checkpw проверяет и ранее созданные
+#    12-round хеши. app.auth.service вызывает bcrypt.gensalt() в момент вызова,
+#    поэтому замены атрибута модуля достаточно. Приложение вне pytest
+#    этот conftest не загружает.
+#    Покрыто tests/test_bcrypt_test_rounds.py.
+import bcrypt  # noqa: E402
+
+_TEST_BCRYPT_ROUNDS = 4
+_original_gensalt = bcrypt.gensalt
+
+
+def _test_gensalt(rounds: int = _TEST_BCRYPT_ROUNDS, prefix: bytes = b"2b") -> bytes:
+    return _original_gensalt(rounds=_TEST_BCRYPT_ROUNDS, prefix=prefix)
+
+
+bcrypt.gensalt = _test_gensalt

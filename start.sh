@@ -5,7 +5,7 @@
 #   2. Создание venv в mindcare_api/.venv
 #   3. Установка backend-зависимостей (pip)
 #   4. Установка frontend-зависимостей (npm)
-#   5. Backend-тесты (./test.sh)
+#   5. Backend-тесты (./test.sh; пропускается с --skip-tests)
 #   6. alembic upgrade head   <- ОБЯЗАТЕЛЬНО до uvicorn
 #   7. Проверка alembic revision
 #   8. Запуск backend (фоном, лог в logs/backend.log)
@@ -19,7 +19,19 @@
 #   НИКОГДА не вызывать Base.metadata.create_all() -- схема только через Alembic.
 #
 # Для production используйте deploy.sh (systemd-сервисы), а не этот скрипт.
+#
+# Использование:
+#   ./start.sh                полный запуск, backend-тесты блокируют старт
+#   ./start.sh --skip-tests   быстрый запуск без шага 5 (./test.sh отдельно)
 set -euo pipefail
+
+SKIP_TESTS=false
+for arg in "$@"; do
+  case "$arg" in
+    --skip-tests) SKIP_TESTS=true ;;
+    *) echo "Неизвестный аргумент: $arg (доступно: --skip-tests)" >&2; exit 2 ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$ROOT/mindcare_api"
@@ -81,8 +93,12 @@ fi
 
 # --- Шаг 5: backend-тесты ----------------------------------------------------
 section "Step 5: backend tests"
-"$ROOT/test.sh" || fail "Проект не запущен: тесты упали. Исправьте и перезапустите ./start.sh"
-ok "Все тесты прошли."
+if $SKIP_TESTS; then
+  warn "Пропущено (--skip-tests). Запустите ./test.sh перед push."
+else
+  "$ROOT/test.sh" || fail "Проект не запущен: тесты упали. Исправьте и перезапустите ./start.sh (или ./start.sh --skip-tests)"
+  ok "Все тесты прошли."
+fi
 
 # --- Шаг 6: alembic upgrade head ---------------------------------------------
 section "Step 6: alembic upgrade head"

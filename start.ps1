@@ -4,7 +4,7 @@
 #   2. Create venv at mindcare_api/.venv
 #   3. Install backend deps (pip)
 #   4. Install frontend deps (npm)
-#   5. Backend tests  (.\test.ps1)
+#   5. Backend tests  (.\test.ps1; skipped with -SkipTests)
 #   6. alembic upgrade head  <- MUST run before uvicorn
 #   7. Verify alembic revision
 #   8. Start backend  (new window)
@@ -16,6 +16,12 @@
 #   It never applies migrations. Migrations must be applied here first.
 #   NEVER call alembic.command.upgrade() from FastAPI lifespan -- deadlock.
 #   NEVER call Base.metadata.create_all() -- schema owned solely by Alembic.
+#
+# Usage:
+#   .\start.ps1              full startup, backend tests gate the launch
+#   .\start.ps1 -SkipTests   quick launch without step 5 (run .\test.ps1 separately)
+
+param([switch]$SkipTests)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -102,14 +108,18 @@ if (-not (Test-Path $nodeModules)) {
 
 # --- Step 5: backend tests ---------------------------------------------------
 Log-Section "Step 5: backend tests"
-& "$root\test.ps1"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host ""
-    Write-Host "  Project not started: tests failed." -ForegroundColor Red
-    Write-Host "  Fix the errors and re-run: .\start.ps1" -ForegroundColor Yellow
-    exit 1
+if ($SkipTests) {
+    Log-Warn "Skipped (-SkipTests). Run .\test.ps1 before pushing."
+} else {
+    & "$root\test.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "  Project not started: tests failed." -ForegroundColor Red
+        Write-Host "  Fix the errors and re-run: .\start.ps1  (or .\start.ps1 -SkipTests)" -ForegroundColor Yellow
+        exit 1
+    }
+    Log-Ok "All tests passed."
 }
-Log-Ok "All tests passed."
 
 # --- Step 6: alembic upgrade head --------------------------------------------
 Log-Section "Step 6: alembic upgrade head"

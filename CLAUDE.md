@@ -244,13 +244,15 @@ npm run build
 
 **Через скрипты в корне проекта:**
 ```bash
-./test.sh     # compileall + все backend-тесты (без запуска проекта)  [Linux]
-./start.sh    # backend-тесты, затем запуск проекта                   [Linux]
+./test.sh                 # compileall + все backend-тесты (без запуска проекта)  [Linux]
+./start.sh                # backend-тесты, затем запуск проекта                   [Linux]
+./start.sh --skip-tests   # быстрый запуск без тестов                             [Linux]
 ```
 
 ```powershell
-.\test.ps1    # то же самое на Windows
+.\test.ps1                # то же самое на Windows
 .\start.ps1
+.\start.ps1 -SkipTests
 ```
 
 ### Уровни тестов
@@ -275,6 +277,9 @@ npm run build
 против dev-БД заблокирован fail-fast'ом; unit-only — `.\test.ps1 -UnitOnly` /
 `./test.sh --unit-only` (без test-БД). Root `tests/conftest.py` гарантирует, что ни
 один pytest-режим не грузит dev `DATABASE_URL` (тестовый URL либо недоступный sentinel).
+Он же снижает стоимость bcrypt до 4 rounds **только в тестах** (production — 12):
+полный набор ~1–2 мин вместо ~1 часа; покрыто `tests/test_bcrypt_test_rounds.py`.
+Не проверять в тестах конкретную production-стоимость через `bcrypt.gensalt()`.
 Frontend: `npm test -- --watchAll=false`, `npm run lint`, `npm run build`.
 
 ---
