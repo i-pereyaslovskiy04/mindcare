@@ -551,7 +551,7 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `e1b4c8f2a6d9` | add_test_moderation_status (`tests.status` draft/in_review/published/needs_changes; Этап F1) |
 | **Ветка impersonation (vb, ADR-025):** | |
 | `a1c2e3f4b5d6` | add_impersonator_to_user_sessions (`user_sessions.impersonator_user_id`, nullable FK→users, ON DELETE SET NULL) |
-| `f3b8d1e6a4c2` | add_users_email_normalized_check (CHECK `ck_users_email_normalized`: `email = lower(trim(email))`; pre-check падает, если есть ненормализованные email) — **head** |
+| `f3b8d1e6a4c2` | add_users_email_normalized_check (CHECK `ck_users_email_normalized`: `email = lower(trim(email))`; существующие ненормализованные email сначала приводятся к `lower(trim)` — коллизий нет благодаря `ux_users_email_normalized`) — **head** |
 
 **Ключевые таблицы:**
 

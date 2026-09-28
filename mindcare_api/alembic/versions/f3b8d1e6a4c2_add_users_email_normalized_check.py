@@ -12,9 +12,16 @@ ck_users_email_normalized (email = lower(trim(email))).
 ORM-путь нормализует сам (@validates в app/db/models/auth.py User); этот CHECK
 ловит запись в обход ORM (raw SQL, bulk update, ручной psql).
 
-Pre-check: при наличии ненормализованных email миграция падает с понятной
-ошибкой ДО DDL — данные нужно исправить вручную (возможны коллизии с уже
-существующими нормализованными адресами, автоматически их не сливаем).
+Существующие ненормализованные email приводятся к lower(trim(email)) ДО
+добавления CHECK, чтобы миграция не останавливала деплой. Коллизий быть не
+может: уникальный ux_users_email_normalized (e5a8f3c1d2b6) уже гарантирует,
+что двух строк с одинаковым lower(trim(email)) нет. Для таких пользователей
+это исправление, а не поломка: до него их логин не находил.
+Изменение идёт мимо data_change_log (DDL-миграция); печатается только
+количество строк, без адресов (ПДн).
+
+Downgrade снимает только CHECK; нормализация данных необратима (и не нужна
+к откату — приложение всегда работало с нормализованной формой).
 
 Revision ID: f3b8d1e6a4c2
 Revises: a1c2e3f4b5d6
@@ -32,16 +39,12 @@ depends_on = None
 
 def upgrade() -> None:
     conn = op.get_context().connection
-    bad = conn.execute(sa.text(
-        "SELECT COUNT(*) FROM users WHERE email <> lower(trim(email))"
-    )).scalar()
-    if bad:
-        # Без самих адресов (ПДн) — только количество и запрос для поиска.
-        raise RuntimeError(
-            f"Cannot add ck_users_email_normalized: {bad} user(s) have "
-            "non-normalized email. Find them with: SELECT id FROM users "
-            "WHERE email <> lower(trim(email)); fix manually, then re-run."
-        )
+    fixed = conn.execute(sa.text(
+        "UPDATE users SET email = lower(trim(email)) "
+        "WHERE email <> lower(trim(email))"
+    )).rowcount
+    if fixed:
+        print(f"[INFO] f3b8d1e6a4c2: normalized email for {fixed} user(s)")
 
     op.create_check_constraint(
         "ck_users_email_normalized",
