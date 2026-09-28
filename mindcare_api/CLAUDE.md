@@ -114,6 +114,9 @@ cd mindcare_api/ && alembic current
 # Создать новую миграцию после изменения ORM-моделей
 cd mindcare_api/ && alembic revision --autogenerate -m "describe_change"
 
+# Проверить, что модели совпадают со схемой (должно быть "No new upgrade operations")
+cd mindcare_api/ && alembic check
+
 # История миграций
 cd mindcare_api/ && alembic history
 ```
@@ -153,6 +156,11 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ Soft delete — deleted_at, не физическое удаление
 ✅ Внешний API использует users.uuid (UUID), не users.id (INT)
 ✅ Схема БД — только через Alembic (alembic upgrade head перед стартом)
+✅ Индекс/constraint/nullable, заданные в миграции, описывать и в ORM-модели
+   (функциональные индексы — sa_text в канонической форме pg_indexes).
+   `alembic check` должен быть чистым — это проверяет
+   tests/integration/test_models_match_migrations.py. Иначе autogenerate
+   предложит DROP (например ux_users_email_normalized → дубли email)
 ✅ consent_records — ТОЛЬКО личное согласие субъекта (НЕ «согласие за пользователя»):
    студент сам принимает политику при self-registration, ЛИБО staff фиксирует личное
    согласие студента, полученное ОЧНО, при создании аккаунта через

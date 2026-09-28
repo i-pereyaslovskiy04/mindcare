@@ -33,6 +33,9 @@ from app.db.base import Base
 
 class DiaryEmotion(Base):
     __tablename__ = "diary_emotions"
+    __table_args__ = (
+        Index("ix_diary_emotions_sort_order", "sort_order"),
+    )
 
     id          = Column(BigInteger, primary_key=True, autoincrement=True)
     key         = Column(String(50),  unique=True, nullable=False)
@@ -40,8 +43,8 @@ class DiaryEmotion(Base):
     description = Column(Text,        nullable=True)
     sort_order  = Column(Integer,     nullable=False, default=0)
     is_active   = Column(Boolean,     nullable=False, default=True)
-    created_at  = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at  = Column(DateTime(timezone=True), server_default=func.now())
+    created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class DiaryEntry(Base):
@@ -56,6 +59,8 @@ class DiaryEntry(Base):
             unique=True,
             postgresql_where=sa_text("deleted_at IS NULL"),
         ),
+        Index("ix_diary_entries_student_id", "student_id"),
+        Index("ix_diary_entries_entry_date", "entry_date"),
     )
 
     id             = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -68,6 +73,6 @@ class DiaryEntry(Base):
     mood_score_enc = Column(Text,    nullable=False)
     entry_text_enc = Column(Text,    nullable=True)
     emotions_enc   = Column(Text,    nullable=False)
-    created_at     = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at     = Column(DateTime(timezone=True), server_default=func.now())
+    created_at     = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at     = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     deleted_at     = Column(DateTime(timezone=True), nullable=True)

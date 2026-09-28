@@ -14,11 +14,11 @@ import uuid as _uuid
 
 from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey,
-    Integer, String, Text,
+    Index, Integer, String, Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text as sa_text
 
 from app.db.base import Base
 
@@ -155,6 +155,10 @@ class ServiceCard(Base):
 
 class Tag(Base):
     __tablename__ = "tags"
+    __table_args__ = (
+        # Регистронезависимая уникальность имени (migration a8c3f1d9e2b5).
+        Index("tags_name_lower_unique", sa_text("lower(name)"), unique=True),
+    )
 
     id         = Column(Integer, primary_key=True)
     uuid       = Column(UUID(as_uuid=True), unique=True, nullable=False, default=_uuid.uuid4)

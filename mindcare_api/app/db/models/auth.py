@@ -6,11 +6,11 @@ import uuid as _uuid
 
 from sqlalchemy import (
     BigInteger, Boolean, Column, DateTime, ForeignKey,
-    Integer, String, Text, UniqueConstraint,
+    Index, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text as sa_text
 
 from app.db.base import Base
 
@@ -66,6 +66,17 @@ class RolePermission(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        # Уникальность нормализованного email (migration e5a8f3c1d2b6): не даёт
+        # завести Ivan@x и ivan@x. Описан здесь, чтобы autogenerate не предлагал
+        # его удалить; users/storage.py маппит нарушение в 409.
+        # Выражение = lower(trim(email)) в канонической форме PostgreSQL
+        # (так его отдаёт pg_indexes), иначе alembic check видит расхождение.
+        Index(
+            "ux_users_email_normalized", sa_text("lower(TRIM(BOTH FROM email))"),
+            unique=True,
+        ),
+    )
 
     id            = Column(Integer, primary_key=True)
     uuid          = Column(

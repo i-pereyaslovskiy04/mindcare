@@ -9,7 +9,7 @@ import uuid as _uuid
 
 from sqlalchemy import (
     ARRAY, Boolean, Column, DateTime, ForeignKey,
-    Integer, String, Text,
+    Index, Integer, String, Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -83,6 +83,10 @@ class TestInterpretation(Base):
     в рамках одного (test_id, scale_name) валидируется в service-слое.
     """
     __tablename__ = "test_interpretations"
+    __table_args__ = (
+        # «Все пороги теста / шкалы» — основной запрос при подсчёте результата.
+        Index("ix_test_interpretations_test", "test_id", "scale_name"),
+    )
 
     id             = Column(Integer, primary_key=True)
     test_id        = Column(
@@ -93,7 +97,7 @@ class TestInterpretation(Base):
     max_score      = Column(Integer, nullable=False)
     label          = Column(String(255), nullable=False)
     recommendation = Column(Text)
-    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    created_at     = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     test = relationship("Test", back_populates="interpretations")
 
