@@ -162,10 +162,15 @@ _ALL += [
     # активных ролей нет. account_disabled (Stage Social Auth 2A) — credentials
     # верны, но аккаунт заблокирован (users.is_active=false). Отдельные СОБЫТИЯ
     # не заводятся: это исходы того же failed_login, registry count не меняется.
+    # oauth_* / social_login_not_allowed (Stage Social Auth 2B) — отказы входа
+    # через провайдера: невалидный/повторный state, сбой провайдера, неизвестная
+    # identity, невалидный ticket, не-чистый студент. Успех — обычный `login`.
     _auth("failed_login", ActorPolicy.ANONYMOUS_ONLY, frozenset(),
           {Outcome.FAILURE},
           {"invalid_credentials", "no_active_roles", "account_disabled",
-           "internal_error"},
+           "oauth_state_invalid", "oauth_provider_error",
+           "oauth_identity_unknown", "oauth_ticket_invalid",
+           "social_login_not_allowed", "internal_error"},
           email=True),
     _auth("logout", ActorPolicy.USER_REQUIRED, _STAFF, {Outcome.SUCCESS},
           frozenset()),

@@ -32,6 +32,13 @@ RULES: dict[str, tuple[int, float]] = {
     "reset_init:ip":       (20, 900),   # 20 запросов / 15 мин
     "confirm:email":       (10, 600),   # 10 попыток / 10 мин (поверх OTP MAX_ATTEMPTS)
     "confirm:ip":          (30, 600),   # 30 попыток / 10 мин
+    # Social login (Stage Social Auth 2B). Только IP: email во входе через
+    # провайдера не участвует. Replay-защита — в БД (state/ticket одноразовые),
+    # здесь — лишь ограничение нагрузки: start пишет строку в БД, callback
+    # вызывает провайдера, complete — атомарную транзакцию.
+    "oauth_start:ip":      (20, 300),   # 20 стартов / 5 мин
+    "oauth_callback:ip":   (30, 300),   # 30 callback / 5 мин
+    "oauth_complete:ip":   (30, 300),   # 30 complete / 5 мин
 }
 
 

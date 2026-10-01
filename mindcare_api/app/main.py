@@ -45,6 +45,13 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# Access log uvicorn не должен содержать code/state из query OAuth callback
+# (Stage Social Auth 2B). uvicorn конфигурирует логирование до импорта app,
+# поэтому фильтр, добавленный здесь, сохраняется.
+from app.core.log_redaction import install_access_log_redaction  # noqa: E402
+
+install_access_log_redaction()
+
 
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 
@@ -114,6 +121,7 @@ app.mount("/media", StaticFiles(directory=str(_MEDIA_DIR)), name="media")
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
 from app.auth.routes import router as auth_router                # noqa: E402
+from app.oauth.routes import router as oauth_router              # noqa: E402
 from app.users.routes_admin import router as admin_users_router  # noqa: E402
 from app.tags.routes_admin import router as admin_tags_router    # noqa: E402
 from app.tags.routes_public import router as public_tags_router  # noqa: E402
@@ -148,6 +156,7 @@ from app.service_cards.routes_supervisor import router as supervisor_service_car
 from app.service_cards.routes_public import router as public_service_cards_router  # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
+app.include_router(oauth_router,              prefix="/api")
 app.include_router(admin_users_router,        prefix="/api")
 app.include_router(admin_tags_router,         prefix="/api")
 app.include_router(public_tags_router,        prefix="/api")

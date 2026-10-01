@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     CHAT_FILE_STORAGE_BACKEND: str = "local_private"
     # --- CORS ---
     ALLOWED_ORIGINS: str = "http://localhost:3000"
+    # --- SOCIAL AUTH (Stage Social Auth 2B; не секреты) ---
+    # База redirect_uri провайдера: {base}/api/auth/oauth/{provider}/callback.
+    # В dev — напрямую backend :8000: CRA-прокси не проксирует GET-навигацию
+    # с Accept: text/html (отдал бы index.html). https:// включает Secure у
+    # state-cookie. Хост не смешивать с 127.0.0.1 — cookie привязан к хосту.
+    OAUTH_CALLBACK_BASE_URL: str = "http://localhost:8000"
+    # Фиксированная страница фронтенда после callback; результат — во fragment.
+    OAUTH_FRONTEND_CALLBACK_URL: str = "http://localhost:3000/auth/callback"
     # --- ENCRYPTION ---
     DATA_ENCRYPTION_KEY: str | None = None
     # --- APP ---

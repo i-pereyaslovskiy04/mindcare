@@ -56,6 +56,20 @@ def get_current_user(token: str = Depends(get_session_token)) -> dict:
             detail="Пользователь не найден",
         )
 
+    # Заблокированный пользователь (is_active=false) не пользуется даже уже
+    # выданной сессией. Деактивация админом отзывает сессии, но при
+    # autoflush=False отзыв выполняется ДО UPDATE users — сессия, созданная
+    # параллельным входом, может его пропустить. Здесь такая сессия
+    # отзывается навсегда (повторная активация её не оживит). NULL — активен
+    # (то же правило, что ensure_user_can_start_session).
+    if user.get("is_active") is False:
+        storage.revoke_session(token)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия истекла. Войдите снова.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # Impersonation (ADR-025): единая точка, где сессия становится user dict.
     # Если сессию создал администратор «под именем» — прокидываем отметку и имя
     # админа, чтобы фронт показал баннер возврата, а /me отдал серверную правду.

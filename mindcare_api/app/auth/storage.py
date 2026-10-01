@@ -774,20 +774,47 @@ def create_session(
     созданная администратором от имени user_id. Отметка серверная, для
     атрибуции; сам токен по правам эквивалентен обычной сессии user_id.
     """
-    token = generate_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(days=expire_days)
-
     with SessionLocal() as db:
-        db.add(UserSession(
-            id=hash_session_token(token),
-            user_id=int(user_id),
-            ip_address=ip,
+        token, expires_at = create_session_in_tx(
+            db,
+            user_id,
+            ip=ip,
             user_agent=user_agent,
-            expires_at=expires_at,
+            expire_days=expire_days,
             impersonator_user_id=impersonator_user_id,
-        ))
+        )
         db.commit()
 
+    return token, expires_at
+
+
+def create_session_in_tx(
+    db,
+    user_id,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    expire_days: float = SESSION_EXPIRE_DAYS,
+    impersonator_user_id: Optional[int] = None,
+) -> tuple[str, datetime]:
+    """
+    Добавляет сессию в ПЕРЕДАННУЮ транзакцию, без commit (Stage Social Auth 2B).
+
+    Единственная точка создания строки user_sessions: create_session (свой
+    commit) и атомарные UoW (oauth complete: списание ticket + сессия одним
+    commit) используют её. Сбой commit у вызывающего откатывает и сессию.
+    Возвращает (raw session_token, expires_at); в БД — только hash токена.
+    """
+    token = generate_session_token()
+    expires_at = datetime.now(timezone.utc) + timedelta(days=expire_days)
+    db.add(UserSession(
+        id=hash_session_token(token),
+        user_id=int(user_id),
+        ip_address=ip,
+        user_agent=user_agent,
+        expires_at=expires_at,
+        impersonator_user_id=impersonator_user_id,
+    ))
     return token, expires_at
 
 

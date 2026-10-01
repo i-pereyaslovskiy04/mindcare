@@ -143,7 +143,12 @@ def test_book_without_engagement_writes_engagement_required(client):
             AuditLog.user_id == sid).count() == 0
 
 
-def test_book_inactive_account_writes_account_inactive(client):
+def test_book_by_inactive_account_is_rejected_before_route(client):
+    """Stage Social Auth 2B: сессия пользователя с is_active=false отсекается в
+    get_current_user (401 + отзыв сессии) — до route записи запрос не доходит,
+    поэтому ни записи, ни appointment_create_failed нет. Сама ветка
+    account_inactive в service покрыта unit-тестом
+    test_appointments_failure_audit_unit.test_book_account_inactive_is_auditable."""
     tok_p, pid, mt_id = _setup_schedule(client)
     tok_s, sid, _ = _make_user(client, "student")
     _make_engagement(sid, pid)
@@ -151,10 +156,10 @@ def test_book_inactive_account_writes_account_inactive(client):
         db.query(User).filter(User.id == sid).update({"is_active": False})
         db.commit()
     r = _book(client, tok_s, mt_id, _future_slot(42))
-    assert r.status_code == 403, r.text
-    rows = _fail_rows("appointment_create_failed", sid)
-    assert len(rows) == 1
-    _assert_failure(rows[0], sid, "student", "account_inactive")
+    assert r.status_code == 401, r.text
+    assert _fail_rows("appointment_create_failed", sid) == []
+    with SessionLocal() as db:
+        assert db.query(Appointment).filter(Appointment.client_id == sid).count() == 0
 
 
 def test_supervisor_book_unlinked_writes_engagement_required(client):

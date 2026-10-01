@@ -1,0 +1,167 @@
+"""
+Stage Social Auth 2B — unit-тесты порядка callback и правил входа (storage
+замокан, БД не нужна). Интеграционное поведение — tests/integration/test_oauth_*.
+"""
+import pytest
+
+from app.oauth import service
+from app.oauth.errors import OAuthLoginDenied
+from app.oauth.providers.base import ProviderIdentity
+from tests.oauth_fakes import FakeProvider, registered
+
+STATE = "s" * 43
+
+
+@pytest.fixture
+def calls(monkeypatch):
+    """Фиксирует обращения к storage; consume по умолчанию успешен."""
+    log = {"consume": 0, "ticket": 0}
+
+    def _consume(**kw):
+        log["consume"] += 1
+        return {"intent": "login", "code_verifier_enc": "enc:v1:x", "user_id": None}
+
+    monkeypatch.setattr(service.storage, "consume_auth_request", _consume)
+    monkeypatch.setattr(
+        service.storage, "create_login_ticket",
+        lambda **kw: log.__setitem__("ticket", log["ticket"] + 1),
+    )
+    monkeypatch.setattr(service, "decrypt_text", lambda v: "verifier")
+    return log
+
+
+def _callback(query, cookie=STATE, provider="yandex"):
+    return service.handle_callback(provider, query, cookie)
+
+
+# ── browser binding до списания state ────────────────────────────────────────
+
+@pytest.mark.parametrize("query,cookie", [
+    ({"code": "c"}, STATE),                       # нет state
+    ({"state": STATE, "code": "c"}, None),        # нет cookie
+    ({"state": STATE, "code": "c"}, "x" * 43),    # не совпадает
+    ({"state": STATE, "error": "access_denied"}, "x" * 43),   # ошибка + чужой state
+])
+def test_binding_failure_does_not_consume_or_clear_cookie(calls, query, cookie):
+    with registered(FakeProvider()):
+        outcome = _callback(query, cookie)
+    assert outcome.fragment == {"error": "oauth_failed"}
+    assert outcome.audit_code == "oauth_state_invalid"
+    assert outcome.clear_cookie is False
+    assert calls["consume"] == 0
+
+
+def test_unregistered_provider_fails_without_consume_or_audit(calls):
+    outcome = _callback({"state": STATE, "code": "c"})
+    assert outcome.fragment == {"error": "oauth_failed"}
+    assert outcome.audit_code is None and calls["consume"] == 0
+
+
+def test_cancel_consumes_state_clears_cookie_and_is_not_audited(calls):
+    fake = FakeProvider()
+    with registered(fake):
+        outcome = _callback({"state": STATE, "error": "access_denied"})
+    assert calls["consume"] == 1
+    assert outcome.fragment == {"error": "oauth_cancelled"}
+    assert outcome.clear_cookie is True and outcome.audit_code is None
+    assert fake.resolve_calls == 0
+
+
+def test_provider_error_consumes_state_and_hides_provider_text(calls):
+    with registered(FakeProvider()):
+        outcome = _callback({
+            "state": STATE, "error": "server_error",
+            "error_description": "internal provider details",
+        })
+    assert calls["consume"] == 1
+    assert outcome.fragment == {"error": "oauth_failed"}
+    assert outcome.audit_code == "oauth_provider_error"
+    assert "internal" not in str(outcome)
+
+
+def test_missing_code_is_provider_error(calls):
+    with registered(FakeProvider()):
+        outcome = _callback({"state": STATE})
+    assert outcome.audit_code == "oauth_provider_error" and outcome.clear_cookie
+
+
+def test_consumed_or_unknown_state_is_state_invalid(calls, monkeypatch):
+    monkeypatch.setattr(service.storage, "consume_auth_request", lambda **kw: None)
+    with registered(FakeProvider()):
+        outcome = _callback({"state": STATE, "code": "c"})
+    assert outcome.audit_code == "oauth_state_invalid"
+    assert outcome.clear_cookie is True
+
+
+def test_link_intent_request_is_rejected_in_stage_2b(calls, monkeypatch):
+    monkeypatch.setattr(
+        service.storage, "consume_auth_request",
+        lambda **kw: {"intent": "link", "code_verifier_enc": "enc:v1:x", "user_id": 1},
+    )
+    with registered(FakeProvider()):
+        outcome = _callback({"state": STATE, "code": "c"})
+    assert outcome.audit_code == "oauth_state_invalid"
+
+
+def test_decrypt_failure_is_internal_error(calls, monkeypatch):
+    def _boom(v):
+        raise ValueError("bad key")
+    monkeypatch.setattr(service, "decrypt_text", _boom)
+    with registered(FakeProvider()):
+        outcome = _callback({"state": STATE, "code": "c"})
+    assert outcome.audit_code == "internal_error"
+    assert outcome.fragment == {"error": "oauth_failed"}
+
+
+@pytest.mark.parametrize("mode", ["unavailable", "rejected", "crash"])
+def test_provider_failures_fail_closed(calls, mode):
+    fake = FakeProvider()
+    fake.mode = mode
+    with registered(fake):
+        outcome = _callback({"state": STATE, "code": "c"})
+    assert fake.resolve_calls == 1
+    assert outcome.fragment == {"error": "oauth_failed"}
+    assert outcome.audit_code == "oauth_provider_error"
+    assert calls["ticket"] == 0
+
+
+class _OtherProviderIdentity(FakeProvider):
+    """Адаптер вернул identity чужого провайдера — должен быть отказ."""
+
+    def resolve_identity(self, **kw):
+        return ProviderIdentity(provider="vk", subject="integ_x")
+
+
+def test_identity_from_other_provider_fails_closed(calls):
+    with registered(_OtherProviderIdentity("yandex")):
+        outcome = _callback({"state": STATE, "code": "c"})
+    assert outcome.audit_code == "oauth_provider_error"
+    assert calls["ticket"] == 0
+
+
+# ── правила входа ────────────────────────────────────────────────────────────
+
+def _user(**kw):
+    base = {"id": "7", "roles": ["student"], "role": "student", "is_active": True}
+    return {**base, **kw}
+
+
+def test_pure_active_student_allowed():
+    service.assert_social_login_allowed(_user())
+
+
+@pytest.mark.parametrize("user,code", [
+    (_user(is_active=False), "account_disabled"),
+    (_user(roles=[], role=None), "no_active_roles"),
+    (_user(roles=["psychologist", "student"], role="psychologist"), "social_login_not_allowed"),
+    (_user(roles=["admin", "student"], role="admin"), "social_login_not_allowed"),
+])
+def test_denials_map_to_stable_codes(user, code):
+    with pytest.raises(OAuthLoginDenied) as ei:
+        service.assert_social_login_allowed(user)
+    assert ei.value.audit_code == code
+    expected_external = (
+        "social_login_not_allowed" if code == "social_login_not_allowed"
+        else "account_unavailable"
+    )
+    assert ei.value.external_code == expected_external

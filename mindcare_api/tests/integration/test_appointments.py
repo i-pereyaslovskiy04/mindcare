@@ -1280,7 +1280,13 @@ class TestPsychologistGroupSessions:
         assert r.status_code == 403
 
     def test_29_inactive_student_cannot_register(self, client):
-        """Неактивный студент не может записаться (403)."""
+        """Неактивный студент не может записаться.
+
+        Stage Social Auth 2B: сессия пользователя с is_active=false отсекается
+        уже в get_current_user (401 + отзыв сессии), запрос до записи не
+        доходит. Проверка «аккаунт неактивен» в service остаётся как
+        defense-in-depth, но через HTTP теперь недостижима.
+        """
         tok_s, sid, _ = _make_user(client, "student")
         _, pid, _ = _make_user(client, "psychologist")
 
@@ -1297,8 +1303,16 @@ class TestPsychologistGroupSessions:
             f"/api/group-sessions/{gs_uuid}/register",
             headers=_auth(tok_s),
         )
-        assert r.status_code == 403
-        assert "неактив" in r.json()["detail"].lower()
+        assert r.status_code == 401
+        with SessionLocal() as db:
+            assert db.query(GroupSessionRegistration).filter(
+                GroupSessionRegistration.student_id == sid
+            ).count() == 0
+        # Сессия отозвана: и после повторной активации не работает.
+        with SessionLocal() as db:
+            db.query(User).filter(User.id == sid).update({"is_active": True})
+            db.commit()
+        assert client.get("/api/auth/me", headers=_auth(tok_s)).status_code == 401
 
     def test_29b_group_sessions_date_range_filter(self, client):
         """date_from/date_to отдают только группы психолога внутри диапазона."""

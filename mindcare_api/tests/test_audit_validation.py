@@ -116,7 +116,9 @@ def test_failed_login_accepts_no_active_roles_reason():
     validation.validate_outcome(FAILED_LOGIN, Outcome.FAILURE, "no_active_roles")
     assert FAILED_LOGIN.allowed_failure_codes == frozenset({
         "invalid_credentials", "no_active_roles", "account_disabled",
-        "internal_error",
+        "oauth_state_invalid", "oauth_provider_error",
+        "oauth_identity_unknown", "oauth_ticket_invalid",
+        "social_login_not_allowed", "internal_error",
     })
 
 
@@ -126,11 +128,25 @@ def test_failed_login_accepts_account_disabled_reason():
     validation.validate_outcome(FAILED_LOGIN, Outcome.FAILURE, "account_disabled")
 
 
+@pytest.mark.parametrize("code", [
+    "oauth_state_invalid", "oauth_provider_error", "oauth_identity_unknown",
+    "oauth_ticket_invalid", "social_login_not_allowed",
+])
+def test_failed_login_accepts_social_login_reasons(code):
+    """Stage Social Auth 2B: отказы входа через провайдера — исходы failed_login."""
+    validation.validate_outcome(FAILED_LOGIN, Outcome.FAILURE, code)
+
+
 def test_no_active_roles_reason_is_not_leaked_to_other_events():
     """Код не расползается по другим auth-событиям."""
+    oauth_codes = {
+        "oauth_state_invalid", "oauth_provider_error", "oauth_identity_unknown",
+        "oauth_ticket_invalid", "social_login_not_allowed",
+    }
     for name in ("registration_failed", "password_reset"):
         assert "no_active_roles" not in REGISTRY[name].allowed_failure_codes
         assert "account_disabled" not in REGISTRY[name].allowed_failure_codes
+        assert not (oauth_codes & REGISTRY[name].allowed_failure_codes)
 
 
 def test_disallowed_outcome():

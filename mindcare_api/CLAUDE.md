@@ -301,7 +301,40 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ OAuth-таблицы (user_oauth_identities / oauth_auth_requests / oauth_pending_tickets)
    не хранят provider token / code / raw state / raw ticket / plaintext verifier /
    client secret / профиль провайдера: state и ticket — SHA-256 hex,
-   verifier — только `enc:v1:` (CHECK). Production-код пока записи не создаёт
+   verifier — только `enc:v1:` (CHECK)
+✅ Social login core (Stage Social Auth 2B, `app/oauth/`): POST
+   /api/auth/oauth/{provider}/start → GET …/callback → POST /api/auth/oauth/complete
+   → обычная user_sessions сессия (SessionResponse, событие `login`). Только вход
+   по УЖЕ привязанной identity чистого студента (активные роли == {"student"},
+   `auth.roles.is_pure_student`); неизвестная identity ничего не создаёт
+   (`social_registration_not_available`). Production-реестр провайдеров пуст —
+   реальные адаптеры Яндекс/VK — Stage 3; FakeProvider живёт только в tests
+✅ Callback: provider → parse → browser binding (state == HttpOnly cookie
+   `mindcare_oauth_state`, Path=/api/auth/oauth, SameSite=Lax, без Domain,
+   Secure по схеме OAUTH_CALLBACK_BASE_URL) → атомарное списание state + commit →
+   ТОЛЬКО затем исход провайдера. Несовпадение state/cookie: state не списывается,
+   cookie не очищается. Отмена (access_denied) сжигает state, не аудируется.
+   Сбой провайдера после списания — fail closed (вход заново)
+✅ Результат callback — только во fragment фиксированного
+   OAUTH_FRONTEND_CALLBACK_URL (`#result=login&ticket=…` / `#error=<код>`),
+   Referrer-Policy: no-referrer. Session token в URL — никогда. Ошибки OAuth API —
+   400/403/404/429, НЕ 401 (client.js трактует 401 как истёкшую сессию)
+✅ complete_login_atomic: списание ticket + проверки + create_session_in_tx — одна
+   транзакция. Доменный отказ (OAuthLoginDenied) → commit одного списания (ticket
+   сожжён, сессии нет); технический сбой → rollback (ticket годен до TTL).
+   Один ticket → максимум одна сессия. Строка user_sessions создаётся только
+   через auth.storage.create_session_in_tx (create_session — обёртка с commit)
+✅ get_current_user: сессия пользователя с `is_active is False` отзывается и даёт
+   401 (закрывает гонку входа с деактивацией: при autoflush=False деактивация
+   отзывает сессии ДО UPDATE users). Повторная активация такую сессию не оживляет
+✅ Access log uvicorn: фильтр `app/core/log_redaction.py` маскирует query у
+   /api/auth/oauth/*/callback (`?<redacted>`). ⚠ Перед публичным HTTPS-деплоем то же
+   обязательно на reverse proxy/TLS-терминаторе (в repo его конфига нет)
+✅ Stage 3 (фронт): start — относительный `/api/…` (same-origin, credentials по
+   умолчанию достаточно); при SPA/API на разных поддоменах — `credentials:
+   'include'` ТОЛЬКО в OAuth start; SPA и API на разных сайтах не поддерживаются.
+   Глобальный apiFetch не менять. До включения реального провайдера — миграция
+   auth_log.auth_method (сейчас social login неотличим от входа по паролю в auth_log)
 ✅ Новые auth/security изменения требуют failure-injection тестов на реальном
    состоянии БД (см. test_register_confirm_atomic, test_password_uow_atomic)
 ❌ Не возвращать старую модель «несколько независимых commit в одной auth-операции»

@@ -41,6 +41,18 @@ def primary_role(role_names: Iterable[str]) -> Optional[str]:
     return None
 
 
+def is_pure_student(role_names: Iterable[str]) -> bool:
+    """
+    True, только если набор АКТИВНЫХ ролей ровно {"student"}.
+
+    Staff получают роль student как функциональный доступ к кабинету студента
+    (ADR-024), поэтому {"student", "psychologist"} и подобные — НЕ чистый
+    студент. Используется для social login MVP (Stage Social Auth 2B): вход
+    через Яндекс/VK разрешён только чистым студентам, сотрудники входят паролем.
+    """
+    return set(role_names) == {"student"}
+
+
 def effective_role(
     role_names: Iterable[str],
     *,
