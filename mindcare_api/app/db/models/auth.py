@@ -94,7 +94,10 @@ class User(Base):
     full_name     = Column(String(255), nullable=False)
     email         = Column(String(255), nullable=False, unique=True, index=True)
     phone         = Column(String(50))
-    password_hash = Column(String(255), nullable=False)
+    # NULL — social-only аккаунт без пароля (migration c6e1a4f8b2d7). Плейсхолдер/
+    # случайный пароль НЕ пишется: вход по паролю для такого аккаунта даёт тот
+    # же 401, что и неверный пароль; первый пароль ставится через reset по OTP.
+    password_hash = Column(String(255), nullable=True)
     avatar_url    = Column(String(500))
     # Оформление UI. NULL = «не задано»: действует выбор устройства (localStorage).
     ui_theme_palette = Column(String(20))

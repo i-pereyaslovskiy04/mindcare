@@ -21,7 +21,10 @@ class OtpVerification(Base):
                       Plaintext никогда не сохраняется в БД.
                       Сравнение через otp_service._verify_code().
       name          — имя пользователя из формы регистрации
-      password_hash — bcrypt хеш пароля, сохраняется до confirm
+      password_hash — bcrypt хеш пароля из формы регистрации, сохраняется до
+                      confirm. NULL у reset-OTP: копия текущего хеша не
+                      хранится (migration c6e1a4f8b2d7); register_confirm
+                      отвергает запись без хеша
       attempts      — счётчик неверных попыток (лимит: 5)
       expires_at    — UTC naive datetime (совместимо с datetime.utcnow())
       last_sent_at  — для cooldown между повторными отправками (60 сек)
@@ -34,7 +37,7 @@ class OtpVerification(Base):
     email         = Column(String(255), nullable=False, index=True)
     code          = Column(String(64),  nullable=False)  # SHA-256 hex (64 chars)
     name          = Column(String(255), nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)
     attempts      = Column(Integer,     nullable=False, default=0)
     expires_at    = Column(DateTime, nullable=False)   # naive UTC
     created_at    = Column(DateTime, nullable=False)

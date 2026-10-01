@@ -159,11 +159,13 @@ _ALL += [
     _auth("login", ActorPolicy.USER_REQUIRED, _STAFF, {Outcome.SUCCESS},
           frozenset(), email=True),
     # no_active_roles (ADR-018) — штатный доменный отказ: credentials верны, но
-    # активных ролей нет. Отдельное СОБЫТИЕ не заводится: это исход того же
-    # failed_login, поэтому registry count не меняется.
+    # активных ролей нет. account_disabled (Stage Social Auth 2A) — credentials
+    # верны, но аккаунт заблокирован (users.is_active=false). Отдельные СОБЫТИЯ
+    # не заводятся: это исходы того же failed_login, registry count не меняется.
     _auth("failed_login", ActorPolicy.ANONYMOUS_ONLY, frozenset(),
           {Outcome.FAILURE},
-          {"invalid_credentials", "no_active_roles", "internal_error"},
+          {"invalid_credentials", "no_active_roles", "account_disabled",
+           "internal_error"},
           email=True),
     _auth("logout", ActorPolicy.USER_REQUIRED, _STAFF, {Outcome.SUCCESS},
           frozenset()),

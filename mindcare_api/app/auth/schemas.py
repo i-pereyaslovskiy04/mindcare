@@ -50,6 +50,9 @@ class UserResponse(BaseModel):
     # администратором «под именем». impersonating=False у обычных сессий.
     impersonating: bool = False
     impersonator_name: Optional[str] = None
+    # Есть ли у аккаунта пароль (social-only аккаунт — False). Вычисляется на
+    # backend из password_hash IS NOT NULL; сам хеш наружу не отдаётся.
+    has_password: bool
 
 
 # Оформление UI. Списки синхронизированы с mindcare_web/src/features/theme/ThemeContext.jsx.
@@ -68,6 +71,8 @@ class ProfileRead(BaseModel):
     # None = «не задано»: тему определяет устройство (localStorage).
     ui_theme_palette: Optional[ThemePalette] = None
     ui_theme_mode: Optional[ThemeMode] = None
+    # См. UserResponse.has_password (экраны настроек: смена vs установка пароля).
+    has_password: bool
 
 
 class ProfileUpdate(BaseModel):

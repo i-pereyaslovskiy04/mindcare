@@ -127,6 +127,13 @@ from app.db.models.diary import DiaryEmotion, DiaryEntry  # noqa: F401
 # ── otp ───────────────────────────────────────────────────────────────────────
 from app.db.models.otp import OtpVerification  # noqa: F401
 
+# ── oauth (FK → users) — Stage Social Auth 2A, фундамент без OAuth flow ────────
+from app.db.models.oauth import (  # noqa: F401
+    UserOAuthIdentity,
+    OAuthAuthRequest,
+    OAuthPendingTicket,
+)
+
 __all__ = [
     # auth
     "Role", "Permission", "RolePermission",
@@ -163,4 +170,6 @@ __all__ = [
     "DiaryEmotion", "DiaryEntry",
     # otp
     "OtpVerification",
+    # oauth
+    "UserOAuthIdentity", "OAuthAuthRequest", "OAuthPendingTicket",
 ]

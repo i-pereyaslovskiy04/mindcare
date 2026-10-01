@@ -285,6 +285,23 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ OTP consume только ПОСЛЕ успешных core DB-изменений, тем же commit
    (validate без удаления; при сбое core-шага OTP не теряется)
 ✅ Хеш нового пароля считать ДО открытия транзакции (bcrypt медленный)
+✅ Новую сессию выдаёт только тот, кто прошёл service.ensure_user_can_start_session:
+   нет пользователя → 401 invalid_credentials; `is_active is False` → 403
+   account_disabled; нет активных ролей → 403 no_active_roles (оба 403 — одно
+   обобщённое сообщение). NULL is_active = активен (колонка без DB-default).
+   Проверка — ПОСЛЕ верного пароля (статус без пароля не раскрывается). Будущий
+   social login обязан вызывать тот же helper (Stage Social Auth 2A)
+✅ users.password_hash может быть NULL (social-only аккаунт). Плейсхолдер/случайный
+   пароль НЕ писать. Вход по паролю без хеша → тот же 401, что неверный пароль
+   (bcrypt выполняется всегда, с dummy-хешем, — без timing-различия). Первый
+   пароль ставится через reset по OTP; change-password без пароля → 409.
+   /auth/me и /auth/profile отдают вычисляемый has_password, хеш — никогда
+✅ Reset-OTP хранит otp_verifications.password_hash = NULL (копия текущего хеша
+   не хранится); register_confirm отвергает OTP без хеша (не создаёт аккаунт без пароля)
+✅ OAuth-таблицы (user_oauth_identities / oauth_auth_requests / oauth_pending_tickets)
+   не хранят provider token / code / raw state / raw ticket / plaintext verifier /
+   client secret / профиль провайдера: state и ticket — SHA-256 hex,
+   verifier — только `enc:v1:` (CHECK). Production-код пока записи не создаёт
 ✅ Новые auth/security изменения требуют failure-injection тестов на реальном
    состоянии БД (см. test_register_confirm_atomic, test_password_uow_atomic)
 ❌ Не возвращать старую модель «несколько независимых commit в одной auth-операции»
@@ -551,7 +568,8 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `e1b4c8f2a6d9` | add_test_moderation_status (`tests.status` draft/in_review/published/needs_changes; Этап F1) |
 | **Ветка impersonation (vb, ADR-025):** | |
 | `a1c2e3f4b5d6` | add_impersonator_to_user_sessions (`user_sessions.impersonator_user_id`, nullable FK→users, ON DELETE SET NULL) |
-| `f3b8d1e6a4c2` | add_users_email_normalized_check (CHECK `ck_users_email_normalized`: `email = lower(trim(email))`; существующие ненормализованные email сначала приводятся к `lower(trim)` — коллизий нет благодаря `ux_users_email_normalized`) — **head** |
+| `f3b8d1e6a4c2` | add_users_email_normalized_check (CHECK `ck_users_email_normalized`: `email = lower(trim(email))`; существующие ненормализованные email сначала приводятся к `lower(trim)` — коллизий нет благодаря `ux_users_email_normalized`) |
+| `c6e1a4f8b2d7` | social_auth_foundation (Stage Social Auth 2A): `users.password_hash` и `otp_verifications.password_hash` → NULLABLE; таблицы `user_oauth_identities`, `oauth_auth_requests`, `oauth_pending_tickets` (только фундамент, OAuth flow не реализован). Downgrade fail-closed при наличии users без пароля — **head** |
 
 **Ключевые таблицы:**
 

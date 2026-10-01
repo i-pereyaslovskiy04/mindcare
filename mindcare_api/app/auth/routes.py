@@ -196,6 +196,7 @@ def me(current_user: dict = Depends(get_current_user)):
         "role":  current_user["role"],
         "impersonating":     impersonator_id is not None,
         "impersonator_name": current_user.get("impersonator_name"),
+        "has_password":      current_user["has_password"],
     }
 
 

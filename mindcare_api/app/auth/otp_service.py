@@ -20,6 +20,7 @@ import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from app.core.normalization import normalize_email, mask_email
 from app.db.session import SessionLocal
@@ -53,9 +54,15 @@ def _verify_code(plaintext_code: str, stored_hash: str) -> bool:
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
-def create_or_update_otp(email: str, name: str, password_hash: str) -> str:
+def create_or_update_otp(
+    email: str, name: str, password_hash: Optional[str]
+) -> str:
     """
     Создаёт (или перезаписывает) OTP-запись для email.
+
+    password_hash — bcrypt-хеш пароля из register_init (регистрационный OTP)
+    либо None (reset-OTP: копия текущего хеша не хранится; confirm её не
+    использует, а у social-only аккаунта пароля нет вовсе).
 
     - Если запись уже существует и код был отправлен < RESEND_COOLDOWN сек назад,
       бросает ValueError с пользовательским сообщением.

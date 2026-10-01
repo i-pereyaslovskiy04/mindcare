@@ -64,6 +64,14 @@ class InvalidCurrentPasswordError(RuntimeError):
     """
 
 
+class PasswordNotSetError(RuntimeError):
+    """
+    У пользователя нет пароля (social-only, password_hash IS NULL) — сменить
+    «текущий» пароль нельзя. Бросается ДО вызова verify-callback (bcrypt на
+    None упал бы) и до любых изменений. Service-слой мапит на HTTP 409.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Вспомогательные функции
 # ---------------------------------------------------------------------------
@@ -111,6 +119,8 @@ def _user_to_dict(user: User, db) -> dict:
         "name":            user.full_name,
         "email":           user.email,
         "hashed_password": user.password_hash,
+        # Вычисляемый флаг для DTO (/me): сам хеш наружу не отдаётся.
+        "has_password":    user.password_hash is not None,
         "roles":           roles,
         "role":            primary_role(roles),
         "is_active":       user.is_active,
@@ -178,6 +188,7 @@ def _profile_to_dict(user: User, db) -> dict:
         "role":             primary_role(roles),
         "ui_theme_palette": user.ui_theme_palette,
         "ui_theme_mode":    user.ui_theme_mode,
+        "has_password":     user.password_hash is not None,
     }
 
 
@@ -452,6 +463,12 @@ def register_confirm_atomic(
 
         name = record.name
         password_hash = record.password_hash
+        # Регистрационный OTP всегда несёт хеш пароля из register_init. Запись
+        # без хеша — это reset-OTP (password_reset_init хранит NULL); принять
+        # её как регистрацию значило бы создать/реактивировать аккаунт без
+        # пароля. Отказ до любых изменений, OTP не потребляется.
+        if password_hash is None:
+            raise OtpInvalidError("Код не найден или уже использован")
 
         # 2. Обязательные consent-политики обязаны существовать (seed data).
         consent_ids: list[int] = []
@@ -611,6 +628,7 @@ def change_password_atomic(
 
     Бросает:
       UserNotFoundError           — пользователь не найден (→ HTTP 404);
+      PasswordNotSetError         — у пользователя нет пароля (→ HTTP 409);
       InvalidCurrentPasswordError — неверный текущий пароль (→ HTTP 400).
 
     Возвращает dict пользователя (для post-commit soft-fail уведомления).
@@ -623,6 +641,9 @@ def change_password_atomic(
         )
         if user is None:
             raise UserNotFoundError("Пользователь не найден")
+
+        if user.password_hash is None:
+            raise PasswordNotSetError("password is not set for this account")
 
         if not verify_current(user.password_hash):
             raise InvalidCurrentPasswordError("Неверный текущий пароль")

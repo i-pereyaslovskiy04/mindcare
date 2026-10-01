@@ -4,7 +4,9 @@ Depends only on storage and bcrypt. Safe to unit-test in isolation.
 """
 
 import logging
+import secrets
 from datetime import datetime
+from functools import lru_cache
 from typing import Optional
 
 import bcrypt
@@ -18,6 +20,16 @@ log = logging.getLogger(__name__)
 # SMTP host/user/stack/internal exception. Детали — только в server-side логах.
 _EMAIL_SEND_FAILED_MESSAGE = "Не удалось отправить письмо. Попробуйте позже."
 
+# Единое сообщение всех отказов по credentials (нет аккаунта / нет пароля /
+# неверный пароль) — не раскрывает, существует ли аккаунт и есть ли у него пароль.
+_INVALID_CREDENTIALS_MESSAGE = "Неверный email или пароль"
+
+# Единое сообщение доменных отказов после верных credentials (нет активных
+# ролей / аккаунт заблокирован): причину наружу не раскрываем.
+_ACCESS_NOT_ACTIVE_MESSAGE = (
+    "Доступ к системе не активирован. Обратитесь к администратору."
+)
+
 
 def _hash(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -25,6 +37,18 @@ def _hash(password: str) -> str:
 
 def _verify(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+@lru_cache(maxsize=1)
+def _dummy_password_hash() -> str:
+    """Хеш случайного пароля — только для выравнивания времени ответа.
+
+    Когда аккаунта нет или у него нет пароля (social-only), bcrypt всё равно
+    выполняется: иначе быстрый отказ отличал бы такие email от существующих
+    аккаунтов с паролем. Совпасть с ним нельзя: исходная строка нигде не
+    сохраняется. Вычисляется лениво, один раз на процесс.
+    """
+    return _hash(secrets.token_urlsafe(32))
 
 
 class AuthError(Exception):
@@ -170,21 +194,39 @@ def register_confirm(
 # Аутентификация
 # ---------------------------------------------------------------------------
 
-def authenticate_user(email: str, password: str) -> dict:
-    user = storage.find_user_by_email(email)
-    if not user or not _verify(password, user["hashed_password"]):
+def ensure_user_can_start_session(user: Optional[dict]) -> None:
+    """
+    Единый инвариант «можно ли выдать этому пользователю НОВУЮ сессию».
+
+    Вызывается после того, как личность уже подтверждена (password сейчас,
+    social login в будущем) и ДО update_last_login/create_session — чтобы оба
+    способа входа не расходились в правилах доступа.
+
+      * нет пользователя (не найден или soft-deleted — storage такие не
+        возвращает) → 401 `invalid_credentials`;
+      * `is_active is False` (заблокирован администратором) → 403
+        `account_disabled`. NULL трактуется как активный: колонка не имеет
+        DB-default, исторические строки без значения не блокируются молча;
+      * нет валидной активной роли (ADR-018) → 403 `no_active_roles`.
+
+    Оба 403 используют одно обобщённое сообщение: причину (блокировка или
+    состав ролей) наружу не раскрываем, различие — только в audit-коде.
+    """
+    if not user:
         raise AuthError(
-            "Неверный email или пароль", 401, audit_code="invalid_credentials"
+            _INVALID_CREDENTIALS_MESSAGE, 401, audit_code="invalid_credentials"
+        )
+    if user.get("is_active") is False:
+        raise AuthError(
+            _ACCESS_NOT_ACTIVE_MESSAGE, 403, audit_code="account_disabled"
         )
     # Fail-closed role invariant: не создаём сессию для аккаунта без валидной
-    # активной роли. role — backend-computed primary из реальных roles; проверяем
-    # ДО update_last_login/create_session.
+    # активной роли. role — backend-computed primary из реальных roles.
     #
     # ADR-018: это ШТАТНЫЙ доменный отказ (403 / `no_active_roles`), а не
     # внутренняя авария. Прежний 500/`internal_error` был неотличим от реального
     # сбоя, шумел в мониторинге и вводил оператора в заблуждение.
     # `internal_error` остаётся только за настоящими внутренними сбоями.
-    # Наружное сообщение обобщённое: состав ролей аккаунта не раскрывается.
     roles = user.get("roles") or []
     role = user.get("role")
     if (
@@ -194,10 +236,24 @@ def authenticate_user(email: str, password: str) -> dict:
         or role not in ROLE_PRIORITY    # и это каноническая известная роль
     ):
         raise AuthError(
-            "Доступ к системе не активирован. Обратитесь к администратору.",
-            403,
-            audit_code="no_active_roles",
+            _ACCESS_NOT_ACTIVE_MESSAGE, 403, audit_code="no_active_roles"
         )
+
+
+def authenticate_user(email: str, password: str) -> dict:
+    user = storage.find_user_by_email(email)
+    hashed = user.get("hashed_password") if user else None
+    # bcrypt выполняется всегда (с dummy-хешем, если аккаунта или пароля нет):
+    # время ответа не отличает «нет аккаунта» / «social-only без пароля» от
+    # «неверный пароль». Все три случая — один и тот же 401.
+    password_ok = _verify(password, hashed or _dummy_password_hash())
+    if not user or not hashed or not password_ok:
+        raise AuthError(
+            _INVALID_CREDENTIALS_MESSAGE, 401, audit_code="invalid_credentials"
+        )
+    # Блокировка/роли проверяются только ПОСЛЕ верного пароля — без него
+    # статус аккаунта не раскрывается.
+    ensure_user_can_start_session(user)
     storage.update_last_login(user["id"])
     return user
 
@@ -215,11 +271,15 @@ def password_reset_init(email: str) -> None:
     if not user:
         return  # не раскрываем, есть ли такой email
 
+    # password_hash=None: reset-OTP не хранит копию текущего хеша (лишнее
+    # хранение credential-derived значения; confirm его не использует). Так же
+    # reset работает для social-only аккаунта без пароля — это штатный способ
+    # установить первый пароль через подтверждение email.
     try:
         code = otp_service.create_or_update_otp(
             email=email,
             name=user["name"],
-            password_hash=user["hashed_password"],
+            password_hash=None,
         )
     except ValueError as e:
         raise AuthError(str(e), 429)
@@ -321,6 +381,16 @@ def change_password(
         )
     except storage.UserNotFoundError:
         raise AuthError("Пользователь не найден", 404)
+    except storage.PasswordNotSetError:
+        # Social-only аккаунт: «текущего пароля» нет, сравнивать не с чем.
+        # Первый пароль задаётся через восстановление по email (OTP) — это
+        # доказывает владение адресом. Endpoint требует сессию, поэтому факт
+        # «пароль не задан» сообщается только самому владельцу аккаунта.
+        raise AuthError(
+            "Пароль ещё не установлен. Чтобы задать его, воспользуйтесь "
+            "восстановлением пароля с подтверждением по email.",
+            409,
+        )
     except storage.InvalidCurrentPasswordError:
         raise AuthError("Неверный текущий пароль", 400)
 

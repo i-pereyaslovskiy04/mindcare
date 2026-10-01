@@ -115,14 +115,22 @@ def test_failed_login_accepts_no_active_roles_reason():
     """ADR-018: отказ по отсутствию активных ролей — исход того же события."""
     validation.validate_outcome(FAILED_LOGIN, Outcome.FAILURE, "no_active_roles")
     assert FAILED_LOGIN.allowed_failure_codes == frozenset({
-        "invalid_credentials", "no_active_roles", "internal_error",
+        "invalid_credentials", "no_active_roles", "account_disabled",
+        "internal_error",
     })
+
+
+def test_failed_login_accepts_account_disabled_reason():
+    """Stage Social Auth 2A: вход заблокированного (is_active=false) аккаунта —
+    исход того же failed_login, отдельного события нет."""
+    validation.validate_outcome(FAILED_LOGIN, Outcome.FAILURE, "account_disabled")
 
 
 def test_no_active_roles_reason_is_not_leaked_to_other_events():
     """Код не расползается по другим auth-событиям."""
     for name in ("registration_failed", "password_reset"):
         assert "no_active_roles" not in REGISTRY[name].allowed_failure_codes
+        assert "account_disabled" not in REGISTRY[name].allowed_failure_codes
 
 
 def test_disallowed_outcome():
