@@ -16,7 +16,7 @@ from app.auth.schemas import (
 )
 from app.auth.security import hash_session_token
 from app.audit import validation as audit_validation
-from app.audit.contracts import AuditResult, RequestContext, WriteState
+from app.audit.contracts import AuditResult, AuthMethod, RequestContext, WriteState
 from app.email_domains.errors import EmailDomainNotAllowedError
 
 
@@ -233,6 +233,7 @@ def test_route_login_success_mapping(monkeypatch):
     assert kw["actor"].kind == "user" and kw["actor"].user_id == 7
     assert kw["actor"].role == "student"
     assert kw["user_email"] == "u@e.com"
+    assert kw["auth_method"] is AuthMethod.PASSWORD
     assert kw["context"].session_id_hash == hash_session_token("rawtok123")
     blob = repr(kw)
     assert "rawtok123" not in blob and "Secret123" not in blob  # raw token/password не переданы
@@ -265,7 +266,29 @@ def test_route_failed_login_mapping(monkeypatch):
     assert kw["event"] == "failed_login" and kw["actor"].kind == "anonymous"
     assert kw["failure_reason_code"] == "invalid_credentials"
     assert kw["user_email"] == "u@e.com"
+    assert kw["auth_method"] is AuthMethod.PASSWORD
     assert "Неверный" not in repr(kw)             # raw message не передан facade
+
+
+@pytest.mark.parametrize("audit_code,status", [
+    ("invalid_credentials", 401),
+    ("account_disabled", 403),      # верный пароль, аккаунт заблокирован
+    ("no_active_roles", 403),       # верный пароль, нет активных ролей
+])
+def test_route_failed_login_is_password_method(monkeypatch, audit_code, status):
+    """Stage Social Auth 3A: любой отказ /auth/login — способ password."""
+    calls = _spy(monkeypatch)
+    monkeypatch.setattr(
+        routes.service, "authenticate_user",
+        _raiser(service.AuthError("x", status, audit_code=audit_code)),
+    )
+    with pytest.raises(HTTPException) as ei:
+        routes.login(body=LoginRequest(email="u@e.com", password="Secret123"),
+                     request=_fake_request())
+    assert ei.value.status_code == status         # внешняя семантика не меняется
+    kw = calls[-1]
+    assert kw["failure_reason_code"] == audit_code
+    assert kw["auth_method"] is AuthMethod.PASSWORD
 
 
 def test_route_logout_no_user_email(monkeypatch):
@@ -276,6 +299,7 @@ def test_route_logout_no_user_email(monkeypatch):
     kw = calls[-1]
     assert kw["event"] == "logout" and kw["actor"].user_id == 9
     assert kw.get("user_email") is None           # user_email НЕ передаётся
+    assert kw.get("auth_method") is None          # не аутентификация → NULL
     assert kw["context"].session_id_hash == hash_session_token("rawtok")
     assert "rawtok" not in repr(kw)
 
@@ -294,6 +318,7 @@ def test_route_password_change_no_user_email(monkeypatch):
     kw = calls[-1]
     assert kw["event"] == "password_change" and kw["actor"].role == "psychologist"
     assert kw.get("user_email") is None
+    assert kw.get("auth_method") is None
     assert "NewPass123" not in repr(kw) and "OldPass12" not in repr(kw)
 
 
@@ -309,6 +334,7 @@ def test_route_register_confirm_success(monkeypatch):
     assert kw["event"] == "registration_succeeded"
     assert kw["actor"].user_id == 11 and kw["actor"].role == "student"
     assert kw["user_email"] == "n@e.com"
+    assert kw.get("auth_method") is None
 
 
 def test_route_register_confirm_failure(monkeypatch):
@@ -326,6 +352,7 @@ def test_route_register_confirm_failure(monkeypatch):
     kw = calls[-1]
     assert kw["event"] == "registration_failed" and kw["actor"].kind == "anonymous"
     assert kw["failure_reason_code"] == "otp_expired"
+    assert kw.get("auth_method") is None
     assert kw["user_email"] == "n@e.com"
 
 
@@ -341,6 +368,7 @@ def test_route_password_reset_success_and_failure(monkeypatch):
     assert calls[-1]["event"] == "password_reset"
     assert calls[-1]["actor"].kind == "anonymous"
     assert calls[-1].get("failure_reason_code") is None
+    assert calls[-1].get("auth_method") is None
 
     monkeypatch.setattr(
         routes.service, "password_reset_confirm",

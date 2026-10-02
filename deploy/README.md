@@ -116,3 +116,51 @@ sudo systemctl enable --now mindcare-anonymize-ips.timer           # тольк�
 
 Если dry-run и ручной прогон уже выполнялись, таймер можно включить сразу при
 развёртывании: `./deploy.sh --enable-ip-anonymization`.
+
+## Вход через Яндекс ID (Stage Social Auth 3A)
+
+> ⚠ В production пока **не включать**: нет фронтенда (Stage 3B) и регистрации
+> через Яндекс (Stage 4) — включённый провайдер умеет только вход по уже
+> привязанной identity. Решение — ADR-026 (`docs/DECISIONS.md`).
+
+Перед первым запуском кода Stage 3A — `alembic upgrade head` (ревизия
+`b8d2f6a3c9e4`, `auth_log.auth_method`). Без миграции новые строки `auth_log`
+не запишутся (журнал auth — soft-fail: вход работает, аудит теряется).
+
+Настройки (`mindcare_api/.env`, не в git):
+
+| Переменная | Значение |
+|---|---|
+| `YANDEX_OAUTH_ENABLED` | `true` — включить; по умолчанию `false` |
+| `YANDEX_OAUTH_CLIENT_ID` | ClientID приложения Яндекс OAuth **этого** окружения |
+| `OAUTH_CALLBACK_BASE_URL` | `https://<домен>` (dev: `http://localhost:8000`) |
+| `OAUTH_FRONTEND_CALLBACK_URL` | `https://<домен>/auth/callback` (dev: `http://localhost:3000/auth/callback`) |
+
+- **client_secret не используется** и в `.env` не добавляется: PKCE S256 +
+  `code_verifier`. Адреса Яндекса зашиты в адаптер.
+- Redirect URI приложения Яндекс OAuth должен **точно** совпадать с
+  `{OAUTH_CALLBACK_BASE_URL}/api/auth/oauth/yandex/callback` (схема, хост,
+  порт, путь). Один Redirect URI на приложение: при неточном совпадении Яндекс
+  молча подставляет первый зарегистрированный. Фактический `redirect_uri`
+  backend пишет в лог при старте (`Yandex ID login enabled (redirect_uri=…)`).
+- DEV и PROD — **разные** приложения Яндекс OAuth (свой ClientID и Redirect
+  URI); ClientID боевого приложения в dev `.env` не попадает. Права приложения —
+  «Адрес электронной почты» (`login:email`).
+- Неполная конфигурация (нет ClientID, `http://` не на localhost, URL с
+  userinfo/fragment) — адаптер **не** регистрируется, в логе ERROR без
+  значений, MindCare стартует как обычно; `/api/auth/oauth/yandex/*` → 404.
+
+Обязательные условия публичного (не localhost) включения:
+
+1. HTTPS (TLS-терминатор/reverse proxy) — `OAUTH_CALLBACK_BASE_URL` с
+   `https://` включает `Secure` у state-cookie.
+2. Access log прокси **не** пишет query `/api/auth/oauth/*/callback`
+   (там authorization code и state): например `$uri` вместо `$request`/
+   `$request_uri` в `log_format` либо `access_log off` для этого location.
+   Uvicorn маскирует его сам (`app/core/log_redaction.py`), прокси — нет.
+3. SPA и `/api` — один сайт (лучше один origin, как в demo-режиме):
+   state-cookie `SameSite=Lax` от `POST /oauth/yandex/start`.
+4. Trusted proxy (`--proxy-headers --forwarded-allow-ips=<IP прокси>`): иначе
+   rate limit `oauth_*:ip` общий для всех и IP в аудите — адрес прокси.
+5. Верификация сервиса в Яндекс ID — иначе пользователи видят предупреждение
+   перед выдачей доступа (технически вход работает).

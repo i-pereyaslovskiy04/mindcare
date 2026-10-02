@@ -7,6 +7,7 @@ import pytest
 from app.oauth import service
 from app.oauth.errors import OAuthLoginDenied
 from app.oauth.providers.base import ProviderIdentity
+from app.oauth.security import code_challenge_s256
 from tests.oauth_fakes import FakeProvider, registered
 
 STATE = "s" * 43
@@ -165,3 +166,64 @@ def test_denials_map_to_stable_codes(user, code):
         else "account_unavailable"
     )
     assert ei.value.external_code == expected_external
+
+
+# ── авторитетный провайдер для auth_log.auth_method (Stage Social Auth 3A) ───
+
+def _fake_with_code():
+    """FakeProvider, чей challenge совпадает с verifier из фикстуры calls
+    (decrypt_text замокан на "verifier") — PKCE-проверка проходит честно."""
+    fake = FakeProvider()
+    fake.build_authorize_url(
+        state=STATE, code_challenge=code_challenge_s256("verifier"), redirect_uri="r",
+    )
+    return fake
+
+
+@pytest.mark.parametrize("query,cookie", [
+    ({"code": "c"}, STATE),                                   # state_invalid
+    ({"state": STATE, "error": "access_denied"}, STATE),      # отмена
+    ({"state": STATE, "error": "server_error"}, STATE),       # provider_error
+    ({"state": STATE}, STATE),                                # нет code
+])
+def test_registered_provider_outcomes_carry_registry_name(calls, query, cookie):
+    with registered(FakeProvider("yandex")):
+        outcome = _callback(query, cookie)
+    assert outcome.provider == "yandex"
+
+
+def test_identity_unknown_carries_provider(calls, monkeypatch):
+    monkeypatch.setattr(service.storage, "find_identity_user", lambda **kw: None)
+    fake = _fake_with_code()
+    code = fake.issue_code(STATE)
+    with registered(fake):
+        outcome = service.handle_callback("yandex", {"state": STATE, "code": code}, STATE)
+    assert outcome.audit_code == "oauth_identity_unknown"
+    assert outcome.provider == "yandex"
+
+
+def test_success_and_denial_carry_provider(calls, monkeypatch):
+    found = {"user_id": 7, "user": _user()}
+    monkeypatch.setattr(service.storage, "find_identity_user", lambda **kw: found)
+    for user, expect_ticket in ((_user(), True), (_user(is_active=False), False)):
+        found["user"] = user
+        fake = _fake_with_code()
+        with registered(fake):
+            outcome = service.handle_callback(
+                "yandex", {"state": STATE, "code": fake.issue_code(STATE)}, STATE,
+            )
+        assert outcome.provider == "yandex"
+        assert ("ticket" in outcome.fragment) is expect_ticket
+
+
+@pytest.mark.parametrize("path_name", ["yandex", "vk", "evil", "YANDEX"])
+def test_unregistered_path_name_never_becomes_provider(calls, path_name):
+    outcome = service.handle_callback(path_name, {"state": STATE, "code": "c"}, STATE)
+    assert outcome.provider is None and outcome.audit_code is None
+
+
+def test_complete_login_returns_ticket_provider(monkeypatch):
+    monkeypatch.setattr(service.storage, "complete_login_atomic", lambda *a, **k: {
+        "session_token": "t", "expires_at": None, "user": _user(), "provider": "yandex",
+    })
+    assert service.complete_login("ticket").provider == "yandex"

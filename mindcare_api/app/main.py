@@ -11,6 +11,7 @@ FastAPI application entry point.
 Startup sequence (lifespan):
   1. init_db()         — ensure_database + check_migrations (read-only) + seed
   2. cleanup_expired() — удаляет просроченные OTP из прошлых запусков
+  3. register_configured_providers() — OAuth-адаптеры (Яндекс ID), если настроены
 
   Миграции НЕ запускаются при старте. Только проверка версии (WARNING если
   DB отстаёт) и idempotent seed.
@@ -78,6 +79,11 @@ async def lifespan(_app: FastAPI):
     removed = cleanup_expired()  # чистим просроченные OTP прошлых сессий
     if removed:
         log.info("Cleaned up %d expired OTP record(s)", removed)
+
+    # Social login: регистрирует только полностью и безопасно настроенные
+    # адаптеры (Яндекс ID — Stage Social Auth 3A). Никогда не роняет старт.
+    from app.oauth.providers.bootstrap import register_configured_providers
+    register_configured_providers()
 
     log.info("MindCare API ready")
     yield

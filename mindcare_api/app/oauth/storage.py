@@ -165,7 +165,9 @@ def complete_login_atomic(
       * ТЕХНИЧЕСКИЙ сбой (БД, вставка сессии) → rollback при выходе из with:
         ticket снова годен до TTL, сессии нет. Один ticket → максимум одна сессия.
 
-    Возвращает {"session_token", "expires_at", "user"}.
+    Возвращает {"session_token", "expires_at", "user", "provider"}; provider —
+    из списанного ticket (для auth_log.auth_method). При доменном отказе тот же
+    провайдер проставляется в OAuthLoginDenied.provider.
     """
     with SessionLocal() as db:
         row = db.execute(
@@ -211,8 +213,10 @@ def complete_login_atomic(
 
             user_dict = _user_to_dict(user, db)
             check_user(user_dict)
-        except OAuthLoginDenied:
+        except OAuthLoginDenied as denial:
             db.commit()   # фиксируем ТОЛЬКО списание ticket
+            if denial.provider is None:
+                denial.provider = row.provider   # провайдер — из строки ticket
             raise
 
         token, expires_at = create_session_in_tx(
@@ -226,4 +230,5 @@ def complete_login_atomic(
             "session_token": token,
             "expires_at": expires_at,
             "user": user_dict,
+            "provider": row.provider,
         }

@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     OAUTH_CALLBACK_BASE_URL: str = "http://localhost:8000"
     # Фиксированная страница фронтенда после callback; результат — во fragment.
     OAUTH_FRONTEND_CALLBACK_URL: str = "http://localhost:3000/auth/callback"
+    # --- YANDEX ID (Stage Social Auth 3A) ---
+    # Адаптер регистрируется только при ENABLED=true и непустом CLIENT_ID
+    # (app/oauth/providers/bootstrap.py); иначе /oauth/yandex/* → 404, остальной
+    # MindCare стартует как обычно. ClientID не секрет (виден в authorize URL), но
+    # свой у каждого окружения (DEV/PROD — разные приложения Яндекс OAuth).
+    # client_secret НЕ используется: PKCE S256 + code_verifier.
+    YANDEX_OAUTH_ENABLED: bool = False
+    YANDEX_OAUTH_CLIENT_ID: str = ""
     # --- ENCRYPTION ---
     DATA_ENCRYPTION_KEY: str | None = None
     # --- APP ---

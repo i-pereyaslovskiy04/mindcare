@@ -24,6 +24,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 ActorKind = Literal["user", "system", "anonymous", "unavailable"]
+AuthMethodLiteral = Literal["password", "yandex", "vk"]
 OperationLiteral = Literal["INSERT", "UPDATE", "DELETE"]
 OutcomeLiteral = Literal["success", "failure"]
 
@@ -94,6 +95,10 @@ class AuthEventOut(BaseModel):
     `email_masked` — маскированный email, ЗАПИСАННЫЙ в момент события
     (денормализация `auth_log.user_email`). Это не то же самое, что
     `actor.email_masked`: там текущий email связанного аккаунта.
+
+    `auth_method` — способ аутентификации (Stage Social Auth 3A): только для
+    login/failed_login. Значение вне allowlist или у события, которому способ
+    не положен, отбрасывается (`None` + `details_redacted`).
     """
     entry_id: str
     source: Literal["auth_log"] = "auth_log"
@@ -104,6 +109,7 @@ class AuthEventOut(BaseModel):
     success: bool
     failure_code: Optional[str] = None
     email_masked: Optional[str] = None
+    auth_method: Optional[AuthMethodLiteral] = None
     details_redacted: bool
 
 

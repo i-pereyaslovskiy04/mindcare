@@ -10,7 +10,8 @@ import pytest
 from app.audit import service
 from app.audit.service import record_event
 from app.audit.contracts import (
-    Actor, AuditError, AuditStorageError, Outcome, RequestContext, Target, WriteState,
+    Actor, AuditError, AuditStorageError, AuthMethod, Outcome, RequestContext, Target,
+    WriteState,
 )
 from app.db.models import AuditLog, AuthLog
 
@@ -123,11 +124,13 @@ def test_auth_success_routes_to_authlog(monkeypatch):
     record_event(
         event="login", actor=Actor.user(3, "admin"),
         context=RequestContext(session_id_hash="a" * 64), user_email="X@Y.com",
+        auth_method=AuthMethod.PASSWORD,
     )
     row = _added(fake)
     assert isinstance(row, AuthLog)
     assert row.success is True and row.user_id == 3
     assert row.user_email == "x@y.com" and row.session_id == "a" * 64
+    assert row.auth_method == "password"
 
 
 def test_auth_failure_maps_to_success_false_and_code(monkeypatch):
@@ -141,6 +144,7 @@ def test_auth_failure_maps_to_success_false_and_code(monkeypatch):
     assert isinstance(row, AuthLog)
     assert row.success is False and row.failure_reason == "invalid_credentials"
     assert row.user_id is None and row.user_email == "a@b.com"
+    assert row.auth_method is None          # OPTIONAL: не передан → NULL
 
 
 # ── INDEPENDENT full lifecycle: factory/add/commit/rollback/close (пункт 1) ────

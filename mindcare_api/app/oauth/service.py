@@ -54,6 +54,10 @@ class CallbackOutcome:
     fragment: Mapping[str, str]
     clear_cookie: bool
     audit_code: Optional[str] = None   # failure_reason_code для failed_login
+    # Имя ЗАРЕГИСТРИРОВАННОГО адаптера, обработавшего callback (для
+    # auth_log.auth_method). None — провайдер не разрешён реестром; сырой
+    # path-параметр сюда не попадает.
+    provider: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,7 @@ class CompleteResult:
     session_token: str
     expires_at: datetime
     user: dict = field(repr=False)
+    provider: Optional[str] = None   # из списанного ticket (auth_log.auth_method)
 
 
 def _now() -> datetime:
@@ -115,8 +120,10 @@ def start_login(provider_name: str) -> StartResult:
 
 # ── callback ─────────────────────────────────────────────────────────────────
 
-def _failed(audit_code: Optional[str], *, clear_cookie: bool) -> CallbackOutcome:
-    return CallbackOutcome({"error": ERROR_FAILED}, clear_cookie, audit_code)
+def _failed(
+    audit_code: Optional[str], *, clear_cookie: bool, provider: Optional[str] = None,
+) -> CallbackOutcome:
+    return CallbackOutcome({"error": ERROR_FAILED}, clear_cookie, audit_code, provider)
 
 
 def handle_callback(
@@ -139,55 +146,58 @@ def handle_callback(
     if provider is None:
         return _failed(None, clear_cookie=False)
 
+    name = provider.name   # авторитетное имя адаптера из реестра
+
     try:
         callback = provider.parse_callback(query)
     except Exception:   # noqa: BLE001 — некорректный callback = невалидный state
-        return _failed("oauth_state_invalid", clear_cookie=False)
+        return _failed("oauth_state_invalid", clear_cookie=False, provider=name)
 
     state = callback.state
     if not state or not cookie_state or not constant_time_equals(state, cookie_state):
-        return _failed("oauth_state_invalid", clear_cookie=False)
+        return _failed("oauth_state_invalid", clear_cookie=False, provider=name)
 
     request = storage.consume_auth_request(
-        state_hash=sha256_hex(state), provider=provider.name,
+        state_hash=sha256_hex(state), provider=name,
     )
     if request is None or request["intent"] != "login":
-        return _failed("oauth_state_invalid", clear_cookie=True)
+        return _failed("oauth_state_invalid", clear_cookie=True, provider=name)
 
     # ── state сожжён; дальше каждый исход очищает cookie ──
     if callback.error:
         if callback.error == CANCELLED_ERROR:
-            return CallbackOutcome({"error": ERROR_CANCELLED}, True, None)
-        return _failed("oauth_provider_error", clear_cookie=True)
+            return CallbackOutcome({"error": ERROR_CANCELLED}, True, None, name)
+        return _failed("oauth_provider_error", clear_cookie=True, provider=name)
     if not callback.code:
-        return _failed("oauth_provider_error", clear_cookie=True)
+        return _failed("oauth_provider_error", clear_cookie=True, provider=name)
 
     try:
         verifier = decrypt_text(request["code_verifier_enc"])
     except Exception:   # noqa: BLE001 — ключ/данные; без деталей наружу
-        return _failed("internal_error", clear_cookie=True)
+        return _failed("internal_error", clear_cookie=True, provider=name)
 
     try:
         identity = provider.resolve_identity(
             code=callback.code,
             code_verifier=verifier,
-            redirect_uri=callback_redirect_uri(provider.name),
+            redirect_uri=callback_redirect_uri(name),
             extra=callback.extra,
         )
     except ProviderError:
-        return _failed("oauth_provider_error", clear_cookie=True)
+        return _failed("oauth_provider_error", clear_cookie=True, provider=name)
     except Exception:   # noqa: BLE001 — дефект адаптера: fail closed
-        return _failed("oauth_provider_error", clear_cookie=True)
+        return _failed("oauth_provider_error", clear_cookie=True, provider=name)
 
-    if identity.provider != provider.name or not identity.subject:
-        return _failed("oauth_provider_error", clear_cookie=True)
+    if identity.provider != name or not identity.subject:
+        return _failed("oauth_provider_error", clear_cookie=True, provider=name)
 
-    found = storage.find_identity_user(provider=provider.name, subject=identity.subject)
+    found = storage.find_identity_user(provider=name, subject=identity.subject)
     if found is None:
         # Регистрации через провайдера нет: ни пользователя, ни identity, ни
         # ticket, никакого автосвязывания по email.
         return CallbackOutcome(
-            {"error": ERROR_REGISTRATION_NOT_AVAILABLE}, True, "oauth_identity_unknown",
+            {"error": ERROR_REGISTRATION_NOT_AVAILABLE}, True,
+            "oauth_identity_unknown", name,
         )
 
     user = found["user"]
@@ -196,17 +206,19 @@ def handle_callback(
             raise OAuthLoginDenied("account_disabled")
         assert_social_login_allowed(user)   # ранняя проверка; complete — авторитетно
     except OAuthLoginDenied as denial:
-        return CallbackOutcome({"error": denial.external_code}, True, denial.audit_code)
+        return CallbackOutcome(
+            {"error": denial.external_code}, True, denial.audit_code, name,
+        )
 
     ticket = generate_ticket()
     storage.create_login_ticket(
         ticket_hash=sha256_hex(ticket),
-        provider=provider.name,
+        provider=name,
         subject=identity.subject,
         user_id=int(found["user_id"]),
         expires_at=_now() + TICKET_TTL,
     )
-    return CallbackOutcome({"result": RESULT_LOGIN, "ticket": ticket}, True, None)
+    return CallbackOutcome({"result": RESULT_LOGIN, "ticket": ticket}, True, None, name)
 
 
 # ── complete ─────────────────────────────────────────────────────────────────
@@ -229,4 +241,5 @@ def complete_login(
         session_token=result["session_token"],
         expires_at=result["expires_at"],
         user=result["user"],
+        provider=result["provider"],
     )

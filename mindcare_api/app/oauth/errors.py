@@ -5,6 +5,7 @@
 failure_reason_code для failed_login (registry), внешний код — фиксированный
 контракт для фронтенда; сообщения не содержат ПДн/секретов/текста провайдера.
 """
+from typing import Optional
 
 
 class OAuthProviderUnavailableError(Exception):
@@ -27,9 +28,12 @@ class OAuthLoginDenied(Exception):
     исключение пробрасывается дальше.
     """
 
-    def __init__(self, audit_code: str):
+    def __init__(self, audit_code: str, provider: Optional[str] = None):
         super().__init__(audit_code)
         self.audit_code = audit_code
+        # Провайдер списанного ticket (для auth_log.auth_method) — проставляет
+        # storage.complete_login_atomic из строки ticket, не из запроса.
+        self.provider = provider
 
     @property
     def external_code(self) -> str:

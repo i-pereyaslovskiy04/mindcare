@@ -593,6 +593,39 @@
   использовать как источник текущего статуса, только для формулировки этого
   пункта)
 
+**Social Auth (Яндекс ID / VK ID) — статус этапов**
+- ✅ 2A — фундамент (migration `c6e1a4f8b2d7`), 2B — provider-neutral ядро
+  `app/oauth/` (state + PKCE + cookie binding, одноразовые state/ticket,
+  вход только по УЖЕ привязанной identity чистого студента)
+- ✅ 3A (backend) — адаптер Яндекс ID (`app/oauth/providers/yandex.py`, PKCE
+  без client_secret, субъект — `id`), bootstrap провайдеров из конфигурации,
+  `auth_log.auth_method` (migration `b8d2f6a3c9e4`), поле `auth_method` в
+  admin API журналов; ADR-026. Выключено по умолчанию
+  (`YANDEX_OAUTH_ENABLED=false`)
+- ⏳ Живая проверка 3A на реальном Яндексе (DEV-приложение, localhost):
+  фаза 1 — неизвестный `id` → `social_registration_not_available` +
+  `failed_login/oauth_identity_unknown/yandex`; фаза 2 (по желанию) — вручную
+  вставленная identity чистого студента в ЛОКАЛЬНОЙ БД → ticket → complete →
+  `/auth/me`. Не проверено документацией Яндекса: код ошибки при отмене
+  (`access_denied`), возврат `state` в ошибке, приём запроса токена без
+  секрета на практике — зафиксировать по факту. При `invalid_client` без
+  секрета архитектуру не угадывать — отдельное решение
+- ⏳ 3B (frontend) — кнопка Яндекса в LoginForm, страница `/auth/callback`
+  (fragment → `history.replaceState` → `POST /oauth/complete`, защита от
+  двойного complete в React StrictMode), AuthContext; показ кнопки по
+  публичному конфигу; колонка/фильтр `auth_method` и подписи OAuth-кодов в
+  просмотрщике журналов
+- ⏳ 4 — регистрация через Яндекс: email провайдера только подсказка
+  (`default_email` часто `@yandex.ru`, не домен университета), собственный OTP
+  MindCare обязателен, никакого auto-link по совпадению email
+- ⏳ 5 — привязка из настроек; VK-адаптер — отдельный этап
+- 🔴 До включения в production: отдельное PROD-приложение Яндекс OAuth
+  (аккаунт организации, один https Redirect URI), верификация сервиса
+  (иначе пользователи видят предупреждение), HTTPS/reverse proxy с маскировкой
+  query callback в access log, trusted proxy (`request.client.host` за прокси —
+  адрес прокси: общие rate limit и неверные IP в аудите). Пересмотреть лимиты
+  `oauth_*:ip` для университетского NAT
+
 **Admin-создание пользователя с email soft-deleted аккаунта**
 - `storage.create_user` проверяет уникальность только среди активных записей (`deleted_at IS NULL`)
 - Если email принадлежит удалённому аккаунту — создаётся дубль в БД

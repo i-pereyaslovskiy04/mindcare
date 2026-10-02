@@ -106,6 +106,7 @@ def auth_row(
     event_email=ACTOR_EMAIL,
     success=True,
     failure_reason=None,
+    auth_method=None,
     actor_found=True,
     actor_deleted_at=None,
     occurred_at=OCCURRED_AT,
@@ -118,6 +119,7 @@ def auth_row(
         event_email=event_email,
         success=success,
         failure_reason=failure_reason,
+        auth_method=auth_method,
         **_actor_columns(found=actor_found, deleted_at=actor_deleted_at),
     )
 

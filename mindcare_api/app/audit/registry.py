@@ -16,8 +16,9 @@ from types import MappingProxyType
 from typing import Iterable, Mapping
 
 from app.audit.contracts import (
-    USER_ROLES, ActorPolicy, AuditError, Destination, DescriptionPolicy, EventSpec,
-    FailurePolicy, FieldSpec, Outcome, StringFormat, TargetPolicy, TxMode,
+    USER_ROLES, ActorPolicy, AuditError, AuthMethodPolicy, Destination,
+    DescriptionPolicy, EventSpec, FailurePolicy, FieldSpec, Outcome, StringFormat,
+    TargetPolicy, TxMode,
 )
 from app.audit.validation import is_denylisted_key
 
@@ -99,7 +100,7 @@ _CARD_LINK_META = MappingProxyType({
 def _spec(
     name, destination, actor_policy, roles, target_policy, entity_type,
     outcomes, failure_codes, metadata, tx_mode, failure_policy,
-    user_email_allowed=False,
+    user_email_allowed=False, auth_method_policy=AuthMethodPolicy.FORBIDDEN,
 ) -> EventSpec:
     return EventSpec(
         name=name, destination=destination, actor_policy=actor_policy,
@@ -111,14 +112,17 @@ def _spec(
         else MappingProxyType(dict(metadata)),
         tx_mode=tx_mode, failure_policy=failure_policy,
         user_email_allowed=user_email_allowed,
+        auth_method_policy=auth_method_policy,
     )
 
 
-def _auth(name, actor_policy, roles, outcomes, failure_codes, email=False) -> EventSpec:
+def _auth(name, actor_policy, roles, outcomes, failure_codes, email=False,
+          auth_method=AuthMethodPolicy.FORBIDDEN) -> EventSpec:
     return _spec(
         name, Destination.AUTH_LOG, actor_policy, roles,
         TargetPolicy.FORBIDDEN, None, outcomes, failure_codes, _EMPTY,
         TxMode.INDEPENDENT, FailurePolicy.SOFT, user_email_allowed=email,
+        auth_method_policy=auth_method,
     )
 
 
@@ -156,8 +160,10 @@ _ALL += [
           {Outcome.FAILURE},
           {"otp_invalid", "otp_expired", "domain_not_allowed", "internal_error"},
           email=True),
+    # auth_method (Stage Social Auth 3A): успешный вход всегда знает способ —
+    # password (/auth/login) или провайдер (/auth/oauth/complete).
     _auth("login", ActorPolicy.USER_REQUIRED, _STAFF, {Outcome.SUCCESS},
-          frozenset(), email=True),
+          frozenset(), email=True, auth_method=AuthMethodPolicy.REQUIRED),
     # no_active_roles (ADR-018) — штатный доменный отказ: credentials верны, но
     # активных ролей нет. account_disabled (Stage Social Auth 2A) — credentials
     # верны, но аккаунт заблокирован (users.is_active=false). Отдельные СОБЫТИЯ
@@ -171,7 +177,9 @@ _ALL += [
            "oauth_state_invalid", "oauth_provider_error",
            "oauth_identity_unknown", "oauth_ticket_invalid",
            "social_login_not_allowed", "internal_error"},
-          email=True),
+          # auth_method OPTIONAL: NULL только когда способ авторитетно неизвестен
+          # (oauth_ticket_invalid — ticket не найден, провайдер не установлен).
+          email=True, auth_method=AuthMethodPolicy.OPTIONAL),
     _auth("logout", ActorPolicy.USER_REQUIRED, _STAFF, {Outcome.SUCCESS},
           frozenset()),
     _auth("password_change", ActorPolicy.USER_REQUIRED, _STAFF, {Outcome.SUCCESS},
@@ -560,6 +568,11 @@ def validate_registry(specs: Mapping[str, EventSpec]) -> None:
             raise AuditError(f"{spec.name}: user_email only for AUTH_LOG")
         if spec.destination is Destination.AUTH_LOG and spec.metadata_schema:
             raise AuditError(f"{spec.name}: AUTH_LOG has no metadata column")
+        if not isinstance(spec.auth_method_policy, AuthMethodPolicy):
+            raise AuditError(f"{spec.name}: auth_method_policy must be AuthMethodPolicy")
+        if (spec.auth_method_policy is not AuthMethodPolicy.FORBIDDEN
+                and spec.destination is not Destination.AUTH_LOG):
+            raise AuditError(f"{spec.name}: auth_method only for AUTH_LOG")
 
         for mkey, fs in spec.metadata_schema.items():
             if is_denylisted_key(mkey):

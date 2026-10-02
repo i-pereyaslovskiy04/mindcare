@@ -1018,3 +1018,89 @@ session-модель (`user_sessions`) и multi-role модель ADR-018.
 **Что НЕ делалось.** Короткоживущая impersonation-сессия (blast radius);
 серверный revoke-эндпоинт вместо `logout`; сквозная атрибуция действий на
 `impersonator_user_id`; impersonation под admin.
+
+---
+
+### ADR-026 — Вход через Яндекс ID: адаптер без client_secret и `auth_log.auth_method`
+
+**Дата:** 2026-10-01
+
+**Статус:** Принято (Stage Social Auth 3A, только backend). Опирается на
+provider-neutral ядро Stage 2B (`app/oauth/`) и multi-role модель ADR-018.
+Frontend — Stage 3B, регистрация через провайдера — Stage 4.
+
+**Контекст.** Ядро 2B (state + PKCE + cookie binding, одноразовые state/ticket,
+вход только по уже привязанной identity чистого студента) работало лишь с
+тестовым FakeProvider: production-реестр был пуст, а в `auth_log` вход через
+провайдера был неотличим от входа по паролю. Сверено с официальной
+документацией Яндекс ID 2026-10-01 и вручную с консолью Яндекс OAuth
+(DEV-приложение `MindCare (DEV)`: Redirect URI
+`http://localhost:8000/api/auth/oauth/yandex/callback` принят; без прав
+приложение не создаётся — выбрано «Адрес электронной почты»).
+
+**Решение.**
+
+1. **Только адаптер.** `app/oauth/providers/yandex.py` реализует существующий
+   `OAuthProvider`; контракт (`ProviderCallback`/`ProviderIdentity`) и
+   конвейер callback не меняются, Яндекс-веток в service/routes нет. Адреса
+   `oauth.yandex.ru/authorize`, `/token`, `login.yandex.ru/info` — константы
+   модуля, не настройки.
+2. **PKCE S256 без client_secret.** Документация Яндекса: при переданном
+   `code_verifier` секрет не требуется. Код может прийти только на
+   зарегистрированный Redirect URI, verifier есть только у backend — секрет
+   почти ничего не добавляет, но требует хранения и ротации. Запрос токена —
+   форма `grant_type`/`code`/`code_verifier`/`client_id`; `redirect_uri`
+   Яндекс для него не документирует. Если живой Яндекс вернёт
+   `invalid_client`, это отдельное решение, а не молчаливое добавление секрета.
+3. **Субъект — `id`, не `psuid`.** `psuid` строится из пары client_id +
+   пользователь: разный у DEV/PROD-приложений и меняется при перерегистрации
+   приложения (ClientID изменить нельзя). `id` хранится строкой как есть
+   (str, 1..255, без управляющих символов); формат «только цифры» не
+   требуется — документация его не гарантирует. `client_id` в user-info обязан
+   совпасть с настроенным (защита от подмены токена).
+4. **Минимизация.** `scope=login:email` (минимальное право, без которого
+   приложение не создаётся), но email и имя не читаются:
+   `ProviderIdentity.email/suggested_name = None`. Токены провайдера живут
+   только внутри вызова адаптера, не сохраняются и не логируются; токен
+   user-info — только в заголовке `Authorization: OAuth`.
+5. **HTTP.** Sync `httpx.Client` (runtime-зависимость), таймауты 3/5/5/3 с,
+   без редиректов и повторов, ответ ≤ 64 KiB. Сеть/5xx/429/3xx/битый ответ →
+   `ProviderUnavailable`, отказ Яндекса (4xx, нет токена/`id`, чужой
+   `client_id`) → `ProviderRejected`; наружу ядро по-прежнему отдаёт
+   `oauth_failed`. Исключения httpx несут заголовки запроса — адаптер их не
+   логирует и поднимает новую ошибку без цепочки.
+6. **Включение из конфигурации.** `YANDEX_OAUTH_ENABLED` +
+   `YANDEX_OAUTH_CLIENT_ID`; `bootstrap.register_configured_providers()` в
+   lifespan регистрирует адаптер только при валидной конфигурации и адресах
+   `https://` или `http://` на loopback. Неполная конфигурация не роняет
+   MindCare — провайдер просто недоступен (404). Проверка не опирается на
+   `ENV`.
+7. **`auth_log.auth_method`** (migration `b8d2f6a3c9e4`): `VARCHAR(20) NULL` +
+   CHECK (`password`/`yandex`/`vk`), без индекса. Facade принимает только
+   `AuthMethod` enum; политика события — `login` REQUIRED, `failed_login`
+   OPTIONAL, остальные AUTH_LOG — FORBIDDEN. OAuth-провайдер берётся из
+   сервиса (имя зарегистрированного адаптера / провайдер списанного ticket),
+   не из сырого path; невалидный ticket → NULL. `mfa_method` не
+   переиспользуется (другой смысл).
+8. **Backfill без догадок.** До 3A реального провайдера в production не было:
+   `login` → `password`; `failed_login` → `password` только при заполненном
+   `user_email` (парольный вход и legacy-хелпер всегда его писали, OAuth-ветка
+   2B — нет) и не-OAuth коде; неоднозначные строки и прочие события — NULL.
+   Downgrade fail-closed при строках `yandex`/`vk`.
+
+**Осознанные следствия.**
+
+- Полный вход Яндекс → сессия MindCare возможен только для заранее
+  привязанной identity; привязки и регистрации пока нет. Живая проверка
+  неизвестного пользователя заканчивается `social_registration_not_available`
+  — это корректный результат 3A.
+- Не подтверждено документацией Яндекса: код ошибки при отмене
+  (`access_denied`), возврат `state` в callback-ошибке, приём запроса токена
+  без секрета на практике. Отмена с другим кодом покажется пользователю как
+  `oauth_failed` (fail-safe).
+- Production требует отдельного приложения, HTTPS, маскировки query callback
+  на reverse proxy, trusted proxy и верификации сервиса — см.
+  `deploy/README.md`.
+
+**Что НЕ делалось.** Frontend, регистрация/привязка, VK, хранение токенов
+провайдера, client_secret, production-приложение и reverse proxy.

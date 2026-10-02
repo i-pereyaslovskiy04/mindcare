@@ -296,6 +296,7 @@ def list_auth_events(
                 AuthLog.user_email.label("event_email"),
                 AuthLog.success.label("success"),
                 AuthLog.failure_reason.label("failure_reason"),
+                AuthLog.auth_method.label("auth_method"),
                 actor.id.label("actor_row_id"),
                 actor.uuid.label("actor_user_uuid"),
                 actor.full_name.label("actor_full_name"),

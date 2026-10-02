@@ -156,6 +156,7 @@ def _hostile_auth_row(**overrides):
         user_agent=MARKERS["user_agent"],
         session_id=MARKERS["session_token"],
         mfa_method="totp",
+        auth_method="totp",
         actor_row_id=None,
         actor_user_uuid=None,
         actor_full_name=None,
@@ -244,6 +245,7 @@ def test_hostile_auth_row_masks_email_and_drops_free_text_reason():
     failure_code, redacted = svc._project_auth_failure(
         spec, bool(row.success), row.failure_reason,
     )
+    auth_method, method_redacted = svc._project_auth_method(spec, row.auth_method)
 
     from app.audit.admin_schemas import AuthEventOut
     item = AuthEventOut(
@@ -251,11 +253,13 @@ def test_hostile_auth_row_masks_email_and_drops_free_text_reason():
         event_code=row.event, known_event=True, actor=actor,
         success=bool(row.success), failure_code=failure_code,
         email_masked=svc.mask_email(row.event_email or ""),
-        details_redacted=redacted,
+        auth_method=auth_method,
+        details_redacted=redacted or method_redacted,
     )
     dumped = _assert_clean([item])[0]
 
     assert dumped["failure_code"] is None
+    assert dumped["auth_method"] is None and method_redacted is True
     assert dumped["details_redacted"] is True
     assert dumped["email_masked"] == "v***@synthetic-domain.test"
     assert "mfa_method" not in dumped

@@ -140,6 +140,11 @@ def _failed_codes_since(mark) -> list:
     return [r.failure_reason for r in _auth_rows_since(mark) if r.event == "failed_login"]
 
 
+def _failed_methods_since(mark) -> list:
+    """auth_method строк failed_login (Stage Social Auth 3A)."""
+    return [r.auth_method for r in _auth_rows_since(mark) if r.event == "failed_login"]
+
+
 def _set(model_filter, **values):
     with SessionLocal() as db:
         model_filter(db).update(values, synchronize_session=False)
@@ -322,6 +327,7 @@ def test_callback_provider_timeout_is_fail_closed(client, fake, test_email):
     # state сожжён: повтор после восстановления провайдера невозможен.
     assert _fragment(_callback(client, params, cookie=state)) == {"error": "oauth_failed"}
     assert _failed_codes_since(mark) == ["oauth_provider_error", "oauth_state_invalid"]
+    assert _failed_methods_since(mark) == ["yandex", "yandex"]
 
 
 def test_callback_pkce_verifier_is_enforced(client, fake, test_email):
@@ -343,6 +349,7 @@ def test_callback_unknown_identity_creates_nothing(client, fake):
 
     assert _fragment(r) == {"error": "social_registration_not_available"}
     assert _failed_codes_since(mark) == ["oauth_identity_unknown"]
+    assert _failed_methods_since(mark) == ["yandex"]   # провайдер из реестра
     with SessionLocal() as db:
         assert db.query(User).count() == users_before
         assert db.query(UserOAuthIdentity).count() == identities_before
@@ -384,6 +391,7 @@ def test_callback_denies_without_ticket(client, fake, test_email, deny, external
 
     assert _fragment(r) == {"error": external}
     assert _failed_codes_since(mark) == [audit]
+    assert _failed_methods_since(mark) == ["yandex"]
     with SessionLocal() as db:
         assert db.query(OAuthPendingTicket).filter_by(user_id=user_id).count() == 0
 
@@ -415,9 +423,13 @@ def test_complete_creates_normal_session(client, fake, test_email):
     logins = [x for x in _auth_rows_since(mark) if x.event == "login"]
     assert len(logins) == 1 and logins[0].user_email == test_email
     assert logins[0].session_id == hashlib.sha256(token.encode()).hexdigest()
+    assert logins[0].auth_method == "yandex"           # из списанного ticket
 
+    logout_mark = _auth_mark()
     assert client.post("/api/auth/logout", headers=headers).status_code == 200
     assert client.get("/api/auth/me", headers=headers).status_code == 401
+    logouts = [x for x in _auth_rows_since(logout_mark) if x.event == "logout"]
+    assert len(logouts) == 1 and logouts[0].auth_method is None
 
 
 def test_complete_ticket_is_single_use(client, fake, test_email):
@@ -429,6 +441,7 @@ def test_complete_ticket_is_single_use(client, fake, test_email):
     again = _complete(client, ticket)
     assert again.status_code == 400 and again.json()["code"] == "oauth_ticket_invalid"
     assert _failed_codes_since(mark) == ["oauth_ticket_invalid"]
+    assert _failed_methods_since(mark) == [None]       # провайдер неизвестен
     assert _sessions(user_id) == 1
 
 
@@ -499,6 +512,7 @@ def test_complete_domain_denial_burns_ticket(
     assert _ticket_row(ticket).consumed_at is not None      # сожжён навсегда
     assert _sessions(user_id) == 0
     assert _failed_codes_since(mark) == [audit]
+    assert _failed_methods_since(mark) == ["yandex"]   # провайдер списанного ticket
     again = _complete(client, ticket)
     assert again.status_code == 400 and again.json()["code"] == "oauth_ticket_invalid"
 

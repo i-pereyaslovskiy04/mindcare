@@ -40,7 +40,9 @@ from app.audit.admin_schemas import (
 )
 from app.audit.change_contracts import PG_INT32_MAX
 from app.audit.change_registry import CHANGE_REGISTRY
-from app.audit.contracts import Actor, AuditError, Outcome, TargetPolicy
+from app.audit.contracts import (
+    Actor, AuditError, AuthMethodPolicy, Outcome, TargetPolicy,
+)
 from app.audit.registry import AUDIT_FILTER_KEYS, REGISTRY
 from app.audit.request_context import build_request_context
 from app.audit.service import record_event
@@ -609,6 +611,7 @@ def list_auth_events(
         failure_code, failure_redacted = _project_auth_failure(
             spec, bool(row.success), row.failure_reason,
         )
+        auth_method, method_redacted = _project_auth_method(spec, row.auth_method)
         items.append(AuthEventOut(
             entry_id=str(row.entry_id),
             occurred_at=row.occurred_at,
@@ -618,7 +621,8 @@ def list_auth_events(
             success=bool(row.success),
             failure_code=failure_code,
             email_masked=mask_email(row.event_email or ""),
-            details_redacted=actor_redacted or failure_redacted,
+            auth_method=auth_method,
+            details_redacted=actor_redacted or failure_redacted or method_redacted,
         ))
 
     _record_access(
@@ -645,6 +649,18 @@ def _project_auth_failure(spec, success: bool, raw_reason) -> tuple[Optional[str
         return None, raw_reason is not None
     if raw_reason and raw_reason in spec.allowed_failure_codes:
         return raw_reason, False
+    return None, True
+
+
+def _project_auth_method(spec, raw_method) -> tuple[Optional[str], bool]:
+    """`auth_log.auth_method` наружу — только значение из allowlist и только у
+    события, политика которого его допускает. Иначе None + redacted."""
+    if raw_method is None:
+        return None, False
+    if spec is None or spec.auth_method_policy is AuthMethodPolicy.FORBIDDEN:
+        return None, True
+    if raw_method in pol.AUTH_METHOD_VALUES:
+        return raw_method, False
     return None, True
 
 

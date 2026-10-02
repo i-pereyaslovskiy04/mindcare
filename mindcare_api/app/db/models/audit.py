@@ -26,6 +26,14 @@ from sqlalchemy.sql import func
 
 from app.db.base import Base
 
+# Допустимые значения auth_log.auth_method (Stage Social Auth 3A, migration
+# b8d2f6a3c9e4). Совпадают с app.audit.contracts.AuthMethod; OAuth-значения —
+# с OAUTH_PROVIDERS. Расширение — только миграцией (CHECK в БД).
+AUTH_LOG_AUTH_METHODS = ("password", "yandex", "vk")
+_AUTH_METHOD_CHECK = (
+    "auth_method IS NULL OR auth_method IN ('password', 'yandex', 'vk')"
+)
+
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
@@ -77,6 +85,7 @@ class AuthLog(Base):
         Index("idx_auth_ip",       "ip_address", "created_at"),
         Index("idx_auth_failures", "ip_address", "created_at"),
         Index("idx_auth_created",  "created_at", "id"),   # Stage 8
+        CheckConstraint(_AUTH_METHOD_CHECK, name="ck_auth_log_auth_method"),
     )
 
     id             = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -89,6 +98,10 @@ class AuthLog(Base):
     user_agent     = Column(Text)
     session_id     = Column(String(255))
     mfa_method     = Column(String(20))
+    # Способ аутентификации (password / провайдер) — только login/failed_login
+    # (политика EventSpec.auth_method_policy). NULL — не применимо/неизвестно.
+    # mfa_method — другой смысл (второй фактор), не переиспользуется.
+    auth_method    = Column(String(20))
     created_at     = Column(DateTime(timezone=True), primary_key=True, server_default=func.now())
 
 

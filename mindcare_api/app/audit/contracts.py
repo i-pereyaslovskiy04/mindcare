@@ -69,6 +69,25 @@ class StringFormat(enum.Enum):
     MIME_TYPE = "mime_type"
 
 
+class AuthMethod(enum.Enum):
+    """Способ аутентификации — `auth_log.auth_method` (Stage Social Auth 3A).
+
+    Значения совпадают с CHECK ck_auth_log_auth_method; OAuth-значения — с
+    OAUTH_PROVIDERS (app/db/models/oauth.py). Caller передаёт только член enum:
+    произвольная строка отклоняется валидацией.
+    """
+    PASSWORD = "password"
+    YANDEX = "yandex"
+    VK = "vk"
+
+
+class AuthMethodPolicy(enum.Enum):
+    """Пишет ли событие auth_method. Не-FORBIDDEN — только для AUTH_LOG."""
+    FORBIDDEN = "forbidden"   # всегда NULL (logout, registration, password_*)
+    OPTIONAL = "optional"     # failed_login: NULL, когда способ не установлен
+    REQUIRED = "required"     # login: успешный вход всегда знает способ
+
+
 # ── Ошибки ────────────────────────────────────────────────────────────────────
 
 class AuditError(Exception):
@@ -108,6 +127,7 @@ class EventSpec:
     description_policy: DescriptionPolicy = DescriptionPolicy.NONE
     static_description: Optional[str] = None
     user_email_allowed: bool = False         # только AUTH_LOG
+    auth_method_policy: AuthMethodPolicy = AuthMethodPolicy.FORBIDDEN  # только AUTH_LOG
 
 
 # ── Actor / Target / контекст / результат ─────────────────────────────────────

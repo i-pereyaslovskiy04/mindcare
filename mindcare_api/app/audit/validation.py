@@ -14,8 +14,9 @@ from typing import Mapping, Optional
 from app.core.normalization import normalize_email
 
 from app.audit.contracts import (
-    USER_ROLES, Actor, AuditError, Destination, EventSpec, FieldSpec, Outcome,
-    RequestContext, StringFormat, Target, TargetPolicy, ActorPolicy,
+    USER_ROLES, Actor, AuditError, AuthMethod, AuthMethodPolicy, Destination,
+    EventSpec, FieldSpec, Outcome, RequestContext, StringFormat, Target,
+    TargetPolicy, ActorPolicy,
 )
 
 # ── Denylist (defense-in-depth; НЕ заменяет per-event allowlist) ──────────────
@@ -298,3 +299,25 @@ def validate_email(spec: EventSpec, user_email: Optional[str]) -> Optional[str]:
     if len(normalized) > _EMAIL_MAX:
         raise AuditError("user_email too long")
     return normalized
+
+
+# ── auth_method (auth-only, Stage Social Auth 3A) ─────────────────────────────
+
+def validate_auth_method(
+    spec: EventSpec, auth_method: Optional[AuthMethod],
+) -> Optional[str]:
+    """Член AuthMethod → значение колонки; политика — из EventSpec.
+
+    Строка (даже совпадающая со значением enum) отклоняется: caller не может
+    записать произвольный способ входа.
+    """
+    policy = spec.auth_method_policy
+    if auth_method is None:
+        if policy is AuthMethodPolicy.REQUIRED:
+            raise AuditError("auth_method required for this event")
+        return None
+    if not isinstance(auth_method, AuthMethod):
+        raise AuditError("auth_method must be an AuthMethod member")
+    if policy is AuthMethodPolicy.FORBIDDEN:
+        raise AuditError("auth_method not allowed for this event")
+    return auth_method.value

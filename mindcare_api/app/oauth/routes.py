@@ -10,12 +10,13 @@
 навигация браузера), результат — во fragment: он не уходит на сервер, в access
 log и Referer. Session token в URL не попадает никогда.
 """
+from typing import Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from app.audit import Actor, Outcome, record_event
+from app.audit import Actor, AuthMethod, Outcome, record_event
 from app.audit.request_context import build_request_context
 from app.auth.schemas import SessionResponse
 from app.auth.security import hash_session_token
@@ -55,7 +56,16 @@ def _context(request: Request, *, session_id_hash=None):
     )
 
 
-def _audit_failed_login(request: Request, audit_code: str) -> None:
+def _auth_method(provider: Optional[str]) -> Optional[AuthMethod]:
+    """Имя провайдера → AuthMethod. provider приходит ТОЛЬКО из сервиса (имя
+    зарегистрированного адаптера или провайдер списанного ticket), никогда из
+    сырого path-параметра. None — способ авторитетно не установлен."""
+    return AuthMethod(provider) if provider is not None else None
+
+
+def _audit_failed_login(
+    request: Request, audit_code: str, provider: Optional[str],
+) -> None:
     """failed_login (AUTH_LOG, INDEPENDENT/SOFT). Без email, state, ticket,
     code, токенов и текста провайдера."""
     record_event(
@@ -63,6 +73,7 @@ def _audit_failed_login(request: Request, audit_code: str) -> None:
         actor=Actor.anonymous(),
         outcome=Outcome.FAILURE,
         failure_reason_code=audit_code,
+        auth_method=_auth_method(provider),
         context=_context(request),
     )
 
@@ -136,7 +147,7 @@ def oauth_callback(provider: str, request: Request):
         request.cookies.get(service.STATE_COOKIE_NAME),
     )
     if outcome.audit_code:
-        _audit_failed_login(request, outcome.audit_code)
+        _audit_failed_login(request, outcome.audit_code, outcome.provider)
     return _frontend_redirect(outcome.fragment, clear_cookie=outcome.clear_cookie)
 
 
@@ -154,13 +165,14 @@ def oauth_complete(body: OAuthCompleteRequest, request: Request, response: Respo
             user_agent=request.headers.get("user-agent"),
         )
     except OAuthTicketInvalidError as exc:
-        _audit_failed_login(request, exc.audit_code)
+        # Ticket не найден/списан/истёк — провайдер не установлен → NULL.
+        _audit_failed_login(request, exc.audit_code, None)
         return JSONResponse(
             status_code=400,
             content={"detail": _TICKET_INVALID_MESSAGE, "code": "oauth_ticket_invalid"},
         )
     except OAuthLoginDenied as denial:
-        _audit_failed_login(request, denial.audit_code)
+        _audit_failed_login(request, denial.audit_code, denial.provider)
         code = denial.external_code
         return JSONResponse(
             status_code=403, content={"detail": _DENIED_MESSAGES[code], "code": code},
@@ -173,6 +185,7 @@ def oauth_complete(body: OAuthCompleteRequest, request: Request, response: Respo
         actor=Actor.user(int(user["id"]), user["role"]),
         outcome=Outcome.SUCCESS,
         user_email=user["email"],
+        auth_method=_auth_method(result.provider),
         context=_context(
             request, session_id_hash=hash_session_token(result.session_token),
         ),

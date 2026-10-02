@@ -20,8 +20,8 @@ from app.db.session import SessionLocal
 from app.db.models import AuditLog, AuthLog
 
 from app.audit.contracts import (
-    SYSTEM_ROLE, Actor, AuditResult, AuditStorageError, Destination, FailurePolicy,
-    Outcome, RequestContext, Target, TxMode, WriteState,
+    SYSTEM_ROLE, Actor, AuditResult, AuditStorageError, AuthMethod, Destination,
+    FailurePolicy, Outcome, RequestContext, Target, TxMode, WriteState,
 )
 from app.audit.registry import get_spec
 from app.audit import validation
@@ -37,6 +37,7 @@ def record_event(
     metadata: Optional[Mapping[str, object]] = None,
     context: Optional[RequestContext] = None,
     user_email: Optional[str] = None,
+    auth_method: Optional[AuthMethod] = None,
     db: Optional[Session] = None,
 ) -> AuditResult:
     """Единая точка входа аудита. Транзакционный режим определяется registry.
@@ -52,6 +53,7 @@ def record_event(
     safe_meta = validation.validate_metadata(spec, metadata)
     validation.validate_context(context)
     norm_email = validation.validate_email(spec, user_email)
+    method = validation.validate_auth_method(spec, auth_method)
 
     # tx/db совместимость — до любой записи (без публичного override режима).
     if spec.tx_mode is TxMode.ATOMIC:
@@ -62,7 +64,7 @@ def record_event(
             raise validation.AuditError("independent event must not receive a caller db")
 
     row = _build_row(spec, actor, target, outcome, failure_reason_code,
-                     safe_meta, context, norm_email)
+                     safe_meta, context, norm_email, method)
     return _write(spec, row, db)
 
 
@@ -80,7 +82,8 @@ def _actor_role(actor: Actor) -> Optional[str]:
     return None  # anonymous
 
 
-def _build_row(spec, actor, target, outcome, failure_reason_code, meta, ctx, email):
+def _build_row(spec, actor, target, outcome, failure_reason_code, meta, ctx, email,
+               auth_method=None):
     ip = ctx.ip_address if ctx else None
     ua = ctx.user_agent if ctx else None
     session_id = ctx.session_id_hash if ctx else None
@@ -95,6 +98,7 @@ def _build_row(spec, actor, target, outcome, failure_reason_code, meta, ctx, ema
             ip_address=ip,
             user_agent=ua,
             session_id=session_id,
+            auth_method=auth_method,
         )
 
     # AUDIT_LOG

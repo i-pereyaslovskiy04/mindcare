@@ -19,7 +19,7 @@ from app.auth.schemas import (
 from app.auth import service
 from app.auth.deps import get_current_user, get_session_token
 from app.auth.security import hash_session_token
-from app.audit import record_event, Actor, Outcome, RequestContext
+from app.audit import record_event, Actor, AuthMethod, Outcome, RequestContext
 from app.audit.failsafe import record_secondary_failure
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -136,6 +136,7 @@ def login(body: LoginRequest, request: Request):
             outcome=Outcome.FAILURE,
             failure_reason_code=e.audit_code,
             user_email=body.email,
+            auth_method=AuthMethod.PASSWORD,
             context=_audit_context(request),
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
@@ -151,6 +152,7 @@ def login(body: LoginRequest, request: Request):
         actor=Actor.user(int(user["id"]), user["role"]),
         outcome=Outcome.SUCCESS,
         user_email=user["email"],
+        auth_method=AuthMethod.PASSWORD,
         # session_id_hash (не raw token): совпадает с user_sessions.id,
         # join для расследований работает, credential в лог не утекает.
         context=_audit_context(

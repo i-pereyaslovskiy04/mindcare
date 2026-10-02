@@ -25,7 +25,8 @@ from typing import Mapping, Optional
 from app.audit.change_contracts import Operation
 from app.audit.change_registry import CHANGE_REGISTRY
 from app.audit.contracts import (
-    SYSTEM_ROLE, USER_ROLES, ActorPolicy, Destination, EventSpec, TargetPolicy,
+    SYSTEM_ROLE, USER_ROLES, ActorPolicy, AuthMethod, Destination, EventSpec,
+    TargetPolicy,
 )
 from app.audit.registry import REGISTRY
 
@@ -133,6 +134,10 @@ AUTH_EVENT_SPECS: Mapping[str, EventSpec] = _by_destination(Destination.AUTH_LOG
 
 AUDIT_EVENT_NAMES: frozenset = frozenset(AUDIT_EVENT_SPECS)
 AUTH_EVENT_NAMES: frozenset = frozenset(AUTH_EVENT_SPECS)
+
+# Допустимые значения auth_log.auth_method в DTO (Stage Social Auth 3A) —
+# производные от контракта, а не отдельный список.
+AUTH_METHOD_VALUES: frozenset = frozenset(m.value for m in AuthMethod)
 
 AUDIT_POLICY = _build_policy(JOURNAL_AUDIT, AUDIT_EVENT_SPECS, role_aware=True)
 AUTH_POLICY = _build_policy(JOURNAL_AUTH, AUTH_EVENT_SPECS, role_aware=False)

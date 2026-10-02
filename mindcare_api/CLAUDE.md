@@ -307,8 +307,9 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    → обычная user_sessions сессия (SessionResponse, событие `login`). Только вход
    по УЖЕ привязанной identity чистого студента (активные роли == {"student"},
    `auth.roles.is_pure_student`); неизвестная identity ничего не создаёт
-   (`social_registration_not_available`). Production-реестр провайдеров пуст —
-   реальные адаптеры Яндекс/VK — Stage 3; FakeProvider живёт только в tests
+   (`social_registration_not_available`). Production-реестр наполняет только
+   `app/oauth/providers/bootstrap.py` (lifespan) — сейчас лишь Яндекс ID (Stage
+   3A); VK-адаптера нет. FakeProvider живёт только в tests
 ✅ Callback: provider → parse → browser binding (state == HttpOnly cookie
    `mindcare_oauth_state`, Path=/api/auth/oauth, SameSite=Lax, без Domain,
    Secure по схеме OAUTH_CALLBACK_BASE_URL) → атомарное списание state + commit →
@@ -333,8 +334,45 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ Stage 3 (фронт): start — относительный `/api/…` (same-origin, credentials по
    умолчанию достаточно); при SPA/API на разных поддоменах — `credentials:
    'include'` ТОЛЬКО в OAuth start; SPA и API на разных сайтах не поддерживаются.
-   Глобальный apiFetch не менять. До включения реального провайдера — миграция
-   auth_log.auth_method (сейчас social login неотличим от входа по паролю в auth_log)
+   Глобальный apiFetch не менять. Frontend (кнопка, /auth/callback) — Stage 3B
+✅ Яндекс ID (Stage Social Auth 3A, `app/oauth/providers/yandex.py`) — ТОЛЬКО
+   адаптер поверх ядра 2B, без Яндекс-веток в service/routes. Authorization Code
+   + PKCE S256, публичный клиент: client_secret НЕ используется и не хранится
+   (token = grant_type/code/code_verifier/client_id формой; redirect_uri в
+   запрос токена не входит). Адреса oauth.yandex.ru/authorize, /token и
+   login.yandex.ru/info — константы модуля, не настройки. scope=login:email
+   (без прав Яндекс не создаёт приложение), но email/имя НЕ читаются —
+   ProviderIdentity.email/suggested_name = None; никакого связывания/регистрации
+   по email
+✅ Субъект Яндекса — `id` профиля строкой как есть (str, 1..255, без управляющих
+   символов; НЕ требовать только цифры, НЕ приводить к int, НЕ trim). `psuid`
+   НЕ использовать и не хранить (зависит от client_id: разный у DEV/PROD и
+   меняется при перерегистрации приложения). `client_id` профиля обязан
+   совпасть с YANDEX_OAUTH_CLIENT_ID, иначе ProviderRejected
+✅ HTTP к Яндексу — sync `httpx.Client` (один на resolve_identity), таймауты
+   connect 3 / read 5 / write 5 / pool 3 с, без редиректов, TLS verify, без
+   повторов (code одноразовый), ответ ≤ 64 KiB. 5xx/429/3xx/сеть/битый JSON →
+   ProviderUnavailable; прочие 4xx, нет access_token/id, чужой client_id →
+   ProviderRejected. Токен user-info — только `Authorization: OAuth`, никогда
+   `?oauth_token=`. Токены провайдера нигде не сохраняются и не логируются
+✅ Исключения httpx несут request с заголовками: адаптер не логирует их
+   (`exc_info`/repr запрещены) и поднимает НОВУЮ ProviderError вне блока except
+   (без __cause__/__context__). Лог сбоя — один WARNING: стадия, класс исхода,
+   HTTP-статус, код ошибки из allowlist; error_description/тела — никогда
+✅ Регистрация адаптера — `bootstrap.register_configured_providers()` в
+   lifespan: только при YANDEX_OAUTH_ENABLED=true, валидном CLIENT_ID и
+   OAUTH_*_URL вида https:// или http:// на loopback (без привязки к ENV).
+   Иначе адаптер не регистрируется (ERROR без значений), MindCare стартует.
+   Bootstrap только добавляет в реестр, никогда не очищает. SAFE_TEST_ENV
+   выключает Яндекс в автотестах
+✅ auth_log.auth_method (migration b8d2f6a3c9e4) — способ аутентификации:
+   `record_event(..., auth_method=AuthMethod.X)`, только член enum (строка
+   отклоняется). Политика EventSpec.auth_method_policy: `login` — REQUIRED,
+   `failed_login` — OPTIONAL, остальные события AUTH_LOG — FORBIDDEN (NULL).
+   /auth/login — PASSWORD во всех исходах; OAuth — провайдер из сервиса
+   (CallbackOutcome.provider — имя зарегистрированного адаптера,
+   CompleteResult/OAuthLoginDenied.provider — из списанного ticket), НЕ из
+   сырого path; невалидный ticket → NULL. mfa_method не переиспользовать
 ✅ Новые auth/security изменения требуют failure-injection тестов на реальном
    состоянии БД (см. test_register_confirm_atomic, test_password_uow_atomic)
 ❌ Не возвращать старую модель «несколько независимых commit в одной auth-операции»
@@ -602,7 +640,8 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | **Ветка impersonation (vb, ADR-025):** | |
 | `a1c2e3f4b5d6` | add_impersonator_to_user_sessions (`user_sessions.impersonator_user_id`, nullable FK→users, ON DELETE SET NULL) |
 | `f3b8d1e6a4c2` | add_users_email_normalized_check (CHECK `ck_users_email_normalized`: `email = lower(trim(email))`; существующие ненормализованные email сначала приводятся к `lower(trim)` — коллизий нет благодаря `ux_users_email_normalized`) |
-| `c6e1a4f8b2d7` | social_auth_foundation (Stage Social Auth 2A): `users.password_hash` и `otp_verifications.password_hash` → NULLABLE; таблицы `user_oauth_identities`, `oauth_auth_requests`, `oauth_pending_tickets` (только фундамент, OAuth flow не реализован). Downgrade fail-closed при наличии users без пароля — **head** |
+| `c6e1a4f8b2d7` | social_auth_foundation (Stage Social Auth 2A): `users.password_hash` и `otp_verifications.password_hash` → NULLABLE; таблицы `user_oauth_identities`, `oauth_auth_requests`, `oauth_pending_tickets` (только фундамент, OAuth flow не реализован). Downgrade fail-closed при наличии users без пароля |
+| `b8d2f6a3c9e4` | auth_log_auth_method (Stage Social Auth 3A): `auth_log.auth_method VARCHAR(20) NULL` + CHECK `ck_auth_log_auth_method` (`password`/`yandex`/`vk`), без индекса; DDL на partitioned parent (наследуется всеми партициями). Backfill: `login` → `password`; `failed_login` → `password` только с `user_email` и не-OAuth кодом, иначе NULL. Downgrade fail-closed при строках `yandex`/`vk` — **head** |
 
 **Ключевые таблицы:**
 
@@ -655,7 +694,7 @@ generic paired events), но несут непересекающуюся инф�
 
 | Журнал | Зона | Что НЕ пишется |
 |--------|------|----------------|
-| `auth_log` | Аутентификация и жизненный цикл сессии: login/failed_login/logout, registration, password change/reset | Роль актора (колонки нет), бизнес-сущности, metadata |
+| `auth_log` | Аутентификация и жизненный цикл сессии: login/failed_login/logout, registration, password change/reset; `auth_method` (password/yandex/vk) — только login/failed_login | Роль актора (колонки нет), бизнес-сущности, metadata |
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 

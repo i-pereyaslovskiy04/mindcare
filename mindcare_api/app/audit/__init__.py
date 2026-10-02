@@ -13,6 +13,7 @@ from app.audit.contracts import (
     AuditError,
     AuditResult,
     AuditStorageError,
+    AuthMethod,
     Outcome,
     RequestContext,
     Target,
@@ -43,6 +44,7 @@ __all__ = [
     "TxMode",
     "AuditError",
     "AuditStorageError",
+    "AuthMethod",
     # ── Stage 6-0: data_change_log ──
     "record_data_change",
     "project_changed_fields",

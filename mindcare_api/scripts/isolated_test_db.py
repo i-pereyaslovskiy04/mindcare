@@ -73,6 +73,10 @@ SAFE_TEST_ENV = {
     "DEBUG": "false",
     "EMAIL_MODE": "dev",
     "DATA_ENCRYPTION_KEY": TEST_ONLY_ENCRYPTION_KEY,
+    # Реальный Яндекс ID из локального .env никогда не включается в автотестах:
+    # bootstrap провайдеров в lifespan TestClient видит его выключенным.
+    "YANDEX_OAUTH_ENABLED": "false",
+    "YANDEX_OAUTH_CLIENT_ID": "",
 }
 
 

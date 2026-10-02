@@ -113,8 +113,17 @@ def safe_test_db():
         )
     if _scalar("SELECT COUNT(*) FROM users WHERE password_hash IS NULL"):
         pytest.skip("round-trip requires a DB without passwordless users")
+    # Откат до PREV проходит через b8d2f6a3c9e4 (auth_log.auth_method), чей
+    # downgrade fail-closed при social-строках auth_log (их пишут OAuth-тесты).
+    if _scalar(
+        "SELECT COUNT(*) FROM information_schema.columns "
+        "WHERE table_name = 'auth_log' AND column_name = 'auth_method'"
+    ) and _scalar(
+        "SELECT COUNT(*) FROM auth_log WHERE auth_method IN ('yandex', 'vk')"
+    ):
+        pytest.skip("round-trip requires a DB without social auth_log rows")
     yield
-    _alembic("upgrade", REVISION)
+    _alembic("upgrade", "head")   # REVISION уже не head (b8d2f6a3c9e4 выше)
 
 
 def _email() -> str:
@@ -166,12 +175,14 @@ def test_downgrade_drops_pending_reset_otps(safe_test_db):
 
 def test_downgrade_fails_closed_with_passwordless_user(safe_test_db):
     _alembic("upgrade", REVISION)
+    version_before = _scalar("SELECT version_num FROM alembic_version")
     user_id = _insert_user(_email(), None)
     try:
         with pytest.raises(RuntimeError, match="no password"):
             _alembic("downgrade", PREV_REVISION)
-        # Ничего не изменено: ревизия, таблицы, nullable, сам пользователь.
-        assert _scalar("SELECT version_num FROM alembic_version") == REVISION
+        # Ничего не изменено: ревизия (откат атомарен — более поздние ревизии
+        # тоже не откатились), таблицы, nullable, сам пользователь.
+        assert _scalar("SELECT version_num FROM alembic_version") == version_before
         assert _existing_tables() == set(NEW_TABLES)
         assert _nullable("users", "password_hash")
         assert _scalar("SELECT COUNT(*) FROM users WHERE id = :i", i=user_id) == 1
