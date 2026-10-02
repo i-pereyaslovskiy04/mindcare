@@ -96,6 +96,16 @@
   color: var(--espresso);
 }
 
+.socBtn:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.socBtn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .socBtnIcon {
   width: 22px;
   height: 22px;

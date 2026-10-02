@@ -5,7 +5,8 @@
  *   <PrivateRoute>   — requires authentication, redirects to / (with login modal) when unauthenticated.
  *   <RoleRoute>      — requires specific role(s), redirects to /profile on mismatch.
  *
- * Public routes: /, /about, /services, /news, /materials, /login, /register, /health
+ * Public routes: /, /about, /services, /news, /materials, /login, /register,
+ *                /auth/callback, /health
  * Private routes: /dashboard, /profile
  * Role routes:   /student/*, /psychologist/*, /supervisor/*, /admin/*
  */
@@ -28,6 +29,7 @@ import ThemePreviewPage  from '../pages/theme-preview/ThemePreviewPage';
 // ── Auth pages ────────────────────────────────────────────────────────────────
 import LoginPage    from '../features/auth/pages/LoginPage';
 import RegisterPage from '../features/auth/pages/RegisterPage';
+import OAuthCallbackPage from '../features/auth/pages/OAuthCallbackPage';
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 import ProfilePage from '../features/profile/pages/ProfilePage';
@@ -107,6 +109,8 @@ export default function AppRouter() {
       {/* Auth */}
       <Route path="/login"    element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      {/* Публичный: завершение входа через внешний провайдер (Stage Social Auth 3B) */}
+      <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
       {/* Private — any authenticated user */}
       <Route path="/dashboard" element={<PrivateRoute><DashboardRedirect /></PrivateRoute>} />

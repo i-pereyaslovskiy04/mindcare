@@ -371,6 +371,7 @@ src/data/
 | `/health` | `HealthPage` | Public |
 | `/login` | `LoginPage` | Public |
 | `/register` | `RegisterPage` | Public |
+| `/auth/callback` | `OAuthCallbackPage` | Public (завершение входа через Яндекс ID) |
 | `/dashboard` | `DashboardRedirect` | Auth (active/default role redirect) |
 | `/profile` | `ProfilePage` | Auth |
 | `/student` | `ClientDashboard` (Outlet) | Auth + role membership: student |
@@ -458,6 +459,37 @@ LoginForm → POST /api/auth/login
                ├─▶ localStorage: access_token
                └─▶ setState({ user }) → App re-renders
 ```
+
+### Вход через внешний провайдер (Stage Social Auth 3B)
+
+```
+LoginForm ──GET /api/public/config──▶ social_providers (кнопка «Яндекс» только
+    │                                  если backend реально зарегистрировал адаптер)
+    ▼
+oauthStart('yandex')  POST /api/auth/oauth/yandex/start  (credentials: 'include')
+    │  → { authorize_url } → top-level переход (не popup); state — в HttpOnly-cookie
+    ▼
+Яндекс → backend callback → 302 /auth/callback#result=login&ticket=… | #error=<код>
+    ▼
+OAuthCallbackPage
+    1. читает fragment и СРАЗУ убирает его (history.replaceState) — до сети;
+    2. ждёт AuthContext.loading === false;
+    3. ровно один AuthContext.completeOAuthLogin(ticket)
+         → POST /api/auth/oauth/complete → тот же путь, что login:
+           токен → /me → user (flushSync)
+    4. navigate('/dashboard', { replace: true })
+```
+
+- Один ticket — один `complete`, в том числе в React StrictMode (захват в ref +
+  уже вычищенный адрес). Ticket не попадает в DOM, логи, storage и navigation state.
+- Принимается только контракт fragment (`result`/`ticket`/`error`); `next`,
+  `redirect` и любые адреса игнорируются. Ошибки — фиксированные русские тексты
+  по коду (`features/auth/lib/oauthCallback.js`), неизвестный код не показывается.
+- Регистрации и привязки через провайдера нет: неизвестный аккаунт Яндекса
+  получает сообщение «пока не привязан к MindCare». Кнопки в RegisterForm
+  остаются декоративными (Stage 4).
+- `apiFetch` переносит строковый `code` тела ошибки в `err.code` — OAuth-ошибки
+  различаются по нему (400/403/404/429, не 401).
 
 ### 401 Retry (api/client.js)
 
@@ -602,7 +634,7 @@ ADR-023). Feature-модуль `features/admin/audit/`: `api/audit.api.js` (HTTP
 | Вкладка | Endpoint | Специфичные фильтры |
 |---|---|---|
 | Действия | `GET /api/admin/audit/events` | категория (frontend-only), событие, результат, роль действия, тип объекта, точный id объекта, «показывать просмотры журнала» |
-| Входы и безопасность | `GET /api/admin/audit/auth-events` | событие, успех/отказ |
+| Входы и безопасность | `GET /api/admin/audit/auth-events` | событие, успех/отказ, способ входа (`auth_method`: Пароль / Яндекс ID / VK ID — из `options.auth_methods`) |
 | Изменённые поля | `GET /api/admin/audit/data-changes` | таблица, операция, роль действия, точный id записи |
 
 Справочник значений — `GET /api/admin/audit/options` (`useAuditOptions`),

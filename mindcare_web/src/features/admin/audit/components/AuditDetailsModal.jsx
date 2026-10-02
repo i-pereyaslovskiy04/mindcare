@@ -8,6 +8,7 @@ import {
   ACTOR_KIND_LABELS,
   AUDIT_EVENT_LABELS,
   AUTH_EVENT_LABELS,
+  AUTH_METHOD_LABELS,
   DETAIL_KEY_LABELS,
   DETAIL_KEY_ORDER,
   ENTITY_TYPE_LABELS,
@@ -18,6 +19,7 @@ import {
   OUTCOME_LABELS,
   OUTCOME_TONES,
   TABLE_LABELS,
+  UNKNOWN_AUTH_METHOD_LABEL,
   changedFieldLabel,
   labelFor,
 } from '../lib/auditLabels';
@@ -146,6 +148,14 @@ export default function AuditDetailsModal({ item, onClose }) {
 
             {item.source === 'auth_log' && item.email_masked && (
               <Row label="Email в момент события">{item.email_masked}</Row>
+            )}
+
+            {item.source === 'auth_log' && (
+              <Row label="Способ входа">
+                {item.auth_method
+                  ? labelFor(AUTH_METHOD_LABELS, item.auth_method, UNKNOWN_AUTH_METHOD_LABEL)
+                  : '—'}
+              </Row>
             )}
 
             {item.failure_code && (

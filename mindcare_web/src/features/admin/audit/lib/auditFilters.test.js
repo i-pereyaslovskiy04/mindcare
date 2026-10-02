@@ -273,3 +273,66 @@ describe('buildQuery', () => {
     expect(query).not.toHaveProperty('actor_role');
   });
 });
+
+describe('способ входа auth_log (Stage Social Auth 3B)', () => {
+  const common = defaultCommon(7);
+  const WITH_METHODS = { ...OPTIONS, auth_methods: ['password', 'yandex', 'vk'] };
+
+  function authQuery(authMethod, options = WITH_METHODS) {
+    return buildQuery({
+      source: 'auth_log',
+      common,
+      slice: { ...SOURCE_DEFAULTS.auth_log, authMethod },
+      page: 1, size: 20, options,
+    });
+  }
+
+  test('authMethod есть только в срезе auth_log и пуст по умолчанию', () => {
+    expect(SOURCE_DEFAULTS.auth_log.authMethod).toBe('');
+    expect(SOURCE_DEFAULTS.audit_log).not.toHaveProperty('authMethod');
+    expect(SOURCE_DEFAULTS.data_change_log).not.toHaveProperty('authMethod');
+  });
+
+  test('routeFilterPatch кладёт authMethod в срез auth_log и не пускает в чужие', () => {
+    expect(routeFilterPatch({ authMethod: 'yandex' }, 'auth_log').slice)
+      .toEqual({ authMethod: 'yandex' });
+    for (const source of ['audit_log', 'data_change_log']) {
+      const routed = routeFilterPatch({ authMethod: 'yandex' }, source);
+      expect(routed.slice).toEqual({});
+      expect(routed.ignored).toEqual(['authMethod']);
+    }
+  });
+
+  test.each(['password', 'yandex', 'vk'])('значение %s уходит в auth_method', (method) => {
+    expect(authQuery(method).auth_method).toBe(method);
+  });
+
+  test('пустое значение — фильтра нет', () => {
+    expect(authQuery('').auth_method).toBe('');
+  });
+
+  test('значение вне справочника не отправляется', () => {
+    expect(authQuery('telegram').auth_method).toBe('');
+  });
+
+  test('без справочника /options фильтр не уходит', () => {
+    expect(authQuery('yandex', null).auth_method).toBe('');
+    expect(authQuery('yandex', OPTIONS).auth_method).toBe('');
+  });
+
+  test('сброс к умолчаниям очищает authMethod', () => {
+    expect(defaultBySource().auth_log.authMethod).toBe('');
+  });
+
+  test('auth_method не появляется в запросах других журналов', () => {
+    for (const source of ['audit_log', 'data_change_log']) {
+      const query = buildQuery({
+        source,
+        common,
+        slice: { ...SOURCE_DEFAULTS[source], authMethod: 'yandex' },
+        page: 1, size: 20, options: WITH_METHODS,
+      });
+      expect(query).not.toHaveProperty('auth_method');
+    }
+  });
+});

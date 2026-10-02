@@ -70,6 +70,7 @@ export const SOURCE_DEFAULTS = Object.freeze({
     actorKind: '',
     event: '',
     success: null,
+    authMethod: '',
   }),
   data_change_log: Object.freeze({
     actorKind: '',
@@ -201,6 +202,18 @@ function safeActorKind(actorKind, source, options) {
 }
 
 /**
+ * Способ входа отправляется только если он есть в `options.auth_methods`
+ * (схема журнала с backend'а). Без справочника фильтр не уходит вовсе — так
+ * неизвестное значение не может попасть в запрос.
+ */
+function safeAuthMethod(authMethod, options) {
+  if (!authMethod) return '';
+  const allowed = options?.auth_methods;
+  if (!Array.isArray(allowed)) return '';
+  return allowed.includes(authMethod) ? authMethod : '';
+}
+
+/**
  * Состояние → параметры запроса конкретного журнала. Ключи, которых у журнала
  * нет, здесь просто не появляются; `category` не появляется никогда — это
  * группировка опций, а не фильтр API.
@@ -236,6 +249,7 @@ export function buildQuery({ source, common, slice, page, size, options }) {
       ...base,
       event: slice.event,
       success: slice.success,
+      auth_method: safeAuthMethod(slice.authMethod, options),
     };
   }
 

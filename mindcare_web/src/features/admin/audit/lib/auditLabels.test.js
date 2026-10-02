@@ -2,6 +2,7 @@ import {
   ACTOR_KIND_LABELS,
   AUDIT_EVENT_LABELS,
   AUTH_EVENT_LABELS,
+  AUTH_METHOD_LABELS,
   CHANGED_FIELD_LABELS,
   DETAIL_KEY_LABELS,
   DETAIL_KEY_ORDER,
@@ -78,11 +79,13 @@ const AUTH_EVENT_CODES = [
 ];
 
 const FAILURE_CODES = [
-  'access_denied', 'account_inactive', 'consent_required', 'domain_not_allowed',
-  'email_already_exists', 'engagement_required', 'internal_error',
-  'invalid_credentials', 'invalid_request', 'legal_basis_required',
-  'no_active_roles', 'otp_expired', 'otp_invalid', 'password_policy',
-  'role_policy_violation', 'self_admin_protected', 'user_not_found',
+  'access_denied', 'account_disabled', 'account_inactive', 'consent_required',
+  'domain_not_allowed', 'email_already_exists', 'engagement_required',
+  'internal_error', 'invalid_credentials', 'invalid_request',
+  'legal_basis_required', 'no_active_roles', 'oauth_identity_unknown',
+  'oauth_provider_error', 'oauth_state_invalid', 'oauth_ticket_invalid',
+  'otp_expired', 'otp_invalid', 'password_policy', 'role_policy_violation',
+  'self_admin_protected', 'social_login_not_allowed', 'user_not_found',
 ];
 
 const ENTITY_TYPES = [
@@ -127,8 +130,16 @@ describe('полнота карт относительно registry', () => {
     expect(Object.keys(AUTH_EVENT_LABELS).sort()).toEqual([...AUTH_EVENT_CODES].sort());
   });
 
-  test('17 кодов отказа имеют подпись', () => {
+  test('23 кода отказа имеют подпись (включая social auth 2A/2B)', () => {
+    expect(FAILURE_CODES).toHaveLength(23);
     expect(Object.keys(FAILURE_CODE_LABELS).sort()).toEqual([...FAILURE_CODES].sort());
+  });
+
+  test('способы входа auth_log имеют подпись', () => {
+    expect(AUTH_METHOD_LABELS).toEqual({
+      password: 'Пароль', yandex: 'Яндекс ID', vk: 'VK ID',
+    });
+    expect(labelFor(AUTH_METHOD_LABELS, 'telegram')).toBe(UNKNOWN_LABEL);
   });
 
   test('23 типа объектов имеют подпись', () => {
@@ -158,7 +169,8 @@ describe('полнота карт относительно registry', () => {
       'anonymous', 'system', 'unavailable', 'user',
     ]);
     expect(Object.keys(OUTCOME_LABELS).sort()).toEqual(['failure', 'success']);
-    expect(Object.keys(FILTER_KEY_LABELS)).toHaveLength(13);
+    expect(Object.keys(FILTER_KEY_LABELS)).toHaveLength(14);
+    expect(FILTER_KEY_LABELS.auth_method).toBe('способ входа');
   });
 
   test('все допустимые ключи details имеют подпись и порядок вывода', () => {

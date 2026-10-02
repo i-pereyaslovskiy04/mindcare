@@ -151,6 +151,7 @@ def list_auth_events(
     actor_kind: Optional[str] = Query(default=None, max_length=32),
     event: Optional[str] = Query(default=None, max_length=150),
     success: Optional[bool] = Query(default=None),
+    auth_method: Optional[str] = Query(default=None, max_length=32),
     token: str = Depends(get_session_token),
     current_user: dict = Depends(get_current_user),
 ) -> AuthEventsPage:
@@ -168,6 +169,7 @@ def list_auth_events(
         session_id_hash=hash_session_token(token),
         page=page, size=size, date_from=date_from, date_to=date_to, order=order,
         actor_uuid=actor_uuid, actor_kind=actor_kind, event=event, success=success,
+        auth_method=auth_method,
     )
 
 

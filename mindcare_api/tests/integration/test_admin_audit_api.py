@@ -792,3 +792,69 @@ def test_new_indexes_exist_on_the_partitioned_parents():
     assert {r[0] for r in rows} == {
         "idx_audit_created", "idx_auth_created", "idx_dcl_created",
     }
+
+
+# ─── Stage Social Auth 3B: фильтр auth_method ────────────────────────────────
+
+def _seed_methods(day):
+    _insert([
+        _authlog(day, event="login", auth_method="password"),
+        _authlog(day, event="login", auth_method="yandex"),
+        _authlog(day, event="failed_login", success=False,
+                 failure_reason="oauth_identity_unknown", auth_method="yandex"),
+        _authlog(day, event="failed_login", success=False,
+                 failure_reason="oauth_ticket_invalid", auth_method=None),
+        _authlog(day, event="logout", auth_method=None),
+    ])
+
+
+def test_auth_method_filter_is_exact(client, admin, unique_day):
+    token, _ = admin
+    _seed_methods(unique_day)
+    params = _window(unique_day)
+
+    def _methods(**extra):
+        body = client.get(AUTH_URL, headers=_auth(token), params={**params, **extra})
+        assert body.status_code == 200, body.text
+        return sorted(
+            ((i["event_code"], i["auth_method"]) for i in body.json()["items"]),
+            key=lambda pair: (pair[0], pair[1] or ""),
+        )
+
+    assert _methods(auth_method="yandex") == [
+        ("failed_login", "yandex"), ("login", "yandex"),
+    ]
+    assert _methods(auth_method="password") == [("login", "password")]
+    assert _methods(auth_method="vk") == []
+    everything = _methods()
+    assert len(everything) == 5
+    assert ("logout", None) in everything and ("failed_login", None) in everything
+
+
+@pytest.mark.parametrize("bad", ["google", "PASSWORD", "telegram", "", "x" * 40])
+def test_auth_method_filter_rejects_unknown_values(client, admin, bad):
+    token, _ = admin
+    r = client.get(AUTH_URL, headers=_auth(token), params={"auth_method": bad})
+    assert r.status_code == 422
+
+
+def test_auth_method_filter_records_only_the_key(client, admin, unique_day):
+    token, _ = admin
+    client.get(AUTH_URL, headers=_auth(token),
+               params={**_window(unique_day), "auth_method": "yandex"})
+    with SessionLocal() as db:
+        row = (
+            db.query(AuditLog)
+            .filter(AuditLog.event_type == "audit_logs_viewed")
+            .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+            .first()
+        )
+    assert row.log_metadata["journal"] == "auth_log"
+    assert set(row.log_metadata["filter_keys"]) == {"date_range", "auth_method"}
+    assert "yandex" not in str(row.log_metadata)
+
+
+def test_options_list_auth_methods(client, admin):
+    token, _ = admin
+    body = client.get(OPTIONS_URL, headers=_auth(token)).json()
+    assert body["auth_methods"] == ["password", "yandex", "vk"]

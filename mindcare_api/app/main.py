@@ -128,6 +128,7 @@ app.mount("/media", StaticFiles(directory=str(_MEDIA_DIR)), name="media")
 
 from app.auth.routes import router as auth_router                # noqa: E402
 from app.oauth.routes import router as oauth_router              # noqa: E402
+from app.oauth.providers import public_social_providers          # noqa: E402
 from app.users.routes_admin import router as admin_users_router  # noqa: E402
 from app.tags.routes_admin import router as admin_tags_router    # noqa: E402
 from app.tags.routes_public import router as public_tags_router  # noqa: E402
@@ -218,8 +219,13 @@ def public_config():
     """
     Публичная конфигурация для фронтенда (без авторизации).
     Позволяет избежать дублирования ENV-переменных между backend и frontend.
+
+    social_providers (Stage Social Auth 3B) — имена провайдеров, РЕАЛЬНО
+    зарегистрированных bootstrap'ом; кнопка входа показывается только по ним.
+    ClientID, callback/frontend URL, scope и адреса провайдера не отдаются.
     """
     return {
         "newsImageMaxSizeMb": settings.NEWS_IMAGE_MAX_SIZE_MB,
         "mediaAvMaxSizeMb": settings.MEDIA_AV_MAX_SIZE_MB,
+        "social_providers": public_social_providers(),
     }

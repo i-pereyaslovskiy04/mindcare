@@ -119,9 +119,11 @@ sudo systemctl enable --now mindcare-anonymize-ips.timer           # тольк�
 
 ## Вход через Яндекс ID (Stage Social Auth 3A)
 
-> ⚠ В production пока **не включать**: нет фронтенда (Stage 3B) и регистрации
-> через Яндекс (Stage 4) — включённый провайдер умеет только вход по уже
-> привязанной identity. Решение — ADR-026 (`docs/DECISIONS.md`).
+> ⚠ В production пока **не включать**: регистрации и привязки через Яндекс
+> нет (Stage 4/5) — включённый провайдер умеет только вход по уже привязанной
+> identity, а привязать её пока нечем. Кнопка входа и страница `/auth/callback`
+> реализованы (Stage 3B): кнопка появляется сама, когда backend зарегистрировал
+> адаптер. Решение — ADR-026 (`docs/DECISIONS.md`).
 
 Перед первым запуском кода Stage 3A — `alembic upgrade head` (ревизия
 `b8d2f6a3c9e4`, `auth_log.auth_method`). Без миграции новые строки `auth_log`

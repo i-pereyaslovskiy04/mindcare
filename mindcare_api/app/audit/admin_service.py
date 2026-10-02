@@ -588,6 +588,7 @@ def list_auth_events(
     actor_kind: Optional[str] = None,
     event: Optional[str] = None,
     success: Optional[bool] = None,
+    auth_method: Optional[str] = None,
 ) -> AuthEventsPage:
     validate_paging(page, size)
     order = _validate_order(order)
@@ -595,10 +596,12 @@ def list_auth_events(
 
     actor_kind = _validate_kind(pol.JOURNAL_AUTH, actor_kind)
     event = _validate_choice(event, pol.AUTH_EVENT_NAMES, "event")
+    auth_method = _validate_choice(auth_method, pol.AUTH_METHOD_VALUES, "auth_method")
 
     rows, total = storage.list_auth_events(
         start=start, end=end, order=order, page=page, size=size,
         actor_uuid=actor_uuid, actor_kind=actor_kind, event=event, success=success,
+        auth_method=auth_method,
     )
 
     items = []
@@ -632,6 +635,7 @@ def list_auth_events(
             "actor_kind": actor_kind is not None,
             "event": event is not None,
             "success": success is not None,
+            "auth_method": auth_method is not None,
         }),
         actor_id=actor_id, actor_role=actor_role,
         ip=ip, user_agent=user_agent, session_id_hash=session_id_hash,
@@ -801,6 +805,7 @@ def build_options() -> AuditOptionsOut:
             journal: list(policy.kinds)
             for journal, policy in pol.POLICY_BY_JOURNAL.items()
         },
+        auth_methods=list(pol.AUTH_METHODS),
         limits=AuditLimitsOut(
             default_range_days=DEFAULT_RANGE_DAYS,
             max_range_days=MAX_RANGE_DAYS,

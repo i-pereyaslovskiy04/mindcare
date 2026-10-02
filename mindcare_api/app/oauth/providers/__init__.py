@@ -32,6 +32,14 @@ def unregister_provider(name: str) -> None:
     _REGISTRY.pop(name, None)
 
 
+def public_social_providers() -> list[str]:
+    """Имена провайдеров, через которые сейчас можно войти (Stage 3B,
+    GET /api/public/config). Источник истины — фактический реестр после
+    bootstrap, а не настройки .env. Только allowlist OAUTH_PROVIDERS в его
+    порядке: ни объектов адаптеров, ни ClientID, ни URL наружу не выходит."""
+    return [name for name in OAUTH_PROVIDERS if name in _REGISTRY]
+
+
 def registered_providers() -> dict[str, OAuthProvider]:
     """Снимок реестра (для восстановления в тестах)."""
     return dict(_REGISTRY)

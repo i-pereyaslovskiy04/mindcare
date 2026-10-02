@@ -34,6 +34,7 @@ const AUTH_KEYS = [
   'actor_kind',
   'event',
   'success',
+  'auth_method',
 ];
 
 const DCL_KEYS = [

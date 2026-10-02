@@ -1,7 +1,13 @@
 import Badge from '../../../../components/UI/Badge/Badge';
 import AuditTableShell, { ActorCell, DetailsButton } from './AuditTableShell';
 import { formatMoscowDateTime } from '../lib/auditFormatters';
-import { AUTH_EVENT_LABELS, FAILURE_CODE_LABELS, labelFor } from '../lib/auditLabels';
+import {
+  AUTH_EVENT_LABELS,
+  AUTH_METHOD_LABELS,
+  FAILURE_CODE_LABELS,
+  UNKNOWN_AUTH_METHOD_LABEL,
+  labelFor,
+} from '../lib/auditLabels';
 import { rowKey } from './rowKey';
 import styles from './AuditTableShell.module.css';
 
@@ -10,6 +16,7 @@ const COLUMNS = [
   { key: 'actor', label: 'Пользователь' },
   { key: 'event', label: 'Событие' },
   { key: 'result', label: 'Результат' },
+  { key: 'method', label: 'Способ входа' },
   { key: 'reason', label: 'Безопасная причина' },
   { key: 'details', label: 'Подробнее', srOnly: true },
 ];
@@ -53,6 +60,13 @@ export default function AuthEventsTable({ items, loading, error, onRetry, onOpen
             <Badge tone={item.success ? 'success' : 'error'}>
               {item.success ? 'Успешно' : 'Отказ'}
             </Badge>
+          </td>
+          <td>
+            {item.auth_method ? (
+              labelFor(AUTH_METHOD_LABELS, item.auth_method, UNKNOWN_AUTH_METHOD_LABEL)
+            ) : (
+              <span className={styles.actorMuted}>—</span>
+            )}
           </td>
           <td>
             {item.failure_code ? (

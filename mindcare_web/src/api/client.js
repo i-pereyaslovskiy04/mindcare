@@ -58,6 +58,10 @@ async function _parseError(res) {
   const body = await res.json().catch(() => ({}));
   const err = new Error(parseErrorMessage(body, res.status));
   err.status = res.status;
+  // Стабильный машинный код ошибки, если backend его отдаёт (например, OAuth:
+  // { detail, code: 'oauth_ticket_invalid' }). Только строка — по нему UI
+  // выбирает фиксированное сообщение, сам код пользователю не показывается.
+  if (typeof body?.code === 'string' && body.code) err.code = body.code;
   return err;
 }
 

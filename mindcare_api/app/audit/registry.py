@@ -81,6 +81,7 @@ AUDIT_FILTER_KEYS: frozenset = frozenset({
     "table",          # table_name
     "operation",
     "access_events",  # только при include_access_events=true
+    "auth_method",    # auth_log.auth_method (Stage Social Auth 3B); значение не пишется
 })
 _ACCESS_META = MappingProxyType({
     "journal": FieldSpec(

@@ -5,7 +5,8 @@
  * No raw fetch() anywhere in this file.
  *
  * Public endpoints (no auth required): login, registerInit,
- * registerConfirm, passwordResetInit, passwordResetConfirm.
+ * registerConfirm, passwordResetInit, passwordResetConfirm, oauthStart,
+ * oauthComplete.
  *
  * Protected endpoints (requires Bearer token in client): me, logout.
  */
@@ -91,5 +92,31 @@ export function changePassword({ current_password, new_password, new_password_co
   return apiFetch(`${BASE}/change-password`, {
     method: 'POST',
     body: JSON.stringify({ current_password, new_password, new_password_confirm }),
+  });
+}
+
+/**
+ * POST /api/auth/oauth/{provider}/start → { authorize_url }  (Stage Social Auth 3B)
+ *
+ * Backend ставит HttpOnly state-cookie (Path=/api/auth/oauth), привязывающий
+ * вход к этому браузеру. `credentials: 'include'` — только здесь (не в
+ * глобальном apiFetch): в same-origin dev он ничего не меняет, а при SPA/API на
+ * разных поддоменах одного сайта без него cookie не сохранится.
+ */
+export function oauthStart(provider) {
+  return apiFetch(`${BASE}/oauth/${encodeURIComponent(provider)}/start`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+}
+
+/**
+ * POST /api/auth/oauth/complete { ticket } → SessionResponse (как у login).
+ * Ticket одноразовый; ошибки — 400/403/429 с полем `code`, но не 401.
+ */
+export function oauthComplete(ticket) {
+  return apiFetch(`${BASE}/oauth/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ ticket }),
   });
 }

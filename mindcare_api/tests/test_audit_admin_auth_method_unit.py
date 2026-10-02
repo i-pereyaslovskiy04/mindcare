@@ -90,3 +90,68 @@ def test_dto_field_is_closed_literal():
             known_event=True, actor={"kind": "anonymous"}, success=True,
             auth_method="google", details_redacted=False,
         )
+
+
+# ── Stage Social Auth 3B: фильтр /auth-events?auth_method=… ──────────────────
+
+class _FilterSpy:
+    def __init__(self):
+        self.storage_kwargs = None
+        self.audit = []
+
+    def storage(self, **kwargs):
+        self.storage_kwargs = kwargs
+        return [], 0
+
+    def record_event(self, **kwargs):
+        self.audit.append(kwargs)
+
+
+@pytest.fixture
+def filter_spy(monkeypatch):
+    spy = _FilterSpy()
+    monkeypatch.setattr(svc.storage, "list_auth_events", spy.storage)
+    monkeypatch.setattr(svc, "record_event", spy.record_event)
+    return spy
+
+
+_ADMIN = dict(actor_id=1, actor_role="admin", ip=None, user_agent=None,
+              session_id_hash=None)
+
+
+@pytest.mark.parametrize("method", ["password", "yandex", "vk"])
+def test_auth_method_filter_reaches_storage(filter_spy, method):
+    svc.list_auth_events(**_ADMIN, auth_method=method)
+    assert filter_spy.storage_kwargs["auth_method"] == method
+
+
+def test_auth_method_filter_omitted_is_none(filter_spy):
+    svc.list_auth_events(**_ADMIN)
+    assert filter_spy.storage_kwargs["auth_method"] is None
+    assert "auth_method" not in filter_spy.audit[-1]["metadata"]["filter_keys"]
+
+
+@pytest.mark.parametrize("raw", ["google", "PASSWORD", " yandex", "", "telegram",
+                                 "password' OR 1=1 --"])
+def test_auth_method_filter_rejects_unknown_before_storage(filter_spy, raw):
+    with pytest.raises(svc.AuditQueryError):
+        svc.list_auth_events(**_ADMIN, auth_method=raw)
+    assert filter_spy.storage_kwargs is None      # до обращения к журналу
+    assert filter_spy.audit == []                 # и без access-события
+
+
+def test_access_event_records_filter_name_not_value(filter_spy):
+    svc.list_auth_events(**_ADMIN, auth_method="yandex")
+    meta = filter_spy.audit[-1]["metadata"]
+    assert "auth_method" in meta["filter_keys"]
+    assert "yandex" not in repr(meta)
+
+
+def test_filter_key_is_registered_for_access_event():
+    from app.audit.registry import AUDIT_FILTER_KEYS
+    assert "auth_method" in AUDIT_FILTER_KEYS
+
+
+def test_options_expose_all_schema_methods_in_enum_order():
+    assert svc.build_options().auth_methods == [m.value for m in AuthMethod]
+    assert svc.build_options().auth_methods == ["password", "yandex", "vk"]

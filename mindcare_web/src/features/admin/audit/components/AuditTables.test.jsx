@@ -309,3 +309,53 @@ describe('DataChangesTable', () => {
     expect(screen.getByText('Часть данных скрыта')).toBeInTheDocument();
   });
 });
+
+describe('AuthEventsTable — способ входа (Stage Social Auth 3B)', () => {
+  test('колонка «Способ входа» есть', () => {
+    renderTable(AuthEventsTable, { items: [authRow()] });
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent);
+    expect(headers).toContain('Способ входа');
+  });
+
+  test.each([
+    ['password', 'Пароль'],
+    ['yandex', 'Яндекс ID'],
+    ['vk', 'VK ID'],
+  ])('%s подписан как «%s»', (method, label) => {
+    renderTable(AuthEventsTable, { items: [authRow({ auth_method: method })] });
+    expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  test('NULL — прочерк, а не пустая ячейка', () => {
+    renderTable(AuthEventsTable, {
+      items: [authRow({ event_code: 'logout', auth_method: null })],
+    });
+    const row = screen.getAllByRole('row')[1];
+    const methodCell = within(row).getAllByRole('cell')[4];
+    expect(methodCell).toHaveTextContent('—');
+  });
+
+  test('неожиданное значение не показывается сырым', () => {
+    renderTable(AuthEventsTable, { items: [authRow({ auth_method: 'telegram_raw' })] });
+    expect(screen.queryByText('telegram_raw')).toBeNull();
+    expect(screen.getByText('Неизвестный способ')).toBeInTheDocument();
+  });
+
+  test.each([
+    ['account_disabled', 'Учётная запись отключена'],
+    ['oauth_state_invalid', 'Недействительная OAuth-сессия'],
+    ['oauth_provider_error', 'Ошибка внешнего провайдера'],
+    ['oauth_identity_unknown', 'Внешняя учётная запись не привязана'],
+    ['oauth_ticket_invalid', 'Недействительный билет входа'],
+    ['social_login_not_allowed', 'Социальный вход для аккаунта запрещён'],
+  ])('код %s имеет русскую подпись', (code, label) => {
+    renderTable(AuthEventsTable, {
+      items: [authRow({
+        event_code: 'failed_login', success: false, failure_code: code,
+        auth_method: 'yandex', actor: { kind: 'anonymous' },
+      })],
+    });
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.queryByText(code)).toBeNull();
+  });
+});

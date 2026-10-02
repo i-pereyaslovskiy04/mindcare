@@ -224,6 +224,34 @@ describe('строки других журналов', () => {
     expect(screen.queryByText('Роль действия')).toBeNull();
   });
 
+  test('auth_log: способ входа подписан, NULL — прочерк', () => {
+    const row = {
+      entry_id: '203',
+      source: 'auth_log',
+      occurred_at: '2026-08-22T11:03:07Z',
+      event_code: 'failed_login',
+      known_event: true,
+      actor: { kind: 'anonymous' },
+      success: false,
+      failure_code: 'oauth_identity_unknown',
+      auth_method: 'yandex',
+      email_masked: null,
+      details_redacted: false,
+    };
+    const { unmount } = openModal(row);
+    expect(screen.getByText('Способ входа')).toBeInTheDocument();
+    expect(screen.getByText('Яндекс ID')).toBeInTheDocument();
+    expect(screen.getByText('Внешняя учётная запись не привязана')).toBeInTheDocument();
+    unmount();
+
+    openModal({ ...row, auth_method: null, failure_code: 'oauth_ticket_invalid' });
+    // dt/dd идут парами: значение — definition с тем же индексом, что и term.
+    const terms = screen.getAllByRole('term').map((node) => node.textContent);
+    const index = terms.indexOf('Способ входа');
+    expect(index).toBeGreaterThan(-1);
+    expect(screen.getAllByRole('definition')[index]).toHaveTextContent('—');
+  });
+
   test('data_change_log: операция, таблица и имена полей', () => {
     openModal({
       entry_id: '303',

@@ -176,3 +176,21 @@ describe('участник адресуется только UUID', () => {
     expect(decodeURIComponent(raw)).not.toMatch(/Тестовый/);
   });
 });
+
+describe('auth_method (Stage Social Auth 3B)', () => {
+  test('auth_method сериализуется только для auth_log', () => {
+    getAuthEvents({ ...BASE_QUERY, auth_method: 'yandex' });
+    expect(lastParams().get('auth_method')).toBe('yandex');
+
+    getAuditEvents({ ...BASE_QUERY, auth_method: 'yandex' });
+    expect(lastParams().has('auth_method')).toBe(false);
+
+    getDataChanges({ ...BASE_QUERY, auth_method: 'yandex' });
+    expect(lastParams().has('auth_method')).toBe(false);
+  });
+
+  test('пустой auth_method не отправляется', () => {
+    getAuthEvents({ ...BASE_QUERY, auth_method: '' });
+    expect(lastParams().has('auth_method')).toBe(false);
+  });
+});

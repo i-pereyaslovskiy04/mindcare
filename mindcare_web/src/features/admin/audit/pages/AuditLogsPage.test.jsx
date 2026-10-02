@@ -36,6 +36,7 @@ const OPTIONS = {
     auth_log: ['user', 'anonymous', 'unavailable'],
     data_change_log: ['user', 'unavailable'],
   },
+  auth_methods: ['password', 'yandex', 'vk'],
   limits: {
     default_range_days: 7,
     max_range_days: 90,
@@ -234,5 +235,31 @@ describe('пагинация', () => {
     getAuditEvents.mockResolvedValue(page(120));
     await renderPage();
     expect(await screen.findByText('Стр. 1 из 6')).toBeInTheDocument();
+  });
+});
+
+describe('способ входа (Stage Social Auth 3B)', () => {
+  test('фильтр есть только на «Входах» и уходит в запрос auth_log', async () => {
+    await renderPage();
+    expect(screen.queryByRole('button', { name: 'Способ входа' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Входы и безопасность' }));
+    await waitFor(() => expect(getAuthEvents).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Способ входа' }));
+    expect(screen.getByRole('option', { name: 'Пароль' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'VK ID' })).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Яндекс ID' }));
+
+    await waitFor(() => {
+      const last = getAuthEvents.mock.calls[getAuthEvents.mock.calls.length - 1][0];
+      expect(last.auth_method).toBe('yandex');
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Действия' }));
+    await waitFor(() => expect(getAuditEvents).toHaveBeenCalled());
+    const lastAudit = getAuditEvents.mock.calls[getAuditEvents.mock.calls.length - 1][0];
+    expect(lastAudit).not.toHaveProperty('auth_method');
+    expect(screen.queryByRole('button', { name: 'Способ входа' })).toBeNull();
   });
 });

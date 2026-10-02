@@ -342,3 +342,19 @@ def test_no_provider_secrets_in_logs(client, yandex, test_email, caplog):
     assert "OAuth " + yandex.issued_tokens[0] not in caplog.text
     assert all(rec.exc_info is None for rec in caplog.records
                if rec.name.startswith("app.oauth"))
+
+
+# ── публичный список провайдеров (Stage Social Auth 3B) ──────────────────────
+
+def test_public_config_lists_registered_yandex_only(client, yandex):
+    r = client.get("/api/public/config")
+    assert r.status_code == 200
+    assert r.json()["social_providers"] == ["yandex"]
+    assert CLIENT_ID not in r.text and "oauth.yandex.ru" not in r.text
+    assert "callback" not in r.text
+
+
+def test_public_config_without_provider_is_empty(client):
+    r = client.get("/api/public/config")
+    assert r.status_code == 200
+    assert r.json()["social_providers"] == []

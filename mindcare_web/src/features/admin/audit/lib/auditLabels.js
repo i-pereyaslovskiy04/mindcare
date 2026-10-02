@@ -279,10 +279,11 @@ export const EVENT_CATEGORIES = {
   registration_succeeded: 'auth_security',
 };
 
-// ── Коды отказа (17) ─────────────────────────────────────────────────────────
+// ── Коды отказа (23) ─────────────────────────────────────────────────────────
 
 export const FAILURE_CODE_LABELS = {
   access_denied:         'Доступ запрещён',
+  account_disabled:      'Учётная запись отключена',
   account_inactive:      'Учётная запись заблокирована',
   consent_required:      'Требуется согласие',
   domain_not_allowed:    'Домен почты не разрешён',
@@ -293,13 +294,29 @@ export const FAILURE_CODE_LABELS = {
   invalid_request:       'Некорректный запрос',
   legal_basis_required:  'Требуется документированное основание',
   no_active_roles:       'Нет активных ролей',
+  oauth_identity_unknown: 'Внешняя учётная запись не привязана',
+  oauth_provider_error:  'Ошибка внешнего провайдера',
+  oauth_state_invalid:   'Недействительная OAuth-сессия',
+  oauth_ticket_invalid:  'Недействительный билет входа',
   otp_expired:           'Код подтверждения истёк',
   otp_invalid:           'Неверный код подтверждения',
   password_policy:       'Пароль не отвечает требованиям',
   role_policy_violation: 'Нарушение политики ролей',
   self_admin_protected:  'Нельзя снять роль администратора у себя',
+  social_login_not_allowed: 'Социальный вход для аккаунта запрещён',
   user_not_found:        'Пользователь не найден',
 };
+
+// ── Способ входа auth_log.auth_method (3) ────────────────────────────────────
+
+export const AUTH_METHOD_LABELS = {
+  password: 'Пароль',
+  yandex:   'Яндекс ID',
+  vk:       'VK ID',
+};
+
+/** Fallback для значения вне карты: сырой код не показывается. */
+export const UNKNOWN_AUTH_METHOD_LABEL = 'Неизвестный способ';
 
 // ── Типы объектов (23) ───────────────────────────────────────────────────────
 
@@ -430,6 +447,7 @@ export const FILTER_KEY_LABELS = {
   table:         'таблица',
   operation:     'операция',
   access_events: 'просмотры журнала',
+  auth_method:   'способ входа',
 };
 
 /** Ключи details, которые разрешено показывать. Порядок — порядок вывода. */

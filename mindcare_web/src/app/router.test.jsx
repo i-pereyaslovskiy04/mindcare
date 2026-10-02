@@ -117,3 +117,22 @@ test('/admin/audit lives inside the admin RoleRoute and nowhere else', () => {
   const outside = ROUTER_SOURCE.replace(block, '');
   expect(outside).not.toContain('path="audit"');
 });
+
+// ── /auth/callback (Stage Social Auth 3B) ────────────────────────────────────
+
+test('/auth/callback зарегистрирован ровно один раз и публичный', () => {
+  const matches = ROUTER_SOURCE.match(/path="\/auth\/callback"/g) ?? [];
+  expect(matches).toHaveLength(1);
+  expect(ROUTER_SOURCE).toMatch(
+    /<Route path="\/auth\/callback" element=\{<OAuthCallbackPage \/>\} \/>/,
+  );
+  // Не обёрнут guard'ом: ни PrivateRoute, ни RoleRoute в его element нет.
+  const line = ROUTER_SOURCE.split(/\r?\n/).find((l) => l.includes('path="/auth/callback"'));
+  expect(line).not.toMatch(/PrivateRoute|RoleRoute/);
+});
+
+test('страница callback импортируется из auth feature', () => {
+  expect(ROUTER_SOURCE).toMatch(
+    /import\s+OAuthCallbackPage\s+from\s+'\.\.\/features\/auth\/pages\/OAuthCallbackPage';/,
+  );
+});

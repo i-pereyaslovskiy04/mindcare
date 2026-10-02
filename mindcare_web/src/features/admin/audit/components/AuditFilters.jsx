@@ -10,6 +10,7 @@ import {
   ACTOR_KIND_LABELS,
   AUDIT_EVENT_LABELS,
   AUTH_EVENT_LABELS,
+  AUTH_METHOD_LABELS,
   ENTITY_TYPE_LABELS,
   EVENT_CATEGORY_LABELS,
   EVENT_CATEGORY_ORDER,
@@ -33,6 +34,17 @@ const ANY = { value: '', label: 'Все' };
 
 const toOptions = (codes, map) =>
   [ANY, ...(codes ?? []).map((code) => ({ value: code, label: labelFor(map, code, code) }))];
+
+/**
+ * Способы входа — только из справочника backend'а и только с известной
+ * подписью: сырой код без подписи в списке не показывается.
+ */
+const authMethodOptions = (codes) => [
+  ANY,
+  ...(codes ?? [])
+    .filter((code) => Object.prototype.hasOwnProperty.call(AUTH_METHOD_LABELS, code))
+    .map((code) => ({ value: code, label: AUTH_METHOD_LABELS[code] })),
+];
 
 const SUCCESS_OPTIONS = [
   { value: '', label: 'Любой' },
@@ -240,6 +252,14 @@ export default function AuditFilters({
               options={SUCCESS_OPTIONS}
               onChange={(value) =>
                 setFilters({ success: value === '' ? null : value === 'true' })}
+            />
+
+            <Select
+              label="Способ входа"
+              value={filters.authMethod}
+              options={authMethodOptions(options?.auth_methods)}
+              disabled={noRegistry}
+              onChange={(value) => setFilters({ authMethod: value })}
             />
           </>
         )}

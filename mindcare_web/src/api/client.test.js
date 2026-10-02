@@ -1,4 +1,4 @@
-import { parseErrorMessage, apiFetchBlob, saveBlobToDisk } from './client';
+import { parseErrorMessage, apiFetch, apiFetchBlob, saveBlobToDisk } from './client';
 
 describe('parseErrorMessage', () => {
   test('detail-строка используется как сообщение', () => {
@@ -225,5 +225,37 @@ describe('apiFetchBlob — Content-Disposition filename', () => {
     _mockFetch(null);
     const { blob } = await apiFetchBlob('/test');
     expect(blob).toBeInstanceOf(Blob);
+  });
+});
+
+
+// ── apiFetch: стабильный код ошибки (Stage Social Auth 3B) ───────────────────
+
+function _mockJsonError(status, body) {
+  jest.spyOn(global, 'fetch').mockResolvedValue({
+    ok: false,
+    status,
+    json: async () => body,
+  });
+}
+
+describe('apiFetch — err.code', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('строковый code из тела переносится в ошибку вместе с detail', async () => {
+    _mockJsonError(400, { detail: 'Ссылка устарела', code: 'oauth_ticket_invalid' });
+    await expect(apiFetch('/x')).rejects.toMatchObject({
+      status: 400, code: 'oauth_ticket_invalid', message: 'Ссылка устарела',
+    });
+  });
+
+  test('без code (или не строка) — поле не появляется', async () => {
+    _mockJsonError(429, { detail: 'Слишком много попыток.' });
+    const err = await apiFetch('/x').catch((e) => e);
+    expect(err.code).toBeUndefined();
+
+    _mockJsonError(403, { detail: 'x', code: { nested: true } });
+    const err2 = await apiFetch('/x').catch((e) => e);
+    expect(err2.code).toBeUndefined();
   });
 });

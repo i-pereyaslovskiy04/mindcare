@@ -334,7 +334,23 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ Stage 3 (фронт): start — относительный `/api/…` (same-origin, credentials по
    умолчанию достаточно); при SPA/API на разных поддоменах — `credentials:
    'include'` ТОЛЬКО в OAuth start; SPA и API на разных сайтах не поддерживаются.
-   Глобальный apiFetch не менять. Frontend (кнопка, /auth/callback) — Stage 3B
+   Глобальный apiFetch не менять
+✅ Доступные способы входа (Stage Social Auth 3B): `GET /api/public/config` →
+   `social_providers` — имена адаптеров, РЕАЛЬНО зарегистрированных bootstrap'ом
+   (`providers.public_social_providers()`, allowlist OAUTH_PROVIDERS), а не
+   значение YANDEX_OAUTH_ENABLED. Наружу — только имена: ни ClientID, ни
+   callback/frontend URL, ни scope, ни адресов провайдера. Frontend показывает
+   кнопку «Яндекс» только по этому списку; Telegram туда не добавлять
+✅ Frontend social login (Stage 3B): кнопка в LoginForm → `oauthStart`
+   (`credentials: 'include'` только в нём) → top-level переход → публичная
+   страница `/auth/callback`: fragment читается и СРАЗУ вычищается
+   (`history.replaceState`), затем ровно один `POST /oauth/complete` (в т.ч. в
+   React StrictMode) через `AuthContext.completeOAuthLogin` — тот же путь
+   сохранения токена, что у пароля. После успеха — только `/dashboard`; адреса
+   перехода из fragment не принимаются. Регистрации/привязки через Яндекс НЕТ:
+   вход только по уже привязанной identity чистого студента
+✅ OAuth-эндпоинты не отвечают 401 в штатных исходах (client.js трактует 401
+   как истёкшую сессию) — ошибки различаются полем `code` тела ответа
 ✅ Яндекс ID (Stage Social Auth 3A, `app/oauth/providers/yandex.py`) — ТОЛЬКО
    адаптер поверх ядра 2B, без Яндекс-веток в service/routes. Authorization Code
    + PKCE S256, публичный клиент: client_secret НЕ используется и не хранится
@@ -828,6 +844,13 @@ storage (SQL-предикаты), И service (проекция DTO) — это �
    union реальных `allowed_operations` (сегодня ровно `["UPDATE"]`),
    `actor_kinds` — per-journal producible-набор (для `data_change_log` сегодня
    `["user","unavailable"]`, без `system`). Событие просмотра `/options` не пишет
+✅ `/auth-events?auth_method=password|yandex|vk` (Stage Social Auth 3B) — точный
+   фильтр по `auth_log.auth_method`, значение проверяется по
+   `admin_policy.AUTH_METHOD_VALUES` (из enum AuthMethod), неизвестное → 422 до
+   обращения к журналу. Индекса нет намеренно. `/options.auth_methods` — ВСЕ
+   значения схемы журнала (в т.ч. `vk` без адаптера), а не доступные сейчас
+   способы входа: тот список — `/api/public/config.social_providers`. В
+   `audit_logs_viewed.filter_keys` пишется только имя `auth_method`, не значение
 ✅ Просмотр пишет `audit_logs_viewed` (AUDIT_LOG, USER_REQUIRED {admin}, target
    FORBIDDEN, success-only, INDEPENDENT + RAISE) ПОСЛЕ выборки и ДО ответа.
    metadata — только `journal` и `filter_keys` (стабильные ИМЕНА применённых

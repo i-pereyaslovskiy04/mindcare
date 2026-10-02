@@ -255,6 +255,7 @@ def list_auth_events(
     actor_kind: Optional[str] = None,
     event: Optional[str] = None,
     success: Optional[bool] = None,
+    auth_method: Optional[str] = None,
 ) -> tuple[list, int]:
     actor = aliased(User)
 
@@ -277,6 +278,10 @@ def list_auth_events(
         conditions.append(AuthLog.event == event)
     if success is not None:
         conditions.append(AuthLog.success.is_(success))
+    if auth_method is not None:
+        # Значение уже проверено сервисом по allowlist; точное сравнение,
+        # индекса нет намеренно (окно created_at отсекает партиции).
+        conditions.append(AuthLog.auth_method == auth_method)
 
     with SessionLocal() as db:
         total = (

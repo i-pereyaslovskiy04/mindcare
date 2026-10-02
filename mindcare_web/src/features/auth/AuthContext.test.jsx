@@ -167,3 +167,78 @@ test('failed restore clears token and activeRole', async () => {
   expect(screen.getByTestId('active')).toHaveTextContent('null');
   expect(localStorage.getItem(ACTIVE_ROLE_KEY)).toBeNull();
 });
+
+// ── Stage Social Auth 3B: вход через провайдера и общий путь сессии ──────────
+
+function LoginConsumer() {
+  const { user, login, completeOAuthLogin, logout, loading } = useAuth();
+  return (
+    <div>
+      <div data-testid="loading">{String(loading)}</div>
+      <div data-testid="roles">{user ? user.roles.join(',') : 'null'}</div>
+      <button onClick={() => login({ email: 'a@b.c', password: 'pw' })}>pw-login</button>
+      <button onClick={() => completeOAuthLogin('tkt_SYNTH').catch(() => {})}>oauth-login</button>
+      <button onClick={() => logout()}>logout</button>
+    </div>
+  );
+}
+
+function renderLogin() {
+  return render(<AuthProvider><LoginConsumer /></AuthProvider>);
+}
+
+test('вход по паролю: прежний контракт (login → токен → /me → user)', async () => {
+  authApi.login.mockResolvedValue({ session_token: 'pw-token', roles: ['student'] });
+  authApi.me.mockResolvedValue({ roles: ['student'] });
+  renderLogin();
+  await waitReady();
+
+  fireEvent.click(screen.getByText('pw-login'));
+  await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('student'));
+  expect(authApi.login).toHaveBeenCalledWith({ email: 'a@b.c', password: 'pw' });
+  expect(localStorage.getItem(SESSION_KEY)).toBe('pw-token');
+  expect(authApi.oauthComplete).not.toHaveBeenCalled();
+});
+
+test('completeOAuthLogin: ticket → oauthComplete → токен → /me → нормализованный user', async () => {
+  authApi.oauthComplete.mockResolvedValue({ session_token: 'social-token', roles: ['student'] });
+  authApi.me.mockResolvedValue({ role: 'student' });          // legacy → roles[]
+  renderLogin();
+  await waitReady();
+
+  fireEvent.click(screen.getByText('oauth-login'));
+  await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('student'));
+  expect(authApi.oauthComplete).toHaveBeenCalledWith('tkt_SYNTH');
+  expect(authApi.oauthComplete).toHaveBeenCalledTimes(1);
+  expect(authApi.me).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem(SESSION_KEY)).toBe('social-token');
+  expect(authApi.login).not.toHaveBeenCalled();
+  // ticket нигде не сохраняется
+  expect(JSON.stringify({ ...localStorage })).not.toContain('tkt_SYNTH');
+});
+
+test('completeOAuthLogin: ошибка complete — ни токена, ни пользователя', async () => {
+  authApi.oauthComplete.mockRejectedValue(Object.assign(new Error('x'), { status: 400 }));
+  renderLogin();
+  await waitReady();
+
+  fireEvent.click(screen.getByText('oauth-login'));
+  await waitFor(() => expect(authApi.oauthComplete).toHaveBeenCalled());
+  expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+  expect(screen.getByTestId('roles')).toHaveTextContent('null');
+  expect(authApi.me).not.toHaveBeenCalled();
+});
+
+test('выход из social-сессии — тот же logout', async () => {
+  authApi.oauthComplete.mockResolvedValue({ session_token: 'social-token' });
+  authApi.me.mockResolvedValue({ roles: ['student'] });
+  renderLogin();
+  await waitReady();
+  fireEvent.click(screen.getByText('oauth-login'));
+  await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('student'));
+
+  fireEvent.click(screen.getByText('logout'));
+  await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('null'));
+  expect(authApi.logout).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+});

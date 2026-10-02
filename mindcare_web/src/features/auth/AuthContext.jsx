@@ -211,9 +211,12 @@ export function AuthProvider({ children }) {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  const login = useCallback(async ({ email, password }) => {
-    const data = await authApi.login({ email, password });
-    _saveToken(data.session_token);
+  /**
+   * Общий шаг входа: SessionResponse → токен → /me → user. Один путь для пароля
+   * и для входа через внешний провайдер, чтобы хранение токена не дублировалось.
+   */
+  const _establishSession = useCallback(async (session) => {
+    _saveToken(session.session_token);
 
     const userData = await authApi.me();
     // flushSync: user state must be committed before the caller's navigate()
@@ -224,6 +227,21 @@ export function AuthProvider({ children }) {
     // а не по одной legacy-роли.
     return normalizeUser(userData);
   }, []);
+
+  const login = useCallback(async ({ email, password }) => {
+    const data = await authApi.login({ email, password });
+    return _establishSession(data);
+  }, [_establishSession]);
+
+  /**
+   * Вход через внешний провайдер (Stage Social Auth 3B): одноразовый ticket из
+   * fragment `/auth/callback` → POST /oauth/complete → та же обычная сессия
+   * MindCare, что и при входе по паролю. Ticket нигде не сохраняется.
+   */
+  const completeOAuthLogin = useCallback(async (ticket) => {
+    const data = await authApi.oauthComplete(ticket);
+    return _establishSession(data);
+  }, [_establishSession]);
 
   const logout = useCallback(async () => {
     try { await authApi.logout(); } catch { /* fire-and-forget */ }
@@ -318,6 +336,7 @@ export function AuthProvider({ children }) {
     activeRole,
     setActiveRole,
     login,
+    completeOAuthLogin,
     logout,
     refreshUser,
     getToken,

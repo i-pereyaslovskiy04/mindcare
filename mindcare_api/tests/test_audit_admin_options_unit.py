@@ -173,5 +173,5 @@ def test_options_expose_no_spec_internals_and_no_log_content(options):
 def test_options_field_set_is_closed(options):
     assert set(options.model_dump()) == {
         "audit_events", "auth_events", "actor_roles", "outcomes", "entity_types",
-        "tables", "operations", "actor_kinds", "limits",
+        "tables", "operations", "actor_kinds", "auth_methods", "limits",
     }

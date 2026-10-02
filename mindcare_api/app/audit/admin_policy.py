@@ -135,9 +135,11 @@ AUTH_EVENT_SPECS: Mapping[str, EventSpec] = _by_destination(Destination.AUTH_LOG
 AUDIT_EVENT_NAMES: frozenset = frozenset(AUDIT_EVENT_SPECS)
 AUTH_EVENT_NAMES: frozenset = frozenset(AUTH_EVENT_SPECS)
 
-# Допустимые значения auth_log.auth_method в DTO (Stage Social Auth 3A) —
-# производные от контракта, а не отдельный список.
-AUTH_METHOD_VALUES: frozenset = frozenset(m.value for m in AuthMethod)
+# Допустимые значения auth_log.auth_method (Stage Social Auth 3A/3B) —
+# производные от контракта, а не отдельный список. Используются И проекцией
+# DTO, И фильтром /auth-events, И /options (порядок — порядок enum).
+AUTH_METHODS: tuple = tuple(m.value for m in AuthMethod)
+AUTH_METHOD_VALUES: frozenset = frozenset(AUTH_METHODS)
 
 AUDIT_POLICY = _build_policy(JOURNAL_AUDIT, AUDIT_EVENT_SPECS, role_aware=True)
 AUTH_POLICY = _build_policy(JOURNAL_AUTH, AUTH_EVENT_SPECS, role_aware=False)

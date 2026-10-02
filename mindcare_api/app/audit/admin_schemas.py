@@ -179,4 +179,7 @@ class AuditOptionsOut(BaseModel):
     tables: list[str]
     operations: list[str]
     actor_kinds: dict[str, list[str]]
+    # Все допустимые значения auth_log.auth_method (схема журнала), а НЕ
+    # доступные сейчас способы входа: тот список — /api/public/config.
+    auth_methods: list[str]
     limits: AuditLimitsOut

@@ -602,19 +602,24 @@
   `auth_log.auth_method` (migration `b8d2f6a3c9e4`), поле `auth_method` в
   admin API журналов; ADR-026. Выключено по умолчанию
   (`YANDEX_OAUTH_ENABLED=false`)
-- ⏳ Живая проверка 3A на реальном Яндексе (DEV-приложение, localhost):
-  фаза 1 — неизвестный `id` → `social_registration_not_available` +
-  `failed_login/oauth_identity_unknown/yandex`; фаза 2 (по желанию) — вручную
-  вставленная identity чистого студента в ЛОКАЛЬНОЙ БД → ticket → complete →
-  `/auth/me`. Не проверено документацией Яндекса: код ошибки при отмене
-  (`access_denied`), возврат `state` в ошибке, приём запроса токена без
-  секрета на практике — зафиксировать по факту. При `invalid_client` без
-  секрета архитектуру не угадывать — отдельное решение
-- ⏳ 3B (frontend) — кнопка Яндекса в LoginForm, страница `/auth/callback`
-  (fragment → `history.replaceState` → `POST /oauth/complete`, защита от
-  двойного complete в React StrictMode), AuthContext; показ кнопки по
-  публичному конфигу; колонка/фильтр `auth_method` и подписи OAuth-кодов в
-  просмотрщике журналов
+- ✅ Живая проверка 3A, фаза 1 (2026-10-02, DEV-приложение, localhost):
+  реальный Яндекс → token БЕЗ секрета (подтверждено на практике) → user-info
+  → `social_registration_not_available` +
+  `failed_login/oauth_identity_unknown/yandex`; повтор старого state отклонён
+- ⏳ Не проверено вживую: отмена на странице Яндекса (код `access_denied` и
+  возврат `state` в ошибке документацией Яндекса не подтверждены — при другом
+  коде пользователь увидит общую ошибку, а не «отменён») и фаза 2 — полный
+  вход до сессии с вручную вставленной identity чистого студента в ЛОКАЛЬНОЙ БД
+- ✅ 3B — пользовательский вход: `social_providers` в `GET /api/public/config`
+  (по фактическому реестру), кнопка Яндекса в LoginForm (Telegram/VK убраны
+  как нерабочие), публичная страница `/auth/callback` (fragment вычищается до
+  обмена, один `POST /oauth/complete` и в StrictMode),
+  `AuthContext.completeOAuthLogin`; фильтр/колонка `auth_method` и подписи
+  кодов 2A/2B в просмотрщике журналов. Регистрации и привязки через Яндекс
+  по-прежнему НЕТ — вход только по уже привязанной identity чистого студента
+- ⏳ RegisterForm: кнопки Telegram/VK/Яндекс остаются декоративными до Stage 4
+  (регистрация через провайдера); тексты ошибок `/auth/callback` называют
+  Яндекс — при появлении второго провайдера передавать его имя в callback
 - ⏳ 4 — регистрация через Яндекс: email провайдера только подсказка
   (`default_email` часто `@yandex.ru`, не домен университета), собственный OTP
   MindCare обязателен, никакого auto-link по совпадению email
