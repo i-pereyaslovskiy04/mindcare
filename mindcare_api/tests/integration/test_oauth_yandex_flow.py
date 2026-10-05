@@ -7,8 +7,10 @@ Stage Social Auth 3A — НАСТОЯЩИЙ YandexProvider через generic pi
 отдаёт профиль только по заголовку `Authorization: OAuth <token>`.
 
 start → authorize URL Яндекса → callback → token → user-info → identity →
-(неизвестна: social_registration_not_available | привязана: ticket → complete →
-обычная сессия → /me → logout). auth_log пишет auth_method=yandex.
+(неизвестна: registration-ticket с email/именем профиля → OTP → confirm |
+привязана: ticket → complete → обычная сессия → /me → logout). auth_log пишет
+auth_method=yandex. Профиль «Яндекса» содержит и лишние поля (пол, телефон,
+дата рождения, psuid) — они не должны никуда попасть.
 """
 import logging
 import secrets
@@ -30,6 +32,9 @@ COOKIE = "mindcare_oauth_state"
 FRONTEND = "http://localhost:3000/auth/callback"
 REDIRECT_URI = "http://localhost:8000/api/auth/oauth/yandex/callback"
 CLIENT_ID = "synthetic0client0id0000000000001"
+PSUID = "1.synthetic.psuid0000"
+SENSITIVE_PHONE = "+79990001122"
+SENSITIVE_BIRTHDAY = "1999-12-31"
 
 
 class MockYandex:
@@ -38,6 +43,10 @@ class MockYandex:
     def __init__(self, subject: str):
         self.subject = subject
         self.client_id_in_profile = CLIENT_ID
+        # integ_* — адрес убирается cleanup'ом, если тест создаст аккаунт.
+        self.email = f"integ_y{subject}@yandex.ru"
+        self.first_name = "Синтетик"
+        self.last_name = "Яндексов"
         self.token_status = None             # принудительный статус token-ответа
         self._challenge_by_code: dict[str, str] = {}
         self._tokens: set[str] = set()
@@ -86,12 +95,20 @@ class MockYandex:
         self.userinfo_auth.append(auth)
         if not auth.startswith("OAuth ") or auth[6:] not in self._tokens:
             return httpx.Response(401)
-        return httpx.Response(200, json={
+        profile = {
             "id": self.subject, "login": "synthetic.login",
             "client_id": self.client_id_in_profile,
-            "psuid": "1.synthetic." + secrets.token_hex(6),
-            "default_email": "synthetic-yandex@yandex.ru",
-        })
+            "psuid": PSUID,
+            "first_name": self.first_name, "last_name": self.last_name,
+            "display_name": "synthetic.display", "real_name": "Синтетик Яндексов",
+            "sex": "male", "birthday": SENSITIVE_BIRTHDAY,
+            "default_phone": {"id": 1, "number": SENSITIVE_PHONE},
+            "default_avatar_id": "synthetic-avatar", "is_avatar_empty": False,
+            "emails": [self.email or "x@yandex.ru"],
+        }
+        if self.email is not None:
+            profile["default_email"] = self.email
+        return httpx.Response(200, json=profile)
 
 
 # ── fixtures / helpers ───────────────────────────────────────────────────────
@@ -175,7 +192,7 @@ def test_start_returns_real_yandex_authorize_url(client, yandex):
     }
     assert params["client_id"] == CLIENT_ID
     assert params["redirect_uri"] == REDIRECT_URI
-    assert params["scope"] == "login:email"
+    assert params["scope"] == "login:email login:info"
     assert params["code_challenge_method"] == "S256"
     assert "client_secret" not in url
 
@@ -189,7 +206,8 @@ def test_unconfigured_yandex_and_vk_are_unavailable(client):
 
 # ── неизвестная identity: адаптер отработал, регистрации нет ─────────────────
 
-def test_unknown_yandex_id_gives_registration_not_available(client, yandex):
+def test_unknown_yandex_id_starts_registration(client, yandex):
+    """Stage Social Auth 4: неизвестный Yandex id → registration-ticket."""
     with SessionLocal() as db:
         users_before = db.query(User).count()
         identities_before = db.query(UserOAuthIdentity).count()
@@ -197,22 +215,87 @@ def test_unknown_yandex_id_gives_registration_not_available(client, yandex):
 
     frag = _fragment(_yandex_round_trip(client, yandex))
 
-    assert frag == {"error": "social_registration_not_available"}
+    assert set(frag) == {"result", "ticket"} and frag["result"] == "registration"
     # Реальный обмен: verifier прошёл S256-проверку «Яндекса», токен — в заголовке.
     assert len(yandex.token_requests) == 1 and len(yandex.issued_tokens) == 1
     assert yandex.userinfo_auth == [f"OAuth {yandex.issued_tokens[0]}"]
-    rows = _auth_rows_since(mark)
-    assert [(r.event, r.failure_reason, r.auth_method) for r in rows] == [
-        ("failed_login", "oauth_identity_unknown", "yandex"),
-    ]
-    assert rows[0].user_email is None and rows[0].user_id is None
+    assert _auth_rows_since(mark) == []                # штатное начало регистрации
     with SessionLocal() as db:
         assert db.query(User).count() == users_before            # без auto-регистрации
         assert db.query(UserOAuthIdentity).count() == identities_before
+        ticket = db.query(OAuthPendingTicket).filter(
+            OAuthPendingTicket.provider_subject == yandex.subject).one()
+        assert (ticket.kind, ticket.user_id) == ("registration", None)
+        # В ticket — только email и имя профиля; пол, телефон, дата рождения,
+        # psuid и токены никуда не записаны.
+        assert (ticket.email, ticket.suggested_name) == (yandex.email, "Синтетик Яндексов")
+        row_text = " ".join(str(v) for v in (
+            ticket.ticket_hash, ticket.provider, ticket.provider_subject,
+            ticket.email, ticket.suggested_name,
+        ))
+        for value in (PSUID, SENSITIVE_PHONE, SENSITIVE_BIRTHDAY, "male",
+                      *yandex.issued_tokens):
+            assert value not in row_text
+        # email Яндекса не использован ни для поиска, ни для привязки
+        assert db.query(User).filter(User.email == yandex.email).count() == 0
+
+
+@pytest.mark.parametrize("profile_patch", [
+    {"email": None}, {"email": "not-an-email"},
+])
+def test_unknown_yandex_id_without_usable_email_fails_closed(client, yandex, profile_patch):
+    for attr, value in profile_patch.items():
+        setattr(yandex, attr, value)
+    mark = _auth_mark()
+    frag = _fragment(_yandex_round_trip(client, yandex))
+    assert frag == {"error": "oauth_email_required"}
+    assert _auth_rows_since(mark) == []
+    with SessionLocal() as db:
         assert db.query(OAuthPendingTicket).filter(
             OAuthPendingTicket.provider_subject == yandex.subject).count() == 0
-        # email Яндекса не использован для поиска/связывания
-        assert db.query(User).filter(User.email == "synthetic-yandex@yandex.ru").count() == 0
+        assert db.query(UserOAuthIdentity).filter(
+            UserOAuthIdentity.provider_subject == yandex.subject).count() == 0
+
+
+def test_known_yandex_id_logs_in_even_without_email(client, yandex, test_email):
+    """Email нужен только регистрации: привязанная identity входит и без него."""
+    _link(test_email, yandex.subject)
+    yandex.email = None
+    frag = _fragment(_yandex_round_trip(client, yandex))
+    assert frag.get("result") == "login", frag
+
+
+def test_yandex_registration_then_second_login(client, yandex, test_email, capture_emails):
+    """Полный сценарий на настоящем адаптере: email и имя — из профиля Яндекса,
+    пользователь вводит только код и согласие; второй вход — сразу login."""
+    yandex.email = test_email
+    frag = _fragment(_yandex_round_trip(client, yandex))
+    ticket = frag["ticket"]
+    r = client.post("/api/auth/oauth/registration/init", json={"ticket": ticket})
+    assert r.status_code == 200, r.text
+    assert test_email not in r.text and "***@" in r.json()["email_masked"]
+    mark = _auth_mark()
+    r = client.post("/api/auth/oauth/registration/confirm", json={
+        "ticket": ticket, "code": capture_emails[test_email][-1], "consent_accepted": True,
+    })
+    assert r.status_code == 200, r.text
+    headers = {"Authorization": f"Bearer {r.json()['session_token']}"}
+    me = client.get("/api/auth/me", headers=headers).json()
+    assert me["email"] == test_email and me["has_password"] is False
+    assert me["name"] == "Синтетик Яндексов"
+    assert me["roles"] == ["student"]
+    assert [(x.event, x.auth_method) for x in _auth_rows_since(mark)] == [
+        ("registration_succeeded", "yandex"), ("login", "yandex"),
+    ]
+    assert client.post("/api/auth/logout", headers=headers).status_code == 200
+
+    # Повторный вход тем же Yandex id: обычный login-ticket, без регистрации.
+    frag = _fragment(_yandex_round_trip(client, yandex))
+    assert frag.get("result") == "login", frag
+    r = client.post("/api/auth/oauth/complete", json={"ticket": frag["ticket"]})
+    assert r.status_code == 200
+    headers = {"Authorization": f"Bearer {r.json()['session_token']}"}
+    assert client.get("/api/auth/me", headers=headers).json()["email"] == test_email
 
 
 # ── привязанная identity: полный вход ────────────────────────────────────────
@@ -337,7 +420,7 @@ def test_no_provider_secrets_in_logs(client, yandex, test_email, caplog):
         if "http://testserver" not in rec.getMessage()
     )
     for secret in (code, ticket, session["session_token"], *yandex.issued_tokens,
-                   yandex.subject, "synthetic-yandex@yandex.ru"):
+                   yandex.subject, yandex.email, PSUID, SENSITIVE_PHONE):
         assert secret not in app_text
     assert "OAuth " + yandex.issued_tokens[0] not in caplog.text
     assert all(rec.exc_info is None for rec in caplog.records

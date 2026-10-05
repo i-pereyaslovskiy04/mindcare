@@ -4,8 +4,10 @@ import {
   INVALID_LINK_MESSAGE,
   completeErrorMessage,
   fragmentMessage,
+  isRegistrationTerminal,
   isSafeAuthorizeUrl,
   parseCallbackFragment,
+  registrationErrorMessage,
   scrubCallbackFragment,
   startErrorMessage,
 } from './oauthCallback';
@@ -96,5 +98,62 @@ describe('isSafeAuthorizeUrl', () => {
     [null, false],
   ])('%p → %p', (url, expected) => {
     expect(isSafeAuthorizeUrl(url)).toBe(expected);
+  });
+});
+
+describe('регистрация (Stage Social Auth 4)', () => {
+  test('result=registration разбирается отдельно от login', () => {
+    expect(parseCallbackFragment('#result=registration&ticket=abc_DEF-123'))
+      .toEqual({ kind: 'registration', ticket: 'abc_DEF-123' });
+    expect(parseCallbackFragment('#result=login&ticket=abc'))
+      .toEqual({ kind: 'login', ticket: 'abc' });
+  });
+
+  test.each([
+    '#result=registration', '#result=registration&ticket=', '#result=link&ticket=abc',
+    '#result=REGISTRATION&ticket=abc', `#result=registration&ticket=${'x'.repeat(129)}`,
+  ])('не по контракту → invalid (%p)', (hash) => {
+    expect(parseCallbackFragment(hash)).toEqual({ kind: 'invalid' });
+  });
+
+  test('код oauth_email_required и legacy-код ошибки известны', () => {
+    expect(parseCallbackFragment('#error=oauth_email_required'))
+      .toEqual({ kind: 'error', code: 'oauth_email_required' });
+    expect(parseCallbackFragment('#error=social_registration_not_available'))
+      .toEqual({ kind: 'error', code: 'social_registration_not_available' });
+  });
+
+  test.each([
+    [{ status: 409, code: 'email_already_exists', message: 'RAW' },
+      'Аккаунт с таким email уже существует. Войдите по email и паролю.'],
+    [{ status: 422, code: 'consent_required', message: 'RAW' },
+      'Необходимо принять политику персональных данных.'],
+    // Снятые в UX hotfix коды больше не имеют своего текста — общее сообщение.
+    [{ status: 409, code: 'oauth_registration_data_mismatch', message: 'RAW' },
+      'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
+    [{ status: 422, code: 'domain_not_allowed', message: 'RAW domain' },
+      'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
+    [{ status: 400, code: 'otp_invalid', message: 'Неверный код. Осталось попыток: 2' },
+      'Неверный код. Осталось попыток: 2'],
+    [{ status: 429, code: 'otp_cooldown', message: 'Повторная отправка доступна через 30 с' },
+      'Повторная отправка доступна через 30 с'],
+    [{ status: 429 }, 'Слишком много попыток. Попробуйте немного позже.'],
+    [{ status: 422, message: 'email: value is not a valid email address' },
+      'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
+    [{ status: 500, code: 'unknown_future_code', message: 'RAW internal' },
+      'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
+    [{ status: 400, code: 'otp_invalid' }, 'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
+  ])('registrationErrorMessage(%j)', (err, expected) => {
+    expect(registrationErrorMessage(err)).toBe(expected);
+  });
+
+  test('isRegistrationTerminal', () => {
+    expect(isRegistrationTerminal({ code: 'oauth_ticket_invalid' })).toBe(true);
+    expect(isRegistrationTerminal({ code: 'oauth_identity_already_linked' })).toBe(true);
+    expect(isRegistrationTerminal({ code: 'otp_invalid' })).toBe(false);
+    // email ticket неизменен (он из профиля Яндекса) — этот ticket уже не завершится.
+    expect(isRegistrationTerminal({ code: 'email_already_exists' })).toBe(true);
+    expect(isRegistrationTerminal({ code: 'consent_required' })).toBe(false);
+    expect(isRegistrationTerminal(undefined)).toBe(false);
   });
 });

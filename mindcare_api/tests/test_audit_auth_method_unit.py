@@ -87,8 +87,11 @@ def test_migration_never_guesses_provider_for_history():
 def test_registry_policies():
     assert REGISTRY["login"].auth_method_policy is AuthMethodPolicy.REQUIRED
     assert REGISTRY["failed_login"].auth_method_policy is AuthMethodPolicy.OPTIONAL
-    for name in ("logout", "registration_succeeded", "registration_failed",
-                 "password_change", "password_reset"):
+    # Stage Social Auth 4: регистрация через провайдера пишет способ; по паролю —
+    # по-прежнему NULL (OPTIONAL, не REQUIRED).
+    for name in ("registration_succeeded", "registration_failed"):
+        assert REGISTRY[name].auth_method_policy is AuthMethodPolicy.OPTIONAL
+    for name in ("logout", "password_change", "password_reset"):
         assert REGISTRY[name].auth_method_policy is AuthMethodPolicy.FORBIDDEN
 
 
@@ -139,8 +142,15 @@ def test_arbitrary_values_rejected(raw):
         validation.validate_auth_method(REGISTRY["login"], raw)
 
 
-@pytest.mark.parametrize("event", ["logout", "password_change", "password_reset",
-                                   "registration_succeeded", "registration_failed"])
+@pytest.mark.parametrize("event", ["registration_succeeded", "registration_failed"])
+def test_registration_events_accept_method_or_none(event):
+    assert validation.validate_auth_method(REGISTRY[event], None) is None
+    assert validation.validate_auth_method(REGISTRY[event], AuthMethod.YANDEX) == "yandex"
+    with pytest.raises(AuditError, match="AuthMethod member"):
+        validation.validate_auth_method(REGISTRY[event], "yandex")
+
+
+@pytest.mark.parametrize("event", ["logout", "password_change", "password_reset"])
 def test_forbidden_events_reject_value_and_accept_none(event):
     assert validation.validate_auth_method(REGISTRY[event], None) is None
     with pytest.raises(AuditError, match="not allowed"):

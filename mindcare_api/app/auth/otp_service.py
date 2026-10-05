@@ -71,47 +71,60 @@ def create_or_update_otp(
     - Возвращает plaintext-код для отправки по email.
       В БД хранится ТОЛЬКО хеш — plaintext нигде не сохраняется.
     """
+    with SessionLocal() as db:
+        plaintext_code = create_or_update_otp_in_tx(db, email, name, password_hash)
+        db.commit()
+
+    log.info("[OTP] Code created/updated for %s", mask_email(email))
+    return plaintext_code   # plaintext возвращается caller'у для отправки по email
+
+
+def create_or_update_otp_in_tx(
+    db, email: str, name: str, password_hash: Optional[str], *, lock: bool = False,
+) -> str:
+    """
+    Та же операция в ПЕРЕДАННОЙ сессии, без commit — владелец транзакции
+    коммитит сам (social registration init проверяет ticket под FOR UPDATE и
+    создаёт OTP одним commit). lock=True берёт FOR UPDATE на существующей записи.
+
+    Бросает ValueError при действующем cooldown (до любых изменений записи).
+    Возвращает plaintext-код; в БД — только хеш.
+    """
     email = normalize_email(email)
     plaintext_code = str(secrets.randbelow(1_000_000)).zfill(6)
     code_hash      = _hash_code(plaintext_code)
     now            = _utcnow()
 
-    with SessionLocal() as db:
-        existing = (
-            db.query(OtpVerification)
-            .filter(OtpVerification.email == email)
-            .first()
-        )
+    query = db.query(OtpVerification).filter(OtpVerification.email == email)
+    if lock:
+        query = query.with_for_update()
+    existing = query.first()
 
-        if existing:
-            elapsed = (now - existing.last_sent_at).total_seconds()
-            if elapsed < RESEND_COOLDOWN:
-                wait = int(RESEND_COOLDOWN - elapsed)
-                raise ValueError(f"Повторная отправка доступна через {wait} с")
+    if existing:
+        elapsed = (now - existing.last_sent_at).total_seconds()
+        if elapsed < RESEND_COOLDOWN:
+            wait = int(RESEND_COOLDOWN - elapsed)
+            raise ValueError(f"Повторная отправка доступна через {wait} с")
 
-            # Обновляем запись — перезаписываем хеш нового кода
-            existing.code          = code_hash
-            existing.name          = name
-            existing.password_hash = password_hash
-            existing.attempts      = 0
-            existing.expires_at    = now + OTP_TTL
-            existing.last_sent_at  = now
-        else:
-            db.add(OtpVerification(
-                email=email,
-                code=code_hash,          # сохраняем хеш, не plaintext
-                name=name,
-                password_hash=password_hash,
-                attempts=0,
-                expires_at=now + OTP_TTL,
-                created_at=now,
-                last_sent_at=now,
-            ))
-
-        db.commit()
-
-    log.info("[OTP] Code created/updated for %s", mask_email(email))
-    return plaintext_code   # plaintext возвращается caller'у для отправки по email
+        # Обновляем запись — перезаписываем хеш нового кода
+        existing.code          = code_hash
+        existing.name          = name
+        existing.password_hash = password_hash
+        existing.attempts      = 0
+        existing.expires_at    = now + OTP_TTL
+        existing.last_sent_at  = now
+    else:
+        db.add(OtpVerification(
+            email=email,
+            code=code_hash,          # сохраняем хеш, не plaintext
+            name=name,
+            password_hash=password_hash,
+            attempts=0,
+            expires_at=now + OTP_TTL,
+            created_at=now,
+            last_sent_at=now,
+        ))
+    return plaintext_code
 
 
 def verify_otp(email: str, code: str) -> dict:

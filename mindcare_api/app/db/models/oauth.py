@@ -133,9 +133,12 @@ class OAuthPendingTicket(Base):
     ticket_hash — SHA-256 hex от raw ticket. Session token через ticket/URL
     не передаётся: сессия создаётся только при complete.
       kind=login         — identity уже привязана, user_id обязателен;
-      kind=registration  — новая identity, аккаунта ещё нет (user_id NULL);
-                           email (если провайдер вернул) хранится
-                           нормализованным и ещё НЕ считается подтверждённым;
+      kind=registration  — новая identity, аккаунта ещё нет (user_id NULL).
+                           email / suggested_name — email и имя из профиля
+                           провайдера, записанные callback'ом при создании
+                           ticket (Stage Social Auth 4); после этого не
+                           меняются, клиент их не передаёт. Email считается
+                           подтверждённым только после OTP MindCare на confirm;
       kind=link_required — email принадлежит существующему аккаунту
                            (in-flow linking не реализуется; ticket нужен для
                            безопасного ответа «войдите и привяжите в настройках»).

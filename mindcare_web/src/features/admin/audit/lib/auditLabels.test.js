@@ -82,7 +82,8 @@ const FAILURE_CODES = [
   'access_denied', 'account_disabled', 'account_inactive', 'consent_required',
   'domain_not_allowed', 'email_already_exists', 'engagement_required',
   'internal_error', 'invalid_credentials', 'invalid_request',
-  'legal_basis_required', 'no_active_roles', 'oauth_identity_unknown',
+  'legal_basis_required', 'no_active_roles', 'oauth_identity_already_linked',
+  'oauth_identity_unknown',
   'oauth_provider_error', 'oauth_state_invalid', 'oauth_ticket_invalid',
   'otp_expired', 'otp_invalid', 'password_policy', 'role_policy_violation',
   'self_admin_protected', 'social_login_not_allowed', 'user_not_found',
@@ -130,8 +131,8 @@ describe('полнота карт относительно registry', () => {
     expect(Object.keys(AUTH_EVENT_LABELS).sort()).toEqual([...AUTH_EVENT_CODES].sort());
   });
 
-  test('23 кода отказа имеют подпись (включая social auth 2A/2B)', () => {
-    expect(FAILURE_CODES).toHaveLength(23);
+  test('24 кода отказа имеют подпись (включая social auth 2A/2B/4)', () => {
+    expect(FAILURE_CODES).toHaveLength(24);
     expect(Object.keys(FAILURE_CODE_LABELS).sort()).toEqual([...FAILURE_CODES].sort());
   });
 

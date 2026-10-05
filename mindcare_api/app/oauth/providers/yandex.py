@@ -12,10 +12,19 @@ grant_type / code / code_verifier / client_id; redirect_uri в запрос то
 нельзя. `id` хранится как есть — строкой, без приведения к int и без
 нормализации; формат (только цифры) намеренно не требуется.
 
-Email/имя не читаются: Stage 3A — только вход по уже привязанной identity.
-Право `login:email` запрашивается, потому что приложение Яндекс OAuth нельзя
-создать без прав, а Stage 4 (регистрация) будет использовать email как подсказку
-(не как доказательство — свой OTP MindCare обязателен).
+Права (Stage Social Auth 4): `login:email login:info`. Из профиля читаются
+ТОЛЬКО три значения:
+  * `id`            → subject;
+  * `default_email` → ProviderIdentity.email (нормализованный; невалидный или
+                      отсутствующий → None — вход по привязанной identity от
+                      него не зависит, а регистрация без email закрыта
+                      сервисом);
+  * имя             → ProviderIdentity.suggested_name: `first_name` +
+                      `last_name` → `real_name` → `display_name` → `login`.
+Пол, телефон, дата рождения, аватар, `psuid` и прочие поля не читаются и
+нигде не сохраняются. Email провайдера — не доказательство владения: его
+подтверждает OTP MindCare, и он никогда не используется для привязки к
+существующему аккаунту.
 
 Безопасность:
   * адреса Яндекса — константы модуля, не настройки;
@@ -37,7 +46,9 @@ from typing import Mapping, Optional
 from urllib.parse import urlencode
 
 import httpx
+from email_validator import EmailNotValidError, validate_email
 
+from app.core.normalization import normalize_email
 from app.oauth.providers.base import (
     CANCELLED_ERROR, ProviderCallback, ProviderIdentity, ProviderRejected,
     ProviderUnavailable,
@@ -51,9 +62,8 @@ AUTHORIZE_URL = "https://oauth.yandex.ru/authorize"
 TOKEN_URL = "https://oauth.yandex.ru/token"
 USERINFO_URL = "https://login.yandex.ru/info"
 
-# Минимальное право, без которого Яндекс не создаёт приложение; email в Stage 3A
-# не читается.
-SCOPE = "login:email"
+# email — адрес для OTP регистрации; info — имя для профиля (Stage 4).
+SCOPE = "login:email login:info"
 
 # Любая ошибка Яндекса, кроме отмены, нормализуется к этому коду: generic core
 # сравнивает error только с CANCELLED_ERROR, остальное → oauth_provider_error.
@@ -66,6 +76,11 @@ USER_AGENT = "MindCare-OAuth/1"
 _CALLBACK_VALUE_MAX = 1024     # state/code из query (state у Яндекса ≤ 1024)
 _ACCESS_TOKEN_MAX = 4096
 _SUBJECT_MAX = 255             # = user_oauth_identities.provider_subject
+_EMAIL_MAX = 255               # = users.email / oauth_pending_tickets.email
+_NAME_MIN = 2                  # как у регистрации по паролю
+_NAME_MAX = 255                # = users.full_name
+# Порядок выбора имени; first_name + last_name проверяются раньше всех.
+_NAME_FALLBACK_FIELDS = ("real_name", "display_name", "login")
 
 # Коды ошибок токен-эндпоинта (документация Яндекс ID), которые можно писать в
 # лог как есть. Всё прочее — "other"; error_description не читается вовсе.
@@ -94,6 +109,56 @@ def _valid_subject(value: object) -> Optional[str]:
     if any(unicodedata.category(ch).startswith("C") for ch in value):
         return None
     return value
+
+
+def _has_control_chars(value: str) -> bool:
+    return any(unicodedata.category(ch).startswith("C") for ch in value)
+
+
+def _valid_email(value: object) -> Optional[str]:
+    """`default_email`: синтаксически валидный адрес ≤ 255 символов →
+    нормализованный (lower/trim), иначе None. Доставляемость не проверяется:
+    владение адресом подтверждает OTP MindCare."""
+    if type(value) is not str or _has_control_chars(value):
+        return None
+    candidate = normalize_email(value)
+    if not 0 < len(candidate) <= _EMAIL_MAX:
+        return None
+    try:
+        validate_email(candidate, check_deliverability=False)
+    except EmailNotValidError:
+        return None
+    return candidate
+
+
+def _clean_name(value: object, min_len: int = _NAME_MIN) -> Optional[str]:
+    """Кандидат в имя: str без управляющих символов, пробелы схлопнуты,
+    min_len..255 символов после trim. Иначе None (берётся следующий fallback)."""
+    if type(value) is not str or _has_control_chars(value):
+        return None
+    cleaned = " ".join(value.split())
+    if not min_len <= len(cleaned) <= _NAME_MAX:
+        return None
+    return cleaned
+
+
+def _suggested_name(profile: dict) -> Optional[str]:
+    """first_name + last_name → real_name → display_name → login. Отдельно
+    имя или фамилия тоже годятся (полезная часть пары)."""
+    parts = [
+        part for part in (
+            _clean_name(profile.get("first_name"), min_len=1),
+            _clean_name(profile.get("last_name"), min_len=1),
+        ) if part
+    ]
+    full = _clean_name(" ".join(parts)) if parts else None
+    if full:
+        return full
+    for field_name in _NAME_FALLBACK_FIELDS:
+        name = _clean_name(profile.get(field_name))
+        if name:
+            return name
+    return None
 
 
 class YandexProvider:
@@ -149,11 +214,13 @@ class YandexProvider:
         with self._client() as client:
             access_token = self._exchange_code(client, code, code_verifier)
             profile = self._fetch_profile(client, access_token)
+        # Из профиля — только id, email и имя; остальные поля отбрасываются
+        # вместе с dict и нигде не сохраняются.
         return ProviderIdentity(
             provider=PROVIDER_NAME,
             subject=self._subject(profile),
-            email=None,
-            suggested_name=None,
+            email=_valid_email(profile.get("default_email")),
+            suggested_name=_suggested_name(profile),
         )
 
     # ── HTTP ─────────────────────────────────────────────────────────────────

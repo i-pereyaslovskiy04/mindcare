@@ -148,7 +148,8 @@ def test_authorize_url_exact_params():
         "code_challenge": [challenge],
         "code_challenge_method": ["S256"],
     }
-    assert SCOPE == "login:email"
+    assert SCOPE == "login:email login:info"
+    assert params["scope"][0].split() == ["login:email", "login:info"]
 
 
 def test_authorize_url_has_no_secret_or_extra_params():
@@ -217,7 +218,8 @@ def test_success_identity_and_request_shapes():
     identity = resolve(fake)
     assert identity.provider == "yandex"
     assert identity.subject == "1000034426"
-    assert identity.email is None and identity.suggested_name is None
+    assert identity.email == "synthetic@yandex.ru"
+    assert identity.suggested_name == "Синтетический Пользователь"
 
     token_req, = fake.calls(TOKEN_URL)
     assert token_req.method == "POST"
@@ -397,10 +399,76 @@ def test_psuid_never_used_as_subject():
     assert "psuid" not in identity.subject
 
 
-def test_email_and_name_ignored_even_when_present():
-    identity = resolve(FakeYandex())
+def _identity_with(**overrides):
+    return resolve(FakeYandex(userinfo=FakeYandex.json(200, profile(**overrides))))
+
+
+@pytest.mark.parametrize("raw_email,expected", [
+    ("synthetic@yandex.ru", "synthetic@yandex.ru"),
+    ("  Synthetic.User@Yandex.RU ", "synthetic.user@yandex.ru"),
+])
+def test_default_email_extracted_and_normalized(raw_email, expected):
+    assert _identity_with(default_email=raw_email).email == expected
+
+
+@pytest.mark.parametrize("bad", [
+    _MISSING, None, "", "   ", "no-at-sign", "a@@yandex.ru", "user@", 42,
+    ["synthetic@yandex.ru"], {"email": "synthetic@yandex.ru"},
+    "user\x00@yandex.ru", "a" * 250 + "@yandex.ru",
+])
+def test_missing_or_malformed_email_is_none_not_failure(bad):
+    """Вход по привязанной identity от email не зависит — адаптер не падает,
+    а регистрацию без email закрывает сервис (oauth_email_required)."""
+    identity = _identity_with(default_email=bad)
     assert identity.email is None
+    assert identity.subject == "1000034426"
+
+
+def test_email_from_emails_list_is_not_used():
+    """Только default_email: список `emails` не читается."""
+    assert _identity_with(default_email=_MISSING).email is None
+
+
+@pytest.mark.parametrize("overrides,expected", [
+    ({}, "Синтетический Пользователь"),
+    ({"first_name": "  Иван ", "last_name": " Петров  "}, "Иван Петров"),
+    ({"last_name": _MISSING}, "Синтетический"),
+    ({"first_name": _MISSING}, "Пользователь"),
+    ({"first_name": _MISSING, "last_name": _MISSING}, "Синтетический Пользователь"),
+    ({"first_name": "", "last_name": "  ", "real_name": "Реальное  Имя"}, "Реальное Имя"),
+    ({"first_name": None, "last_name": None, "real_name": None}, "synthetic"),
+    ({"first_name": _MISSING, "last_name": _MISSING, "real_name": _MISSING,
+      "display_name": _MISSING}, "synthetic.login"),
+    ({"first_name": "Ив\x00ан", "last_name": _MISSING, "real_name": _MISSING},
+     "synthetic"),
+    ({"first_name": 42, "last_name": ["x"], "real_name": "я"}, "synthetic"),
+    ({"first_name": "x" * 300}, "Пользователь"),          # слишком длинная часть
+    ({"first_name": "x" * 300, "last_name": _MISSING}, "Синтетический Пользователь"),
+])
+def test_suggested_name_fallback_chain(overrides, expected):
+    assert _identity_with(**overrides).suggested_name == expected
+
+
+def test_no_usable_name_is_none():
+    identity = _identity_with(first_name=_MISSING, last_name=_MISSING,
+                              real_name=_MISSING, display_name=_MISSING, login=_MISSING)
     assert identity.suggested_name is None
+    assert identity.subject == "1000034426"            # вход от имени не зависит
+
+
+def test_only_id_email_and_name_leave_the_adapter():
+    """Пол, телефон, дата рождения, аватар и psuid не попадают в identity."""
+    sensitive = {
+        "sex": "female", "birthday": "1999-12-31",
+        "default_phone": {"id": 1, "number": "+79990001122"},
+        "default_avatar_id": "synthetic-avatar", "is_avatar_empty": False,
+    }
+    identity = _identity_with(**sensitive)
+    assert set(vars(identity)) == {"provider", "subject", "email", "suggested_name"}
+    text = repr(identity)
+    for value in ("female", "1999-12-31", "+79990001122", "synthetic-avatar",
+                  "synthetic-psuid", ACCESS_TOKEN, REFRESH_TOKEN):
+        assert value not in text
 
 
 # ── логи ─────────────────────────────────────────────────────────────────────

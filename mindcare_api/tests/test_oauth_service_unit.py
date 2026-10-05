@@ -192,14 +192,71 @@ def test_registered_provider_outcomes_carry_registry_name(calls, query, cookie):
     assert outcome.provider == "yandex"
 
 
-def test_identity_unknown_carries_provider(calls, monkeypatch):
+def test_unknown_identity_starts_registration_not_failure(calls, monkeypatch):
+    """Stage Social Auth 4: новая identity — registration-ticket, а не отказ."""
+    created = []
     monkeypatch.setattr(service.storage, "find_identity_user", lambda **kw: None)
+    monkeypatch.setattr(
+        service.storage, "create_registration_ticket",
+        lambda **kw: created.append(kw),
+    )
     fake = _fake_with_code()
     code = fake.issue_code(STATE)
     with registered(fake):
         outcome = service.handle_callback("yandex", {"state": STATE, "code": code}, STATE)
-    assert outcome.audit_code == "oauth_identity_unknown"
+
+    assert outcome.audit_code is None                 # не failed_login
     assert outcome.provider == "yandex"
+    assert outcome.clear_cookie is True
+    assert outcome.fragment["result"] == "registration"
+    assert "error" not in outcome.fragment
+    assert calls["ticket"] == 0                       # login-ticket не создан
+    row, = created
+    ticket = outcome.fragment["ticket"]
+    assert row["ticket_hash"] == service.sha256_hex(ticket) and row["ticket_hash"] != ticket
+    assert (row["provider"], row["subject"]) == ("yandex", fake.subject)
+    # email/имя профиля провайдера (без имени — локальная часть email)
+    assert row["email"] == fake.email
+    assert row["suggested_name"] == fake.email.split("@", 1)[0]
+    ttl = row["expires_at"] - service._now()
+    assert service.timedelta(minutes=29) < ttl <= service.timedelta(minutes=30)
+    assert service.REGISTRATION_TICKET_TTL == service.timedelta(minutes=30)
+    assert service.TICKET_TTL == service.timedelta(minutes=2)    # login не изменён
+
+
+@pytest.mark.parametrize("email", [None, "", "no-at-sign", "a@@b.ru", "a b@yandex.ru"])
+def test_unknown_identity_without_usable_email_fails_closed(calls, monkeypatch, email):
+    """Новая identity без пригодного email провайдера: ни ticket, ни аудита."""
+    created = []
+    monkeypatch.setattr(service.storage, "find_identity_user", lambda **kw: None)
+    monkeypatch.setattr(
+        service.storage, "create_registration_ticket",
+        lambda **kw: created.append(kw),
+    )
+    fake = _fake_with_code()
+    fake.email = email
+    code = fake.issue_code(STATE)
+    with registered(fake):
+        outcome = service.handle_callback("yandex", {"state": STATE, "code": code}, STATE)
+    assert outcome.fragment == {"error": "oauth_email_required"}
+    assert outcome.audit_code is None and outcome.clear_cookie is True
+    assert created == [] and calls["ticket"] == 0
+
+
+def test_unknown_identity_ticket_uses_provider_name(calls, monkeypatch):
+    created = []
+    monkeypatch.setattr(service.storage, "find_identity_user", lambda **kw: None)
+    monkeypatch.setattr(
+        service.storage, "create_registration_ticket",
+        lambda **kw: created.append(kw),
+    )
+    fake = _fake_with_code()
+    fake.email, fake.suggested_name = "  Ivan@Yandex.RU ", "  Иван   Петров "
+    code = fake.issue_code(STATE)
+    with registered(fake):
+        service.handle_callback("yandex", {"state": STATE, "code": code}, STATE)
+    row, = created
+    assert (row["email"], row["suggested_name"]) == ("ivan@yandex.ru", "Иван Петров")
 
 
 def test_success_and_denial_carry_provider(calls, monkeypatch):

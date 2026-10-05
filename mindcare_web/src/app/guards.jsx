@@ -3,15 +3,17 @@
  * чтобы их можно было юнит-тестировать без загрузки всего дерева страниц
  * (router.jsx тянет тяжёлые модули вроде TiptapEditor).
  */
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import RoleChooser from '../features/auth/RoleChooser';
 import { getRoleHome } from '../shared/lib/routes';
+import { authEntryState } from '../features/auth/lib/authEntry';
 import { normalizeRoles, selectableRoles } from '../shared/lib/roles';
 
 /**
  * Requires authentication.
  * While auth state is resolving: render nothing (avoid flash).
+ * Unauthenticated → `/` с открытой AuthModal на вкладке «Вход».
  */
 export function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -59,4 +61,21 @@ export function DashboardRedirect() {
   const choices = selectableRoles(user);
   if (choices.length === 1) return <Navigate to={getRoleHome(choices[0])} replace />;
   return <RoleChooser roles={choices} />;
+}
+
+/**
+ * Совместимость для `/login` и `/register` (закладки, внешние и старые
+ * внутренние ссылки, история браузера). Отдельных страниц входа больше нет:
+ * канонический UI — главная `/` + AuthModal. Редирект — replace, вкладка —
+ * tab ('login' | 'register'); строковое `message` (и допустимый
+ * `messageTone`) из state пробрасывается.
+ * Уже вошедший пользователь, как и раньше на этих адресах, идёт в кабинет.
+ */
+export function LegacyAuthRedirect({ tab }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return null;
+  if (user) return <Navigate to="/dashboard" replace />;
+  const state = authEntryState(tab, location.state?.message, location.state?.messageTone);
+  return <Navigate to="/" replace state={state} />;
 }

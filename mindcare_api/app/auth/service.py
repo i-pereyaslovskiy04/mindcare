@@ -159,6 +159,19 @@ def register_confirm(
     # распространяется как внутренняя ошибка (route не ловит → 500), а не даёт
     # клиенту ложный «неверный код». Durable-обработка неожиданного — Stage 5A.
 
+    run_post_registration_actions(user, ip=ip, user_agent=user_agent)
+    return user
+
+
+def run_post_registration_actions(
+    user: dict, *, ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> None:
+    """
+    Действия ПОСЛЕ успешного commit регистрации — общие для регистрации по
+    паролю и через внешний провайдер (Stage Social Auth 4). Оба soft-fail:
+    аккаунт уже зафиксирован, их сбой регистрацию не откатывает и наружу не
+    выходит.
+    """
     # Привязка карточек незарегистрированного студента к новому аккаунту (этап 2).
     # Только ПОСЛЕ подтверждения владения email (этот шаг и есть подтверждение).
     # Вне core-транзакции и soft-fail: регистрация уже зафиксирована, сбой
@@ -180,14 +193,16 @@ def register_confirm(
     # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
     # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
     # не должен ломать регистрацию.
-    from app.chat.system_publisher import publish_system_message
-    publish_system_message(
-        recipient_id=int(user["id"]),
-        event_key=f"welcome:user:{user['id']}",
-        text="Добро пожаловать в MindCare.",
-    )
-
-    return user
+    try:
+        from app.chat.system_publisher import publish_system_message
+        publish_system_message(
+            recipient_id=int(user["id"]),
+            event_key=f"welcome:user:{user['id']}",
+            text="Добро пожаловать в MindCare.",
+        )
+    except Exception as exc:
+        log.warning("[register_confirm] phase=welcome error=%s",
+                    type(exc).__name__)
 
 
 # ---------------------------------------------------------------------------

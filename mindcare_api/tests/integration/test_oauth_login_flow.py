@@ -339,22 +339,37 @@ def test_callback_pkce_verifier_is_enforced(client, fake, test_email):
     assert _fragment(r) == {"error": "oauth_failed"}
 
 
-def test_callback_unknown_identity_creates_nothing(client, fake):
+def test_callback_unknown_identity_starts_registration(client, fake):
+    """Stage Social Auth 4: новая identity — не отказ, а registration-ticket.
+    На callback не создаётся ни пользователь, ни identity, ни сессия, и
+    failed_login не пишется."""
     with SessionLocal() as db:
         users_before = db.query(User).count()
         identities_before = db.query(UserOAuthIdentity).count()
+        sessions_before = db.query(UserSession).count()
     state, _ = _start(client)
     mark = _auth_mark()
     r = _callback(client, {"state": state, "code": fake.issue_code(state)}, cookie=state)
 
-    assert _fragment(r) == {"error": "social_registration_not_available"}
-    assert _failed_codes_since(mark) == ["oauth_identity_unknown"]
-    assert _failed_methods_since(mark) == ["yandex"]   # провайдер из реестра
+    frag = _fragment(r)
+    assert set(frag) == {"result", "ticket"} and frag["result"] == "registration"
+    assert _cookie_cleared(r)
+    assert _auth_rows_since(mark) == []                 # ни failed_login, ни login
+    row = _ticket_row(frag["ticket"])
+    assert row is not None and row.ticket_hash != frag["ticket"]   # в БД только hash
+    assert (row.kind, row.user_id, row.provider, row.provider_subject) == (
+        "registration", None, "yandex", fake.subject,
+    )
+    # email/имя профиля провайдера (FakeProvider по умолчанию отдаёт email без имени)
+    assert row.email == fake.email and row.consumed_at is None
+    assert row.suggested_name == fake.email.split("@", 1)[0]
+    assert timedelta(minutes=29) <= row.expires_at - row.created_at <= timedelta(minutes=31)
     with SessionLocal() as db:
         assert db.query(User).count() == users_before
         assert db.query(UserOAuthIdentity).count() == identities_before
-        assert db.query(OAuthPendingTicket).filter(
-            OAuthPendingTicket.provider_subject == fake.subject).count() == 0
+        assert db.query(UserSession).count() == sessions_before
+    # registration-ticket — не login-ticket: /complete его не принимает.
+    assert _complete(client, frag["ticket"]).status_code == 400
 
 
 def _deny_disabled(user_id):

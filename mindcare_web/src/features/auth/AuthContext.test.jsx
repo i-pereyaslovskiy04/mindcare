@@ -7,8 +7,9 @@ jest.mock('../../api/client', () => ({
   configureClient: jest.fn(),
   apiFetch: jest.fn(),
 }));
+const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
-  useNavigate: () => jest.fn(),
+  useNavigate: () => mockNavigate,
 }), { virtual: true });
 
 const SESSION_KEY = 'mindcare_session';
@@ -155,6 +156,13 @@ test('auth:session-expired clears activeRole and user', async () => {
   await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('null'));
   expect(screen.getByTestId('active')).toHaveTextContent('null');
   expect(localStorage.getItem(ACTIVE_ROLE_KEY)).toBeNull();
+  // Канонический вход: главная + AuthModal «Вход» с сообщением, не /login.
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(mockNavigate).toHaveBeenCalledWith('/', {
+    replace: true,
+    state: { openAuth: 'login', message: 'Сессия истекла. Войдите снова.' },
+  });
+  expect(mockNavigate.mock.calls.flat()).not.toContain('/login');
 });
 
 test('failed restore clears token and activeRole', async () => {
@@ -171,13 +179,18 @@ test('failed restore clears token and activeRole', async () => {
 // ── Stage Social Auth 3B: вход через провайдера и общий путь сессии ──────────
 
 function LoginConsumer() {
-  const { user, login, completeOAuthLogin, logout, loading } = useAuth();
+  const {
+    user, login, completeOAuthLogin, completeOAuthRegistration, logout, loading,
+  } = useAuth();
   return (
     <div>
       <div data-testid="loading">{String(loading)}</div>
       <div data-testid="roles">{user ? user.roles.join(',') : 'null'}</div>
       <button onClick={() => login({ email: 'a@b.c', password: 'pw' })}>pw-login</button>
       <button onClick={() => completeOAuthLogin('tkt_SYNTH').catch(() => {})}>oauth-login</button>
+      <button onClick={() => completeOAuthRegistration('tkt_REG', '123456', true).catch(() => {})}>
+        oauth-register
+      </button>
       <button onClick={() => logout()}>logout</button>
     </div>
   );
@@ -241,4 +254,40 @@ test('выход из social-сессии — тот же logout', async () => {
   await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('null'));
   expect(authApi.logout).toHaveBeenCalledTimes(1);
   expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+});
+
+// ── Stage Social Auth 4: завершение регистрации через провайдера ─────────────
+
+test('completeOAuthRegistration: confirm → токен → /me → user, без входа по паролю', async () => {
+  authApi.oauthRegistrationConfirm.mockResolvedValue({
+    session_token: 'reg-token', roles: ['student'],
+  });
+  authApi.me.mockResolvedValue({ roles: ['student'], has_password: false });
+  renderLogin();
+  await waitReady();
+
+  fireEvent.click(screen.getByText('oauth-register'));
+  await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('student'));
+  expect(authApi.oauthRegistrationConfirm).toHaveBeenCalledTimes(1);
+  expect(authApi.oauthRegistrationConfirm).toHaveBeenCalledWith({
+    ticket: 'tkt_REG', code: '123456', consentAccepted: true,
+  });
+  expect(authApi.me).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem(SESSION_KEY)).toBe('reg-token');
+  expect(authApi.login).not.toHaveBeenCalled();
+  expect(authApi.oauthComplete).not.toHaveBeenCalled();
+  expect(JSON.stringify({ ...localStorage })).not.toContain('tkt_REG');
+});
+
+test('completeOAuthRegistration: отказ confirm — ни токена, ни пользователя', async () => {
+  authApi.oauthRegistrationConfirm.mockRejectedValue(
+    Object.assign(new Error('x'), { status: 400, code: 'otp_invalid' }));
+  renderLogin();
+  await waitReady();
+
+  fireEvent.click(screen.getByText('oauth-register'));
+  await waitFor(() => expect(authApi.oauthRegistrationConfirm).toHaveBeenCalled());
+  expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+  expect(screen.getByTestId('roles')).toHaveTextContent('null');
+  expect(authApi.me).not.toHaveBeenCalled();
 });

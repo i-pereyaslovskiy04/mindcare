@@ -382,6 +382,31 @@ def save_consent_record(
         db.commit()
 
 
+def required_consent_ids(db, required_consent_types: list[str]) -> list[int]:
+    """
+    id актуальных (последняя версия) обязательных consent-политик — в переданной
+    сессии. Общий шаг self-registration по паролю и через внешний провайдер.
+
+    Бросает RegistrationDataError, если политики нет (проблема seed data) — до
+    любых изменений, чтобы пользователь не появился без согласий.
+    """
+    consent_ids: list[int] = []
+    for policy_type in required_consent_types:
+        consent = (
+            db.query(Consent)
+            .filter(Consent.policy_type == policy_type)
+            .order_by(Consent.version.desc())
+            .first()
+        )
+        if consent is None:
+            raise RegistrationDataError(
+                f"Политика '{policy_type}' не найдена в БД."
+                " Обратитесь к администратору."
+            )
+        consent_ids.append(consent.id)
+    return consent_ids
+
+
 def register_confirm_atomic(
     email: str,
     code: str,
@@ -471,20 +496,7 @@ def register_confirm_atomic(
             raise OtpInvalidError("Код не найден или уже использован")
 
         # 2. Обязательные consent-политики обязаны существовать (seed data).
-        consent_ids: list[int] = []
-        for policy_type in required_consent_types:
-            consent = (
-                db.query(Consent)
-                .filter(Consent.policy_type == policy_type)
-                .order_by(Consent.version.desc())
-                .first()
-            )
-            if consent is None:
-                raise RegistrationDataError(
-                    f"Политика '{policy_type}' не найдена в БД."
-                    " Обратитесь к администратору."
-                )
-            consent_ids.append(consent.id)
+        consent_ids = required_consent_ids(db, required_consent_types)
 
         # 3. Создать нового или реактивировать soft-deleted пользователя.
         user = (

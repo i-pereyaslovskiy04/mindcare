@@ -1,15 +1,27 @@
 import fs from 'fs';
 import path from 'path';
 import { render, screen } from '@testing-library/react';
-import { RoleRoute, DashboardRedirect } from './guards';
+import {
+  RoleRoute, DashboardRedirect, PrivateRoute, LegacyAuthRedirect,
+} from './guards';
 import * as AuthContext from '../features/auth/AuthContext';
 
 // react-router-dom (v7) не резолвится jest-резолвером в этом проекте — как и во
 // всех существующих тестах, мокаем виртуально. Navigate рендерит свой `to`,
 // чтобы можно было проверить цель редиректа.
+// state и replace выводятся только если заданы — чтобы видеть router state
+// редиректов на главную с AuthModal.
+const mockLocation = { state: null };
 jest.mock('react-router-dom', () => ({
-  Navigate: ({ to }) => <div>NAV:{to}</div>,
+  Navigate: ({ to, state, replace }) => (
+    <div>
+      NAV:{to}
+      {state ? ` STATE:${JSON.stringify(state)}` : ''}
+      {state && replace ? ' REPLACE' : ''}
+    </div>
+  ),
   useNavigate: () => jest.fn(),
+  useLocation: () => mockLocation,
 }), { virtual: true });
 jest.mock('../features/auth/AuthContext', () => ({ useAuth: jest.fn() }));
 
@@ -17,7 +29,10 @@ function mockAuth(value) {
   AuthContext.useAuth.mockReturnValue({ loading: false, ...value });
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockLocation.state = null;
+});
 
 // ── RoleRoute ────────────────────────────────────────────────────────────────
 
@@ -135,4 +150,87 @@ test('страница callback импортируется из auth feature', (
   expect(ROUTER_SOURCE).toMatch(
     /import\s+OAuthCallbackPage\s+from\s+'\.\.\/features\/auth\/pages\/OAuthCallbackPage';/,
   );
+});
+
+// ── Канонический вход: главная + AuthModal ───────────────────────────────────
+
+const LOGIN_MODAL = 'NAV:/ STATE:{"openAuth":"login"} REPLACE';
+const REGISTER_MODAL = 'NAV:/ STATE:{"openAuth":"register"} REPLACE';
+
+test.each([
+  ['PrivateRoute', () => <PrivateRoute><div>SECRET</div></PrivateRoute>],
+  ['RoleRoute', () => <RoleRoute roles={['student']}><div>SECRET</div></RoleRoute>],
+  ['DashboardRedirect', () => <DashboardRedirect />],
+])('%s без пользователя → главная + AuthModal «Вход» (не /login)', (_, ui) => {
+  mockAuth({ user: null });
+  render(ui());
+  expect(screen.getByText(LOGIN_MODAL)).toBeInTheDocument();
+  expect(screen.queryByText('SECRET')).toBeNull();
+  expect(screen.queryByText(/NAV:\/login/)).toBeNull();
+});
+
+test('/login (совместимость) → replace на главную, вкладка «Вход»', () => {
+  mockAuth({ user: null });
+  render(<LegacyAuthRedirect tab="login" />);
+  expect(screen.getByText(LOGIN_MODAL)).toBeInTheDocument();
+});
+
+test('/register (совместимость) → replace на главную, вкладка «Регистрация»', () => {
+  mockAuth({ user: null });
+  render(<LegacyAuthRedirect tab="register" />);
+  expect(screen.getByText(REGISTER_MODAL)).toBeInTheDocument();
+});
+
+test('совместимый редирект пробрасывает только строковое сообщение и допустимый тон', () => {
+  mockAuth({ user: null });
+  mockLocation.state = { message: 'Сессия истекла. Войдите снова.' };
+  const { unmount } = render(<LegacyAuthRedirect tab="login" />);
+  expect(screen.getByText(
+    'NAV:/ STATE:{"openAuth":"login","message":"Сессия истекла. Войдите снова.","messageTone":"info"} REPLACE',
+  )).toBeInTheDocument();
+  unmount();
+
+  mockLocation.state = { message: 'Ошибка', messageTone: 'error' };
+  const view = render(<LegacyAuthRedirect tab="login" />);
+  expect(screen.getByText(
+    'NAV:/ STATE:{"openAuth":"login","message":"Ошибка","messageTone":"error"} REPLACE',
+  )).toBeInTheDocument();
+  view.unmount();
+
+  mockLocation.state = { message: 'Ошибка', messageTone: 'danger-class' };
+  const utils = render(<LegacyAuthRedirect tab="login" />);
+  expect(screen.getByText(
+    'NAV:/ STATE:{"openAuth":"login","message":"Ошибка","messageTone":"info"} REPLACE',
+  )).toBeInTheDocument();
+  utils.unmount();
+
+  mockLocation.state = { message: { html: '<b>x</b>' }, openAuth: 'admin' };
+  render(<LegacyAuthRedirect tab="register" />);
+  expect(screen.getByText(REGISTER_MODAL)).toBeInTheDocument();
+});
+
+test('совместимый редирект: вошедший пользователь идёт в кабинет, при загрузке — ничего', () => {
+  mockAuth({ user: { roles: ['student'] } });
+  const { unmount } = render(<LegacyAuthRedirect tab="login" />);
+  expect(screen.getByText('NAV:/dashboard')).toBeInTheDocument();
+  unmount();
+
+  mockAuth({ user: null, loading: true });
+  const { container } = render(<LegacyAuthRedirect tab="register" />);
+  expect(container).toBeEmptyDOMElement();
+});
+
+test('/login и /register — совместимые редиректы, отдельных страниц входа нет', () => {
+  expect(ROUTER_SOURCE).toMatch(
+    /<Route path="\/login"\s+element=\{<LegacyAuthRedirect tab="login" \/>\} \/>/,
+  );
+  expect(ROUTER_SOURCE).toMatch(
+    /<Route path="\/register"\s+element=\{<LegacyAuthRedirect tab="register" \/>\} \/>/,
+  );
+  expect(ROUTER_SOURCE.match(/path="\/login"/g)).toHaveLength(1);
+  expect(ROUTER_SOURCE.match(/path="\/register"/g)).toHaveLength(1);
+  expect(ROUTER_SOURCE).not.toMatch(/LoginPage|RegisterPage/);
+  const pagesDir = path.join(__dirname, '..', 'features', 'auth', 'pages');
+  expect(fs.existsSync(path.join(pagesDir, 'LoginPage.jsx'))).toBe(false);
+  expect(fs.existsSync(path.join(pagesDir, 'RegisterPage.jsx'))).toBe(false);
 });

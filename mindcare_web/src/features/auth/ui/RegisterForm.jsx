@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
 import { registerInit, registerConfirm } from '../../../api/auth.api';
-import { TelegramIcon, VKIcon, YandexIcon } from '../../../components/icons';
-import CodeInput from '../../../components/CodeInput/CodeInput';
+import SocialButtons from './SocialButtons';
+import RegistrationOtpStep, { EMPTY_CODE, useResendTimer } from './RegistrationOtpStep';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
 
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -22,9 +22,12 @@ const getPasswordStrength = (pass) => {
 const STRENGTH_LABELS = ['', 'Слабый', 'Средний', 'Надёжный'];
 const STRENGTH_COLORS = ['', 'var(--strength-weak)', 'var(--strength-medium)', 'var(--strength-strong)'];
 const STRENGTH_CLASSES = ['', 'w', 'm', 's'];
-const RESEND_COOLDOWN = 60;
 
-export default function RegisterForm({ onSuccess }) {
+/**
+ * onStepChange(step) — 'form' | 'code': AuthModal прячет вкладки
+ * «Вход | Регистрация» на шаге подтверждения кода.
+ */
+export default function RegisterForm({ onSuccess, onStepChange }) {
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -39,29 +42,20 @@ export default function RegisterForm({ onSuccess }) {
 
   // Step 2 — code confirmation
   const [step, setStep] = useState('form');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(EMPTY_CODE);
   const [otpError, setOtpError] = useState('');
-  const [timer, setTimer] = useState(0);
+  const [timer, restartTimer] = useResendTimer();
 
   // Shared
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
 
-  // --- Timer countdown ---
-  useEffect(() => {
-    if (timer <= 0) return;
-    const id = setTimeout(() => setTimer((t) => t - 1), 1000);
-    return () => clearTimeout(id);
-  }, [timer]);
-
-  // --- Auto-submit when all 6 digits filled ---
-  useEffect(() => {
-    if (step !== 'code') return;
-    if (!otp.every((d) => d !== '')) return;
-    const id = setTimeout(() => handleConfirm(otp), 120);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp, step]);
+  // Родитель узнаёт о шаге в том же обновлении, что и сама форма — без кадра,
+  // где одновременно видны вкладки и шаг кода.
+  const goToStep = (next) => {
+    setStep(next);
+    onStepChange?.(next);
+  };
 
   // --- Step 1 validators ---
   const validateName = () => name.trim().length >= 2;
@@ -101,10 +95,10 @@ export default function RegisterForm({ onSuccess }) {
     setIsLoading(true);
     try {
       await registerInit({ name: name.trim(), email, password });
-      setOtp(['', '', '', '', '', '']);
+      setOtp(EMPTY_CODE);
       setOtpError('');
-      setTimer(RESEND_COOLDOWN);
-      setStep('code');
+      restartTimer();
+      goToStep('code');
     } catch (err) {
       setApiError(err.message || 'Ошибка. Попробуйте снова.');
     } finally {
@@ -112,7 +106,7 @@ export default function RegisterForm({ onSuccess }) {
     }
   };
 
-  // --- Step 2 submit — confirm OTP ---
+  // --- Step 2 submit — confirm OTP (авто-подтверждение — в RegistrationOtpStep) ---
   const handleConfirm = useCallback(async (digits) => {
     const code = digits.join('');
     if (code.length < 6) return;
@@ -125,7 +119,7 @@ export default function RegisterForm({ onSuccess }) {
       navigate('/dashboard');
     } catch (err) {
       setOtpError(err.message || 'Неверный код. Попробуйте снова.');
-      setOtp(['', '', '', '', '', '']);
+      setOtp(EMPTY_CODE);
     } finally {
       setIsLoading(false);
     }
@@ -138,8 +132,8 @@ export default function RegisterForm({ onSuccess }) {
     setIsLoading(true);
     try {
       await registerInit({ name: name.trim(), email, password });
-      setOtp(['', '', '', '', '', '']);
-      setTimer(RESEND_COOLDOWN);
+      setOtp(EMPTY_CODE);
+      restartTimer();
     } catch (err) {
       setOtpError(err.message || 'Не удалось отправить код. Попробуйте позже.');
     } finally {
@@ -147,91 +141,29 @@ export default function RegisterForm({ onSuccess }) {
     }
   };
 
-  // ── STEP 2: код подтверждения ──────────────────────────────────────────────
+  // ── STEP 2: код подтверждения (общий шаг, без вкладок) ─────────────────────
   if (step === 'code') {
     return (
-      <div className={`${styles.authPanel} ${styles.active}`}>
-        <p className={styles.stepDesc}>
-          Отправили 6-значный код на{' '}
-          <strong className={styles.stepDescStrong}>{email}</strong>
-        </p>
-
-        <CodeInput
-          value={otp}
-          onChange={(next) => { setOtp(next); setOtpError(''); }}
-          error={!!otpError}
-        />
-
-        {otpError && (
-          <div className={styles.apiError} role="alert">{otpError}</div>
-        )}
-
-        {timer > 0 ? (
-          <p className={styles.otpTimer}>
-            Отправить повторно через{' '}
-            <span className={styles.otpTimerCount}>{timer}</span> с
-          </p>
-        ) : (
-          <div className={styles.otpAux}>
-            <button
-              type="button"
-              className={styles.ghost}
-              onClick={handleResend}
-              disabled={isLoading}
-            >
-              Отправить повторно
-            </button>
-          </div>
-        )}
-
-        <button
-          type="button"
-          className={styles.authBtn}
-          onClick={() => handleConfirm(otp)}
-          disabled={isLoading || otp.some((d) => d === '')}
-        >
-          {isLoading ? 'Проверяем…' : 'Подтвердить'}
-        </button>
-
-        <div className={styles.otpAux}>
-          <button
-            type="button"
-            className={`${styles.ghost} ${styles.ghostMuted}`}
-            onClick={() => { setStep('form'); setApiError(''); }}
-          >
-            ← Изменить данные
-          </button>
-        </div>
-      </div>
+      <RegistrationOtpStep
+        email={email}
+        code={otp}
+        onCodeChange={(next) => { setOtp(next); setOtpError(''); }}
+        error={otpError}
+        timer={timer}
+        onResend={handleResend}
+        onConfirm={handleConfirm}
+        loading={isLoading}
+        backLabel="← Изменить данные"
+        onBack={() => { goToStep('form'); setApiError(''); }}
+      />
     );
   }
 
   // ── STEP 1: форма регистрации ──────────────────────────────────────────────
   return (
     <form className={`${styles.authPanel} ${styles.active}`} onSubmit={handleFormSubmit} noValidate>
-      <div className={styles.socialSection}>
-        <div className={styles.socialLabel}>Быстрая авторизация</div>
-        <div className={styles.socialBtns}>
-          <button type="button" className={styles.socBtn} aria-label="Войти через Telegram">
-            <div className={styles.socBtnIcon}><TelegramIcon /></div>
-            <span className={styles.socBtnLabel}>Telegram</span>
-          </button>
-          <button type="button" className={styles.socBtn} aria-label="Войти через ВКонтакте">
-            <div className={styles.socBtnIcon}><VKIcon /></div>
-            <span className={styles.socBtnLabel}>VK</span>
-          </button>
-          <button type="button" className={styles.socBtn} aria-label="Войти через Яндекс">
-            <div className={styles.socBtnIcon}><YandexIcon /></div>
-            <span className={styles.socBtnLabel}>Яндекс</span>
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.authDivider}>
-        <div className={styles.authDividerLine} />
-        <span className={styles.authDividerText}>или продолжить с email</span>
-        <div className={styles.authDividerLine} />
-      </div>
+      {/* VK (заглушка) + Яндекс — та же логика, что на соседней вкладке. */}
+      <SocialButtons />
 
       <div className={`${styles.authField} ${errors.name ? styles.hasErr : ''}`}>
         <label htmlFor="r-name">Имя</label>

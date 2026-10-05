@@ -304,10 +304,10 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    verifier — только `enc:v1:` (CHECK)
 ✅ Social login core (Stage Social Auth 2B, `app/oauth/`): POST
    /api/auth/oauth/{provider}/start → GET …/callback → POST /api/auth/oauth/complete
-   → обычная user_sessions сессия (SessionResponse, событие `login`). Только вход
-   по УЖЕ привязанной identity чистого студента (активные роли == {"student"},
-   `auth.roles.is_pure_student`); неизвестная identity ничего не создаёт
-   (`social_registration_not_available`). Production-реестр наполняет только
+   → обычная user_sessions сессия (SessionResponse, событие `login`). ВХОД — по
+   УЖЕ привязанной identity чистого студента (активные роли == {"student"},
+   `auth.roles.is_pure_student`); неизвестная identity — начало РЕГИСТРАЦИИ
+   (Stage 4, см. ниже), а не отказ. Production-реестр наполняет только
    `app/oauth/providers/bootstrap.py` (lifespan) — сейчас лишь Яндекс ID (Stage
    3A); VK-адаптера нет. FakeProvider живёт только в tests
 ✅ Callback: provider → parse → browser binding (state == HttpOnly cookie
@@ -347,8 +347,72 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    (`history.replaceState`), затем ровно один `POST /oauth/complete` (в т.ч. в
    React StrictMode) через `AuthContext.completeOAuthLogin` — тот же путь
    сохранения токена, что у пароля. После успеха — только `/dashboard`; адреса
-   перехода из fragment не принимаются. Регистрации/привязки через Яндекс НЕТ:
-   вход только по уже привязанной identity чистого студента
+   перехода из fragment не принимаются
+✅ «Продолжить через Яндекс» (Stage Social Auth 4, ADR-027): ОДИН OAuth-поток для
+   вкладок «Вход» и «Регистрация», отдельного intent вкладка не передаёт. Что
+   дальше — решает callback: identity (provider, subject) известна → login-ticket;
+   неизвестна → registration-ticket (`#result=registration&ticket=…`). Callback
+   НЕ создаёт user/identity/session и НЕ пишет `failed_login` для новой identity
+✅ Registration-ticket: существующий `oauth_pending_tickets.kind='registration'`
+   (миграции нет), в БД только SHA-256, TTL 30 мин (`REGISTRATION_TICKET_TTL`,
+   resend НЕ продлевает; login-ticket остаётся 2 мин). Поля `email` /
+   `suggested_name` callback заполняет СРАЗУ из профиля провайдера
+   (нормализованный `default_email`; имя — fallback-цепочка адаптера, без неё —
+   локальная часть email). Клиент их не передаёт и не меняет (UX hotfix
+   2026-10-05). Новая identity без пригодного email → `#error=oauth_email_required`,
+   ticket не создаётся, аудита нет
+✅ POST /api/auth/oauth/registration/init {ticket} → {message, email_masked}.
+   Лишние поля (name/email/consent_accepted/…) → 422. `storage.issue_registration_otp`:
+   ticket FOR UPDATE → identity уже есть / email занят → ticket сжигается, 409 →
+   OTP (`password_hash NULL`) под cooldown 60 с → один commit; письмо на email
+   ticket — ПОСЛЕ commit. Повтор тем же ticket — resend. Отказы init не
+   аудируются (как у /auth/register/init)
+✅ POST /api/auth/oauth/registration/confirm {ticket, code, consent_accepted}
+   → SessionResponse. `consent_accepted` только буквальное JSON true
+   (StrictBool, иначе 422) + независимая проверка в service ДО storage: без
+   согласия ничего не создаётся и код не проверяется.
+   `storage.complete_registration_atomic` — одна сессия, один commit: ticket FOR
+   UPDATE → identity ещё нет → email свободен → OTP FOR UPDATE с
+   `password_hash IS NULL` → User (password_hash NULL, full_name из ticket) →
+   роль student → consent_records (те же REQUIRED_CONSENTS) → UserOAuthIdentity
+   (last_login_at) → удаление OTP → ticket.consumed_at → create_session_in_tx →
+   last_login. Имя и email — ТОЛЬКО из ticket
+✅ Allowlist доменов к регистрации через провайдера НЕ применяется (ADR-027
+   п. 5, намеренно): ни на init, ни на confirm. Регистрация по паролю,
+   admin-created staff и supervisor-created student проверяют его как прежде
+   (регрессия — `test_ordinary_registration_still_enforces_domain_allowlist`)
+✅ Email провайдера — только адрес для OTP: владение подтверждает OTP MindCare,
+   для поиска/привязки существующего аккаунта он не используется. Занятый
+   email — и активный, и soft-deleted (уникальный индекс email полный) — даёт
+   один и тот же 409 `email_already_exists`: без привязки, без реактивации, без
+   раскрытия состояния аккаунта. Привязка к существующему аккаунту — только
+   Stage 5
+✅ Изоляция OTP между потоками (одна запись `otp_verifications` на email):
+   social confirm принимает запись только при живом ticket И
+   `password_hash IS NULL` И отсутствии пользователя с этим email; запись с
+   хешем (обычная регистрация) отклоняется БЕЗ сжигания чужих попыток;
+   `register_confirm_atomic` по-прежнему отклоняет NULL-хеш
+✅ Семантика отказов confirm: неверный/истёкший код → commit только счётчика
+   (ticket годен, resend возможен); identity/email уже существуют → ticket
+   сожжён; нет роли/политики → rollback (ticket и OTP целы);
+   гонка на UNIQUE → rollback + фиксированный 409; технический сбой → rollback и
+   исключение как есть (НЕ `otp_invalid`)
+✅ Аудит регистрации через провайдера: `registration_succeeded` + `login`, оба с
+   `auth_method=yandex`; отказы confirm — `registration_failed` (коды +
+   `email_already_exists`, `oauth_identity_already_linked`,
+   `oauth_ticket_invalid`), `auth_method` из ticket, NULL при невалидном ticket.
+   Политика `auth_method` у registration_* — OPTIONAL: регистрация по email и
+   паролю оставляет NULL (история не переписывается)
+✅ Лимиты: `oauth_registration_init` (IP 20/15 мин, ticket 3/15 мин),
+   `oauth_registration_confirm` (IP 30/10 мин, ticket 10/10 мин). Ключ ticket —
+   ПОЛНЫЙ SHA-256 digest (`enforce(ticket_digest=…)` отклоняет иное значение);
+   raw ticket в ключи и логи не попадает никогда
+✅ Post-commit действия регистрации (привязка карточек, welcome) — общий
+   `auth.service.run_post_registration_actions` для пароля и провайдера, soft-fail
+❌ Не привязывать identity к существующему аккаунту по совпадению email и не
+   реактивировать soft-deleted аккаунт из social-регистрации
+❌ Не генерировать пароль/заглушку для social-аккаунта; первый пароль — только
+   через существующий сброс по email
 ✅ OAuth-эндпоинты не отвечают 401 в штатных исходах (client.js трактует 401
    как истёкшую сессию) — ошибки различаются полем `code` тела ответа
 ✅ Яндекс ID (Stage Social Auth 3A, `app/oauth/providers/yandex.py`) — ТОЛЬКО
@@ -356,10 +420,13 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    + PKCE S256, публичный клиент: client_secret НЕ используется и не хранится
    (token = grant_type/code/code_verifier/client_id формой; redirect_uri в
    запрос токена не входит). Адреса oauth.yandex.ru/authorize, /token и
-   login.yandex.ru/info — константы модуля, не настройки. scope=login:email
-   (без прав Яндекс не создаёт приложение), но email/имя НЕ читаются —
-   ProviderIdentity.email/suggested_name = None; никакого связывания/регистрации
-   по email
+   login.yandex.ru/info — константы модуля, не настройки.
+   scope=`login:email login:info` (Stage 4 hotfix). Из профиля читаются ТОЛЬКО
+   `id`, `default_email` (валидный → нормализованный, иначе None — вход по
+   привязанной identity от него не зависит) и имя: `first_name`+`last_name` →
+   `real_name` → `display_name` → `login` (без управляющих символов, 2..255).
+   Пол, телефон, дата рождения, аватар, `psuid`, список `emails` не читаются и
+   не сохраняются; связывания по email нет
 ✅ Субъект Яндекса — `id` профиля строкой как есть (str, 1..255, без управляющих
    символов; НЕ требовать только цифры, НЕ приводить к int, НЕ trim). `psuid`
    НЕ использовать и не хранить (зависит от client_id: разный у DEV/PROD и

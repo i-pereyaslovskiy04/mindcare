@@ -6,7 +6,7 @@
  *
  * Public endpoints (no auth required): login, registerInit,
  * registerConfirm, passwordResetInit, passwordResetConfirm, oauthStart,
- * oauthComplete.
+ * oauthComplete, oauthRegistrationInit, oauthRegistrationConfirm.
  *
  * Protected endpoints (requires Bearer token in client): me, logout.
  */
@@ -118,5 +118,31 @@ export function oauthComplete(ticket) {
   return apiFetch(`${BASE}/oauth/complete`, {
     method: 'POST',
     body: JSON.stringify({ ticket }),
+  });
+}
+
+/**
+ * POST /api/auth/oauth/registration/init { ticket } → { message, email_masked }
+ * (Stage Social Auth 4). Код уходит на email из профиля провайдера, который
+ * backend записал в ticket: ни email, ни имя клиент не передаёт. Повтор с тем
+ * же ticket — повторная отправка (cooldown 60 с).
+ */
+export function oauthRegistrationInit({ ticket }) {
+  return apiFetch(`${BASE}/oauth/registration/init`, {
+    method: 'POST',
+    body: JSON.stringify({ ticket }),
+  });
+}
+
+/**
+ * POST /api/auth/oauth/registration/confirm
+ * { ticket, code, consent_accepted: true } → SessionResponse.
+ * Создаёт аккаунт без пароля, привязку провайдера и обычную сессию MindCare.
+ * consent_accepted — согласие MindCare; backend принимает только true.
+ */
+export function oauthRegistrationConfirm({ ticket, code, consentAccepted }) {
+  return apiFetch(`${BASE}/oauth/registration/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ ticket, code, consent_accepted: consentAccepted === true }),
   });
 }

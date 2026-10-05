@@ -4,6 +4,8 @@
   POST /{provider}/start    → {authorize_url} + HttpOnly state-cookie
   GET  /{provider}/callback → 302 на OAUTH_FRONTEND_CALLBACK_URL#...
   POST /complete            → SessionResponse (тот же, что у входа по паролю)
+  POST /registration/init    → OTP на email провайдера из ticket (Stage 4)
+  POST /registration/confirm → SessionResponse: аккаунт + identity + сессия
 
 Ошибки OAuth-потока — 400/403/404/429, НЕ 401: frontend client.js трактует
 любой 401 как истёкшую сессию. Callback всегда отвечает redirect (это
@@ -24,9 +26,15 @@ from app.core.config import settings
 from app.core.rate_limit import RateLimitExceeded, enforce as enforce_rate_limit
 from app.oauth import service
 from app.oauth.errors import (
-    OAuthLoginDenied, OAuthProviderUnavailableError, OAuthTicketInvalidError,
+    OAuthLoginDenied, OAuthProviderUnavailableError, OAuthRegistrationError,
+    OAuthTicketInvalidError,
 )
-from app.oauth.schemas import OAuthCompleteRequest, OAuthStartResponse
+from app.oauth.schemas import (
+    OAuthCompleteRequest, OAuthRegistrationConfirmRequest,
+    OAuthRegistrationInitRequest, OAuthRegistrationInitResponse,
+    OAuthStartResponse,
+)
+from app.oauth.security import sha256_hex
 
 router = APIRouter(prefix="/auth/oauth", tags=["auth"])
 
@@ -186,6 +194,133 @@ def oauth_complete(body: OAuthCompleteRequest, request: Request, response: Respo
         outcome=Outcome.SUCCESS,
         user_email=user["email"],
         auth_method=_auth_method(result.provider),
+        context=_context(
+            request, session_id_hash=hash_session_token(result.session_token),
+        ),
+    )
+    _no_store(response)
+    return {
+        "session_token": result.session_token,
+        "expires_at": result.expires_at,
+        "roles": user["roles"],
+        "role": user["role"],
+    }
+
+
+# ── регистрация через провайдера (Stage Social Auth 4) ───────────────────────
+
+def _registration_error_response(exc: OAuthRegistrationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.message, "code": exc.code},
+    )
+
+
+def _ticket_invalid_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={"detail": _TICKET_INVALID_MESSAGE, "code": "oauth_ticket_invalid"},
+    )
+
+
+def _rate_limited_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": _RATE_LIMIT_MESSAGE, "code": "rate_limited"},
+    )
+
+
+def _audit_registration_failed(
+    request: Request, audit_code: str, provider: Optional[str],
+    email: Optional[str] = None,
+) -> None:
+    """registration_failed (AUTH_LOG, INDEPENDENT/SOFT). Без ticket, OTP,
+    subject, имени и текста провайдера; email — только из ticket."""
+    record_event(
+        event="registration_failed",
+        actor=Actor.anonymous(),
+        outcome=Outcome.FAILURE,
+        failure_reason_code=audit_code,
+        user_email=email,
+        auth_method=_auth_method(provider),
+        context=_context(request),
+    )
+
+
+@router.post("/registration/init", response_model=OAuthRegistrationInitResponse)
+def oauth_registration_init(body: OAuthRegistrationInitRequest, request: Request):
+    """registration-ticket → OTP на email провайдера из ticket. Повтор с тем же
+    ticket — повторная отправка кода (cooldown 60 с). Отказы init не
+    аудируются (как и у /auth/register/init)."""
+    try:
+        enforce_rate_limit(
+            "oauth_registration_init", ip=_client_ip(request),
+            # Только SHA-256 digest: raw ticket в ключи лимитера не попадает.
+            ticket_digest=sha256_hex(body.ticket),
+        )
+    except RateLimitExceeded:
+        return _rate_limited_response()
+
+    try:
+        email_masked = service.registration_init(body.ticket)
+    except OAuthTicketInvalidError:
+        return _ticket_invalid_response()
+    except OAuthRegistrationError as exc:
+        return _registration_error_response(exc)
+    return {
+        "message": "Код подтверждения отправлен на email",
+        "email_masked": email_masked,
+    }
+
+
+@router.post("/registration/confirm", response_model=SessionResponse)
+def oauth_registration_confirm(
+    body: OAuthRegistrationConfirmRequest, request: Request, response: Response,
+):
+    """ticket + OTP + согласие MindCare → аккаунт без пароля + identity +
+    обычная сессия MindCare."""
+    try:
+        enforce_rate_limit(
+            "oauth_registration_confirm", ip=_client_ip(request),
+            # Только SHA-256 digest: raw ticket в ключи лимитера не попадает.
+            ticket_digest=sha256_hex(body.ticket),
+        )
+    except RateLimitExceeded:
+        return _rate_limited_response()
+
+    try:
+        result = service.registration_confirm(
+            body.ticket, body.code,
+            consent_accepted=body.consent_accepted,
+            ip=_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except OAuthTicketInvalidError as exc:
+        # Ticket не найден/списан/истёк/не привязан — провайдер не установлен.
+        _audit_registration_failed(request, exc.audit_code, None)
+        return _ticket_invalid_response()
+    except OAuthRegistrationError as exc:
+        if exc.audit_code:
+            _audit_registration_failed(request, exc.audit_code, exc.provider, exc.email)
+        return _registration_error_response(exc)
+
+    user = result.user
+    auth_method = _auth_method(result.provider)
+    record_event(
+        event="registration_succeeded",
+        actor=Actor.user(int(user["id"]), "student"),
+        outcome=Outcome.SUCCESS,
+        user_email=user["email"],
+        auth_method=auth_method,
+        context=_context(request),
+    )
+    # Регистрация сразу создаёт сессию — это и первый вход.
+    record_event(
+        event="login",
+        actor=Actor.user(int(user["id"]), user["role"]),
+        outcome=Outcome.SUCCESS,
+        user_email=user["email"],
+        auth_method=auth_method,
         context=_context(
             request, session_id_hash=hash_session_token(result.session_token),
         ),

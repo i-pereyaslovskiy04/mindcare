@@ -7,14 +7,18 @@ uvicorn-воркерах или нескольких инстансах кажд
 multi-worker/multi-instance заменить на Redis/shared storage — интерфейс
 enforce() при этом сохраняется.
 
-Ключи лимитера содержат только: имя действия, нормализованный email, IP.
-Никогда не класть в ключ пароли, OTP-коды или токены.
+Ключи лимитера содержат только: имя действия, нормализованный email, IP и
+(для social registration confirm) SHA-256 digest одноразового ticket.
+Никогда не класть в ключ пароли, OTP-коды, токены или raw ticket.
 """
 
+import re
 import threading
 import time
 
 from app.core.normalization import normalize_email
+
+_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
 
 # Период фоновой зачистки устаревших ключей (сек) — защита от роста памяти
 # на ключах, к которым больше не обращаются.
@@ -39,6 +43,14 @@ RULES: dict[str, tuple[int, float]] = {
     "oauth_start:ip":      (20, 300),   # 20 стартов / 5 мин
     "oauth_callback:ip":   (30, 300),   # 30 callback / 5 мин
     "oauth_complete:ip":   (30, 300),   # 30 complete / 5 мин
+    # Social registration (Stage Social Auth 4). init шлёт письмо на email из
+    # ticket (клиент email не передаёт) — лимит по ticket вместо email: один
+    # ticket = один адрес. Ключ ticket — ПОЛНЫЙ SHA-256 digest (raw ticket в
+    # ключи/логи не попадает никогда).
+    "oauth_registration_init:ip":        (20, 900),
+    "oauth_registration_init:ticket":    (3,  900),
+    "oauth_registration_confirm:ip":     (30, 600),
+    "oauth_registration_confirm:ticket": (10, 600),
 }
 
 
@@ -100,13 +112,18 @@ class SlidingWindowRateLimiter:
 _limiter = SlidingWindowRateLimiter()
 
 
-def enforce(action: str, *, email: str | None = None, ip: str | None = None) -> None:
+def enforce(
+    action: str, *, email: str | None = None, ip: str | None = None,
+    ticket_digest: str | None = None,
+) -> None:
     """
     Проверяет лимиты действия action по доступным измерениям.
 
     - email нормализуется через normalize_email до построения ключа;
     - отсутствующее измерение (None/пустое) пропускается;
-    - порядок: сначала IP (защита от массовых атак), затем email.
+    - порядок: сначала IP (защита от массовых атак), затем email, затем ticket;
+    - ticket_digest — ТОЛЬКО SHA-256 hex от ticket (64 символа); иное значение
+      отклоняется, чтобы raw ticket не мог стать ключом по ошибке вызывающего.
 
     Бросает RateLimitExceeded при превышении любого из лимитов.
     """
@@ -119,6 +136,13 @@ def enforce(action: str, *, email: str | None = None, ip: str | None = None) -> 
         rule = RULES.get(f"{action}:email")
         if rule:
             _limiter.check(f"{action}:email:{normalize_email(email)}", *rule)
+
+    if ticket_digest:
+        if not _SHA256_HEX_RE.fullmatch(ticket_digest):
+            raise ValueError("ticket_digest must be a SHA-256 hex digest")
+        rule = RULES.get(f"{action}:ticket")
+        if rule:
+            _limiter.check(f"{action}:ticket:{ticket_digest}", *rule)
 
 
 def check(key: str, limit: int, window_seconds: float) -> None:

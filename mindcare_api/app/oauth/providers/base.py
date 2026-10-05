@@ -18,8 +18,11 @@ CANCELLED_ERROR = "access_denied"
 @dataclass(frozen=True)
 class ProviderIdentity:
     """Нормализованная identity. subject — стабильный id у провайдера
-    (Яндекс `id`, VK `user_id`). email/suggested_name в Stage 2B не
-    используются (нужны будущей регистрации) и НЕ считаются подтверждёнными."""
+    (Яндекс `id`, VK `user_id`). email — нормализованный адрес провайдера
+    или None, suggested_name — имя для начального профиля или None. Для входа
+    ни то ни другое не используется; регистрация (Stage 4) записывает их в
+    registration-ticket, а владение email подтверждает только OTP MindCare.
+    Привязки к существующему аккаунту по email нет."""
     provider: str
     subject: str
     email: Optional[str] = None

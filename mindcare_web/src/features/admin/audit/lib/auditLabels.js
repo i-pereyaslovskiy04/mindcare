@@ -279,7 +279,7 @@ export const EVENT_CATEGORIES = {
   registration_succeeded: 'auth_security',
 };
 
-// ── Коды отказа (23) ─────────────────────────────────────────────────────────
+// ── Коды отказа (24) ─────────────────────────────────────────────────────────
 
 export const FAILURE_CODE_LABELS = {
   access_denied:         'Доступ запрещён',
@@ -294,6 +294,7 @@ export const FAILURE_CODE_LABELS = {
   invalid_request:       'Некорректный запрос',
   legal_basis_required:  'Требуется документированное основание',
   no_active_roles:       'Нет активных ролей',
+  oauth_identity_already_linked: 'Внешняя учётная запись уже привязана',
   oauth_identity_unknown: 'Внешняя учётная запись не привязана',
   oauth_provider_error:  'Ошибка внешнего провайдера',
   oauth_state_invalid:   'Недействительная OAuth-сессия',

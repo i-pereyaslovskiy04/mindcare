@@ -8,32 +8,49 @@ import NewsSection from '../../features/news/components/NewsSection';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 import CookieBanner from '../../components/CookieBanner/CookieBanner';
+import { authRequestFrom } from '../../features/auth/lib/authEntry';
+
+// Router-state контракт ({ openAuth, message?, messageTone? }) и его
+// валидация — features/auth/lib/authEntry.js. Пишут его guards, истечение
+// сессии, смена пароля, совместимые /login и /register и терминальные ошибки
+// OAuth callback.
+const CLOSED = { open: false, tab: 'login', message: '', messageTone: 'info' };
 
 export default function Home() {
   const location = useLocation();
   const { loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  // Router state set by password-change redirect or route guards
-  const { openAuth, message: routerMessage } = location.state ?? {};
+  const request = authRequestFrom(location.state);
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(openAuth === 'login');
-  const [authMessage, setAuthMessage] = useState(routerMessage ?? '');
+  const [auth, setAuth] = useState(() => (request ? { open: true, ...request } : CLOSED));
 
-  // Clear router state so back-navigation doesn't re-trigger the modal
+  // Новая навигация с openAuth, когда Home уже смонтирован (например, guard
+  // вернул на `/` с открытой главной): применяется во время рендера по ключу
+  // записи истории — без устаревшей вкладки и без лишнего кадра.
+  const [handledKey, setHandledKey] = useState(location.key);
+  if (request && handledKey !== location.key) {
+    setHandledKey(location.key);
+    setAuth({ open: true, ...request });
+  }
+
+  // Router state одноразовый: очищаем его через роутер (replace), чтобы
+  // «назад»/обновление страницы не открывали модалку повторно. После очистки
+  // request === null, поэтому эффект не зацикливается.
+  const hasRequest = request !== null;
   useEffect(() => {
-    if (openAuth) {
-      window.history.replaceState({}, '');
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!hasRequest) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [hasRequest, location.key, location.pathname, location.search, navigate]);
 
   const handleOpenAuth = () => {
     if (isAuthenticated) return;
-    setIsAuthModalOpen(true);
+    // Navbar: всегда «Вход» и без прежнего системного сообщения.
+    setAuth({ ...CLOSED, open: true });
   };
   const handleCloseAuth = () => {
-    setIsAuthModalOpen(false);
-    setAuthMessage('');
+    // Закрытие сбрасывает сообщение и тон — при следующем открытии их нет.
+    setAuth((prev) => ({ ...CLOSED, tab: prev.tab }));
   };
   // Кабинет выбирает DashboardRedirect (multi-role: chooser/activeRole).
   const handleGoToDashboard = () => navigate('/dashboard');
@@ -48,7 +65,13 @@ export default function Home() {
       <NewsSection />
       <Footer />
       {!loading && !isAuthenticated && (
-        <AuthModal isOpen={isAuthModalOpen} onClose={handleCloseAuth} message={authMessage} />
+        <AuthModal
+          isOpen={auth.open}
+          initialTab={auth.tab}
+          onClose={handleCloseAuth}
+          message={auth.message}
+          messageTone={auth.messageTone}
+        />
       )}
       <CookieBanner />
     </>

@@ -1,4 +1,4 @@
-/* Тот же визуальный язык, что у LoginPage: карточка с шапкой MindCare. */
+/* Карточка с шапкой MindCare; шаг кода внутри — контейнер AuthModal (authBody). */
 
 .page {
   min-height: 100vh;
@@ -52,20 +52,7 @@
   text-align: center;
 }
 
-.error {
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 10px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--error);
-  background: rgba(var(--error-rgb), 0.08);
-  border: 1px solid rgba(var(--error-rgb), 0.25);
-}
 
-.action {
-  align-self: center;
-}
 
 @media (max-width: 480px) {
   .header {

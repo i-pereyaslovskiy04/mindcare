@@ -25,9 +25,17 @@ FAKE_AUTHORIZE_URL = "https://oauth.fake-provider.invalid/authorize"
 
 
 class FakeProvider:
-    def __init__(self, name: str = "yandex", subject: Optional[str] = None):
+    def __init__(
+        self, name: str = "yandex", subject: Optional[str] = None, *,
+        email: Optional[str] = "", suggested_name: Optional[str] = None,
+    ):
         self.name = name
         self.subject = subject or f"integ_{secrets.token_hex(6)}"
+        # Профиль провайдера (Stage 4 hotfix). По умолчанию — уникальный адрес
+        # на основе subject (integ_* — убирается cleanup'ом); None — провайдер
+        # email не отдал.
+        self.email = f"{self.subject}@example.com" if email == "" else email
+        self.suggested_name = suggested_name
         self.mode = "success"          # success | unavailable | rejected | crash | wrong_provider
         self.resolve_calls = 0
         self.last_redirect_uri: Optional[str] = None
@@ -64,7 +72,10 @@ class FakeProvider:
         if expected is None or code_challenge_s256(code_verifier) != expected:
             raise ProviderRejected()   # PKCE mismatch / неизвестный code
         provider = "vk" if self.mode == "wrong_provider" and self.name == "yandex" else self.name
-        return ProviderIdentity(provider=provider, subject=self.subject)
+        return ProviderIdentity(
+            provider=provider, subject=self.subject,
+            email=self.email, suggested_name=self.suggested_name,
+        )
 
     # ── helpers для тестов ───────────────────────────────────────────────────
     def issue_code(self, state: str) -> str:

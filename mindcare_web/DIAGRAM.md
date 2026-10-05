@@ -11,7 +11,7 @@
 ```mermaid
 flowchart TD
     U([Пользователь]) --> PUB[Публичные страницы\n/ /about /services\n/news /materials]
-    U --> LOGIN[/login /register]
+    U --> LOGIN["/ + AuthModal<br/>/login, /register — редирект сюда"]
 
     LOGIN --> AUTH{Аутентификация}
 
@@ -132,7 +132,7 @@ sequenceDiagram
     BE-->>API: 401 (истёкшая сессия)
     API->>AC: dispatch auth:session-expired
     AC->>AC: logout()
-    AC->>U: redirect → /login
+    AC->>U: redirect → / + AuthModal «Вход» (сообщение)
 ```
 
 ---

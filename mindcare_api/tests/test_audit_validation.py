@@ -146,7 +146,21 @@ def test_no_active_roles_reason_is_not_leaked_to_other_events():
     for name in ("registration_failed", "password_reset"):
         assert "no_active_roles" not in REGISTRY[name].allowed_failure_codes
         assert "account_disabled" not in REGISTRY[name].allowed_failure_codes
-        assert not (oauth_codes & REGISTRY[name].allowed_failure_codes)
+    assert not (oauth_codes & REGISTRY["password_reset"].allowed_failure_codes)
+    # Stage Social Auth 4: из OAuth-кодов входа регистрации достаётся только
+    # невалидный ticket; коды login-потока в неё не расползаются.
+    assert oauth_codes & REGISTRY["registration_failed"].allowed_failure_codes == {
+        "oauth_ticket_invalid",
+    }
+
+
+def test_registration_failed_accepts_social_registration_codes():
+    """Stage Social Auth 4: отказы confirm регистрации через провайдера."""
+    spec = REGISTRY["registration_failed"]
+    assert {"email_already_exists", "oauth_identity_already_linked",
+            "oauth_ticket_invalid"} <= spec.allowed_failure_codes
+    for code in ("email_already_exists", "oauth_identity_already_linked"):
+        assert code not in REGISTRY["failed_login"].allowed_failure_codes
 
 
 def test_disallowed_outcome():

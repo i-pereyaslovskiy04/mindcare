@@ -1,15 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
-import { YandexIcon } from '../../../components/icons';
-import { oauthStart } from '../../../api/auth.api';
-import { getPublicConfig, socialProvidersOf } from '../../../api/config.api';
-import {
-  isSafeAuthorizeUrl,
-  navigateToProvider,
-  startErrorMessage,
-} from '../lib/oauthCallback';
+import SocialButtons from './SocialButtons';
 
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
@@ -30,43 +23,6 @@ export default function LoginForm({ onSuccess, onForgotPassword }) {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
-  // Провайдеры, реально зарегистрированные backend'ом (GET /api/public/config).
-  // Пока список не получен или запрос упал — социального входа нет вовсе,
-  // вход по email и паролю работает как обычно.
-  const [socialProviders, setSocialProviders] = useState([]);
-  const [socialLoading, setSocialLoading] = useState(false);
-  const [socialError, setSocialError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    getPublicConfig()
-      .then((config) => {
-        if (!cancelled) setSocialProviders(socialProvidersOf(config));
-      })
-      .catch(() => {
-        if (!cancelled) setSocialProviders([]);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  const yandexAvailable = socialProviders.includes('yandex');
-
-  const handleYandexLogin = async () => {
-    if (socialLoading) return;
-    setSocialError('');
-    setSocialLoading(true);
-    try {
-      const data = await oauthStart('yandex');
-      const url = data?.authorize_url;
-      if (!isSafeAuthorizeUrl(url)) throw new Error('invalid authorize_url');
-      // Top-level переход на страницу Яндекса; state привязан HttpOnly-cookie,
-      // поэтому ни адрес, ни state нигде на клиенте не сохраняются.
-      navigateToProvider(url);
-    } catch (err) {
-      setSocialError(startErrorMessage(err));
-      setSocialLoading(false);
-    }
-  };
 
   const validateEmail = () => isEmail(email);
   const validatePassword = () => password.length > 0;
@@ -101,37 +57,8 @@ export default function LoginForm({ onSuccess, onForgotPassword }) {
 
   return (
     <form className={`${styles.authPanel} ${styles.active}`} onSubmit={handleSubmit} noValidate>
-      {yandexAvailable && (
-        <>
-          <div className={styles.socialSection}>
-            <div className={styles.socialLabel}>Быстрая авторизация</div>
-            <div className={styles.socialBtns}>
-              <button
-                type="button"
-                className={styles.socBtn}
-                aria-label="Войти через Яндекс"
-                onClick={handleYandexLogin}
-                disabled={socialLoading}
-                aria-busy={socialLoading ? 'true' : undefined}
-              >
-                <div className={styles.socBtnIcon} aria-hidden="true"><YandexIcon /></div>
-                <span className={styles.socBtnLabel}>
-                  {socialLoading ? 'Переход…' : 'Яндекс'}
-                </span>
-              </button>
-            </div>
-            {socialError && (
-              <div className={styles.apiError} role="alert">{socialError}</div>
-            )}
-          </div>
-
-          <div className={styles.authDivider}>
-            <div className={styles.authDividerLine} />
-            <span className={styles.authDividerText}>или продолжить с email</span>
-            <div className={styles.authDividerLine} />
-          </div>
-        </>
-      )}
+      {/* VK (заглушка) + Яндекс — та же логика, что на соседней вкладке. */}
+      <SocialButtons />
 
       <div className={`${styles.authField} ${errors.email ? styles.hasErr : ''}`}>
         <label htmlFor="l-email">Email</label>

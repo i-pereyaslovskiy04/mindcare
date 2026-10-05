@@ -243,6 +243,17 @@ export function AuthProvider({ children }) {
     return _establishSession(data);
   }, [_establishSession]);
 
+  /**
+   * Завершение регистрации через внешний провайдер (Stage Social Auth 4):
+   * ticket регистрации + код из письма + согласие MindCare → backend создаёт
+   * аккаунт и сразу возвращает SessionResponse. Тот же путь установки сессии;
+   * отдельного входа по паролю нет (пароля у такого аккаунта нет вовсе).
+   */
+  const completeOAuthRegistration = useCallback(async (ticket, code, consentAccepted) => {
+    const data = await authApi.oauthRegistrationConfirm({ ticket, code, consentAccepted });
+    return _establishSession(data);
+  }, [_establishSession]);
+
   const logout = useCallback(async () => {
     try { await authApi.logout(); } catch { /* fire-and-forget */ }
     _clearSession();
@@ -337,6 +348,7 @@ export function AuthProvider({ children }) {
     setActiveRole,
     login,
     completeOAuthLogin,
+    completeOAuthRegistration,
     logout,
     refreshUser,
     getToken,
@@ -362,7 +374,8 @@ export function useAuth() {
  *
  * Сначала навигирует на `/`, потом очищает сессию.
  * Порядок важен: если сначала очистить сессию, RoleRoute успевает
- * отредиректить на /login до того, как сработает наш navigate('/').
+ * отредиректить на `/` с открытой AuthModal «Вход» (state.openAuth) до того,
+ * как сработает наш navigate('/') — после явного выхода модалка не нужна.
  */
 export function useLogout() {
   const { logout } = useAuth();

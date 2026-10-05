@@ -3,16 +3,20 @@
  *
  * Route guards:
  *   <PrivateRoute>   — requires authentication, redirects to / (with login modal) when unauthenticated.
+ *   <LegacyAuthRedirect> — /login и /register: replace-редирект на / с AuthModal
+ *                      на нужной вкладке (отдельных страниц входа нет).
  *   <RoleRoute>      — requires specific role(s), redirects to /profile on mismatch.
  *
- * Public routes: /, /about, /services, /news, /materials, /login, /register,
- *                /auth/callback, /health
+ * Public routes: /, /about, /services, /news, /materials, /auth/callback, /health
+ * Compatibility redirects: /login, /register → / + AuthModal
  * Private routes: /dashboard, /profile
  * Role routes:   /student/*, /psychologist/*, /supervisor/*, /admin/*
  */
 
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { PrivateRoute, RoleRoute, DashboardRedirect } from './guards';
+import {
+  PrivateRoute, RoleRoute, DashboardRedirect, LegacyAuthRedirect,
+} from './guards';
 
 // ── Public pages ──────────────────────────────────────────────────────────────
 import Home              from '../pages/home/Home';
@@ -27,8 +31,6 @@ import HealthPage        from '../pages/health/HealthPage';
 import ThemePreviewPage  from '../pages/theme-preview/ThemePreviewPage';
 
 // ── Auth pages ────────────────────────────────────────────────────────────────
-import LoginPage    from '../features/auth/pages/LoginPage';
-import RegisterPage from '../features/auth/pages/RegisterPage';
 import OAuthCallbackPage from '../features/auth/pages/OAuthCallbackPage';
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -106,9 +108,9 @@ export default function AppRouter() {
         <Route path="/theme-preview" element={<ThemePreviewPage />} />
       )}
 
-      {/* Auth */}
-      <Route path="/login"    element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      {/* Auth: канонический UI — / + AuthModal; эти адреса — только совместимость */}
+      <Route path="/login"    element={<LegacyAuthRedirect tab="login" />} />
+      <Route path="/register" element={<LegacyAuthRedirect tab="register" />} />
       {/* Публичный: завершение входа через внешний провайдер (Stage Social Auth 3B) */}
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 

@@ -60,8 +60,7 @@ mindcare_web/
     │   │   │   ├── LoginForm.jsx
     │   │   │   └── RegisterForm.jsx
     │   │   ├── pages/
-    │   │   │   ├── LoginPage.jsx
-    │   │   │   └── RegisterPage.jsx
+    │   │   │   └── OAuthCallbackPage.jsx   # /auth/callback (Яндекс ID)
     │   │   └── forgot-password/
     │   │       ├── ForgotPasswordModal.jsx
     │   │       ├── ForgotPasswordStepper.jsx
@@ -369,9 +368,9 @@ src/data/
 | `/materials` | `MaterialsPage` | Public |
 | `/materials/:id` | `MaterialsItemPage` | Public |
 | `/health` | `HealthPage` | Public |
-| `/login` | `LoginPage` | Public |
-| `/register` | `RegisterPage` | Public |
-| `/auth/callback` | `OAuthCallbackPage` | Public (завершение входа через Яндекс ID) |
+| `/login` | `LegacyAuthRedirect tab="login"` | Совместимость: replace → `/` + AuthModal «Вход» |
+| `/register` | `LegacyAuthRedirect tab="register"` | Совместимость: replace → `/` + AuthModal «Регистрация» |
+| `/auth/callback` | `OAuthCallbackPage` | Public (завершение входа или регистрации через Яндекс ID) |
 | `/dashboard` | `DashboardRedirect` | Auth (active/default role redirect) |
 | `/profile` | `ProfilePage` | Auth |
 | `/student` | `ClientDashboard` (Outlet) | Auth + role membership: student |
@@ -440,7 +439,11 @@ Multi-role users (ADR-018):
   прямой URL кабинета синхронизирует active role после membership-check.
 
 **Guards:**
-- `PrivateRoute` — требует аутентификации, редирект на `/login`
+- `PrivateRoute` — требует аутентификации; без пользователя — replace на `/`
+  с `state: { openAuth: 'login' }` (главная открывает AuthModal)
+- `LegacyAuthRedirect` — `/login` и `/register`: отдельных страниц входа нет,
+  канонический UI — `/` + AuthModal (`openAuth: 'login' | 'register'`,
+  строковое `message` пробрасывается; вошедший пользователь → `/dashboard`)
 - `RoleRoute` — требует membership в `user.roles`, редирект на `/profile` при несоответствии
 - Пока auth восстанавливается — рендерит `null` (без белого экрана — в бэклоге)
 
@@ -463,7 +466,7 @@ LoginForm → POST /api/auth/login
 ### Вход через внешний провайдер (Stage Social Auth 3B)
 
 ```
-LoginForm ──GET /api/public/config──▶ social_providers (кнопка «Яндекс» только
+SocialButtons ─GET /api/public/config─▶ social_providers (кнопка «Яндекс» активна только
     │                                  если backend реально зарегистрировал адаптер)
     ▼
 oauthStart('yandex')  POST /api/auth/oauth/yandex/start  (credentials: 'include')
@@ -485,9 +488,65 @@ OAuthCallbackPage
 - Принимается только контракт fragment (`result`/`ticket`/`error`); `next`,
   `redirect` и любые адреса игнорируются. Ошибки — фиксированные русские тексты
   по коду (`features/auth/lib/oauthCallback.js`), неизвестный код не показывается.
-- Регистрации и привязки через провайдера нет: неизвестный аккаунт Яндекса
-  получает сообщение «пока не привязан к MindCare». Кнопки в RegisterForm
-  остаются декоративными (Stage 4).
+- **Stage Social Auth 4 — «Продолжить через Яндекс».** Блок кнопок общий:
+  `features/auth/ui/SocialButtons.jsx` в LoginForm и RegisterForm. Яндекс на
+  обеих вкладках вызывает один и тот же `oauthStart('yandex')` — вкладка не
+  передаёт «намерение». VK — видимая заглушка: всегда `disabled`, запросов не
+  шлёт; Telegram убран. Яндекс активен только если backend вернул его в
+  `social_providers`, иначе виден, но `disabled`.
+- **Регистрация (UX hotfix).** `#result=registration&ticket=…` → на той же
+  странице `/auth/callback` (карточка MindCare + контейнер `authBody` модалки)
+  автоматически, ровно один раз (в т.ч. в StrictMode — ref-флаг) вызывается
+  `oauthRegistrationInit({ ticket })`; пока он идёт — «Отправляем код
+  подтверждения…». Email и имя backend взял из профиля Яндекса и держит в
+  ticket; клиент их не передаёт. После init — общий шаг
+  `features/auth/ui/RegistrationOtpStep.jsx` («Подтверждение регистрации»,
+  маскированный email из `email_masked`, `CodeInput`, таймер 60 с, повтор,
+  компактный чекбокс согласия) → `AuthContext.completeOAuthRegistration(ticket,
+  code, true)` (`consent_accepted: true`; тот же путь установки сессии) →
+  `/dashboard`. Полей имени, email и пароля нет; отдельного входа по паролю нет.
+  Ошибка init — терминальная ошибка (см. ниже).
+- **Машина состояний `/auth/callback`** (`PHASE` в `OAuthCallbackPage.jsx`):
+  `resolving` → `loginCompleting` («Выполняем вход через Яндекс…») |
+  `registrationInitializing` («Отправляем код подтверждения…») →
+  `registrationOtp` | `error`; после успеха — `completed`. Шаг кода монтируется
+  ТОЛЬКО в `registrationOtp`, куда ведёт лишь успешный init для
+  `result=registration`: известная identity (`result=login`) его не видит ни
+  на один кадр (регрессия — MutationObserver + счётчик монтирований в
+  `OAuthCallbackPage.test.jsx`).
+- **Терминальные ошибки callback** (ошибка во fragment, недействительная
+  ссылка, отказ `complete`, ошибка init регистрации) своей карточки не имеют:
+  фаза `error` ничего не рисует и один раз делает replace на `/` со state
+  `{ openAuth: 'login', message, messageTone }`. Текст — только фиксированные
+  сообщения из `lib/oauthCallback.js` (без текста провайдера, query, ticket,
+  email); тон — `fragmentTone`: отмена на Яндексе — `info`, всё остальное
+  (аккаунт недоступен, сбой провайдера, устаревшая ссылка, лимит) — `error`.
+  Ошибки на шаге кода (неверный код, email занят при confirm) остаются внутри
+  шага кода на callback.
+- **Router state канонического входа** — `features/auth/lib/authEntry.js`:
+  `{ openAuth: 'login' | 'register', message?: string, messageTone?: 'info' |
+  'error' }`; `authRequestFrom` валидирует (неизвестная вкладка — модалка не
+  открывается, не-строка — без сообщения, неизвестный тон — `info`),
+  `authEntryState` собирает. Home применяет его при каждой навигации и очищает
+  через `navigate(..., { replace: true, state: null })`; закрытие модалки и
+  открытие через Navbar сбрасывают сообщение. `AuthModal` выводит сообщение над
+  формой входа: `info` — `.infoMessage` + `role="status"`, `error` —
+  `.errorMessage` + `role="alert"`.
+- **Общий шаг кода.** `RegistrationOtpStep` используют и регистрация по паролю
+  (`RegisterForm`), и регистрация через Яндекс — разметка не дублируется. На
+  шаге кода вкладок «Вход | Регистрация» нет: `RegisterForm` сообщает шаг через
+  `onStepChange`, `AuthModal` прячет tablist. «← Изменить данные» (пароль)
+  возвращает к форме и вкладкам; «← Начать заново» (Яндекс) — только локальный
+  сброс и переход на `/` с AuthModal на вкладке «Регистрация», backend не
+  вызывается, ticket истечёт сам.
+- Ticket регистрации живёт только в памяти страницы (state/prop): не в DOM,
+  storage, URL и navigation state; перезагрузка страницы его теряет.
+- Legacy-код `social_registration_not_available` в карте сообщений оставлен как
+  безопасный fallback, backend его больше штатно не выдаёт.
+- Привязки к существующему аккаунту нет: занятый email — отказ с текстом
+  «Войдите по email и паролю» (Stage 5 — привязка из настроек).
+- Яндекс без пригодного email для новой identity — fragment
+  `#error=oauth_email_required` с объяснением (регистрации нет).
 - `apiFetch` переносит строковый `code` тела ошибки в `err.code` — OAuth-ошибки
   различаются по нему (400/403/404/429, не 401).
 
@@ -500,7 +559,7 @@ apiFetch() → 401
          logout() + dispatch auth:session-expired
                │
                ▼
-         redirect → /login
+         redirect → / + AuthModal «Вход» (state.openAuth + message)
 ```
 
 ### Session Restore
@@ -514,7 +573,7 @@ AuthProvider mount → read localStorage
 ### ProtectedRoute
 
 ```jsx
-if (!user) return <Navigate to="/login" />;
+if (!user) return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
 if (roles && !roles.some((role) => user.roles?.includes(role))) {
   return <Navigate to="/profile" />;
 }

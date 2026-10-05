@@ -155,12 +155,20 @@ _ALL: list[EventSpec] = []
 
 # ── AUTH_LOG ─────────────────────────────────────────────────────────────────
 _ALL += [
+    # auth_method OPTIONAL (Stage Social Auth 4): регистрация через провайдера
+    # пишет yandex/vk; регистрация по email и паролю оставляет NULL, как раньше
+    # (история не переписывается). email_already_exists /
+    # oauth_identity_already_linked / oauth_ticket_invalid — отказы confirm
+    # регистрации через провайдера; отдельных событий нет, count не меняется.
     _auth("registration_succeeded", ActorPolicy.USER_REQUIRED, {"student"},
-          {Outcome.SUCCESS}, frozenset(), email=True),
+          {Outcome.SUCCESS}, frozenset(), email=True,
+          auth_method=AuthMethodPolicy.OPTIONAL),
     _auth("registration_failed", ActorPolicy.ANONYMOUS_ONLY, frozenset(),
           {Outcome.FAILURE},
-          {"otp_invalid", "otp_expired", "domain_not_allowed", "internal_error"},
-          email=True),
+          {"otp_invalid", "otp_expired", "domain_not_allowed", "internal_error",
+           "email_already_exists", "oauth_identity_already_linked",
+           "oauth_ticket_invalid"},
+          email=True, auth_method=AuthMethodPolicy.OPTIONAL),
     # auth_method (Stage Social Auth 3A): успешный вход всегда знает способ —
     # password (/auth/login) или провайдер (/auth/oauth/complete).
     _auth("login", ActorPolicy.USER_REQUIRED, _STAFF, {Outcome.SUCCESS},
