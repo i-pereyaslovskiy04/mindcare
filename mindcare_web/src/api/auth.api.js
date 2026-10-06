@@ -6,7 +6,8 @@
  *
  * Public endpoints (no auth required): login, registerInit,
  * registerConfirm, passwordResetInit, passwordResetConfirm, oauthStart,
- * oauthComplete, oauthRegistrationInit, oauthRegistrationConfirm.
+ * oauthComplete, oauthRegistrationPreview, oauthRegistrationInit,
+ * oauthRegistrationConfirm.
  *
  * Protected endpoints (requires Bearer token in client): me, logout.
  */
@@ -122,15 +123,34 @@ export function oauthComplete(ticket) {
 }
 
 /**
- * POST /api/auth/oauth/registration/init { ticket } → { message, email_masked }
- * (Stage Social Auth 4). Код уходит на email из профиля провайдера, который
- * backend записал в ticket: ни email, ни имя клиент не передаёт. Повтор с тем
- * же ticket — повторная отправка (cooldown 60 с).
+ * POST /api/auth/oauth/registration/preview { ticket }
+ * → { provider, email_masked | null, email_allowed, email_editable }
+ * (Stage Social Auth VK-1B). Что показать на шаге email: маскированный адрес,
+ * привязанный к ticket, и можно ли с ним продолжить. Ничего не меняет и код
+ * не отправляет. Raw email backend не отдаёт.
  */
-export function oauthRegistrationInit({ ticket }) {
-  return apiFetch(`${BASE}/oauth/registration/init`, {
+export function oauthRegistrationPreview({ ticket }) {
+  return apiFetch(`${BASE}/oauth/registration/preview`, {
     method: 'POST',
     body: JSON.stringify({ ticket }),
+  });
+}
+
+/**
+ * POST /api/auth/oauth/registration/init { ticket[, email] }
+ * → { message, email_masked }  (Stage Social Auth 4 / VK-1B).
+ * Без email — код уходит на адрес, уже привязанный к ticket (Яндекс: адрес
+ * профиля; VK: адрес VK или ранее выбранный; повтор — повторная отправка,
+ * cooldown 60 с). С email — только для VK: адрес, который пользователь указал
+ * сам; backend проверяет домен и занятость и отправляет код на него. Имя
+ * клиент не передаёт никогда.
+ */
+export function oauthRegistrationInit({ ticket, email }) {
+  const body = { ticket };
+  if (typeof email === 'string' && email) body.email = email;
+  return apiFetch(`${BASE}/oauth/registration/init`, {
+    method: 'POST',
+    body: JSON.stringify(body),
   });
 }
 

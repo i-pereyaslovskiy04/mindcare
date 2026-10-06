@@ -77,6 +77,9 @@ SAFE_TEST_ENV = {
     # bootstrap провайдеров в lifespan TestClient видит его выключенным.
     "YANDEX_OAUTH_ENABLED": "false",
     "YANDEX_OAUTH_CLIENT_ID": "",
+    "VK_OAUTH_ENABLED": "false",
+    "VK_OAUTH_CLIENT_ID": "",
+    "VK_OAUTH_CALLBACK_BASE_URL": "",
 }
 
 

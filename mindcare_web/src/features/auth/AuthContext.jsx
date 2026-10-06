@@ -10,6 +10,13 @@
  *   - Backend sessions are server-side and can be revoked on logout /
  *     change-password regardless of storage mechanism.
  *
+ * Social registration continuation (`socialRegistration`):
+ *   - Незавершённая регистрация через внешний провайдер: одноразовый ticket
+ *     регистрации, который `/auth/callback` передаёт главной с AuthModal.
+ *   - ТОЛЬКО в памяти (React state): не в URL, router state, localStorage и
+ *     sessionStorage. Перезагрузка страницы его теряет — пользователь начинает
+ *     вход через провайдера заново.
+ *
  * All HTTP calls go through api/auth.api.js → api/client.js.
  * No raw fetch() in this file.
  */
@@ -23,7 +30,7 @@ import {
   useRef,
 } from 'react';
 import { flushSync } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { configureClient } from '../../api/client';
 import * as authApi from '../../api/auth.api';
 import { impersonateUser as apiImpersonate } from '../../api/users.api';
@@ -34,6 +41,9 @@ const ACTIVE_ROLE_KEY = 'mindcare_active_role';
 // Impersonation (ADR-025): токен администратора, вошедшего «под именем».
 // Только клиент держит raw-токен админа, поэтому возврат — client-side.
 const IMPERSONATOR_KEY = 'mindcare_impersonator';
+// Где может жить незавершённая регистрация через провайдера: технический
+// маршрут callback (передаёт её) и главная (AuthModal её продолжает).
+const SOCIAL_REGISTRATION_PATHS = Object.freeze(['/', '/auth/callback']);
 
 function getStoredToken() {
   return localStorage.getItem(SESSION_KEY);
@@ -89,6 +99,10 @@ export function AuthProvider({ children }) {
   const [activeRole, setActiveRoleState] = useState(() => getStoredActiveRole());
   const tokenRef              = useRef(null);
   const navigate              = useNavigate();
+  const { pathname }          = useLocation();
+  // Незавершённая регистрация через провайдера: { ticket, provider, emailStep }
+  // либо null. Только память — см. комментарий в начале файла.
+  const [socialRegistration, setSocialRegistration] = useState(null);
 
   /** Expose token to the HTTP client. */
   const getToken = useCallback(() => tokenRef.current, []);
@@ -122,6 +136,7 @@ export function AuthProvider({ children }) {
     // Impersonation-токен админа тоже сбрасываем: иначе после разлогина
     // остался бы «висящий» админский токен на устройстве.
     clearStoredImpersonator();
+    setSocialRegistration(null);
     setUser(null);
   }, []);
 
@@ -208,6 +223,35 @@ export function AuthProvider({ children }) {
       _clearActiveRole();
     }
   }, [user, activeRole]);
+
+  // ── Social registration continuation (только память) ──────────────────────
+
+  /**
+   * `/auth/callback` передаёт сюда ticket регистрации и уходит на главную, где
+   * AuthModal продолжает регистрацию. provider — имя провайдера для текстов,
+   * emailStep — нужен ли шаг выбора email (VK ID).
+   */
+  const beginSocialRegistration = useCallback((continuation) => {
+    const ticket = continuation?.ticket;
+    if (typeof ticket !== 'string' || !ticket) return;
+    setSocialRegistration(Object.freeze({
+      ticket,
+      provider: continuation.provider,
+      emailStep: continuation.emailStep === true,
+    }));
+  }, []);
+
+  /** «Начать заново», закрытие модалки, терминальная ошибка: ticket забыт. */
+  const clearSocialRegistration = useCallback(() => setSocialRegistration(null), []);
+
+  // Ticket не переживает ни появления сессии (регистрация завершена либо
+  // пользователь уже вошёл), ни ухода с главной.
+  useEffect(() => {
+    if (!socialRegistration) return;
+    if (user || !SOCIAL_REGISTRATION_PATHS.includes(pathname)) {
+      setSocialRegistration(null);
+    }
+  }, [socialRegistration, user, pathname]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -349,6 +393,9 @@ export function AuthProvider({ children }) {
     login,
     completeOAuthLogin,
     completeOAuthRegistration,
+    socialRegistration,
+    beginSocialRegistration,
+    clearSocialRegistration,
     logout,
     refreshUser,
     getToken,

@@ -97,7 +97,14 @@ export default function RegistrationOtpStep({
             label={
               <>
                 Согласен(на) с{' '}
-                <a href="/privacy-policy" className={styles.consentLink}>
+                {/* Новая вкладка: переход в этой же вкладке выгружает страницу,
+                    а ticket регистрации через провайдера живёт только в памяти. */}
+                <a
+                  href="/privacy-policy"
+                  className={styles.consentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   политикой персональных данных
                 </a>
               </>

@@ -28,10 +28,13 @@ from app.db.models import (
     UserOAuthIdentity,
 )
 from app.db.session import SessionLocal
+from app.email_domains.errors import EmailDomainNotAllowedError
+from app.email_domains.storage import assert_email_domain_allowed_in_tx
 from app.oauth.errors import (
     REGISTRATION_INTERNAL_MESSAGE, OAuthLoginDenied, OAuthRegistrationError,
     OAuthTicketInvalidError, email_exists_error, identity_linked_error,
 )
+from app.oauth.policy import RegistrationPolicy, registration_policy
 
 _CLEANUP_GRACE = timedelta(hours=1)
 
@@ -250,11 +253,15 @@ def complete_login_atomic(
 
 # ── регистрация через провайдера (Stage Social Auth 4) ───────────────────────
 #
-# Миграции нет: используется kind='registration' фундамента 2A. Поля ticket
-# `email` / `suggested_name` — email и имя из профиля провайдера, записанные
-# callback'ом; клиент их не передаёт и изменить не может. Обычный allowlist
-# доменов здесь НЕ применяется (ADR-027): email выбран не пользователем вручную,
-# а подтверждён провайдером и затем OTP MindCare.
+# Миграции нет: используется kind='registration' фундамента 2A.
+#   ticket.email          — адрес, на который уходит код и с которым будет создан
+#                           аккаунт. Яндекс: email профиля, фиксирован. VK: адрес
+#                           VK (может отсутствовать — NULL) либо адрес, выбранный
+#                           пользователем на init; до успешного confirm его можно
+#                           заменить новым init (каждая замена — новый код).
+#   ticket.suggested_name — имя из профиля провайдера (может быть NULL).
+# Confirm email от клиента не принимает: только ticket.email под FOR UPDATE, и
+# код проверяется именно для него. Отличия провайдеров — app/oauth/policy.py.
 
 _EMAIL_CONSTRAINTS = frozenset({"ux_users_email_normalized", "ix_users_email"})
 _IDENTITY_CONSTRAINTS = frozenset({
@@ -264,12 +271,13 @@ _IDENTITY_CONSTRAINTS = frozenset({
 
 
 def create_registration_ticket(
-    *, ticket_hash: str, provider: str, subject: str, email: str,
-    suggested_name: str, expires_at: datetime,
+    *, ticket_hash: str, provider: str, subject: str, email: Optional[str],
+    suggested_name: Optional[str], expires_at: datetime,
 ) -> None:
     """kind=registration: identity провайдера подтверждена, аккаунта ещё нет
-    (user_id NULL); email (нормализованный) и имя — из профиля провайдера. Ни
-    пользователь, ни identity, ни сессия здесь не создаются."""
+    (user_id NULL); email (нормализованный) и имя — из профиля провайдера, оба
+    могут отсутствовать (политика email_choice). Ни пользователь, ни identity,
+    ни сессия здесь не создаются."""
     with SessionLocal() as db:
         db.execute(
             delete(OAuthPendingTicket)
@@ -291,8 +299,7 @@ def create_registration_ticket(
 
 def _lock_registration_ticket(db, ticket_hash: str) -> OAuthPendingTicket:
     """Живой registration-ticket под FOR UPDATE: параллельный init/confirm того
-    же ticket ждёт и затем видит уже изменённую строку. Ticket без email/имени
-    (создан до Stage 4 hotfix) завершить нельзя — он невалиден."""
+    же ticket ждёт и затем видит уже изменённую строку."""
     ticket = db.execute(
         select(OAuthPendingTicket)
         .where(
@@ -303,9 +310,52 @@ def _lock_registration_ticket(db, ticket_hash: str) -> OAuthPendingTicket:
         )
         .with_for_update()
     ).scalar_one_or_none()
-    if ticket is None or ticket.email is None or ticket.suggested_name is None:
+    if ticket is None:
         raise OAuthTicketInvalidError()
     return ticket
+
+
+def _policy_of(ticket: OAuthPendingTicket) -> RegistrationPolicy:
+    """Политика провайдера ticket. Ticket провайдера без регистрации завершить
+    нельзя — он невалиден."""
+    policy = registration_policy(ticket.provider)
+    if policy is None:
+        raise OAuthTicketInvalidError()
+    return policy
+
+
+def get_registration_ticket(ticket_hash: str) -> dict:
+    """Чтение живого registration-ticket без блокировки и без изменений
+    (preview шага email). {"provider", "email"}; иначе OAuthTicketInvalidError."""
+    with SessionLocal() as db:
+        row = db.execute(
+            select(OAuthPendingTicket.provider, OAuthPendingTicket.email)
+            .where(
+                OAuthPendingTicket.ticket_hash == ticket_hash,
+                OAuthPendingTicket.kind == "registration",
+                OAuthPendingTicket.consumed_at.is_(None),
+                OAuthPendingTicket.expires_at > func.now(),
+            )
+        ).first()
+    if row is None:
+        raise OAuthTicketInvalidError()
+    return {"provider": row.provider, "email": row.email}
+
+
+def _domain_error(db, email: str, provider: str, *, audited: bool):
+    """Allowlist доменов in-tx (FOR SHARE на строке домена) → отказ или None."""
+    message = None
+    try:
+        assert_email_domain_allowed_in_tx(db, email)
+    except EmailDomainNotAllowedError as exc:
+        message = str(exc)
+    if message is None:
+        return None
+    return OAuthRegistrationError(
+        "domain_not_allowed", message, 422,
+        audit_code="domain_not_allowed" if audited else None,
+        provider=provider, email=email if audited else None,
+    )
 
 
 def _identity_exists(db, provider: str, subject: str) -> bool:
@@ -323,45 +373,88 @@ def _email_taken(db, email: str) -> bool:
     return db.execute(select(User.id).where(User.email == email)).first() is not None
 
 
-def issue_registration_otp(ticket_hash: str) -> tuple[str, str]:
+def issue_registration_otp(
+    ticket_hash: str,
+    *,
+    chosen_email: Optional[str] = None,
+    resolve_name: Callable[[Optional[str], str], str],
+) -> tuple[str, str]:
     """
-    Init регистрации (и повторная отправка): OTP на email ИЗ TICKET.
+    Init регистрации (и повторная отправка): OTP на email ticket.
+
+    chosen_email=None — код на уже привязанный адрес ticket. chosen_email задан
+    (уже нормализован) — пользователь выбрал адрес: допустимо только при
+    политике email_choice; адрес становится адресом ticket в ЭТОЙ ЖЕ транзакции.
 
       1. ticket (FOR UPDATE): registration, не списан, не истёк;
       2. identity уже привязана → ticket сжигается (commit), отказ;
-      3. email уже занят (включая soft-deleted) → ticket сжигается (commit):
-         email ticket не меняется, регистрация этим ticket невозможна;
-      4. OTP (password_hash NULL) под cooldown — отказ без изменений;
-      5. commit.
+      3. выбор email при фиксированном email провайдера → отказ без изменений;
+      4. email не определён → `email_required` (нечего отправлять);
+      5. allowlist доменов in-tx — только при политике enforce_allowlist;
+         отказ НЕ меняет ticket (адрес можно исправить);
+      6. email уже занят (включая soft-deleted): при email_choice — отказ без
+         изменений (можно указать другой адрес); иначе ticket сжигается —
+         его email не изменить;
+      7. ticket.email = выбранный адрес; OTP (password_hash NULL) под cooldown;
+      8. commit.
 
-    Allowlist доменов не проверяется (ADR-027). Возвращает (plaintext-код,
-    email) для отправки ПОСЛЕ commit — письмо уходит из service, вне транзакции.
+    Замена адреса не продлевает ticket и не трогает запись OTP прежнего адреса:
+    confirm проверяет код только для текущего ticket.email, поэтому код от
+    прежнего адреса регистрацию уже не подтвердит.
+
+    Возвращает (plaintext-код, email) для отправки ПОСЛЕ commit — письмо уходит
+    из service, вне транзакции.
     """
     with SessionLocal() as db:
         ticket = _lock_registration_ticket(db, ticket_hash)
+        policy = _policy_of(ticket)
         provider = ticket.provider
-        email = ticket.email
 
         if _identity_exists(db, provider, ticket.provider_subject):
             ticket.consumed_at = datetime.now(timezone.utc)
             db.commit()
             raise identity_linked_error(provider)
 
+        if chosen_email is not None and not policy.email_choice:
+            raise OAuthRegistrationError(
+                "email_not_changeable",
+                "Адрес электронной почты для этой регистрации изменить нельзя.", 422,
+                provider=provider,
+            )
+        email = chosen_email if chosen_email is not None else ticket.email
+        if email is None:
+            if not policy.email_choice:
+                # Фиксированный email обязан быть в ticket с момента callback;
+                # ticket без него (старый контракт) завершить нельзя.
+                raise OAuthTicketInvalidError()
+            raise OAuthRegistrationError(
+                "email_required", "Укажите адрес электронной почты.", 422,
+                provider=provider,
+            )
+
+        if policy.enforce_allowlist:
+            denied = _domain_error(db, email, provider, audited=False)
+            if denied is not None:
+                raise denied
+
         if _email_taken(db, email):
-            ticket.consumed_at = datetime.now(timezone.utc)
-            db.commit()
+            if not policy.email_choice:
+                ticket.consumed_at = datetime.now(timezone.utc)
+                db.commit()
             raise email_exists_error(provider)
 
         cooldown = None
         try:
             code = create_or_update_otp_in_tx(
-                db, email, ticket.suggested_name, None, lock=True,
+                db, email, resolve_name(ticket.suggested_name, email), None, lock=True,
             )
         except ValueError as exc:
             cooldown = str(exc)
         if cooldown is not None:
+            # Выход из with без commit → rollback: адрес ticket не меняется.
             raise OAuthRegistrationError("otp_cooldown", cooldown, 429, provider=provider)
 
+        ticket.email = email
         db.commit()
         return code, email
 
@@ -412,6 +505,7 @@ def complete_registration_atomic(
     code: str,
     *,
     required_consent_types: list,
+    resolve_name: Callable[[Optional[str], str], str],
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> dict:
@@ -422,26 +516,27 @@ def complete_registration_atomic(
     Согласие MindCare (consent gate) проверяет service ДО вызова: без него
     сюда не доходит.
 
-      1. ticket (FOR UPDATE): registration, не списан, не истёк, с email/именем;
+      1. ticket (FOR UPDATE): registration, не списан, не истёк, с email
+         (email берётся ТОЛЬКО отсюда — клиент его не передаёт);
       2. identity уже существует → ticket сжигается, отказ;
-      3. email свободен, включая soft-deleted → иначе ticket сжигается, отказ
-         (до OTP: reset-OTP существующего пользователя здесь не трогается);
+      3. email свободен, включая soft-deleted (до OTP: reset-OTP существующего
+         пользователя здесь не трогается);
       4. OTP по email ticket (FOR UPDATE): password_hash IS NULL (иначе это код
          другого потока), не истёк, попытки, код;
-      5. id обязательных согласий;
-      6. User (password_hash NULL) → роль student → consent_records →
+      5. allowlist доменов in-tx — только при политике enforce_allowlist (VK);
+      6. повторная проверка занятости email; id обязательных согласий;
+      7. User (password_hash NULL) → роль student → consent_records →
          UserOAuthIdentity (last_login_at) → удаление OTP → ticket.consumed_at
          → сессия → last_login;
-      7. commit.
-
-    Allowlist доменов не проверяется (ADR-027): email — от провайдера,
-    подтверждён этим OTP.
+      8. commit.
 
     Семантика:
       * неверный/истёкший код → commit ТОЛЬКО счётчика попыток (или удаления
         OTP); ticket остаётся годным, аккаунт не создаётся;
-      * identity/email уже существуют → ticket сожжён навсегда (commit);
-      * нет роли/политики → rollback: ticket и OTP целы;
+      * identity уже существует → ticket сожжён навсегда (commit);
+      * email уже занят: фиксированный email провайдера (Яндекс) → ticket
+        сожжён; email_choice (VK) → ticket цел, можно выбрать другой адрес;
+      * домен отключён (VK), нет роли/политики → rollback: ticket и OTP целы;
       * гонка на UNIQUE → rollback всего, фиксированный 409;
       * технический сбой (БД, вставка сессии, commit) → rollback всего и
         исключение как есть — он НЕ превращается в «неверный код».
@@ -451,23 +546,28 @@ def complete_registration_atomic(
     """
     with SessionLocal() as db:
         ticket = _lock_registration_ticket(db, ticket_hash)
+        policy = _policy_of(ticket)
+        if ticket.email is None:
+            raise OAuthTicketInvalidError()   # email ещё не выбран — кода не было
 
         provider = ticket.provider
         subject = ticket.provider_subject
         email = ticket.email
-        name = ticket.suggested_name
+        name = resolve_name(ticket.suggested_name, email)
 
         if _identity_exists(db, provider, subject):
             ticket.consumed_at = datetime.now(timezone.utc)
             db.commit()
             raise identity_linked_error(provider, email, audited=True)
 
-        # Email занят → ticket уже не завершится. Проверка ДО OTP:
-        # запись OTP для существующего пользователя — это reset-OTP чужого
-        # потока, её попытки здесь трогать нельзя.
+        # Email занят. Проверка ДО OTP: запись OTP для существующего
+        # пользователя — это reset-OTP чужого потока, её попытки здесь трогать
+        # нельзя. Фиксированный email → ticket уже не завершится (сжигается);
+        # email_choice → ticket цел, пользователь выберет другой адрес.
         if _email_taken(db, email):
-            ticket.consumed_at = datetime.now(timezone.utc)
-            db.commit()
+            if not policy.email_choice:
+                ticket.consumed_at = datetime.now(timezone.utc)
+                db.commit()
             raise email_exists_error(provider, email, audited=True)
 
         # ── OTP ─────────────────────────────────────────────────────────────
@@ -514,11 +614,22 @@ def complete_registration_atomic(
             )
 
         # ── OTP верный. Дальше — core UoW без промежуточных commit. ─────────
+        # Авторитетная проверка allowlist (FOR SHARE на строке домена): домен
+        # могли отключить между init и confirm. Отказ → rollback, ticket и OTP целы.
+        if policy.enforce_allowlist:
+            denied = _domain_error(db, email, provider, audited=True)
+            if denied is not None:
+                db.rollback()
+                raise denied
+
         # Повторная проверка email (READ COMMITTED: свежий снимок после
         # ожидания FOR UPDATE на OTP); окончательно гонку решает UNIQUE ниже.
         if _email_taken(db, email):
-            ticket.consumed_at = datetime.now(timezone.utc)
-            db.commit()
+            if policy.email_choice:
+                db.rollback()
+            else:
+                ticket.consumed_at = datetime.now(timezone.utc)
+                db.commit()
             raise email_exists_error(provider, email, audited=True)
 
         conflict = None

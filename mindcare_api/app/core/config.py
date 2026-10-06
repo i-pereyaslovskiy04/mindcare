@@ -49,6 +49,18 @@ class Settings(BaseSettings):
     # client_secret НЕ используется: PKCE S256 + code_verifier.
     YANDEX_OAUTH_ENABLED: bool = False
     YANDEX_OAUTH_CLIENT_ID: str = ""
+    # --- VK ID (Stage Social Auth VK-1A) ---
+    # То же правило регистрации адаптера, что у Яндекса. CLIENT_ID — «ID
+    # приложения» VK ID (не секрет). Защищённый и сервисный ключи НЕ
+    # используются: публичный клиент, PKCE S256.
+    VK_OAUTH_ENABLED: bool = False
+    VK_OAUTH_CLIENT_ID: str = ""
+    # Необязательная база redirect_uri только для VK (пусто → общий
+    # OAUTH_CALLBACK_BASE_URL). Нужна, когда доверенный Redirect URL приложения
+    # VK зарегистрирован на другом порту, чем у Яндекса (DEV: http://localhost —
+    # порт 80). Схема обязана совпадать с OAUTH_CALLBACK_BASE_URL (от неё
+    # зависит Secure у общего state-cookie).
+    VK_OAUTH_CALLBACK_BASE_URL: str = ""
     # --- ENCRYPTION ---
     DATA_ENCRYPTION_KEY: str | None = None
     # --- APP ---

@@ -636,10 +636,50 @@
   существующий email; отмена
 - ⏳ Новая identity без email у Яндекса → `oauth_email_required` (без аудита);
   при необходимости добавить код в `failed_login`/`registration_failed`
-- ⏳ Тексты `/auth/callback` и шага кода называют Яндекс — при появлении
-  второго провайдера передавать его имя в callback
-- ⏳ VK — кнопка видна на обеих вкладках, но disabled (адаптера нет);
-  отдельный этап. Telegram убран
+- ✅ VK-1A (probe) — адаптер VK ID (`app/oauth/providers/vk.py`, OAuth 2.1 +
+  PKCE, публичный клиент без ключей, `device_id` через `extra` без хранения),
+  `VK_OAUTH_ENABLED` / `VK_OAUTH_CLIENT_ID` / `VK_OAUTH_CALLBACK_BASE_URL`,
+  кнопка VK активна по `social_providers`. Только ВХОД по уже привязанной
+  identity: новая VK identity → `social_registration_not_available`, ничего не
+  создаётся. Миграции нет. Telegram убран
+- ✅ Живая проверка VK-1A (DEV, 2026-10-06): обмен кода и `user_info` — 200 без
+  client_secret/service_token; `device_id` работает; stable subject и имя
+  получены; **email VK не вернул**, хотя почта в кабинете отмечена обязательной
+- ✅ VK-1B (ADR-028, без миграции) — регистрация через VK с собственным шагом
+  email: ticket и без email → preview (маска) → `SocialEmailStep` → init с
+  выбором адреса (allowlist, занятость, привязка к ticket) → OTP MindCare →
+  согласие → аккаунт + VK identity + сессия. Адрес можно сменить до confirm;
+  занятый/запрещённый адрес исправляется тем же ticket; auto-link нет.
+  Временная строка `[oauth probe]` убрана. Mail.ru/QR внутри VK ID — тот же
+  provider `vk`
+- ✅ VK-1B UX hotfix (только frontend, ADR-028 п. 8) — `/auth/callback` стал
+  техническим маршрутом: ticket регистрации передаётся в память приложения
+  (`AuthContext.socialRegistration`) → replace на `/` → шаг email и шаг кода
+  внутри существующей AuthModal (режимы `socialEmail` / `socialOtp`, вкладок
+  нет). Карточка callback и её стили удалены; заголовок шага наследует шрифт
+  модалки; тексты шага email формализованы. Шаг кода Яндекса тоже в AuthModal
+  (поведение прежнее)
+- ✅ DEV-listener callback VK ID на `:80` запускают launcher'ы `start.ps1` /
+  `start.sh` вместе с основным backend (VK ID принимает localhost только на
+  портах 80/443); решение — `scripts/dev_oauth_callback_port.py` по локальному
+  `.env`; приложение само процессы не порождает; production не затронут
+  (`deploy/README.md`, раздел «DEV: callback на порту 80»)
+- ⏳ Живая проверка VK-1B: новая identity без email → шаг email → код → кабинет;
+  повторный вход без шагов; занятый email; запрещённый домен
+- ⚠ Асимметрия allowlist: Яндекс — без allowlist (ADR-027), VK и пароль — с
+  allowlist (ADR-028). Осознанное продуктовое решение, не инвариант
+  безопасности: allowlist сейчас обходится регистрацией через Яндекс. Нужно
+  отдельное решение (DPO/владелец продукта), если требуется ограничить круг лиц
+- ⏳ Не проверено вживую: формат отмены на странице VK (`error=access_denied`?)
+  и возврат `payload` вместо отдельных параметров — адаптер принимает оба вида
+- ⏳ Письмо с кодом одинаково для всех потоков регистрации; при желании
+  уточнить текст («регистрация через VK»)
+- ⏳ Имя провайдера для текстов callback хранится в `sessionStorage`
+  (`mindcare_oauth_provider`, только имя): при переходе в другую вкладку
+  тексты будут про провайдера по умолчанию — надёжнее передавать `provider`
+  во fragment (меняет контракт fragment, отдельным шагом)
+- ⏳ Общие валидаторы адаптеров (`_valid_email`, `_clean_name`, …) живут в
+  `providers/yandex.py`, VK их импортирует — вынести в общий модуль
 - ⏳ 5 — привязка провайдера к СУЩЕСТВУЮЩЕМУ аккаунту из настроек (сейчас
   пользователь с уже зарегистрированным email войти через Яндекс не может)
 - ⏳ Email регистрации — всегда `default_email` Яндекса; другой адрес — только

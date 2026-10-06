@@ -174,3 +174,81 @@ sudo systemctl enable --now mindcare-anonymize-ips.timer           # тольк�
    rate limit `oauth_*:ip` общий для всех и IP в аудите — адрес прокси.
 5. Верификация сервиса в Яндекс ID — иначе пользователи видят предупреждение
    перед выдачей доступа (технически вход работает).
+
+## Вход и регистрация через VK ID (Stage Social Auth VK-1A/VK-1B)
+
+> Вход по привязанной VK identity — сразу, без кода. Новая identity проходит
+> регистрацию с шагом email (ADR-028): VK может не вернуть адрес, поэтому
+> пользователь подтверждает или указывает его сам; адрес проходит тот же
+> allowlist доменов, что обычная регистрация, и подтверждается кодом MindCare.
+> Регистрация шлёт письмо — нужен рабочий `EMAIL_MODE=smtp`. Привязки к
+> существующему аккаунту по email нет. Mail.ru и QR внутри VK ID — тот же
+> провайдер `vk`. Миграций нет.
+
+Настройки (только в локальном `.env`, в git не коммитить):
+
+```
+VK_OAUTH_ENABLED=true
+VK_OAUTH_CLIENT_ID=<ID приложения VK ID>
+VK_OAUTH_CALLBACK_BASE_URL=http://localhost
+```
+
+Защищённый ключ и сервисный ключ приложения VK **не нужны** и никуда не
+добавляются: публичный клиент, OAuth 2.1 Authorization Code + PKCE.
+
+Доверенный Redirect URL приложения VK должен точно совпадать с
+`{VK_OAUTH_CALLBACK_BASE_URL}/api/auth/oauth/vk/callback`. Если
+`VK_OAUTH_CALLBACK_BASE_URL` пуст, берётся общий `OAUTH_CALLBACK_BASE_URL`.
+Схема (`http`/`https`) обеих баз обязана совпадать.
+
+### DEV: callback на порту 80
+
+**Почему порт 80.** VK ID принимает `localhost` в доверенном Redirect URL
+только на стандартных портах: `http://localhost` (порт 80) либо
+`https://localhost` (порт 443); другие localhost-порты VK ID не поддерживает.
+Поэтому DEV-приложение VK зарегистрировано на
+`http://localhost/api/auth/oauth/vk/callback`, хотя основной backend слушает
+`:8000` (на него же настроен Яндекс). Dev reverse proxy в репозитории нет,
+поэтому callback принимает второй экземпляр того же backend на порту 80 — та
+же БД и тот же `.env`.
+
+**Запускать его вручную не нужно.** DEV-launcher'ы поднимают listener сами:
+
+| Launcher | Где живёт listener `:80` | Как останавливается |
+|----------|--------------------------|---------------------|
+| `.\start.ps1` (Windows) | в окне backend, вместе с `:8000` (заголовок окна «Backend :8000 + VK callback :80 (dev)») | Ctrl+C или закрытие окна backend гасят оба экземпляра; если основной backend завершился сам, listener гасится следом |
+| `./start.sh` (Linux) | фоном, лог `logs/vk-callback.log`, PID `logs/vk-callback.pid` | той же командой `kill …`, что backend и frontend (скрипт печатает её в конце) |
+
+Listener запускается, только когда локальный `.env` этого требует:
+`VK_OAUTH_ENABLED=true` и `VK_OAUTH_CALLBACK_BASE_URL=http://localhost` (http,
+loopback, порт 80). Решение принимает
+`mindcare_api/scripts/dev_oauth_callback_port.py`: печатает номер порта либо
+ничего; значения настроек он не выводит. В остальных случаях (VK выключен,
+своя база не задана, база — https-адрес) launcher пишет «listener не нужен» и
+стартует как раньше. Listener слушает только `127.0.0.1` и работает с
+`--reload`, как основной backend, поэтому оба экземпляра всегда на одном коде.
+
+Если порт 80 недоступен, launcher предупреждает и продолжает запуск без
+listener (вход через VK локально работать не будет):
+
+- Windows: порт обычно свободен и прав администратора не требует; занять его
+  может IIS, другой веб-сервер или забытый ручной `uvicorn --port 80`;
+- Linux: порты ниже 1024 требуют привилегий (root, `CAP_NET_BIND_SERVICE` либо
+  `net.ipv4.ip_unprivileged_port_start`); launcher их не меняет.
+
+`scripts/mindcare-mode.sh dev` (dev-режим на общем стенде) listener не
+поднимает: там браузер работает не с `localhost` стенда.
+
+Основной backend на `:8000` и фронтенд на `:3000` работают как обычно: `start`
+уходит через прокси фронтенда на `:8000`, VK возвращает браузер на
+`http://localhost/...` (порт 80), state-cookie привязан к хосту `localhost` без
+порта и приходит на оба экземпляра, state и ticket лежат в общей БД.
+
+Чего здесь нет намеренно: приложение само второй сервер не запускает (никакого
+subprocess в FastAPI lifespan — это давало бы дубли при `--reload`, нескольких
+воркерах и в тестах), отдельного пользовательского скрипта запуска для VK нет.
+
+**Production этот механизм не использует.** `deploy.sh` и systemd-юниты
+launcher'ы и helper не вызывают; обе базы callback там — один https-адрес
+сайта, callback обслуживает обычный HTTPS reverse proxy, отдельный Uvicorn на
+`:80` не нужен.
