@@ -582,6 +582,8 @@ EOF
     mindcare-ensure-audit-partitions.timer
     mindcare-anonymize-ips.service
     mindcare-anonymize-ips.timer
+    mindcare-deliver-system-messages.service
+    mindcare-deliver-system-messages.timer
     'mindcare-maintenance-failure@.service'
   )
   CURRENT_GROUP=$(id -gn)
@@ -612,6 +614,9 @@ EOF
   # Только создаёт недостающие будущие партиции: DROP старых партиций и
   # удаление строк в этот job НЕ входят, поэтому включается без opt-in.
   sudo systemctl enable --now mindcare-ensure-audit-partitions.timer
+  # ADR-029: повторная доставка уже зафиксированных намерений system-сообщений
+  # (outbox). Идемпотентна (event_key), данных не удаляет — включается сразу.
+  sudo systemctl enable --now mindcare-deliver-system-messages.timer
 
   # IP-анонимизация: установка отделена от активации.
   #

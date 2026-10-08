@@ -71,6 +71,29 @@ def is_domain_active(domain: str) -> bool:
         return found is not None
 
 
+def _active_domain_names(db) -> list[str]:
+    """
+    Имена активных доменов по возрастанию — в ПЕРЕДАННОЙ сессии, без
+    блокировок. Только имена: id, comment и даты наружу не идут.
+    """
+    return list(
+        db.execute(
+            sa.select(AllowedEmailDomain.domain)
+            .where(AllowedEmailDomain.is_active.is_(True))
+            .order_by(AllowedEmailDomain.domain.asc())
+        ).scalars().all()
+    )
+
+
+def list_active_domain_names() -> list[str]:
+    """
+    Активные домены (по возрастанию) для публичной подсказки формы и текста
+    отказа ранней проверки. Открывает свою короткую сессию, без блокировок.
+    """
+    with SessionLocal() as db:
+        return _active_domain_names(db)
+
+
 def assert_email_domain_allowed_in_tx(db, email: str) -> None:
     """
     Authoritative in-tx проверка: домен email должен быть активен в allowlist.
@@ -80,20 +103,29 @@ def assert_email_domain_allowed_in_tx(db, email: str) -> None:
     пока транзакция создания пользователя не завершится. Нет активной строки →
     EmailDomainNotAllowedError (вызывающий мапит в HTTP 422). Вызывать ДО
     необратимых шагов (создание пользователя, consume OTP).
+
+    Отказ определяется ТОЛЬКО точным сравнением нормализованного домена с
+    активной строкой (поддомен разрешённого домена не разрешён автоматически).
+    Список активных доменов читается лишь в ветке отказа — обычным SELECT без
+    блокировок в той же транзакции — и кладётся в исключение
+    (`allowed_domains`) для понятного сообщения пользователю; на сам отказ он
+    не влияет.
     """
     domain = extract_domain(email)
-    if not domain:
-        raise EmailDomainNotAllowedError(_NOT_ALLOWED_MESSAGE)
-    found = db.execute(
-        sa.select(AllowedEmailDomain.id)
-        .where(
-            AllowedEmailDomain.domain == domain,
-            AllowedEmailDomain.is_active.is_(True),
-        )
-        .with_for_update(read=True)  # PostgreSQL FOR SHARE
-    ).first()
+    found = None
+    if domain:
+        found = db.execute(
+            sa.select(AllowedEmailDomain.id)
+            .where(
+                AllowedEmailDomain.domain == domain,
+                AllowedEmailDomain.is_active.is_(True),
+            )
+            .with_for_update(read=True)  # PostgreSQL FOR SHARE
+        ).first()
     if found is None:
-        raise EmailDomainNotAllowedError(_NOT_ALLOWED_MESSAGE)
+        raise EmailDomainNotAllowedError(
+            _NOT_ALLOWED_MESSAGE, allowed_domains=_active_domain_names(db),
+        )
 
 
 # ── Admin CRUD ─────────────────────────────────────────────────────────────────

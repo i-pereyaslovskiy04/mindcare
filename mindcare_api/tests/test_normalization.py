@@ -4,7 +4,7 @@ Tests for application-layer email normalization (Stage 17b).
 Covers:
   - normalize_email() pure function
   - otp_service: email normalized before DB insert/lookup/delete
-  - auth.storage: email normalized in find_user_by_email, save_user, reactivate_user
+  - auth.storage: email normalized in find_user_by_email, save_user, email_exists_any
   - users.storage: email normalized in create_user
 
 Integration tests (OTP create+verify cross-case with a real DB) are
@@ -22,7 +22,7 @@ from app.auth.otp_service import (
     verify_otp,
     _hash_code,
 )
-from app.auth.storage import find_user_by_email, reactivate_user, save_user
+from app.auth.storage import email_exists_any, find_user_by_email, save_user
 from app.users.storage import create_user
 
 
@@ -158,14 +158,14 @@ class TestAuthStorageEmailNormalization:
         added = mock_db.add.call_args[0][0]
         assert added.email == "user@mail.ru"
 
-    def test_reactivate_user_calls_normalize(self):
-        """reactivate_user passes email through normalize_email."""
+    def test_email_exists_any_calls_normalize(self):
+        """email_exists_any (ADR-028: ранняя проверка регистрации по ЛЮБОЙ
+        строке users) passes email through normalize_email."""
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        with patch("app.auth.storage.SessionLocal", _mock_session(mock_db)), \
-             patch("app.auth.storage.normalize_email", wraps=normalize_email) as spy:
-            reactivate_user("User@MAIL.RU", "Name", "hash")
+        with patch("app.auth.storage.SessionLocal", _mock_session(mock_db)),              patch("app.auth.storage.normalize_email", wraps=normalize_email) as spy:
+            assert email_exists_any("User@MAIL.RU") is False
 
         spy.assert_called_once_with("User@MAIL.RU")
 

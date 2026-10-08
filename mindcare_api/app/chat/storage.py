@@ -1011,6 +1011,16 @@ def get_or_create_system_conversation(
         return conv, True
 
 
+# Partial UNIQUE (conversation_id, event_key): единственное нарушение, которое
+# означает «это system-сообщение уже опубликовано» (ADR-029).
+SYSTEM_MESSAGE_EVENT_KEY_CONSTRAINT = "ux_chat_messages_event_key"
+
+
+def _constraint_name(exc: IntegrityError) -> Optional[str]:
+    """Имя нарушенного ограничения из диагностики драйвера (не из текста)."""
+    return getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+
+
 def create_system_message(
     recipient_id: int,
     *,
@@ -1021,6 +1031,11 @@ def create_system_message(
     Get-or-create system-беседы + encrypt-on-write одного сообщения.
     Идемпотентность: повторный вызов с тем же (conversation, event_key)
     не создаёт дубль (partial UNIQUE → IntegrityError → skipped).
+    Дублем считается ТОЛЬКО нарушение ux_chat_messages_event_key (опознаётся
+    по exc.orig.diag.constraint_name, ADR-029): прочие IntegrityError (FK,
+    NOT NULL, CHECK) — дефект, а не «уже доставлено»; они откатываются и
+    пробрасываются (publisher превратит их в None без текста исключения, и
+    outbox не отметит доставку).
 
     Возвращает ({"created": bool, "conversation_id": int}, conversation_created).
     "created" в dict — было ли создано СООБЩЕНИЕ (публичный контракт, не меняется).
@@ -1046,9 +1061,11 @@ def create_system_message(
         db.add(msg)
         try:
             db.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
             db.rollback()
-            return {"created": False, "conversation_id": conv.id}, conversation_created
+            if _constraint_name(exc) == SYSTEM_MESSAGE_EVENT_KEY_CONSTRAINT:
+                return {"created": False, "conversation_id": conv.id}, conversation_created
+            raise
 
         db.query(ChatConversation).filter(
             ChatConversation.id == conv.id

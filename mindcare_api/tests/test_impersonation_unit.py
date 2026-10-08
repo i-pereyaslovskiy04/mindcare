@@ -105,13 +105,14 @@ def test_route_impersonate_creates_marked_session_and_audits(monkeypatch):
     )
     created = {}
 
-    def _create_session(*, user_id, ip, user_agent, impersonator_user_id):
-        created["user_id"] = user_id
-        created["impersonator_user_id"] = impersonator_user_id
+    def _start(target_id, *, actor_id, ip, user_agent):
+        created["user_id"] = target_id
+        created["impersonator_user_id"] = actor_id
         return "raw-token", datetime.now(timezone.utc)
 
+    # ADR-028: сессия выдаётся атомарно под блокировкой (service).
     monkeypatch.setattr(
-        routes_admin.auth_service, "create_session", _create_session
+        routes_admin.service, "start_impersonation_session", _start
     )
 
     with patch.object(routes_admin, "record_event") as rec:
@@ -147,8 +148,8 @@ def test_route_impersonate_fail_closed_revokes_session_on_audit_error(monkeypatc
         lambda uuid, actor_id: _target(),
     )
     monkeypatch.setattr(
-        routes_admin.auth_service, "create_session",
-        lambda **kw: ("raw-token", datetime.now(timezone.utc)),
+        routes_admin.service, "start_impersonation_session",
+        lambda target_id, **kw: ("raw-token", datetime.now(timezone.utc)),
     )
     revoked = {}
     monkeypatch.setattr(
@@ -165,3 +166,68 @@ def test_route_impersonate_fail_closed_revokes_session_on_audit_error(monkeypatc
 
     assert ei.value.status_code == 503
     assert revoked["tok"] == "raw-token"  # созданная сессия отозвана
+
+
+# ── ADR-028: авторитетная проверка под блокировкой (start_session_atomic) ────
+
+def _capture_check(monkeypatch):
+    """Подменяет storage: сохраняет check, переданный в start_session_atomic."""
+    import app.auth.storage as auth_storage
+    seen = {}
+
+    def _fake(user_id, *, check, ip, user_agent, impersonator_user_id):
+        seen.update(user_id=user_id, impersonator_user_id=impersonator_user_id)
+        seen["check"] = check
+        return "tok", datetime.now(timezone.utc), {}
+    monkeypatch.setattr(auth_storage, "start_session_atomic", _fake)
+    return seen
+
+
+def _admin(**over):
+    base = {"id": str(ADMIN_ID), "roles": ["admin", "student"],
+            "role": "admin", "is_active": True, "name": "Админ"}
+    base.update(over)
+    return base
+
+
+def test_start_impersonation_session_marks_admin_and_locks(monkeypatch):
+    seen = _capture_check(monkeypatch)
+    tok, _ = users_service.start_impersonation_session(202, actor_id=ADMIN_ID)
+    assert tok == "tok"
+    assert seen["user_id"] == 202 and seen["impersonator_user_id"] == ADMIN_ID
+    seen["check"](_target(), _admin())          # валидная пара — не бросает
+
+
+@pytest.mark.parametrize("admin", [
+    None,                                         # инициатор удалён
+    _admin(is_active=False),                      # инициатор отключён
+    _admin(roles=["student"], role="student"),    # инициатор потерял admin
+])
+def test_impersonation_check_rejects_invalid_initiator(monkeypatch, admin):
+    seen = _capture_check(monkeypatch)
+    users_service.start_impersonation_session(202, actor_id=ADMIN_ID)
+    with pytest.raises(AuthError) as ei:
+        seen["check"](_target(), admin)
+    assert ei.value.status_code == 403
+
+
+@pytest.mark.parametrize("target,status", [
+    (None, 404),                                  # цель удалена под блокировкой
+    (_target(is_active=False), 403),              # цель отключена конкурентно
+    (_target(roles=["admin"], role="admin"), 403),
+])
+def test_impersonation_check_rejects_target_changed_under_lock(
+    monkeypatch, target, status,
+):
+    seen = _capture_check(monkeypatch)
+    users_service.start_impersonation_session(202, actor_id=ADMIN_ID)
+    with pytest.raises(AuthError) as ei:
+        seen["check"](target, _admin())
+    assert ei.value.status_code == status
+
+
+def test_impersonation_target_null_is_active_is_active(monkeypatch):
+    # Историческое is_active=NULL трактуется как активный (ADR-028).
+    seen = _capture_check(monkeypatch)
+    users_service.start_impersonation_session(202, actor_id=ADMIN_ID)
+    seen["check"](_target(is_active=None), _admin())

@@ -81,34 +81,20 @@ def add_admin_role_to_existing_user(email: str) -> bool:
         print("Отменено.")
         sys.exit(0)
 
+    # ADR-028: строка users берётся FOR UPDATE ДО чтения ролей (общая функция
+    # app.users.storage) — выдача staff-роли сериализуется с самоотключением,
+    # которое проверяет «чистого студента» под той же блокировкой.
+    from app.users.errors import RoleConfigError
+    from app.users.storage import grant_admin_role_to_existing_in_tx
     with SessionLocal() as db:
-        admin_role = db.query(Role).filter(Role.name == "admin").first()
-        if not admin_role:
+        try:
+            granted = grant_admin_role_to_existing_in_tx(db, int(user["id"]))
+        except RoleConfigError:
             print("[ERROR] Роль 'admin' не найдена в БД. Применены ли seed-миграции?")
             sys.exit(1)
-
-        # Проверка нет ли уже такой связи (на случай гонки)
-        existing = (
-            db.query(UserRole)
-            .filter(UserRole.user_id == int(user["id"]),
-                    UserRole.role_id == admin_role.id)
-            .first()
-        )
-        if existing:
+        if not granted:
             print("[INFO] Роль уже назначена.")
             sys.exit(0)
-
-        db.add(UserRole(user_id=int(user["id"]), role_id=admin_role.id))
-        # Роль admin — это смена основания обработки ПДн (студент → сотрудник).
-        # Фиксируем legal basis record в той же транзакции.
-        db.add(UserLegalBasisRecord(
-            user_id=int(user["id"]),
-            basis_type="role_change",
-            basis_source="bootstrap_script",
-            confirmed_by_user_id=None,
-            user_agent="bootstrap-script",
-            comment="Admin role granted to existing user via bootstrap script",
-        ))
         db.commit()
 
     # Гарантируем неявную роль student и этому staff-аккаунту (идемпотентно).

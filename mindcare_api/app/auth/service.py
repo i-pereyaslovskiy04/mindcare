@@ -30,6 +30,15 @@ _ACCESS_NOT_ACTIVE_MESSAGE = (
     "Доступ к системе не активирован. Обратитесь к администратору."
 )
 
+# Регистрация на занятый email (любая строка users — ADR-028).
+_EMAIL_TAKEN_MESSAGE = "Email уже зарегистрирован"
+
+# Самоотключение доступно только студенческому аккаунту (ADR-028).
+_SELF_DEACTIVATION_FORBIDDEN_MESSAGE = (
+    "Самостоятельное отключение доступно только студенческому аккаунту. "
+    "Для служебной учётной записи обратитесь к администратору."
+)
+
 
 def _hash(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -73,6 +82,24 @@ class AuthError(Exception):
 REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
 
 
+def _domain_not_allowed_error(
+    exc, *, audit_code: Optional[str] = None,
+) -> AuthError:
+    """
+    Единая ошибка отказа по домену для register_init и register_confirm: один
+    статус (422) и ОДИН текст со списком активных доменов на момент отказа
+    (`exc.allowed_domains`: домены берутся из БД, в коде их нет). У confirm
+    audit_code — `domain_not_allowed`; ранний отказ init не аудируется.
+    Введённый пользователем email в текст и логи не попадает.
+    """
+    from app.email_domains.service import registration_domain_message
+    return AuthError(
+        registration_domain_message(exc.allowed_domains),
+        422,
+        audit_code=audit_code,
+    )
+
+
 def register_init(name: str, email: str, password: str) -> None:
     """Валидация данных -> OTP в БД -> отправка письма."""
     if not name or len(name.strip()) < 2:
@@ -86,9 +113,12 @@ def register_init(name: str, email: str, password: str) -> None:
     try:
         assert_email_domain_allowed(email)
     except EmailDomainNotAllowedError as e:
-        raise AuthError(str(e), 422)
-    if storage.find_user_by_email(email):
-        raise AuthError("Email уже зарегистрирован", 409)
+        raise _domain_not_allowed_error(e)
+    # ADR-028: email любой строки users — включая отключённую и исторически
+    # soft-deleted — недоступен для регистрации (восстанавливает только
+    # администратор). То же сообщение, что для активного аккаунта.
+    if storage.email_exists_any(email):
+        raise AuthError(_EMAIL_TAKEN_MESSAGE, 409)
 
     from app.auth import otp_service
     from app.services.email_service import send_registration_otp
@@ -139,7 +169,14 @@ def register_confirm(
     except EmailDomainNotAllowedError as e:
         # Домен отключили между init и confirm — новое регистрационное действие
         # отклоняется; OTP не потреблён (rollback внутри register_confirm_atomic).
-        raise AuthError(str(e), 422, audit_code="domain_not_allowed")
+        # Текст тот же, что у init (общий хелпер): список — активные на сейчас.
+        raise _domain_not_allowed_error(e, audit_code="domain_not_allowed")
+    except storage.AccountUnavailableError:
+        # ADR-028: email принадлежит существующей (в т.ч. отключённой/удалённой)
+        # учётной записи — регистрация её не восстанавливает. OTP не потреблён.
+        raise AuthError(
+            _EMAIL_TAKEN_MESSAGE, 409, audit_code="email_already_exists",
+        )
     except storage.RegistrationDataError:
         # Отсутствует роль/consent-политика — проблема seed/reference data.
         # Клиенту — фиксированное безопасное сообщение (str(e) называет
@@ -204,6 +241,19 @@ def run_post_registration_actions(
         log.warning("[register_confirm] phase=welcome error=%s",
                     type(exc).__name__)
 
+    # ADR-029: приглашение подтвердить статус студента ДонГУ. Намерение уже
+    # зафиксировано в core UoW регистрации (оба способа); здесь — попытка
+    # доставки после commit. Soft-fail: недоставленное добирает retry-job
+    # scripts/deliver_system_message_intents.py, delivered отмечается только
+    # после успешного результата publisher.
+    try:
+        from app.notifications.service import deliver_by_key_soft
+        from app.notifications.templates import invite_event_key
+        deliver_by_key_soft(int(user["id"]), invite_event_key(int(user["id"])))
+    except Exception as exc:
+        log.warning("[register_confirm] phase=verification_invite error=%s",
+                    type(exc).__name__)
+
 
 # ---------------------------------------------------------------------------
 # Аутентификация
@@ -256,6 +306,13 @@ def ensure_user_can_start_session(user: Optional[dict]) -> None:
 
 
 def authenticate_user(email: str, password: str) -> dict:
+    """
+    Проверка credentials (bcrypt — вне какой-либо блокировки) и ранняя
+    проверка допуска. Сессию НЕ создаёт и last_login НЕ трогает: авторитетная
+    повторная проверка под блокировкой строки users и выдача сессии — в
+    start_password_session (ADR-028). Возвращаемый dict содержит
+    hashed_password — внутреннее значение для сверки, наружу не отдаётся.
+    """
     user = storage.find_user_by_email(email)
     hashed = user.get("hashed_password") if user else None
     # bcrypt выполняется всегда (с dummy-хешем, если аккаунта или пароля нет):
@@ -269,8 +326,82 @@ def authenticate_user(email: str, password: str) -> dict:
     # Блокировка/роли проверяются только ПОСЛЕ верного пароля — без него
     # статус аккаунта не раскрывается.
     ensure_user_can_start_session(user)
-    storage.update_last_login(user["id"])
     return user
+
+
+def start_password_session(
+    user: dict,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> tuple[str, datetime, dict]:
+    """
+    ADR-028: атомарная выдача сессии после успешного authenticate_user.
+    Под FOR UPDATE строки users: текущий password_hash сверяется с тем, для
+    которого прошёл bcrypt (сменили/сбросили → 401 invalid_credentials), затем
+    ensure_user_can_start_session на заблокированной строке (отключили →
+    403 account_disabled; роли сняли → 403 no_active_roles), last_login и
+    сессия — одним commit. Технический сбой БД/commit не превращается в
+    доменный отказ (всплывает как есть → 500 без failed_login).
+
+    Возвращает (session_token, expires_at, user_dict заблокированной строки).
+    """
+    # Проверенный хеш — отдельное значение, зафиксированное ДО повторного
+    # чтения строки под блокировкой.
+    verified_hash = user.get("hashed_password")
+    try:
+        return storage.start_session_atomic(
+            int(user["id"]),
+            check=ensure_user_can_start_session,
+            ip=ip,
+            user_agent=user_agent,
+            expected_password_hash=verified_hash,
+        )
+    except storage.StaleCredentialsError:
+        raise AuthError(
+            _INVALID_CREDENTIALS_MESSAGE, 401, audit_code="invalid_credentials"
+        )
+
+
+def deactivate_own_account(
+    user: dict,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    """
+    ADR-028: самоотключение. Target — только authenticated user. Ранняя
+    проверка «чистого student» (staff, в т.ч. admin+student, — 403);
+    авторитетная повторная — в storage под FOR UPDATE вместе с отключением,
+    отзывом всех сессий и user_self_deactivated (один commit).
+    """
+    from app.auth.roles import is_pure_student
+    from app.users.errors import AccountAlreadyDisabledError
+
+    if not is_pure_student(user.get("roles") or []):
+        raise AuthError(
+            _SELF_DEACTIVATION_FORBIDDEN_MESSAGE, 403,
+            audit_code="self_deactivation_not_allowed",
+        )
+    try:
+        storage.self_deactivate_atomic(
+            int(user["id"]), ip=ip, user_agent=user_agent,
+        )
+    except storage.SelfDeactivationNotAllowedError:
+        raise AuthError(
+            _SELF_DEACTIVATION_FORBIDDEN_MESSAGE, 403,
+            audit_code="self_deactivation_not_allowed",
+        )
+    except AccountAlreadyDisabledError:
+        raise AuthError(
+            "Аккаунт уже отключён", 409, audit_code="account_already_disabled",
+        )
+    except storage.UserNotFoundError:
+        # Аккаунт исчез между dependency и блокировкой — тот же отказ, что у
+        # недействительной сессии; failure-код из allowlist события.
+        raise AuthError(
+            "Аккаунт уже отключён", 409, audit_code="account_already_disabled",
+        )
 
 
 # ---------------------------------------------------------------------------

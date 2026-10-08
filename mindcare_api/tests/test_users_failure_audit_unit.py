@@ -21,7 +21,9 @@ from app.users.errors import (
     RoleConfigError, UserNotFoundError,
 )
 from app.users.storage import RoleChangeError
-from app.users.schemas import AdminUserCreate, AdminUserUpdate
+from app.users.schemas import (
+    AdminUserCreate, AdminUserDeactivateRequest, AdminUserUpdate,
+)
 
 ACTOR_ID = 101
 
@@ -131,20 +133,63 @@ def test_update_service_general_runtime_not_converted(monkeypatch):
         )
 
 
-def test_delete_service_not_found_and_actor_context(monkeypatch):
-    monkeypatch.setattr(users_service.storage, "soft_delete_user",
-                        lambda *a, **kw: False)
-    with pytest.raises(AuthError) as ei:
-        users_service.delete_user("uuid", actor_id=ACTOR_ID, actor_role="admin")
-    _assert_auth(ei, 404, "user_not_found")
-
-    monkeypatch.setattr(
-        users_service.storage, "soft_delete_user",
-        lambda *a, **kw: (_ for _ in ()).throw(ActorContextError("ctx")),
+def test_delete_service_legacy_path_mapping(monkeypatch):
+    """ADR-028: DELETE не удаляет — typed отказы storage → стабильные коды."""
+    from app.users.errors import (
+        LifecycleEndpointRequiredError, SelfLifecycleProtectedError,
+        UserNotFoundError,
     )
-    with pytest.raises(AuthError) as ei2:
-        users_service.delete_user("uuid", actor_id=ACTOR_ID, actor_role="admin")
-    _assert_auth(ei2, 500, "internal_error")
+
+    def _raiser(exc):
+        def _f(*a, **kw):
+            raise exc
+        return _f
+
+    cases = [
+        (UserNotFoundError("x"), 404, "user_not_found"),
+        (SelfLifecycleProtectedError("x"), 422, "self_admin_protected"),
+        (LifecycleEndpointRequiredError("x"), 410, "lifecycle_endpoint_required"),
+        (ActorContextError("ctx"), 500, "internal_error"),
+    ]
+    for exc, status, code in cases:
+        monkeypatch.setattr(users_service.storage, "reject_legacy_delete",
+                            _raiser(exc))
+        with pytest.raises(AuthError) as ei:
+            users_service.delete_user("uuid", actor_id=ACTOR_ID, actor_role="admin")
+        _assert_auth(ei, status, code)
+
+
+@pytest.mark.parametrize("fn,raised,status,code", [
+    ("deactivate_user", "UserNotFoundError", 404, "user_not_found"),
+    ("deactivate_user", "SelfLifecycleProtectedError", 422, "self_admin_protected"),
+    ("deactivate_user", "AccountAlreadyDisabledError", 409, "account_already_disabled"),
+    ("deactivate_user", "InvalidUserRequestError", 422, "invalid_request"),
+    ("deactivate_user", "ActorContextError", 500, "internal_error"),
+    ("restore_user", "UserNotFoundError", 404, "user_not_found"),
+    ("restore_user", "AccountAlreadyActiveError", 409, "account_already_active"),
+    ("restore_user", "ActorContextError", 500, "internal_error"),
+])
+def test_lifecycle_service_maps_typed_to_audit_code(monkeypatch, fn, raised,
+                                                    status, code):
+    import app.users.errors as uerr
+    exc_cls = getattr(uerr, raised)
+
+    def _f(*a, **kw):
+        raise exc_cls("x")
+    monkeypatch.setattr(users_service.storage, fn, _f)
+    args = ("uuid", "reason") if fn == "deactivate_user" else ("uuid",)
+    with pytest.raises(AuthError) as ei:
+        getattr(users_service, fn)(*args, actor_id=ACTOR_ID, actor_role="admin")
+    _assert_auth(ei, status, code)
+
+
+def test_lifecycle_service_general_runtime_not_converted(monkeypatch):
+    def _f(*a, **kw):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(users_service.storage, "deactivate_user", _f)
+    with pytest.raises(RuntimeError):
+        users_service.deactivate_user("uuid", "r", actor_id=ACTOR_ID,
+                                      actor_role="admin")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -417,9 +462,12 @@ def test_create_precommit_typed_writes_secondary_no_success(monkeypatch):
 
 def _setup_update(monkeypatch, *, commit_exc=None, post_role_exc=None):
     db = MagicMock(name="db")
-    user = SimpleNamespace(id=5, full_name="Old", phone=None, is_active=True)
-    db.query.return_value.filter.return_value.filter.return_value.first \
-        .return_value = user
+    user = SimpleNamespace(id=5, full_name="Old", phone=None, is_active=True,
+                           deleted_at=None, deactivation_source=None,
+                           deactivated_at=None)
+    # ADR-028: update_user берёт строку FOR UPDATE.
+    (db.query.return_value.filter.return_value.filter.return_value
+       .with_for_update.return_value.first.return_value) = user
     if commit_exc is not None:
         db.commit.side_effect = commit_exc
     post = post_role_exc if post_role_exc is not None else ["psychologist"]
@@ -466,29 +514,75 @@ def test_update_postcommit_query_failure_no_secondary(monkeypatch):
     assert sec == []
 
 
-# ── delete (postcommit-шагов нет — только commit) ────────────────────────────
+# ── deactivate / restore (ADR-028): commit-фаза ──────────────────────────────
 
-def _setup_delete(monkeypatch, *, commit_exc):
+def _setup_lifecycle(monkeypatch, *, commit_exc, disabled):
     db = MagicMock(name="db")
-    user = SimpleNamespace(id=5, deleted_at=None, is_active=True)
-    db.query.return_value.filter.return_value.filter.return_value.first \
-        .return_value = user
+    user = SimpleNamespace(
+        id=9, deleted_at=None, is_active=not disabled,
+        deactivated_at=None, deactivation_source=None,
+        deactivation_reason_enc=None, updated_at=None,
+    )
+    (db.query.return_value.filter.return_value.with_for_update.return_value
+       .populate_existing.return_value.first.return_value) = user
     db.commit.side_effect = commit_exc
     monkeypatch.setattr(users_storage, "SessionLocal", _mock_session(db))
+    monkeypatch.setattr(users_storage, "_revoke_all_user_sessions_in_session",
+                        lambda db, uid: None)
+    monkeypatch.setattr(users_storage, "_revoke_sessions_impersonated_by",
+                        lambda db, uid: None)
     rec, sec = _spies(monkeypatch, users_storage)
     return db, rec, sec
 
 
-def test_delete_commit_failure_propagates_no_secondary(monkeypatch, capsys):
-    db, rec, sec = _setup_delete(monkeypatch, commit_exc=_Sentinel(_SENTINEL_PII))
+def test_deactivate_commit_failure_propagates_no_secondary(monkeypatch, capsys):
+    _db, rec, sec = _setup_lifecycle(
+        monkeypatch, commit_exc=_Sentinel(_SENTINEL_PII), disabled=False,
+    )
     with pytest.raises(_Sentinel):
+        routes_admin.deactivate_user(
+            request=_req(), uuid=str(_uuid.uuid4()),
+            body=AdminUserDeactivateRequest(reason="Причина leak@secret.example"),
+            current_user=_admin_cu(),
+        )
+    assert len(rec) == 1 and rec[0]["event"] == "admin_user_deactivated"
+    assert rec[0]["outcome"] is Outcome.SUCCESS
+    assert sec == []                          # *_failed НЕ пишется
+    err = capsys.readouterr().err
+    assert "event=admin_user_deactivate phase=commit error=_Sentinel" in err
+    for leak in ("leak@secret.example", "550e8400", "Причина", _SENTINEL_PII):
+        assert leak not in err
+
+
+def test_restore_commit_failure_propagates_no_secondary(monkeypatch, capsys):
+    _db, rec, sec = _setup_lifecycle(
+        monkeypatch, commit_exc=_Sentinel(_SENTINEL_PII), disabled=True,
+    )
+    with pytest.raises(_Sentinel):
+        routes_admin.restore_user(
+            request=_req(), uuid=str(_uuid.uuid4()), current_user=_admin_cu(),
+        )
+    assert len(rec) == 1 and rec[0]["event"] == "admin_user_activated"
+    assert sec == []
+    err = capsys.readouterr().err
+    assert "event=admin_user_restore phase=commit error=_Sentinel" in err
+    assert _SENTINEL_PII not in err
+
+
+def test_legacy_delete_writes_failure_and_never_commits(monkeypatch):
+    db = MagicMock(name="db")
+    db.query.return_value.filter.return_value.first.return_value = (
+        SimpleNamespace(id=9)
+    )
+    monkeypatch.setattr(users_storage, "SessionLocal", _mock_session(db))
+    rec, sec = _spies(monkeypatch, users_storage)
+    with pytest.raises(HTTPException) as ei:
         routes_admin.delete_user(
             request=_req(), uuid=str(_uuid.uuid4()), current_user=_admin_cu(),
         )
-    assert len(rec) == 1 and rec[0]["event"] == "admin_user_deleted"
-    assert rec[0]["outcome"] is Outcome.SUCCESS
-    assert sec == []
-    err = capsys.readouterr().err
-    assert "event=admin_user_delete phase=commit error=_Sentinel" in err
-    for leak in ("leak@secret.example", "550e8400", _SENTINEL_PII):
-        assert leak not in err
+    assert ei.value.status_code == 410
+    db.commit.assert_not_called()
+    assert rec == []
+    assert len(sec) == 1
+    assert sec[0]["event"] == "admin_user_delete_failed"
+    assert sec[0]["failure_reason_code"] == "lifecycle_endpoint_required"

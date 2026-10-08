@@ -153,7 +153,48 @@ def test_normal_user_login_still_succeeds(monkeypatch, last_login_calls):
     monkeypatch.setattr(storage, "find_user_by_email", lambda e: _user())
     monkeypatch.setattr(service, "_verify", lambda p, h: True)
     assert service.authenticate_user("u@e.com", "pw")["id"] == "5"
-    assert last_login_calls == ["5"]
+    # ADR-028: last_login обновляется только атомарно вместе с выдачей сессии
+    # (start_session_atomic), а не на шаге проверки пароля.
+    assert last_login_calls == []
+
+
+# ── ADR-028: start_password_session — повторная проверка под блокировкой ─────
+
+def test_start_password_session_passes_verified_hash_and_invariant(monkeypatch):
+    seen = {}
+
+    def _fake(user_id, *, check, ip, user_agent, expected_password_hash):
+        seen.update(user_id=user_id, check=check,
+                    expected_password_hash=expected_password_hash)
+        return "tok", None, {"id": "5"}
+    monkeypatch.setattr(storage, "start_session_atomic", _fake)
+    out = service.start_password_session(_user(hashed_password="H1"))
+    assert out[0] == "tok"
+    assert seen["user_id"] == 5
+    # Сверяется именно тот хеш, по которому прошёл bcrypt.
+    assert seen["expected_password_hash"] == "H1"
+    # Под блокировкой применяется тот же инвариант допуска.
+    assert seen["check"] is service.ensure_user_can_start_session
+
+
+def test_start_password_session_stale_hash_is_invalid_credentials(monkeypatch):
+    def _fake(*a, **k):
+        raise storage.StaleCredentialsError("x")
+    monkeypatch.setattr(storage, "start_session_atomic", _fake)
+    with pytest.raises(AuthError) as ei:
+        service.start_password_session(_user())
+    assert (ei.value.status_code, ei.value.audit_code) == (401, "invalid_credentials")
+    assert ei.value.message == "Неверный email или пароль"
+    assert "h" not in ei.value.message.split()        # хеш не попадает в ответ
+
+
+def test_start_password_session_technical_failure_not_masked(monkeypatch):
+    """Сбой БД/commit не превращается в доменный отказ (→ 500, без failed_login)."""
+    def _fake(*a, **k):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(storage, "start_session_atomic", _fake)
+    with pytest.raises(RuntimeError):
+        service.start_password_session(_user())
 
 
 # ── change_password без пароля ────────────────────────────────────────────────

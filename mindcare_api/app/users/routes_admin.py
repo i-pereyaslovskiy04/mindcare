@@ -21,6 +21,7 @@ from app.users.schemas import (
     AdminUserCreateResponse,
     AdminUserUpdate,
     AdminUserRead,
+    AdminUserDeactivateRequest,
     ImpersonateResponse,
 )
 
@@ -133,15 +134,13 @@ def impersonate_user(
     ua = request.headers.get("user-agent")
     try:
         target = service.impersonate_target(uuid, actor_id=actor.user_id)
+        # ADR-028: авторитетная повторная проверка цели и инициатора под
+        # FOR SHARE (порядок по user id) + сессия — одной транзакцией.
+        session_token, expires_at = service.start_impersonation_session(
+            int(target["id"]), actor_id=actor.user_id, ip=ip, user_agent=ua,
+        )
     except service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-
-    session_token, expires_at = auth_service.create_session(
-        user_id=target["id"],
-        ip=ip,
-        user_agent=ua,
-        impersonator_user_id=actor.user_id,
-    )
 
     # session_id_hash новой сессии = user_sessions.id impersonation-сессии:
     # связывает audit-строку с конкретной созданной сессией.
@@ -174,6 +173,66 @@ def impersonate_user(
     }
 
 
+@router.post("/{uuid}/deactivate", response_model=AdminUserRead)
+def deactivate_user(
+    request: Request,
+    uuid: str,
+    body: AdminUserDeactivateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Отключение аккаунта (ADR-028): обязательная причина (trim, ≤500),
+    собственный аккаунт отключить нельзя. Аккаунт, email и данные
+    сохраняются; все сессии отзываются; восстановление — POST /restore.
+    Причина хранится зашифрованной и в ответ/журналы не попадает.
+    """
+    actor = _admin_actor(current_user)
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
+    try:
+        return service.deactivate_user(
+            uuid, body.reason,
+            actor_id=actor.user_id, actor_role=actor.role,
+            ip=ip, user_agent=ua,
+        )
+    except service.AuthError as e:
+        record_secondary_failure(
+            event="admin_user_deactivate_failed", actor=actor,
+            failure_reason_code=e.audit_code,
+            context=build_request_context(ip=ip, user_agent=ua),
+        )
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.post("/{uuid}/restore", response_model=AdminUserRead)
+def restore_user(
+    request: Request,
+    uuid: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Восстановление отключённого или исторически удалённого аккаунта
+    (ADR-028) — только администратором, по обращению. Прежние id/uuid,
+    роли, профиль и связи сохраняются; старые сессии не оживают.
+    """
+    actor = _admin_actor(current_user)
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
+    try:
+        return service.restore_user(
+            uuid,
+            actor_id=actor.user_id, actor_role=actor.role,
+            ip=ip, user_agent=ua,
+        )
+    except service.AuthError as e:
+        record_secondary_failure(
+            event="admin_user_restore_failed", actor=actor,
+            failure_reason_code=e.audit_code,
+            context=build_request_context(ip=ip, user_agent=ua),
+        )
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
 @router.get("/{uuid}", response_model=AdminUserRead)
 def get_user(uuid: str):
     """Профиль конкретного пользователя по UUID."""
@@ -191,8 +250,10 @@ def update_user(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Частичное обновление пользователя.
-    Поддерживает: блокировку/разблокировку, смену роли, ФИО и телефон.
+    Частичное обновление пользователя: роли, ФИО и телефон (в т.ч. у
+    отключённого, но не удалённого аккаунта). Реальная смена is_active
+    отклоняется (ADR-028, 422 lifecycle_endpoint_required; собственное
+    отключение — self_admin_protected) — используйте /deactivate и /restore.
     """
     actor = _admin_actor(current_user)
     ip = _client_ip(request)
@@ -223,8 +284,10 @@ def delete_user(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Мягкое удаление пользователя. Отзывает все сессии.
-    Возвращает 204 No Content при успехе.
+    Устаревший путь (ADR-028): аккаунт больше НЕ удаляется. Без изменений БД
+    отвечает 404 (нет пользователя), 422 self_admin_protected (собственный
+    аккаунт) или 410 lifecycle_endpoint_required — отключение выполняется
+    POST /{uuid}/deactivate с обязательной причиной.
     """
     actor = _admin_actor(current_user)
     ip = _client_ip(request)

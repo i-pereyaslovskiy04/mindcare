@@ -25,6 +25,32 @@ class InvalidUserRequestError(ValueError):
     audit_code = "invalid_request"
 
 
+class SelfLifecycleProtectedError(ValueError):
+    """
+    ADR-028: администратор пытается отключить (или «удалить») собственный
+    аккаунт. Guard по стабильному actor_id == target_id — ДО любых мутаций.
+    """
+    audit_code = "self_admin_protected"
+
+
+class AccountAlreadyDisabledError(ValueError):
+    """ADR-028: аккаунт уже отключён (is_active=false и/или deleted_at)."""
+    audit_code = "account_already_disabled"
+
+
+class AccountAlreadyActiveError(ValueError):
+    """ADR-028: восстанавливать нечего — аккаунт активен и не удалён."""
+    audit_code = "account_already_active"
+
+
+class LifecycleEndpointRequiredError(ValueError):
+    """
+    ADR-028: устаревший путь изменения lifecycle (DELETE / PATCH is_active)
+    отклонён — только POST /deactivate (с причиной) и POST /restore.
+    """
+    audit_code = "lifecycle_endpoint_required"
+
+
 class RoleConfigError(RuntimeError):
     """
     Отсутствует разрешённая Role в seed/БД — configuration/internal failure

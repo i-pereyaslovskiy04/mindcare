@@ -36,16 +36,29 @@ class RegistrationDataError(RuntimeError):
     """
 
 
-class SelfReactivationNotAllowedError(RegistrationDataError):
+class AccountUnavailableError(RuntimeError):
     """
-    Stage 5A-1 (security): попытка публичной self-registration реактивировать
-    soft-deleted аккаунт, активные роли которого НЕ равны строго {"student"}
-    (staff-роль, пустой набор или student+staff). Подкласс RegistrationDataError
-    → уже существующий `except storage.RegistrationDataError` в service мапит его
-    в безопасный generic ответ (HTTP 500, audit_code="internal_error") БЕЗ
-    раскрытия существования аккаунта и его ролей. Сообщение исключения намеренно
-    фиксированное и НЕ содержит email/id/UUID/названий ролей.
+    ADR-028: регистрация на email, которому уже принадлежит ЛЮБАЯ строка users
+    (активная, отключённая или исторически soft-deleted). Self-registration
+    больше не реактивирует аккаунт — восстанавливает только администратор.
+    Бросается после верного OTP и ДО любых мутаций: транзакция откатывается,
+    OTP не потребляется. Service мапит в 409 email_already_exists (то же
+    сообщение, что у register_init) — без раскрытия состояния аккаунта.
     """
+
+
+class StaleCredentialsError(RuntimeError):
+    """
+    ADR-028: под блокировкой строки users текущий password_hash отличается от
+    того, для которого вход успешно выполнил bcrypt (пароль сменили/сбросили
+    между проверкой и выдачей сессии). Сессия не создаётся; service мапит в
+    401 invalid_credentials. Хеш в исключение не передаётся.
+    """
+
+
+class SelfDeactivationNotAllowedError(RuntimeError):
+    """ADR-028: самоотключение доступно только чистому student (под блокировкой)."""
+    audit_code = "self_deactivation_not_allowed"
 
 
 class UserNotFoundError(RuntimeError):
@@ -322,34 +335,17 @@ def save_user(user: dict) -> dict:
         return _user_to_dict(db_user, db)
 
 
-def reactivate_user(
-    email: str,
-    name: str,
-    password_hash: str,
-) -> Optional[dict]:
+def email_exists_any(email: str) -> bool:
     """
-    Реактивирует мягко-удалённого пользователя вместо создания нового.
-    Возвращает dict если такой удалённый юзер найден, иначе None.
-    Роль, uuid и id остаются прежними — обновляются только имя, пароль и статус.
+    ADR-028: принадлежит ли email ЛЮБОЙ строке users — активной, отключённой
+    или исторически soft-deleted (уникальный индекс email полный). Ранняя
+    проверка register_init: отключённый/удалённый аккаунт регистрация не
+    восстанавливает, OTP для него не создаётся.
     """
     with SessionLocal() as db:
-        user = (
-            db.query(User)
-            .filter(
-                User.email == normalize_email(email),
-                User.deleted_at.isnot(None),
-            )
-            .first()
-        )
-        if not user:
-            return None
-        user.deleted_at = None
-        user.is_active = True
-        user.full_name = name
-        user.password_hash = password_hash
-        db.commit()
-        db.refresh(user)
-        return _user_to_dict(user, db)
+        return db.query(User.id).filter(
+            User.email == normalize_email(email),
+        ).first() is not None
 
 
 def get_active_consent_id(policy_type: str) -> Optional[int]:
@@ -407,6 +403,25 @@ def required_consent_ids(db, required_consent_types: list[str]) -> list[int]:
     return consent_ids
 
 
+def enqueue_registration_invite_in_tx(db, user_id: int) -> None:
+    """
+    ADR-029: намерение доставить приглашение подтвердить статус студента ДонГУ
+    — общий шаг core UoW регистрации по паролю и через провайдера. Пишется в
+    ПЕРЕДАННУЮ транзакцию (без commit): аккаунт без намерения не появляется.
+    Ключ стабилен для пользователя; ON CONFLICT DO NOTHING — без IntegrityError.
+    """
+    from app.notifications.storage import enqueue_in_tx
+    from app.notifications.templates import (
+        STUDENT_VERIFICATION_INVITE, invite_event_key,
+    )
+    enqueue_in_tx(
+        db,
+        recipient_id=user_id,
+        event_key=invite_event_key(user_id),
+        message_code=STUDENT_VERIFICATION_INVITE,
+    )
+
+
 def register_confirm_atomic(
     email: str,
     code: str,
@@ -420,8 +435,10 @@ def register_confirm_atomic(
     В ОДНОЙ сессии и ОДНОМ финальном commit:
       1. validate OTP (без удаления, если код верный);
       2. убедиться, что все обязательные consent-политики существуют;
-      3. создать нового или реактивировать soft-deleted пользователя;
-      4. назначить роль student (для нового пользователя);
+      3. создать нового пользователя; если email уже принадлежит любой строке
+         users (в т.ч. отключённой/soft-deleted) — AccountUnavailableError без
+         мутаций (ADR-028: реактивацию выполняет только администратор);
+      4. назначить роль student;
       5. создать все обязательные consent_records (с ip/user_agent);
       6. consume (delete) OTP;
       7. commit.
@@ -436,8 +453,9 @@ def register_confirm_atomic(
     (пользователь при этом не создаётся).
 
     Бросает:
-      ValueError            — проблема OTP (service → HTTP 400);
-      RegistrationDataError — нет роли student или consent-политики (→ HTTP 500).
+      ValueError              — проблема OTP (service → HTTP 400);
+      AccountUnavailableError — email занят любой строкой users (→ HTTP 409);
+      RegistrationDataError   — нет роли student или consent-политики (→ 500).
 
     SMTP/email и welcome-уведомление СЮДА не входят (письмо отправляется на
     init-шаге; welcome — soft-fail после commit на уровне service).
@@ -498,56 +516,24 @@ def register_confirm_atomic(
         # 2. Обязательные consent-политики обязаны существовать (seed data).
         consent_ids = required_consent_ids(db, required_consent_types)
 
-        # 3. Создать нового или реактивировать soft-deleted пользователя.
-        user = (
-            db.query(User)
-            .filter(
-                User.email == email,
-                User.deleted_at.isnot(None),
-            )
-            .first()
+        # 3. ADR-028: email уже принадлежит ЛЮБОЙ строке users (активной,
+        #    отключённой или исторически soft-deleted) → отказ ДО любой
+        #    мутации. Self-registration больше не реактивирует аккаунт —
+        #    восстанавливает только администратор. Выход из with без commit:
+        #    rollback, OTP не потребляется, попытки не тратятся. UNIQUE email
+        #    (полный индекс) не ослаблен и окончательно решает гонку.
+        existing = db.query(User.id).filter(User.email == email).first()
+        if existing is not None:
+            raise AccountUnavailableError("email is not available for registration")
+
+        user = User(
+            full_name=name,
+            email=email,
+            password_hash=password_hash,
         )
-        if user is not None:
-            # Stage 5A-1 (security): публичная self-registration может
-            # реактивировать ТОЛЬКО чистый student-аккаунт. Проверяем реальные
-            # активные роли ДО любой мутации/flush/audit/consume OTP. Staff-роль,
-            # пустой набор или student+staff → fail closed (typed internal
-            # precommit error, generic ответ без раскрытия ролей/существования).
-            active_roles = set(get_active_role_names(db, user.id))
-            if active_roles != {"student"}:
-                raise SelfReactivationNotAllowedError(
-                    "self-reactivation is not permitted for this account"
-                )
-            # Реактивация: id/uuid/роль сохраняются (как в reactivate_user).
-            user.deleted_at = None
-            user.is_active = True
-            user.full_name = name
-            user.password_hash = password_hash
-            db.flush()
-            # Stage 5A-1: entity-привязанное lifecycle-событие восстановления
-            # soft-deleted аккаунта. Actor = сам восстановленный student, target =
-            # этот же аккаунт. ATOMIC (db=db) в той же транзакции до единственного
-            # commit — сбой аудита откатывает реактивацию/consent/consume OTP.
-            # Только reactivation-ветка; новая регистрация его НЕ пишет. ПДн
-            # (email/ФИО/OTP/hash/consent) в audit не попадают: metadata={}.
-            record_event(
-                event="user_reactivated",
-                actor=Actor.user(user.id, "student"),
-                target=Target("user", user.id),
-                outcome=Outcome.SUCCESS,
-                metadata={},
-                context=build_request_context(ip=ip, user_agent=user_agent),
-                db=db,
-            )
-        else:
-            user = User(
-                full_name=name,
-                email=email,
-                password_hash=password_hash,
-            )
-            db.add(user)
-            db.flush()                      # нужен user.id до user_roles/consents
-            _assign_role(db, user.id, "student")  # RegistrationDataError если нет роли
+        db.add(user)
+        db.flush()                      # нужен user.id до user_roles/consents
+        _assign_role(db, user.id, "student")  # RegistrationDataError если нет роли
 
         # 4. Обязательные consent_records (с request-контекстом).
         for cid in consent_ids:
@@ -558,6 +544,11 @@ def register_confirm_atomic(
                 ip_address=ip,
                 user_agent=user_agent,
             ))
+
+        # 4a. ADR-029: намерение доставить приглашение подтвердить статус
+        #     студента ДонГУ — в ТОЙ ЖЕ транзакции (сбой → откат регистрации,
+        #     OTP цел). Публикация — post-commit, повтор — retry-job.
+        enqueue_registration_invite_in_tx(db, user.id)
 
         # 5. Потребить OTP в той же транзакции.
         db.delete(record)
@@ -629,9 +620,9 @@ def change_password_atomic(
       5. commit.
 
     verify_current — функция (stored_hash: str) -> bool; bcrypt-проверка
-    выполняется внутри транзакции, но до UPDATE строка не блокируется
-    (plain SELECT в PostgreSQL не держит row lock), поэтому медленный bcrypt
-    не удерживает блокировку. new_password_hash вычисляется ВНЕ транзакции.
+    выполняется по plain SELECT (row lock не держится), затем строка берётся
+    FOR UPDATE и хеш сверяется с проверенным (ADR-028): изменился → тот же
+    InvalidCurrentPasswordError. new_password_hash вычисляется ВНЕ транзакции.
 
     Если verify_current(...) → False, бросается InvalidCurrentPasswordError
     ДО любых изменений: пароль и сессии не трогаются. Сбой на шаге отзыва
@@ -657,7 +648,28 @@ def change_password_atomic(
         if user.password_hash is None:
             raise PasswordNotSetError("password is not set for this account")
 
-        if not verify_current(user.password_hash):
+        # bcrypt — ДО блокировки (не удерживает row lock). Проверенный хеш —
+        # отдельное локальное значение, снятое до повторного чтения строки.
+        verified_hash = user.password_hash
+        if not verify_current(verified_hash):
+            raise InvalidCurrentPasswordError("Неверный текущий пароль")
+
+        # ADR-028: FOR UPDATE до смены пароля и отзыва сессий — сериализация со
+        # start_session_atomic (вход, завершившийся первым, будет отозван ниже;
+        # вход, ждущий блокировку, увидит новый хеш → invalid_credentials) и с
+        # параллельной сменой/сбросом. populate_existing — свежая версия строки.
+        user = (
+            db.query(User)
+            .filter(User.id == int(user_id), User.deleted_at.is_(None))
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if user is None:
+            raise UserNotFoundError("Пользователь не найден")
+        if user.password_hash != verified_hash:
+            # Пароль сменили между проверкой и блокировкой: проверенный
+            # «текущий» пароль уже не текущий.
             raise InvalidCurrentPasswordError("Неверный текущий пароль")
 
         user.password_hash = new_password_hash
@@ -737,9 +749,12 @@ def password_reset_confirm_atomic(
             raise OtpInvalidError(f"Неверный код. Осталось попыток: {remaining}")
 
         # ── OTP верный. Дальше — core UoW без промежуточных commit. ──────────
+        # ADR-028: FOR UPDATE до смены пароля и отзыва сессий — сериализация
+        # со start_session_atomic и lifecycle-операциями на строке users.
         user = (
             db.query(User)
             .filter(User.email == email, User.deleted_at.is_(None))
+            .with_for_update()
             .first()
         )
         if user is None:
@@ -828,6 +843,157 @@ def create_session_in_tx(
         impersonator_user_id=impersonator_user_id,
     ))
     return token, expires_at
+
+
+_UNSET = object()
+
+
+def start_session_atomic(
+    user_id,
+    *,
+    check,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    expected_password_hash=_UNSET,
+    impersonator_user_id: Optional[int] = None,
+) -> tuple[str, datetime, dict]:
+    """
+    ADR-028: единая атомарная выдача сессии с повторной проверкой доступа под
+    блокировкой строки users. Одна транзакция: lock → dict из заблокированной
+    строки → check → (last_login) → create_session_in_tx → commit.
+
+    Режимы блокировок (без перехода SHARE → UPDATE):
+      * обычный вход (impersonator_user_id is None): строка пользователя
+        FOR UPDATE — у неё обновляется last_login. Lifecycle-операции
+        (deactivate/restore/self) и смена/сброс пароля берут ту же строку
+        FOR UPDATE: вход либо коммитится раньше (и они отзовут его сессию),
+        либо ждёт и видит новое состояние;
+      * impersonation: admin и target одним запросом `ORDER BY id FOR SHARE`
+        (общий порядок блокировок по user id); ни одна строка не обновляется,
+        last_login цели НЕ меняется (это не вход самого пользователя).
+
+    expected_password_hash — хеш, для которого вход УЖЕ успешно выполнил
+    bcrypt (вне блокировки). Под блокировкой сравнивается с актуальным
+    password_hash; расхождение → StaleCredentialsError, сессия не создаётся.
+    Хеш — только внутренний параметр: в результат/логи/исключения не попадает.
+
+    check:
+      * обычный вход — check(user_dict | None);
+      * impersonation — check(target_dict | None, impersonator_dict | None).
+    check бросает доменный отказ (AuthError) → выход из with без commit
+    (rollback, ничего не изменено). Технический сбой БД/commit всплывает как
+    есть (НЕ превращается в доменный отказ).
+
+    Возвращает (raw session_token, expires_at, user_dict заблокированной строки).
+    """
+    with SessionLocal() as db:
+        if impersonator_user_id is None:
+            user = (
+                db.query(User)
+                .filter(User.id == int(user_id), User.deleted_at.is_(None))
+                .with_for_update()
+                .populate_existing()
+                .first()
+            )
+            if (
+                expected_password_hash is not _UNSET
+                and (user is None or user.password_hash != expected_password_hash)
+            ):
+                raise StaleCredentialsError("credentials changed before session start")
+            user_dict = _user_to_dict(user, db) if user is not None else None
+            check(user_dict)
+            user.last_login = datetime.now(timezone.utc)
+        else:
+            ids = sorted({int(user_id), int(impersonator_user_id)})
+            rows = (
+                db.query(User)
+                .filter(User.id.in_(ids), User.deleted_at.is_(None))
+                .order_by(User.id)
+                .with_for_update(read=True)
+                .populate_existing()
+                .all()
+            )
+            by_id = {u.id: u for u in rows}
+            user = by_id.get(int(user_id))
+            admin = by_id.get(int(impersonator_user_id))
+            user_dict = _user_to_dict(user, db) if user is not None else None
+            admin_dict = _user_to_dict(admin, db) if admin is not None else None
+            check(user_dict, admin_dict)
+
+        token, expires_at = create_session_in_tx(
+            db, user.id, ip=ip, user_agent=user_agent,
+            impersonator_user_id=impersonator_user_id,
+        )
+        db.commit()
+        return token, expires_at, user_dict
+
+
+def self_deactivate_atomic(
+    user_id,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    """
+    ADR-028: пользователь отключает СВОЙ аккаунт. Target — только
+    authenticated user_id (клиент чужой id не передаёт). Одна транзакция:
+
+      1. users FOR UPDATE (не soft-deleted) — та же блокировка, что у смены
+         membership (users.storage.update_user, grant admin) и lifecycle;
+      2. ПОД блокировкой: активные роли ровно {student}, иначе
+         SelfDeactivationNotAllowedError (staff, в т.ч. admin+student);
+      3. уже отключён → AccountAlreadyDisabledError;
+      4. disable_user_in_tx(source='self', фиксированная причина) — is_active,
+         зашифрованная причина, отзыв ВСЕХ сессий;
+      5. user_self_deactivated (ATOMIC/RAISE, actor = target, metadata={});
+      6. один commit. Сбой аудита/commit откатывает всё вместе.
+    """
+    # Локальный импорт: users.storage импортирует auth.storage на уровне модуля.
+    from app.auth.roles import is_pure_student
+    from app.users.errors import AccountAlreadyDisabledError
+    from app.users.storage import (
+        DEACTIVATION_SOURCE_SELF, SELF_DEACTIVATION_REASON, disable_user_in_tx,
+    )
+
+    with SessionLocal() as db:
+        user = (
+            db.query(User)
+            .filter(User.id == int(user_id), User.deleted_at.is_(None))
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if user is None:
+            raise UserNotFoundError("Пользователь не найден")
+        if not is_pure_student(get_active_role_names(db, user.id)):
+            raise SelfDeactivationNotAllowedError(
+                "self-deactivation is allowed only for student accounts"
+            )
+        if user.is_active is False:
+            raise AccountAlreadyDisabledError("Аккаунт уже отключён")
+
+        disable_user_in_tx(
+            db, user,
+            source=DEACTIVATION_SOURCE_SELF, reason=SELF_DEACTIVATION_REASON,
+        )
+        record_event(
+            event="user_self_deactivated",
+            actor=Actor.user(user.id, "student"),
+            target=Target("user", user.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=build_request_context(ip=ip, user_agent=user_agent),
+            db=db,
+        )
+        try:
+            db.commit()
+        except Exception as exc:   # noqa: BLE001 — только commit-фаза
+            print(
+                "[AUDIT] event=user_self_deactivate phase=commit "
+                f"error={type(exc).__name__}",
+                file=sys.stderr,
+            )
+            raise
 
 
 def find_session(token: str) -> Optional[dict]:

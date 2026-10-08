@@ -200,19 +200,21 @@ def test_user_identical_scalar_values_produce_no_dcl():
 # 2. users — границы: is_active и роли НЕ попадают в DCL
 # ══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.parametrize("before,after,expected_event", [
-    (True, False, "admin_user_deactivated"),
-    (False, True, "admin_user_activated"),
-])
-def test_user_lifecycle_only_writes_zero_dcl(before, after, expected_event):
+@pytest.mark.parametrize("before,after", [(True, False), (False, True)])
+def test_user_lifecycle_via_patch_rejected_writes_nothing(before, after):
+    """ADR-028: реальная смена is_active через generic PATCH отклоняется ДО
+    мутации — ни lifecycle-события, ни DCL-строки, is_active не изменён.
+    Lifecycle пишут только deactivate_user/restore_user (без DCL)."""
     spies = _spies()
     db = MagicMock(name="db")
     user = _user(is_active=before)
-    _apply(db, user, spies, is_active=after)
+    with pytest.raises(users_storage.RoleChangeError) as ei:
+        _apply(db, user, spies, is_active=after)
+    assert ei.value.audit_code == "lifecycle_endpoint_required"
 
     events, dcl = spies
-    assert [e["event"] for e in events] == [expected_event]
-    assert dcl == []
+    assert events == [] and dcl == []
+    assert user.is_active is before
 
 
 def test_user_role_only_writes_zero_dcl():
@@ -233,9 +235,10 @@ def test_user_role_only_writes_zero_dcl():
     assert dcl == []
 
 
-def test_user_combined_scalar_lifecycle_role_writes_one_dcl_for_scalar_only():
-    """Три непересекающихся audit-события, но РОВНО ОДНА journal-строка —
-    и только по scalar-полям."""
+def test_user_combined_scalar_role_writes_one_dcl_for_scalar_only():
+    """Два непересекающихся audit-события, но РОВНО ОДНА journal-строка —
+    и только по scalar-полям. is_active с прежним значением — no-op
+    (ADR-028: lifecycle через PATCH не меняется)."""
     spies = _spies()
     role_obj = SimpleNamespace(id=55, name="supervisor")
     db = _role_lookup_db([role_obj])
@@ -243,7 +246,7 @@ def test_user_combined_scalar_lifecycle_role_writes_one_dcl_for_scalar_only():
     _apply(
         db, user, spies,
         full_name=PII_NAME,
-        is_active=False,
+        is_active=True,
         current_roles=["psychologist"],
         target_staff={"psychologist", "supervisor"},
         legal_basis_confirmed=True, basis_type="service_duty",
@@ -252,7 +255,7 @@ def test_user_combined_scalar_lifecycle_role_writes_one_dcl_for_scalar_only():
 
     events, dcl = spies
     assert [e["event"] for e in events] == [
-        "admin_user_updated", "admin_user_deactivated", "admin_role_add",
+        "admin_user_updated", "admin_role_add",
     ]
     assert len(dcl) == 1
     kw = dcl[0]
@@ -262,8 +265,8 @@ def test_user_combined_scalar_lifecycle_role_writes_one_dcl_for_scalar_only():
     assert kw["values"] is None
 
 
-def test_user_dcl_is_written_right_after_generic_event_before_lifecycle():
-    """Порядок: admin_user_updated → DCL → lifecycle → role."""
+def test_user_dcl_is_written_right_after_generic_event_before_role():
+    """Порядок: admin_user_updated → DCL → role (lifecycle в PATCH нет)."""
     calls = []
     role_obj = SimpleNamespace(id=55, name="supervisor")
     db = _role_lookup_db([role_obj])
@@ -276,7 +279,7 @@ def test_user_dcl_is_written_right_after_generic_event_before_lifecycle():
             db, user,
             current_roles=["psychologist"],
             target_staff={"psychologist", "supervisor"},
-            full_name="New Name", phone=None, is_active=False,
+            full_name="New Name", phone=None, is_active=True,
             legal_basis_confirmed=True, basis_type="service_duty",
             basis_reference="Order #1", legal_basis_comment=None,
             confirmed_by_user_id=ACTOR_ID,
@@ -286,7 +289,6 @@ def test_user_dcl_is_written_right_after_generic_event_before_lifecycle():
     assert calls == [
         ("event", "admin_user_updated"),
         ("dcl", "users"),
-        ("event", "admin_user_deactivated"),
         ("event", "admin_role_add"),
     ]
 

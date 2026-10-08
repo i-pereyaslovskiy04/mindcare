@@ -73,13 +73,35 @@ def get_current_user(token: str = Depends(get_session_token)) -> dict:
     # Impersonation (ADR-025): единая точка, где сессия становится user dict.
     # Если сессию создал администратор «под именем» — прокидываем отметку и имя
     # админа, чтобы фронт показал баннер возврата, а /me отдал серверную правду.
+    #
+    # ADR-028: impersonation-сессия действительна, только пока инициатор —
+    # существующий (не soft-deleted), не отключённый пользователь с активной
+    # membership-ролью admin. Иначе сессия отзывается навсегда и запрос
+    # получает тот же 401, что и любая недействительная сессия (как ветка
+    # is_active выше; auth_log для отказа dependency не пишется — причина уже
+    # зафиксирована событием, которое её вызвало). Так ни одно действие не
+    # выполняется от имени администратора, утратившего это право, и роль
+    # инициатора в user dict — подтверждённая в ЭТОМ запросе membership, а не
+    # предположение.
     impersonator_id = session.get("impersonator_user_id")
     if impersonator_id is not None:
         admin = storage.find_user_by_id(str(impersonator_id))
+        if (
+            admin is None
+            or admin.get("is_active") is False
+            or "admin" not in (admin.get("roles") or [])
+        ):
+            storage.revoke_session(token)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Сессия истекла. Войдите снова.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         user = {
             **user,
             "impersonator_user_id": impersonator_id,
-            "impersonator_name": admin["name"] if admin else None,
+            "impersonator_name": admin["name"],
+            "impersonator_role": "admin",
         }
     return user
 

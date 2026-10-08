@@ -240,15 +240,20 @@ def test_user_both_scalar_fields_write_one_sorted_dcl(client):
 # ══════════════════════════════════════════════════════════════════════════
 
 def test_user_lifecycle_only_writes_zero_dcl(client):
+    # ADR-028: lifecycle — выделенные операции; DCL они не пишут.
     token, _admin_id, _ = create_multi_role_user(client, ["admin"])
     target_id = _make_staff_target(client, token)
 
     before = len(_dcl_rows("users", target_id))
-    r = client.patch(f"/api/admin/users/{_uuid_for(target_id)}",
-                     headers=_auth(token), json={"is_active": False})
+    r = client.post(f"/api/admin/users/{_uuid_for(target_id)}/deactivate",
+                    headers=_auth(token), json={"reason": "Причина DCL"})
+    assert r.status_code == 200, r.text
+    r = client.post(f"/api/admin/users/{_uuid_for(target_id)}/restore",
+                    headers=_auth(token))
     assert r.status_code == 200, r.text
 
     assert len(_audit_rows("admin_user_deactivated", target_id, "user")) == 1
+    assert len(_audit_rows("admin_user_activated", target_id, "user")) == 1
     assert len(_dcl_rows("users", target_id)) == before      # 0 добавлено
 
 
@@ -273,7 +278,8 @@ def test_user_role_only_writes_zero_dcl(client):
     assert len(_dcl_rows("users", target_id)) == before      # 0 добавлено
 
 
-def test_user_combined_scalar_lifecycle_role_writes_one_scalar_only_dcl(client):
+def test_user_combined_scalar_role_writes_one_scalar_only_dcl(client):
+    # is_active с прежним значением (edit-модалка) — no-op; DCL только scalar.
     token, admin_id, _ = create_multi_role_user(client, ["admin"])
     target_id = _make_staff_target(client, token)
 
@@ -281,7 +287,7 @@ def test_user_combined_scalar_lifecycle_role_writes_one_scalar_only_dcl(client):
         f"/api/admin/users/{_uuid_for(target_id)}", headers=_auth(token),
         json={
             "full_name": PII_NAME,
-            "is_active": False,
+            "is_active": True,
             "roles": ["psychologist", "supervisor"],
             "legal_basis_confirmed": True,
             "basis_type": "employment",
@@ -290,11 +296,9 @@ def test_user_combined_scalar_lifecycle_role_writes_one_scalar_only_dcl(client):
     )
     assert r.status_code == 200, r.text
 
-    # Три непересекающихся audit-события.
     assert len(_audit_rows("admin_user_updated", target_id, "user")) == 1
-    assert len(_audit_rows("admin_user_deactivated", target_id, "user")) == 1
+    assert _audit_rows("admin_user_deactivated", target_id, "user") == []
     assert len(_audit_rows("admin_role_add", target_id, "user")) == 1
-    # РОВНО ОДНА journal-строка, только по scalar-полю.
     drows = _dcl_rows("users", target_id)
     assert len(drows) == 1
     row = drows[0]

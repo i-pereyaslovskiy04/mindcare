@@ -9,6 +9,16 @@
 > обслуживание партиций — [`STAGE_7_DEPLOYMENT.md`](STAGE_7_DEPLOYMENT.md).
 > ⚠ Первый прогон анонимизации **необратим**, поэтому её таймер `deploy.sh`
 > устанавливает, но **не включает**.
+>
+> **ADR-029:** повторная доставка system-сообщений (outbox
+> `system_message_intents`: приглашение подтвердить статус студента ДонГУ и
+> результат решения по заявке) — `mindcare-deliver-system-messages.timer`
+> (каждые 5 минут, `scripts/deliver_system_message_intents.py`). `deploy.sh`
+> устанавливает и **включает** его сразу: job идемпотентен (event_key), только
+> публикует уже зафиксированные намерения и ничего не удаляет. Exit 1 (ошибка
+> чтения outbox, публикации или отметки) поднимает
+> `mindcare-maintenance-failure@`. Ручной запуск:
+> `cd mindcare_api && .venv/bin/python scripts/deliver_system_message_intents.py [--dry-run] [--limit N]`.
 
 ## Демо-стенд MindCare (локальная сеть)
 

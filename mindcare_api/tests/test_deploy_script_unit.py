@@ -40,6 +40,9 @@ MAINTENANCE_UNITS = (
     "mindcare-ensure-audit-partitions.timer",
     "mindcare-anonymize-ips.service",
     "mindcare-anonymize-ips.timer",
+    # ADR-029: retry outbox system-сообщений
+    "mindcare-deliver-system-messages.service",
+    "mindcare-deliver-system-messages.timer",
     "mindcare-maintenance-failure@.service",
 )
 
@@ -193,6 +196,23 @@ def test_all_declared_maintenance_units_exist_in_repo(src):
 def test_timers_are_enabled_unconditionally(src):
     assert "systemctl enable --now mindcare-complete-group-sessions.timer" in src
     assert "systemctl enable --now mindcare-extend-schedules.timer" in src
+    assert "systemctl enable --now mindcare-deliver-system-messages.timer" in src
+
+
+def test_outbox_retry_unit_is_oneshot_with_failure_hook():
+    unit = (DEPLOY_DIR / "mindcare-deliver-system-messages.service").read_text(
+        encoding="utf-8",
+    )
+    assert "Type=oneshot" in unit
+    assert "scripts/deliver_system_message_intents.py" in unit
+    assert (
+        "OnFailure=mindcare-maintenance-failure@"
+        "mindcare-deliver-system-messages.service"
+    ) in unit
+    timer = (DEPLOY_DIR / "mindcare-deliver-system-messages.timer").read_text(
+        encoding="utf-8",
+    )
+    assert "Unit=mindcare-deliver-system-messages.service" in timer
 
 
 def test_repo_units_are_retargeted_to_actual_host(src):

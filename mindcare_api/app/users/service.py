@@ -6,16 +6,21 @@
 import logging
 import secrets
 import string
+from datetime import datetime
 from typing import Optional
 
 log = logging.getLogger(__name__)
 
 from app.users import storage
 from app.users.errors import (
+    AccountAlreadyActiveError,
+    AccountAlreadyDisabledError,
     ActorContextError,
     EmailAlreadyExistsError,
     InvalidUserRequestError,
+    LifecycleEndpointRequiredError,
     RoleConfigError,
+    SelfLifecycleProtectedError,
     UserNotFoundError,
 )
 from app.users.schemas import (
@@ -183,7 +188,15 @@ def impersonate_target(uuid: str, actor_id: int) -> dict:
       * 403 — цель заблокирована (is_active=False) или без активных ролей.
     """
     target = get_user(uuid)  # 404 если нет
+    _check_impersonation_target(target, actor_id)
+    return target
 
+
+def _check_impersonation_target(target: Optional[dict], actor_id: int) -> None:
+    """Правила допустимости цели impersonation (общие для ранней проверки и
+    авторитетной — под блокировкой в start_impersonation_session)."""
+    if target is None:
+        raise AuthError("Пользователь не найден", status_code=404)
     if int(target["id"]) == int(actor_id):
         raise AuthError(
             "Нельзя войти под своим же аккаунтом", status_code=400,
@@ -192,7 +205,7 @@ def impersonate_target(uuid: str, actor_id: int) -> dict:
         raise AuthError(
             "Нельзя войти под именем другого администратора", status_code=403,
         )
-    if not target.get("is_active"):
+    if target.get("is_active") is False:   # NULL = активен (ADR-028)
         raise AuthError(
             "Нельзя войти под заблокированным пользователем", status_code=403,
         )
@@ -200,7 +213,45 @@ def impersonate_target(uuid: str, actor_id: int) -> dict:
         raise AuthError(
             "У пользователя нет активных ролей", status_code=403,
         )
-    return target
+
+
+def start_impersonation_session(
+    target_id: int,
+    *,
+    actor_id: int,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> tuple[str, datetime]:
+    """
+    ADR-025/028: атомарная выдача impersonation-сессии. В одной транзакции
+    admin и target блокируются FOR SHARE (порядок по user id), правила цели
+    проверяются повторно на заблокированных строках, инициатор обязан быть
+    существующим активным пользователем с ролью admin; last_login цели не
+    меняется. Отключение цели/админа, идущее параллельно, либо дождётся этой
+    транзакции (и отзовёт сессию), либо отработает раньше (и проверка ниже
+    откажет).
+    """
+    from app.auth import storage as auth_storage
+
+    def _check(target: Optional[dict], admin: Optional[dict]) -> None:
+        if (
+            admin is None
+            or admin.get("is_active") is False
+            or "admin" not in (admin.get("roles") or [])
+        ):
+            raise AuthError(
+                "Недостаточно прав для выполнения действия", status_code=403,
+            )
+        _check_impersonation_target(target, actor_id)
+
+    token, expires_at, _ = auth_storage.start_session_atomic(
+        int(target_id),
+        check=_check,
+        ip=ip,
+        user_agent=user_agent,
+        impersonator_user_id=int(actor_id),
+    )
+    return token, expires_at
 
 
 def delete_user(
@@ -212,27 +263,99 @@ def delete_user(
     user_agent: Optional[str] = None,
 ) -> None:
     """
-    Мягкое удаление юзера от имени администратора.
-    Raises AuthError 404/user_not_found если юзер не найден (в т.ч. malformed
-    UUID — текущий контракт сохранён); 500/internal_error при wiring-сбое.
+    ADR-028: устаревший DELETE больше НЕ удаляет аккаунт — документированно
+    отклоняется без изменений БД. Всегда бросает AuthError:
+      404/user_not_found              — нет пользователя (в т.ч. malformed);
+      422/self_admin_protected        — администратор «удаляет» себя;
+      410/lifecycle_endpoint_required — используйте POST /deactivate;
+      500/internal_error              — wiring-сбой (нет actor context).
     """
     try:
-        found = storage.soft_delete_user(
-            uuid,
-            actor_id=actor_id,
-            actor_role=actor_role,
-            ip=ip,
-            user_agent=user_agent,
-        )
-    except ActorContextError:
-        raise AuthError(
-            "Не удалось удалить пользователя.", status_code=500,
-            audit_code="internal_error",
-        )
-    if not found:
+        storage.reject_legacy_delete(uuid, actor_id=actor_id)
+    except UserNotFoundError:
         raise AuthError(
             "Пользователь не найден", status_code=404,
             audit_code="user_not_found",
+        )
+    except SelfLifecycleProtectedError as e:
+        raise AuthError(str(e), status_code=422, audit_code=e.audit_code)
+    except LifecycleEndpointRequiredError as e:
+        raise AuthError(str(e), status_code=410, audit_code=e.audit_code)
+    except ActorContextError:
+        raise AuthError(
+            "Не удалось обработать запрос.", status_code=500,
+            audit_code="internal_error",
+        )
+
+
+def deactivate_user(
+    uuid: str,
+    reason: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    Отключение аккаунта администратором (ADR-028): обязательная причина,
+    атомарный отзыв всех сессий и admin_user_deactivated — в storage.
+    Типизированные precommit-отказы → AuthError со стабильным audit_code.
+    Commit-time/unknown НЕ ловятся → 500 без *_failed.
+    """
+    try:
+        return storage.deactivate_user(
+            uuid, reason,
+            actor_id=actor_id, actor_role=actor_role,
+            ip=ip, user_agent=user_agent,
+        )
+    except UserNotFoundError:
+        raise AuthError(
+            "Пользователь не найден", status_code=404,
+            audit_code="user_not_found",
+        )
+    except SelfLifecycleProtectedError as e:
+        raise AuthError(str(e), status_code=422, audit_code=e.audit_code)
+    except AccountAlreadyDisabledError as e:
+        raise AuthError(str(e), status_code=409, audit_code=e.audit_code)
+    except InvalidUserRequestError as e:
+        raise AuthError(str(e), status_code=422, audit_code="invalid_request")
+    except ActorContextError:
+        raise AuthError(
+            "Не удалось отключить аккаунт.", status_code=500,
+            audit_code="internal_error",
+        )
+
+
+def restore_user(
+    uuid: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    Восстановление аккаунта администратором (ADR-028), в т.ч. исторически
+    soft-deleted. Отзывает оставшиеся сессии; пользователь входит заново.
+    """
+    try:
+        return storage.restore_user(
+            uuid,
+            actor_id=actor_id, actor_role=actor_role,
+            ip=ip, user_agent=user_agent,
+        )
+    except UserNotFoundError:
+        raise AuthError(
+            "Пользователь не найден", status_code=404,
+            audit_code="user_not_found",
+        )
+    except AccountAlreadyActiveError as e:
+        raise AuthError(str(e), status_code=409, audit_code=e.audit_code)
+    except ActorContextError:
+        raise AuthError(
+            "Не удалось восстановить аккаунт.", status_code=500,
+            audit_code="internal_error",
         )
 
 

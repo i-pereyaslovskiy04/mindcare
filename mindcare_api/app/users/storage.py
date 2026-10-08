@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from sqlalchemy import or_, asc, desc, select, case as sa_case
 from sqlalchemy.exc import IntegrityError
 
+from app.core.encryption import encrypt_text
 from app.core.normalization import normalize_email
 from app.audit import (
     Actor, Operation, Outcome, Target, project_changed_fields,
@@ -19,15 +20,64 @@ from app.audit import (
 )
 from app.audit.request_context import build_request_context
 from app.auth.roles import ROLE_PRIORITY as _ROLE_PRIORITY_ORDER, primary_role
-from app.auth.storage import get_active_role_names
+from app.auth.storage import (
+    _revoke_all_user_sessions_in_session, get_active_role_names,
+)
 from app.db.session import SessionLocal
 from app.db.models import (
     User, UserRole, Role, UserSession, UserLegalBasisRecord,
 )
 from app.users.errors import (
-    ActorContextError, EmailAlreadyExistsError, InvalidUserRequestError,
-    RoleConfigError, UserNotFoundError,
+    AccountAlreadyActiveError, AccountAlreadyDisabledError, ActorContextError,
+    EmailAlreadyExistsError, InvalidUserRequestError,
+    LifecycleEndpointRequiredError, RoleConfigError,
+    SelfLifecycleProtectedError, UserNotFoundError,
 )
+from app.users.schemas import DEACTIVATION_REASON_MAX_LEN
+
+# ADR-028: источники отключения (совпадают с CHECK ck_users_deactivation_source).
+DEACTIVATION_SOURCE_ADMIN = "admin"
+DEACTIVATION_SOURCE_SELF = "self"
+# Фиксированная причина самоотключения (хранится так же зашифрованной).
+SELF_DEACTIVATION_REASON = "По запросу пользователя"
+
+
+def is_user_active(user) -> bool:
+    """
+    Единая трактовка активности (ADR-028): NULL is_active = активен (колонка
+    без DB-default, то же правило, что ensure_user_can_start_session и
+    get_current_user). DTO всегда отдают bool, а не None.
+    """
+    return user.is_active is not False
+
+
+def is_user_disabled(user) -> bool:
+    """Отключён = is_active=false ИЛИ исторически soft-deleted (deleted_at)."""
+    return user.is_active is False or user.deleted_at is not None
+
+
+def _lifecycle_fields(user) -> dict:
+    """Публичные lifecycle-поля DTO. Текст причины не отдаётся никогда."""
+    return {
+        "is_active":           is_user_active(user),
+        "deleted_at":          user.deleted_at,
+        "deactivation_source": user.deactivation_source,
+        "deactivated_at":      user.deactivated_at,
+    }
+
+
+def _revoke_sessions_impersonated_by(db, user_id: int) -> None:
+    """
+    Отзывает impersonation-сессии, которые создал администратор user_id
+    (ADR-025/028). Вызывается, когда инициатор теряет право на них: его
+    отключение или снятие роли admin. get_current_user дополнительно
+    проверяет инициатора на каждом запросе — это гигиена, не единственная
+    защита.
+    """
+    db.query(UserSession).filter(
+        UserSession.impersonator_user_id == user_id,
+        ~UserSession.is_revoked,
+    ).update({"is_revoked": True}, synchronize_session=False)
 
 # Имена email-unique объектов схемы (перепроверены по Alembic: baseline
 # af13ad7a133c → ix_users_email; e5a8f3c1d2b6 → ux_users_email_normalized).
@@ -139,7 +189,10 @@ def find_users(
             .scalar_subquery()
         )
         query = db.query(User, role_subq.label("role_name"))
-        if not include_deleted:
+        # ADR-028: фильтр «Отключён» обязан находить и исторически
+        # soft-deleted аккаунты (их восстанавливает только администратор),
+        # поэтому при is_active=false удалённые включаются автоматически.
+        if not include_deleted and is_active is not False:
             query = query.filter(User.deleted_at.is_(None))
 
         # ── 2. Фильтры ──
@@ -173,8 +226,16 @@ def find_users(
                 )
                 query = query.filter(User.id.notin_(other_role_subq))
 
-        if is_active is not None:
-            query = query.filter(User.is_active == is_active)
+        # ADR-028: NULL is_active — активен (историческая колонка без
+        # DB-default); «Отключён» = is_active=false ИЛИ deleted_at.
+        if is_active is True:
+            query = query.filter(
+                User.is_active.is_not(False), User.deleted_at.is_(None),
+            )
+        elif is_active is False:
+            query = query.filter(
+                or_(User.is_active.is_(False), User.deleted_at.is_not(None)),
+            )
 
         # ── 3. Общее количество (для пагинации) ──
         total = query.count()
@@ -217,10 +278,9 @@ def find_users(
                 # НЕ маскировать отсутствие активных ролей как "student":
                 # role_name уже отфильтрован по _active_role и может быть None.
                 "role":       role_name,
-                "is_active":  user.is_active,
                 "created_at": user.created_at,
                 "last_login": user.last_login,
-                "deleted_at": user.deleted_at,
+                **_lifecycle_fields(user),
             })
 
     return items, total
@@ -250,19 +310,25 @@ def get_user_by_uuid(uuid: str) -> Optional[dict]:
         )
         if not user:
             return None
-        roles = get_active_role_names(db, user.id)
-        return {
-            "id":         user.id,
-            "uuid":       str(user.uuid),
-            "email":      user.email,
-            "full_name":  user.full_name,
-            "phone":      user.phone,
-            "roles":      roles,
-            "role":       primary_role(roles),
-            "is_active":  user.is_active,
-            "created_at": user.created_at,
-            "last_login": user.last_login,
-        }
+        return _user_read_dict(db, user)
+
+
+def _user_read_dict(db, user) -> dict:
+    """AdminUserRead-форма: активные роли + нормализованные lifecycle-поля."""
+    roles = get_active_role_names(db, user.id)
+    return {
+        "id":         user.id,
+        "uuid":       str(user.uuid),
+        "email":      user.email,
+        "full_name":  user.full_name,
+        "phone":      user.phone,
+        "roles":      roles,
+        # НЕ маскировать отсутствие активных ролей как "student".
+        "role":       primary_role(roles),
+        "created_at": user.created_at,
+        "last_login": user.last_login,
+        **_lifecycle_fields(user),
+    }
 
 
 def _target_staff_from_roles(roles: list[str], current: set[str]) -> set[str]:
@@ -374,8 +440,11 @@ def _apply_role_and_scalar_changes(
     if phone is not None and new_phone != user.phone:
         changed_scalar_fields.add("phone")
     scalar_changed = bool(changed_scalar_fields)
-    is_active_changed = is_active is not None and is_active != user.is_active
-    deactivating = is_active_changed and is_active is False
+    # ADR-028: сравнение с НОРМАЛИЗОВАННОЙ активностью (NULL = активен), иначе
+    # is_active=true на исторической NULL-строке считался бы «переходом».
+    is_active_changed = (
+        is_active is not None and is_active != is_user_active(user)
+    )
 
     # ── (d) Role diff — до мутации.
     added: set = set()
@@ -401,6 +470,24 @@ def _apply_role_and_scalar_changes(
             "(actor_id and actor_role)"
         )
 
+    # ADR-028: реальная смена is_active через generic PATCH больше не
+    # выполняется — отключение требует причины и отзывает сессии, восстановление
+    # снимает deleted_at; оба — только выделенными POST /deactivate|/restore.
+    # Self-guard первым: попытка отключить СЕБЯ классифицируется как
+    # self_admin_protected (стабильный код ADR-020/028), а не как устаревший
+    # путь. Обе проверки — после fail-closed actor-guard и до любой мутации.
+    if is_active_changed:
+        if is_active is False and actor_id is not None and user.id == actor_id:
+            raise RoleChangeError(
+                "Нельзя отключить собственный аккаунт", 422,
+                "self_admin_protected",
+            )
+        raise RoleChangeError(
+            "Отключение и восстановление аккаунта выполняются отдельными "
+            "действиями «Отключить аккаунт» и «Восстановить»", 422,
+            "lifecycle_endpoint_required",
+        )
+
     # Self-admin guard (defense-in-depth, frontend лишь предотвращает ошибку в UI):
     # администратор не может снять у себя собственную активную роль admin. Работает
     # и для set-based roles[], и для legacy role adapter (оба вычисляют removed).
@@ -415,7 +502,6 @@ def _apply_role_and_scalar_changes(
     #    validations/мутаций/audit.
     if (
         not scalar_changed
-        and not is_active_changed
         and (target_staff is None or (not added and not removed))
     ):
         return
@@ -505,17 +591,8 @@ def _apply_role_and_scalar_changes(
         user.full_name = new_full_name
     if phone is not None:
         user.phone = new_phone
-    if is_active is not None:
-        user.is_active = is_active
-
-    # Stage 5A-1: отзыв активных сессий ТОЛЬКО при реальном переходе True→False,
-    # в той же транзакции ДО record_event и commit. Сбой аудита/commit откатывает
-    # is_active и отзыв сессий вместе. Активация/no-op/прочие поля сессии не трогают.
-    if deactivating:
-        db.query(UserSession).filter(
-            UserSession.user_id == user.id,
-            ~UserSession.is_revoked,
-        ).update({"is_revoked": True}, synchronize_session=False)
+    # is_active здесь не мутируется (ADR-028): реальный переход отклонён выше,
+    # совпадающее значение — no-op.
 
     roles_before = roles_after = None
     if target_staff is not None and (added or removed):
@@ -528,6 +605,11 @@ def _apply_role_and_scalar_changes(
                 UserRole.user_id == user.id,
                 UserRole.role_id.in_(removed_role_ids),
             ).delete(synchronize_session=False)
+
+        # ADR-028: снятие admin лишает права на созданные этим пользователем
+        # impersonation-сессии — отзываем их той же транзакцией.
+        if "admin" in removed:
+            _revoke_sessions_impersonated_by(db, user.id)
 
         # Добавление новых staff-ролей + запись основания на каждую.
         for role_name in _sorted_roles(added):
@@ -589,18 +671,8 @@ def _apply_role_and_scalar_changes(
             context=safe_ctx,
             db=db,
         )
-    # Stage 5A-1: отдельное lifecycle-событие для перехода is_active (не дублируется
-    # в admin_user_updated). Ровно одно на реальный переход; direction по deactivating.
-    if is_active_changed:
-        record_event(
-            event="admin_user_deactivated" if deactivating else "admin_user_activated",
-            actor=Actor.user(actor_id, actor_role),
-            target=Target("user", user.id),
-            outcome=Outcome.SUCCESS,
-            metadata={},
-            context=safe_ctx,
-            db=db,
-        )
+    # Lifecycle-события (admin_user_deactivated/activated) пишут только
+    # deactivate_user/restore_user (ADR-028), не generic PATCH.
     if target_staff is not None and (added or removed):
         event = "admin_role_add" if added and not removed else (
             "admin_role_remove" if removed and not added else "admin_role_update"
@@ -666,10 +738,15 @@ def update_user(
         raise InvalidUserRequestError("Некорректный идентификатор пользователя")
 
     with SessionLocal() as db:
+        # ADR-028: FOR UPDATE — смена membership существующего пользователя
+        # сериализуется с самоотключением (проверка «чистого студента») и
+        # lifecycle-операциями на той же строке users. Роли читаются ПОСЛЕ
+        # блокировки — свежий снимок после ожидания конкурента.
         user = (
             db.query(User)
             .filter(User.uuid == uuid_obj)
             .filter(User.deleted_at.is_(None))
+            .with_for_update()
             .first()
         )
         if not user:
@@ -705,88 +782,264 @@ def update_user(
 
         _commit_or_diag(db, "admin_user_update")
         db.refresh(user)
-
-        roles_out = get_active_role_names(db, user.id)
-        return {
-            "id":         user.id,
-            "uuid":       str(user.uuid),
-            "email":      user.email,
-            "full_name":  user.full_name,
-            "phone":      user.phone,
-            "roles":      roles_out,
-            # НЕ маскировать отсутствие активных ролей как "student".
-            "role":       primary_role(roles_out),
-            "is_active":  user.is_active,
-            "created_at": user.created_at,
-            "last_login": user.last_login,
-        }
+        return _user_read_dict(db, user)
 
 
-def soft_delete_user(
+# ─── ADR-028: единый обратимый lifecycle отключения/восстановления ──────────
+#
+# Инвариант блокировок: lifecycle-операции берут строку users FOR UPDATE.
+# Выдача сессий (auth.storage.start_session_atomic, oauth complete) берёт ту же
+# строку FOR UPDATE/FOR SHARE, поэтому вход либо коммитится ДО отключения (и
+# отключение отзывает его сессию), либо ждёт и видит is_active=false. Смена
+# membership (update_user) тоже под FOR UPDATE — самоотключение проверяет
+# «чистого студента» на закоммиченном наборе ролей.
+
+
+def _parse_uuid_or_none(uuid: str):
+    try:
+        return _uuid.UUID(uuid)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _lock_user_by_uuid(db, uuid_obj, *, include_deleted: bool):
+    """Строка users под FOR UPDATE (READ COMMITTED: свежая версия после
+    ожидания конкурента). include_deleted — для restore исторически
+    soft-deleted аккаунтов и для единообразного 404 у deactivate."""
+    query = db.query(User).filter(User.uuid == uuid_obj)
+    if not include_deleted:
+        query = query.filter(User.deleted_at.is_(None))
+    return query.with_for_update().populate_existing().first()
+
+
+def disable_user_in_tx(db, user, *, source: str, reason: str) -> None:
+    """
+    Отключает аккаунт ВНУТРИ caller-транзакции (без commit). Общий шаг
+    admin-отключения и самоотключения.
+
+    - is_active=false, deactivated_at, deactivation_source;
+    - причина — только Fernet enc:v1 (plaintext в БД/логи/audit не попадает);
+    - отзыв ВСЕХ сессий пользователя и impersonation-сессий, созданных им
+      (если отключают администратора).
+    Аккаунт, email, роли и связанные данные сохраняются. deleted_at не
+    трогается: новое отключение не является удалением.
+    """
+    if source not in (DEACTIVATION_SOURCE_ADMIN, DEACTIVATION_SOURCE_SELF):
+        raise ValueError("unsupported deactivation source")
+    now = datetime.now(timezone.utc)
+    user.is_active = False
+    user.deactivated_at = now
+    user.deactivation_source = source
+    user.deactivation_reason_enc = encrypt_text(reason)
+    user.updated_at = now
+    _revoke_all_user_sessions_in_session(db, user.id)
+    _revoke_sessions_impersonated_by(db, user.id)
+
+
+def _require_actor(actor_id, actor_role, flow: str) -> None:
+    if actor_id is None or actor_role is None:
+        raise ActorContextError(
+            f"user {flow} requires authenticated actor context "
+            "(actor_id and actor_role)"
+        )
+
+
+def deactivate_user(
     uuid: str,
+    reason: str,
     *,
     actor_id: Optional[int] = None,
     actor_role: Optional[str] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
-) -> bool:
+) -> dict:
     """
-    Мягкое удаление юзера — выставляет deleted_at, не удаляет физически.
-    Возвращает True если юзер найден и помечен удалённым, False если не найден.
-    Также отзывает все активные сессии юзера.
+    Отключение аккаунта администратором (ADR-028). Одна транзакция:
+    FOR UPDATE → self-guard → «уже отключён» → disable_user_in_tx (причина +
+    отзыв сессий) → admin_user_deactivated (ATOMIC, metadata={}) → commit.
 
-    Raises:
-        ActorContextError: нет authenticated actor context (→ internal_error).
+    Raises (typed precommit, ничего не изменено):
+      ActorContextError            — нет actor context (wiring);
+      InvalidUserRequestError      — причина пуста/длинная (defense-in-depth);
+      UserNotFoundError            — нет такого пользователя (в т.ч. malformed);
+      SelfLifecycleProtectedError  — администратор отключает себя;
+      AccountAlreadyDisabledError  — аккаунт уже отключён/удалён.
     """
-    # malformed UUID → not-found контракт (service → 404/user_not_found).
-    try:
-        uuid_obj = _uuid.UUID(uuid)
-    except ValueError:
-        return False
+    _require_actor(actor_id, actor_role, "deactivate")
+    cleaned = (reason or "").strip() if isinstance(reason, str) else ""
+    if not cleaned or len(cleaned) > DEACTIVATION_REASON_MAX_LEN:
+        raise InvalidUserRequestError("Некорректная причина отключения")
 
-    # Fail-closed actor guard — ДО открытия сессии/поиска пользователя.
-    # Мягкое удаление — всегда привилегированное действие; отсутствие
-    # actor-контекста здесь — internal wiring-баг, не пользовательский ввод.
-    if actor_id is None or actor_role is None:
-        raise ActorContextError(
-            "user delete requires authenticated actor context "
-            "(actor_id and actor_role)"
-        )
+    uuid_obj = _parse_uuid_or_none(uuid)
+    if uuid_obj is None:
+        raise UserNotFoundError("Пользователь не найден")
 
     with SessionLocal() as db:
-        user = (
-            db.query(User)
-            .filter(User.uuid == uuid_obj)
-            .filter(User.deleted_at.is_(None))
-            .first()
+        user = _lock_user_by_uuid(db, uuid_obj, include_deleted=True)
+        if user is None:
+            raise UserNotFoundError("Пользователь не найден")
+        # Guard собственного аккаунта — ДО любой мутации (ADR-028).
+        if user.id == int(actor_id):
+            raise SelfLifecycleProtectedError(
+                "Нельзя отключить собственный аккаунт"
+            )
+        if is_user_disabled(user):
+            raise AccountAlreadyDisabledError("Аккаунт уже отключён")
+
+        disable_user_in_tx(
+            db, user, source=DEACTIVATION_SOURCE_ADMIN, reason=cleaned,
         )
-        if not user:
-            return False
-
-        now = datetime.now(timezone.utc)
-        user.deleted_at = now
-        user.is_active = False
-
-        db.query(UserSession).filter(
-            UserSession.user_id == user.id,
-            ~UserSession.is_revoked,
-        ).update({"is_revoked": True}, synchronize_session=False)
-
-        # ATOMIC audit через единый facade: та же caller-транзакция (db=db),
-        # facade только db.add. metadata={} (registry не допускает ключей).
-        # Сбой аудита откатывает soft-delete и отзыв сессий целиком.
         record_event(
-            event="admin_user_deleted",
-            actor=Actor.user(actor_id, actor_role),
+            event="admin_user_deactivated",
+            actor=Actor.user(int(actor_id), actor_role),
             target=Target("user", user.id),
             outcome=Outcome.SUCCESS,
             metadata={},
             context=build_request_context(ip=ip, user_agent=user_agent),
             db=db,
         )
+        _commit_or_diag(db, "admin_user_deactivate")
+        db.refresh(user)
+        return _user_read_dict(db, user)
 
-        _commit_or_diag(db, "admin_user_delete")
-        return True
+
+def restore_user(
+    uuid: str,
+    *,
+    actor_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    Восстановление аккаунта администратором (ADR-028) — единственный путь
+    вернуть отключённый или исторически soft-deleted аккаунт. Одна транзакция:
+    FOR UPDATE (включая deleted) → «уже активен» → deleted_at=NULL,
+    is_active=true, поля отключения обнуляются → отзыв ВСЕХ оставшихся сессий
+    (сессия, выданная гонкой входа до отключения, не «оживает»), а также
+    impersonation-сессии, созданные этим пользователем как администратором →
+    admin_user_activated (ATOMIC, metadata={}) → commit.
+
+    Сохраняются id/uuid, email, роли, профиль, OAuth identity и все связанные
+    записи; новые роли не назначаются. Allowlist доменов не проверяется:
+    возвращается существующий аккаунт, а не создаётся новый.
+    """
+    _require_actor(actor_id, actor_role, "restore")
+    uuid_obj = _parse_uuid_or_none(uuid)
+    if uuid_obj is None:
+        raise UserNotFoundError("Пользователь не найден")
+
+    with SessionLocal() as db:
+        user = _lock_user_by_uuid(db, uuid_obj, include_deleted=True)
+        if user is None:
+            raise UserNotFoundError("Пользователь не найден")
+        # Восстанавливать нечего: не удалён и активен (NULL = активен).
+        # Soft-deleted строка с исторически is_active=true восстанавливается
+        # (и аудируется) — она отключена через deleted_at.
+        if not is_user_disabled(user):
+            raise AccountAlreadyActiveError("Аккаунт уже активен")
+
+        user.deleted_at = None
+        user.is_active = True
+        user.deactivated_at = None
+        user.deactivation_source = None
+        user.deactivation_reason_enc = None
+        user.updated_at = datetime.now(timezone.utc)
+        _revoke_all_user_sessions_in_session(db, user.id)
+        # Исторически отключённый/удалённый администратор мог оставить
+        # impersonation-сессии (до ADR-028 их отзыв не делался): они не должны
+        # ожить после восстановления его admin-роли. Та же транзакция.
+        _revoke_sessions_impersonated_by(db, user.id)
+
+        record_event(
+            event="admin_user_activated",
+            actor=Actor.user(int(actor_id), actor_role),
+            target=Target("user", user.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=build_request_context(ip=ip, user_agent=user_agent),
+            db=db,
+        )
+        _commit_or_diag(db, "admin_user_restore")
+        db.refresh(user)
+        return _user_read_dict(db, user)
+
+
+def reject_legacy_delete(uuid: str, *, actor_id: Optional[int] = None) -> None:
+    """
+    ADR-028: DELETE /api/admin/users/{uuid} больше НЕ выполняет soft-delete —
+    отключение только через POST /deactivate с обязательной причиной. Ничего
+    не изменяет. Порядок отказов: нет пользователя → 404; собственный аккаунт
+    → SelfLifecycleProtectedError; иначе LifecycleEndpointRequiredError.
+    """
+    _require_actor(actor_id, "admin", "delete")
+    uuid_obj = _parse_uuid_or_none(uuid)
+    if uuid_obj is None:
+        raise UserNotFoundError("Пользователь не найден")
+    with SessionLocal() as db:
+        user = (
+            db.query(User)
+            .filter(User.uuid == uuid_obj, User.deleted_at.is_(None))
+            .first()
+        )
+        if user is None:
+            raise UserNotFoundError("Пользователь не найден")
+        if user.id == int(actor_id):
+            raise SelfLifecycleProtectedError(
+                "Нельзя удалить собственный аккаунт"
+            )
+    raise LifecycleEndpointRequiredError(
+        "Удаление аккаунтов не поддерживается: используйте «Отключить аккаунт»"
+    )
+
+
+def grant_admin_role_to_existing_in_tx(db, user_id: int) -> bool:
+    """
+    Ops-путь scripts/create_admin.py: выдать роль admin СУЩЕСТВУЮЩЕМУ
+    пользователю (без commit). Строка users берётся FOR UPDATE ДО чтения ролей —
+    так выдача staff-роли сериализуется с самоотключением, которое проверяет
+    «чистого студента» под той же блокировкой (ADR-028).
+
+    Возвращает False, если роль admin уже назначена (идемпотентно), иначе
+    добавляет UserRole + UserLegalBasisRecord(bootstrap) и возвращает True.
+    Отсутствие роли admin в справочнике — RoleConfigError.
+    """
+    user = (
+        db.query(User)
+        .filter(User.id == int(user_id))
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if user is None:
+        raise UserNotFoundError("Пользователь не найден")
+    admin_role = db.query(Role).filter(Role.name == "admin").first()
+    if admin_role is None:
+        raise RoleConfigError("required role missing in seed/DB")
+    existing = (
+        db.query(UserRole)
+        .filter(UserRole.user_id == user.id, UserRole.role_id == admin_role.id)
+        .first()
+    )
+    if existing is not None and (
+        existing.expires_at is None
+        or existing.expires_at > datetime.now(timezone.utc)
+    ):
+        return False
+    if existing is not None:
+        existing.expires_at = None
+    else:
+        db.add(UserRole(user_id=user.id, role_id=admin_role.id))
+    # Роль admin — смена основания обработки ПДн: legal basis в той же tx.
+    db.add(UserLegalBasisRecord(
+        user_id=user.id,
+        basis_type="role_change",
+        basis_source="bootstrap_script",
+        confirmed_by_user_id=None,
+        user_agent="bootstrap-script",
+        comment="Admin role granted to existing user via bootstrap script",
+    ))
+    return True
 
 
 def create_user(

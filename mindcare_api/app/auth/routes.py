@@ -15,9 +15,10 @@ from app.auth.schemas import (
     ChangePasswordRequest,
     ProfileRead,
     ProfileUpdate,
+    SelfDeactivateRequest,
 )
 from app.auth import service
-from app.auth.deps import get_current_user, get_session_token
+from app.auth.deps import get_current_user, get_session_token, resolve_role_or_403
 from app.auth.security import hash_session_token
 from app.audit import record_event, Actor, AuthMethod, Outcome, RequestContext
 from app.audit.failsafe import record_secondary_failure
@@ -127,8 +128,15 @@ def login(body: LoginRequest, request: Request):
     _check_rate_limit("login", request, email=body.email)
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
+    # ADR-028: bcrypt (authenticate_user) — вне блокировки; выдача сессии —
+    # атомарно под FOR UPDATE строки users с повторной проверкой хеша пароля
+    # и допуска (start_password_session). Доменные отказы обоих шагов — тот же
+    # failed_login; технический сбой БД/commit не ловится (500, без failed_login).
     try:
         user = service.authenticate_user(email=body.email, password=body.password)
+        session_token, expires_at, user = service.start_password_session(
+            user, ip=ip, user_agent=user_agent,
+        )
     except service.AuthError as e:
         record_event(
             event="failed_login",
@@ -140,12 +148,6 @@ def login(body: LoginRequest, request: Request):
             context=_audit_context(request),
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
-
-    session_token, expires_at = service.create_session(
-        user_id=user["id"],
-        ip=ip,
-        user_agent=user_agent,
-    )
 
     record_event(
         event="login",
@@ -239,6 +241,56 @@ def update_profile(
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return profile
+
+
+@router.post("/account/deactivate", response_model=MessageResponse)
+def deactivate_own_account(
+    body: SelfDeactivateRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Самоотключение аккаунта (ADR-028). Target — только authenticated user
+    (тело принимает лишь confirm=true, чужой id передать нельзя). Доступно
+    только чистому student и запрещено в impersonation-сессии. Аккаунт, email
+    и данные сохраняются; все сессии отзываются; восстановление — только
+    администратором. Ответ 200, после чего клиент очищает авторизацию.
+    """
+    impersonator_id = current_user.get("impersonator_user_id")
+    if impersonator_id is not None:
+        # Действие инициировал администратор «под именем» — failure пишется от
+        # НЕГО (membership admin подтверждена get_current_user в этом же
+        # запросе), а не от целевого пользователя.
+        record_secondary_failure(
+            event="user_self_deactivate_failed",
+            actor=Actor.user(
+                int(impersonator_id), current_user["impersonator_role"],
+            ),
+            failure_reason_code="impersonation_forbidden",
+            context=_audit_context(request),
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Отключение аккаунта недоступно при входе под именем пользователя",
+        )
+
+    # Acting-роль — primary по membership (у staff — его служебная роль, а не
+    # неявная student), чтобы отказ staff был виден как отказ staff.
+    actor = Actor.user(int(current_user["id"]), resolve_role_or_403(current_user))
+    try:
+        service.deactivate_own_account(
+            current_user,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except service.AuthError as e:
+        record_secondary_failure(
+            event="user_self_deactivate_failed", actor=actor,
+            failure_reason_code=e.audit_code,
+            context=_audit_context(request),
+        )
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return {"message": "Аккаунт отключён"}
 
 
 @router.post("/password/reset/init", response_model=MessageResponse)

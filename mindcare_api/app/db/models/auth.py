@@ -85,6 +85,27 @@ class User(Base):
         CheckConstraint(
             "email = lower(trim(email))", name="ck_users_email_normalized",
         ),
+        # Lifecycle отключения (ADR-028, migration d7e2a9c4f1b6): источник и
+        # защищённая причина ТЕКУЩЕГО отключения. Все три поля задаются вместе
+        # и вместе очищаются при восстановлении; исторические отключения
+        # (до ADR-028) остаются с NULL. Причина — только Fernet enc:v1.
+        CheckConstraint(
+            "deactivation_source IS NULL "
+            "OR deactivation_source IN ('admin', 'self')",
+            name="ck_users_deactivation_source",
+        ),
+        CheckConstraint(
+            "deactivation_reason_enc IS NULL "
+            "OR deactivation_reason_enc LIKE 'enc:v1:%'",
+            name="ck_users_deactivation_reason_enc",
+        ),
+        CheckConstraint(
+            "(deactivated_at IS NULL AND deactivation_source IS NULL "
+            "AND deactivation_reason_enc IS NULL) "
+            "OR (deactivated_at IS NOT NULL AND deactivation_source IS NOT NULL "
+            "AND deactivation_reason_enc IS NOT NULL)",
+            name="ck_users_deactivation_fields_consistent",
+        ),
     )
 
     id            = Column(Integer, primary_key=True)
@@ -107,6 +128,10 @@ class User(Base):
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at    = Column(DateTime(timezone=True))
+    # ADR-028: текущее отключение. 'admin' | 'self'; причина — enc:v1 (Fernet).
+    deactivated_at          = Column(DateTime(timezone=True))
+    deactivation_source     = Column(String(10))
+    deactivation_reason_enc = Column(Text)
 
     @validates("email")
     def _normalize_email(self, key, value):

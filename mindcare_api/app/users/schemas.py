@@ -5,7 +5,16 @@ Pydantic-схемы для модуля управления пользоват�
 
 from datetime import datetime
 from typing import Optional, Literal
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator,
+)
+
+# ADR-028: максимальная длина причины отключения (после trim). Ограничение —
+# защита от свободного «досье» в поле, а не формат: текст хранится только
+# зашифрованным (users.deactivation_reason_enc) и наружу не отдаётся.
+DEACTIVATION_REASON_MAX_LEN = 500
+
+DeactivationSource = Literal["admin", "self"]
 
 
 class AdminUserListQuery(BaseModel):
@@ -38,6 +47,10 @@ class AdminUserListItem(BaseModel):
     created_at: datetime
     last_login: Optional[datetime] = None
     deleted_at: Optional[datetime] = None
+    # ADR-028: источник и момент ТЕКУЩЕГО отключения (NULL у исторических
+    # отключений до ADR-028 и у активных). Текст причины не отдаётся.
+    deactivation_source: Optional[DeactivationSource] = None
+    deactivated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -205,8 +218,37 @@ class AdminUserRead(BaseModel):
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    deactivation_source: Optional[DeactivationSource] = None
+    deactivated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class AdminUserDeactivateRequest(BaseModel):
+    """
+    Тело POST /api/admin/users/{uuid}/deactivate (ADR-028).
+
+    reason обязательна: trim, непустая, ≤ DEACTIVATION_REASON_MAX_LEN.
+    Хранится только зашифрованной, в audit/логи не попадает. Лишние поля → 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(description="Причина отключения (обязательно)")
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_required(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Укажите причину отключения аккаунта")
+        if len(stripped) > DEACTIVATION_REASON_MAX_LEN:
+            raise ValueError(
+                "Причина отключения не должна превышать "
+                f"{DEACTIVATION_REASON_MAX_LEN} символов"
+            )
+        return stripped
 
 
 class ImpersonateResponse(BaseModel):

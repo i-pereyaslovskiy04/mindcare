@@ -48,7 +48,7 @@ _SECRET = "smtp.internal.example login failed for admin:supersecret"
 def test_register_init_sanitizes_smtp_failure():
     # Domain-allowlist проверка мокается: этот unit-тест изолирует поведение при
     # сбое SMTP, а не email-политику (и остаётся без БД).
-    with patch("app.auth.storage.find_user_by_email", return_value=None), \
+    with patch("app.auth.storage.email_exists_any", return_value=False), \
          patch(
              "app.email_domains.service.assert_email_domain_allowed",
              return_value=None,

@@ -222,6 +222,13 @@ _ALL += [
     # Восстановление soft-deleted аккаунта при self-registration (actor = сам
     # восстановленный student). Пишется только в reactivation-ветке.
     _audit_ok("user_reactivated", {"student"}, "user"),
+    # ADR-028: пользователь (чистый student) сам отключил свой аккаунт.
+    # actor = target = этот пользователь; ATOMIC/RAISE — в одной транзакции с
+    # is_active=false, сохранением защищённой причины и отзывом всех сессий.
+    # Исторический user_reactivated (реактивация через self-registration)
+    # больше не пишется — регистрация отключённый аккаунт не восстанавливает, —
+    # но остаётся в registry ради классификации уже записанных строк.
+    _audit_ok("user_self_deactivated", {"student"}, "user"),
     _audit_ok("profile_updated", _STAFF, "user", _PROFILE_META),
     # supervisor-операции доступны и supervisor, и admin (routes:
     # resolve_role_or_403(allowed={"admin","supervisor"})) — actor_role может быть
@@ -323,11 +330,30 @@ _ALL += [
 _ALL += [
     _audit_fail("admin_user_create_failed", {"admin"},
                 {"email_already_exists", "domain_not_allowed", "internal_error"}),
+    # lifecycle_endpoint_required (ADR-028): реальная смена is_active через
+    # generic PATCH отклоняется — отключение/восстановление только выделенными
+    # POST /deactivate|/restore (обязательная причина, отзыв сессий).
     _audit_fail("admin_user_update_failed", {"admin"},
                 {"user_not_found", "invalid_request", "role_policy_violation",
-                 "self_admin_protected", "legal_basis_required", "internal_error"}),
+                 "self_admin_protected", "legal_basis_required",
+                 "lifecycle_endpoint_required", "internal_error"}),
+    # ADR-028: DELETE больше не выполняет soft-delete. self_admin_protected —
+    # попытка удалить себя; lifecycle_endpoint_required — устаревший путь.
     _audit_fail("admin_user_delete_failed", {"admin"},
-                {"user_not_found", "internal_error"}),
+                {"user_not_found", "self_admin_protected",
+                 "lifecycle_endpoint_required", "internal_error"}),
+    # ADR-028: выделенные lifecycle-операции администратора.
+    _audit_fail("admin_user_deactivate_failed", {"admin"},
+                {"user_not_found", "self_admin_protected", "invalid_request",
+                 "account_already_disabled", "internal_error"}),
+    _audit_fail("admin_user_restore_failed", {"admin"},
+                {"user_not_found", "account_already_active", "internal_error"}),
+    # ADR-028: отказ самоотключения. actor — пользователь сессии с его acting
+    # ролью; в impersonation-сессии — администратор-инициатор (membership admin
+    # подтверждена в этом же запросе), а НЕ целевой пользователь.
+    _audit_fail("user_self_deactivate_failed", _STAFF,
+                {"self_deactivation_not_allowed", "impersonation_forbidden",
+                 "account_already_disabled", "internal_error"}),
     _audit_fail("profile_update_failed", _STAFF,
                 {"user_not_found", "invalid_request", "internal_error"}),
 ]
@@ -455,6 +481,44 @@ _ALL += [
               actor_policy=ActorPolicy.SYSTEM),
     _audit_ok("schedule_auto_extended", frozenset(), "schedule_series",
               actor_policy=ActorPolicy.SYSTEM),
+]
+
+# ── AUDIT_LOG: ADR-029 подтверждение статуса студента ДонГУ ───────────────────
+# Подача (actor = сам чистый student) и решение (actor = supervisor) —
+# выделенные lifecycle-события заявки: ATOMIC/RAISE в одной транзакции с
+# мутацией (для решения — и с outbox-намерением уведомления), metadata пуст.
+# Номер билета, факультет, пояснение отказа в audit не копируются; DCL не
+# пишется (generic UPDATE реквизитов нет).
+#
+# content_read — чтение полного номера билета в карточке supervisor'ом.
+# INDEPENDENT + RAISE (fail-closed, как audit_logs_viewed): не записали факт
+# чтения → номер не отдаётся (route → 503). Список заявок номер не содержит и
+# события не пишет.
+#
+# Failure-события — только типизированные отказы после отката (record_
+# secondary_failure). submit_failed: actor — student; staff (student+staff)
+# под своей acting-ролью; при impersonation — admin-инициатор. Запрет
+# supervisor-эндпоинтов в impersonation-сессии — auth-guard до бизнес-операции
+# (как 403 require_role): события нет, пользователю-цели не приписывается.
+# reviewer_not_allowed — повторная проверка допуска reviewer'а ПОСЛЕ ожидания
+# блокировок (роль supervisor снята / аккаунт отключён во время запроса);
+# actor — reviewer с acting-ролью, валидированной по membership в начале
+# этого же запроса.
+_SVR = "student_verification_request"
+_ALL += [
+    _audit_ok("student_verification_submitted", {"student"}, _SVR),
+    _audit_ok("student_verification_approved", {"supervisor"}, _SVR),
+    _audit_ok("student_verification_rejected", {"supervisor"}, _SVR),
+    _audit_ok("student_verification_content_read", {"supervisor"}, _SVR,
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+    _audit_fail("student_verification_submit_failed", _STAFF,
+                {"verification_not_allowed", "impersonation_forbidden",
+                 "verification_pending_exists", "already_verified",
+                 "account_inactive"}),
+    _audit_fail("student_verification_review_failed", {"supervisor"},
+                {"verification_not_found", "self_review_forbidden",
+                 "reviewer_not_allowed", "verification_already_decided",
+                 "account_inactive"}),
 ]
 
 # ── AUDIT_LOG: Stage 8 — привилегированное чтение журналов ────────────────────

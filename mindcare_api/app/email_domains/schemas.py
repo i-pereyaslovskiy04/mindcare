@@ -43,3 +43,12 @@ class EmailDomainRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PublicEmailDomainsRead(BaseModel):
+    """
+    Публичный ответ GET /api/public/email-domains: ТОЛЬКО имена активных
+    доменов. Без id, comment, дат и отключённых строк.
+    """
+
+    domains: list[str]

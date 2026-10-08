@@ -8,6 +8,8 @@
 транслирует в HTTP-специфику.
 """
 
+from collections.abc import Sequence
+
 
 class EmailDomainNotAllowedError(Exception):
     """
@@ -16,7 +18,18 @@ class EmailDomainNotAllowedError(Exception):
     НЕ подкласс ValueError — чтобы существующие `except ValueError` в
     creation-путях (users.service.create_user → 409 и т.п.) его НЕ
     перехватывали. Обрабатывается только явными except и мапится в HTTP 422.
+
+    `allowed_domains` — имена доменов, активных в allowlist в момент отказа
+    (по возрастанию). Нужны только для понятного сообщения пользователю
+    (`email_domains.service.registration_domain_message`); на сам отказ не
+    влияют. Пустой кортеж — активных доменов нет.
     """
+
+    def __init__(
+        self, message: str = "", allowed_domains: Sequence[str] = (),
+    ):
+        super().__init__(message)
+        self.allowed_domains: tuple[str, ...] = tuple(allowed_domains)
 
 
 class DomainError(Exception):

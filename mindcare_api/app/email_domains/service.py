@@ -2,11 +2,15 @@
 Бизнес-логика allowlist почтовых доменов.
 
 Импортирует `storage` / `policy` / `errors`. Storages НЕ импортируют этот
-модуль (направление `service → storage`). Раздаёт две вещи:
+модуль (направление `service → storage`). Раздаёт:
   - `assert_email_domain_allowed(email)` — ранний read-check для register_init;
+  - `registration_domain_message(domains)` — понятный текст отказа обычной
+    регистрации (общий для init и confirm);
+  - `list_public_domains()` — имена активных доменов для публичной подсказки;
   - admin CRUD-обёртки (валидация домена через policy → storage).
 """
 
+from collections.abc import Sequence
 from typing import Optional
 
 from app.email_domains import storage
@@ -23,6 +27,18 @@ _INVALID_DOMAIN_MESSAGE = (
     "пробелов, протокола, порта, пути и подстановочных символов."
 )
 
+# Тексты отказа ОБЫЧНОЙ регистрации (init и confirm). Говорят про регистрацию
+# «по электронной почте», а не про любую: вход через Яндекс allowlist не
+# применяет (ADR-027 п. 5). Сами домены в код не зашиты — приходят из БД.
+_REGISTRATION_DOMAIN_MESSAGE = (
+    "Для регистрации по электронной почте используйте адрес с одним из "
+    "разрешённых доменов: {domains}."
+)
+_REGISTRATION_UNAVAILABLE_MESSAGE = (
+    "Регистрация по электронной почте сейчас недоступна. "
+    "Обратитесь в поддержку."
+)
+
 
 # ── Политика при создании (ранний путь) ────────────────────────────────────────
 
@@ -33,11 +49,37 @@ def assert_email_domain_allowed(email: str) -> None:
     Отдельный short read (storage.is_domain_active открывает свою сессию, без
     блокировки). Authoritative in-tx проверка выполняется отдельно внутри
     транзакции создания (storage.assert_email_domain_allowed_in_tx).
-    Raises EmailDomainNotAllowedError.
+    Raises EmailDomainNotAllowedError — с активными доменами на момент отказа
+    (`allowed_domains`), для понятного сообщения пользователю.
     """
     domain = extract_domain(email)
-    if not domain or not storage.is_domain_active(domain):
-        raise EmailDomainNotAllowedError(_NOT_ALLOWED_MESSAGE)
+    if domain and storage.is_domain_active(domain):
+        return
+    raise EmailDomainNotAllowedError(
+        _NOT_ALLOWED_MESSAGE,
+        allowed_domains=storage.list_active_domain_names(),
+    )
+
+
+def registration_domain_message(allowed_domains: Sequence[str]) -> str:
+    """
+    Текст отказа по домену при обычной регистрации. И init, и confirm строят
+    его ЭТОЙ функцией — тексты не расходятся. Домены берутся только из
+    переданного списка (активные домены из БД на момент отказа), порядок
+    сохраняется. Список пуст (активных доменов нет) — отдельный текст без
+    перечисления.
+    """
+    if not allowed_domains:
+        return _REGISTRATION_UNAVAILABLE_MESSAGE
+    listed = ", ".join(f"@{domain}" for domain in allowed_domains)
+    return _REGISTRATION_DOMAIN_MESSAGE.format(domains=listed)
+
+
+# ── Публичное чтение ───────────────────────────────────────────────────────
+
+def list_public_domains() -> list[str]:
+    """Имена активных доменов (по возрастанию) — без id и комментариев."""
+    return storage.list_active_domain_names()
 
 
 # ── Admin CRUD ─────────────────────────────────────────────────────────────────

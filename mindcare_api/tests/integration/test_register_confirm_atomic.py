@@ -228,72 +228,76 @@ def test_new_registration_writes_no_user_reactivated(test_email):
     assert _reactivated_rows(user["id"]) == []
 
 
-def test_reactivation_of_soft_deleted_writes_single_user_reactivated(test_email):
-    # 1. Первичная регистрация (new) → user_reactivated НЕ пишется.
+def test_soft_deleted_student_is_not_reactivated_by_registration(test_email):
+    # ADR-028: self-registration больше НЕ реактивирует soft-deleted аккаунт.
     code = _seed_otp(test_email)
     user = storage.register_confirm_atomic(
         email=test_email, code=code,
         required_consent_types=service.REQUIRED_CONSENTS,
         ip="127.0.0.1", user_agent="ua",
     )
-    uid = user["id"]
-    # storage отдаёт id строкой, а audit_log.user_id/entity_id — INTEGER:
-    # сравнивать надо с приведённым значением, иначе '1170' != 1170.
-    uid_int = int(uid)
+    uid = int(user["id"])
+    _soft_delete(uid)
+    with SessionLocal() as db:
+        consents_before = db.query(ConsentRecord).filter(
+            ConsentRecord.user_id == uid).count()
+
+    code2 = _seed_otp(test_email)
+    with pytest.raises(storage.AccountUnavailableError):
+        storage.register_confirm_atomic(
+            email=test_email, code=code2,
+            required_consent_types=service.REQUIRED_CONSENTS,
+            ip="127.0.0.1", user_agent="ua",
+        )
+
+    with SessionLocal() as db:
+        u = db.query(User).filter(User.id == uid).first()
+        assert u.deleted_at is not None and u.is_active is False
+        otp = _get_otp(db, test_email)
+        assert otp is not None and otp.attempts == 0   # OTP не потреблён
+        assert db.query(ConsentRecord).filter(
+            ConsentRecord.user_id == uid).count() == consents_before
+        assert db.query(User).filter(User.email == test_email).count() == 1
     assert _reactivated_rows(uid) == []
 
-    # 2. Soft-delete того же аккаунта.
-    _soft_delete(uid)
 
-    # 3. Повторное подтверждение с новым OTP → ветка реактивации.
-    code2 = _seed_otp(test_email)
-    user2 = storage.register_confirm_atomic(
-        email=test_email, code=code2,
-        required_consent_types=service.REQUIRED_CONSENTS,
-        ip="127.0.0.1", user_agent="ua",
-    )
-    assert user2["id"] == uid                     # тот же аккаунт восстановлен
-
-    rows = _reactivated_rows(uid)
-    assert len(rows) == 1                          # ровно одно событие
-    row = rows[0]
-    assert row.entity_type == "user" and row.entity_id == uid_int
-    assert row.user_id == uid_int                  # actor == восстановленный student
-    assert row.user_role == "student"
-    assert (row.log_metadata or {}) == {}
-    assert row.description is None
-    assert row.outcome == "success"
-    assert row.failure_reason_code is None
-
-
-def test_http_reactivation_coexists_with_registration_succeeded(client, test_email):
-    # user_reactivated (AUDIT_LOG, storage) сосуществует с registration_succeeded
-    # (AUTH_LOG, route). Первичная регистрация — через storage; повторное
-    # подтверждение — через HTTP-роут, который пишет registration_succeeded.
+@pytest.mark.parametrize("state", ["soft_deleted", "disabled"])
+def test_http_registration_on_unavailable_account_is_409(client, test_email, state):
+    # ADR-028: и отключённый, и soft-deleted аккаунт — один и тот же 409
+    # email_already_exists (как у init), OTP цел, registration_succeeded нет.
     code = _seed_otp(test_email)
     user = storage.register_confirm_atomic(
         email=test_email, code=code,
         required_consent_types=service.REQUIRED_CONSENTS,
         ip="127.0.0.1", user_agent="ua",
     )
-    uid = user["id"]
-    assert _registration_succeeded_count(uid) == 0   # storage-путь не пишет auth_log
-
-    _soft_delete(uid)
-
-    # Точные before/after для обоих журналов.
-    react_before = len(_reactivated_rows(uid))
+    uid = int(user["id"])
+    if state == "soft_deleted":
+        _soft_delete(uid)
+    else:
+        with SessionLocal() as db:
+            db.query(User).filter(User.id == uid).update(
+                {"is_active": False}, synchronize_session=False)
+            db.commit()
     regsucc_before = _registration_succeeded_count(uid)
+    failed_before = len(_registration_failed_rows(test_email))
 
     code2 = _seed_otp(test_email)
     r = client.post(
         "/api/auth/register/confirm",
         json={"email": test_email, "code": code2},
     )
-    assert r.status_code == 201, r.text
-
-    assert len(_reactivated_rows(uid)) == react_before + 1      # AUDIT_LOG lifecycle
-    assert _registration_succeeded_count(uid) == regsucc_before + 1  # AUTH_LOG
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "Email уже зарегистрирован"
+    assert _registration_succeeded_count(uid) == regsucc_before
+    rows = _registration_failed_rows(test_email)
+    assert len(rows) == failed_before + 1
+    assert rows[-1].failure_reason == "email_already_exists"
+    with SessionLocal() as db:
+        assert _get_otp(db, test_email) is not None
+        u = db.query(User).filter(User.id == uid).first()
+        assert u.is_active is False
+    assert _reactivated_rows(uid) == []
 
 
 # ─── Stage 5A-1 security: только чистый student реактивируется публично ─────────
@@ -354,10 +358,12 @@ def test_soft_deleted_staff_not_reactivated_by_public_registration(
     r = client.post(
         "/api/auth/register/confirm", json={"email": email, "code": code},
     )
-    # Generic internal_error — существование аккаунта/ролей не раскрывается.
-    assert r.status_code == 500, r.text
+    # ADR-028: тот же 409, что и для любого существующего email — роли и
+    # состояние аккаунта не раскрываются.
+    assert r.status_code == 409, r.text
     body_text = json.dumps(r.json(), ensure_ascii=False).lower()
-    for leak in ("admin", "supervisor", "psychologist", "staff", "role", "роль"):
+    for leak in ("admin", "supervisor", "psychologist", "staff", "role", "роль",
+                 "удал", "отключ"):
         assert leak not in body_text
 
     with SessionLocal() as db:
@@ -368,23 +374,17 @@ def test_soft_deleted_staff_not_reactivated_by_public_registration(
 
     assert _reactivated_rows(uid) == []           # нет user_reactivated
 
-    # registration_failed: ровно одна новая строка — durable audit_code контракт.
     failed_rows = _registration_failed_rows(email)
     assert len(failed_rows) == failed_before + 1
-    row = failed_rows[-1]                          # последняя добавленная строка
+    row = failed_rows[-1]
     assert row.success is False
-    assert row.failure_reason == "internal_error"
+    assert row.failure_reason == "email_already_exists"
     assert row.user_id is None                     # actor anonymous (pre-auth)
     assert row.session_id is None
-    for rn in role_names:
-        assert rn not in (row.failure_reason or "")
-    # Никаких raw exception details (класс исключения/сообщение) в текстовых
-    # полях AuthLog — только стабильный код internal_error.
     for field in (row.failure_reason, row.user_agent):
         text = (field or "")
-        assert "SelfReactivationNotAllowedError" not in text
+        assert "AccountUnavailableError" not in text
         assert "Traceback" not in text
-        assert "self-reactivation" not in text
 
 
 # ─── welcome system message soft-fail does not break registration ─────────────

@@ -556,7 +556,13 @@ def test_post_commit_actions_run_and_their_failure_does_not_rollback(
 
     assert r.status_code == 200, r.text
     user = _user(test_email)
-    assert calls == [("cards", test_email), ("welcome", f"welcome:user:{user.id}")]
+    # ADR-029: третий post-commit шаг — доставка приглашения подтвердить статус
+    # студента ДонГУ через тот же publisher; его сбой тоже не откатывает.
+    assert calls == [
+        ("cards", test_email),
+        ("welcome", f"welcome:user:{user.id}"),
+        ("welcome", f"student_verification_invite:user:{user.id}"),
+    ]
     assert _identities(fake.subject) == 1
 
 

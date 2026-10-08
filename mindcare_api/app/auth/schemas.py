@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, field_validator
 from typing import Literal, Optional
 from datetime import datetime
 
@@ -107,3 +107,22 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
     new_password_confirm: str
+
+
+class SelfDeactivateRequest(BaseModel):
+    """
+    POST /api/auth/account/deactivate (ADR-028). Target — ТОЛЬКО
+    authenticated user: поля user_id/uuid/email и любые иные → 422
+    (extra="forbid"). confirm — буквальное JSON true (StrictBool).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirm: StrictBool
+
+    @field_validator("confirm")
+    @classmethod
+    def _must_confirm(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError("Подтвердите отключение аккаунта")
+        return v

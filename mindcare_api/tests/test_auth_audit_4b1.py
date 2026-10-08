@@ -224,8 +224,8 @@ def test_route_login_success_mapping(monkeypatch):
     monkeypatch.setattr(routes.service, "authenticate_user", lambda email, password: {
         "id": 7, "email": "u@e.com", "role": "student", "roles": ["student"],
     })
-    monkeypatch.setattr(routes.service, "create_session",
-                        lambda **k: ("rawtok123", None))
+    monkeypatch.setattr(routes.service, "start_password_session",
+                        lambda user, **k: ("rawtok123", None, user))
     routes.login(body=LoginRequest(email="u@e.com", password="Secret123"),
                  request=_fake_request())
     kw = calls[-1]
@@ -246,7 +246,8 @@ def test_route_login_soft_failed_does_not_break(monkeypatch):
     monkeypatch.setattr(routes.service, "authenticate_user", lambda email, password: {
         "id": 7, "email": "u@e.com", "role": "student", "roles": ["student"],
     })
-    monkeypatch.setattr(routes.service, "create_session", lambda **k: ("t", None))
+    monkeypatch.setattr(routes.service, "start_password_session",
+                        lambda user, **k: ("t", None, user))
     out = routes.login(body=LoginRequest(email="u@e.com", password="Secret123"),
                        request=_fake_request())
     assert out["session_token"] == "t"            # SOFT_FAILED не ломает HTTP-результат
@@ -454,8 +455,8 @@ def test_route_login_bad_user_agent_not_500(monkeypatch):
     monkeypatch.setattr(routes.service, "authenticate_user", lambda email, password: {
         "id": 7, "email": "u@e.com", "role": "student", "roles": ["student"],
     })
-    monkeypatch.setattr(routes.service, "create_session",
-                        lambda **k: ("tok", None))
+    monkeypatch.setattr(routes.service, "start_password_session",
+                        lambda user, **k: ("tok", None, user))
     out = routes.login(body=LoginRequest(email="u@e.com", password="Secret123"),
                        request=_fake_request(ua=_BAD_UA_LONG, ip="testclient"))
     assert out["session_token"] == "tok"           # успешная операция не падает

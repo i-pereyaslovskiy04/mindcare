@@ -198,17 +198,20 @@ def _active_sessions(user_id):
 
 
 def test_deactivate_writes_lifecycle_event_and_revokes_sessions(client):
-    # Stage 5A-1: True→False → admin_user_deactivated + отзыв активных сессий.
+    # ADR-028: POST /deactivate → admin_user_deactivated + отзыв всех сессий.
     token, admin_id, _ = create_multi_role_user(client, ["admin"])
     target_id = _make_staff_target_with_session(client, token)
     target_uuid = _uuid_for(target_id)
     assert _active_sessions(target_id) >= 1
 
-    r = client.patch(
-        f"/api/admin/users/{target_uuid}",
-        headers=_auth(token), json={"is_active": False},
+    r = client.post(
+        f"/api/admin/users/{target_uuid}/deactivate",
+        headers=_auth(token), json={"reason": "Увольнение"},
     )
     assert r.status_code == 200, r.text
+    assert r.json()["is_active"] is False
+    assert r.json()["deactivation_source"] == "admin"
+    assert "reason" not in r.json()                 # причина наружу не отдаётся
 
     rows = _audit_rows("admin_user_deactivated", target_id)
     assert len(rows) == 1
@@ -218,45 +221,46 @@ def test_deactivate_writes_lifecycle_event_and_revokes_sessions(client):
     assert row.outcome == "success"
     assert row.failure_reason_code is None
     assert row.description is None
-    # is_active НЕ дублируется в admin_user_updated.
     assert _audit_rows("admin_user_updated", target_id) == []
-    # Сессии отозваны в той же транзакции.
     assert _active_sessions(target_id) == 0
 
 
-def test_activate_writes_lifecycle_event_no_extra_revoke(client):
-    # Stage 5A-1: False→True → admin_user_activated; активация не отзывает сессии.
+def test_restore_writes_lifecycle_event(client):
+    # ADR-028: POST /restore → admin_user_activated; generic update не пишется.
     token, admin_id, _ = create_multi_role_user(client, ["admin"])
     target_id = _make_staff_target(client, token)
     target_uuid = _uuid_for(target_id)
 
-    client.patch(
-        f"/api/admin/users/{target_uuid}",
-        headers=_auth(token), json={"is_active": False},
-    )
+    assert client.post(
+        f"/api/admin/users/{target_uuid}/deactivate",
+        headers=_auth(token), json={"reason": "Временно"},
+    ).status_code == 200
     before_deact = len(_audit_rows("admin_user_deactivated", target_id))
 
-    r = client.patch(
-        f"/api/admin/users/{target_uuid}",
-        headers=_auth(token), json={"is_active": True},
+    r = client.post(
+        f"/api/admin/users/{target_uuid}/restore", headers=_auth(token),
     )
     assert r.status_code == 200, r.text
+    assert r.json()["is_active"] is True
+    assert r.json()["deactivation_source"] is None
 
     act_rows = _audit_rows("admin_user_activated", target_id)
     assert len(act_rows) == 1
     assert act_rows[0].user_id == admin_id
     assert (act_rows[0].log_metadata or {}) == {}
     assert act_rows[0].outcome == "success"
-    # Активация не пишет generic update и не добавляет deactivated.
     assert _audit_rows("admin_user_updated", target_id) == []
     assert len(_audit_rows("admin_user_deactivated", target_id)) == before_deact
 
 
-def test_combined_scalar_is_active_role_writes_three_disjoint_events(client):
-    # Combined PATCH: full_name + is_active(False) + добавление роли supervisor.
+def test_patch_with_is_active_transition_rejected_without_any_change(client):
+    # ADR-028: PATCH с реальной сменой is_active отклоняется ЦЕЛИКОМ (422
+    # lifecycle_endpoint_required) — ни ФИО, ни роли, ни статус не меняются.
     token, admin_id, _ = create_multi_role_user(client, ["admin"])
     target_id = _make_staff_target(client, token)   # psychologist, active
     target_uuid = _uuid_for(target_id)
+    with SessionLocal() as db:
+        name_before = db.get(User, target_id).full_name
 
     r = client.patch(
         f"/api/admin/users/{target_uuid}",
@@ -270,12 +274,16 @@ def test_combined_scalar_is_active_role_writes_three_disjoint_events(client):
             "basis_reference": "Приказ № 45-к",
         },
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 422, r.text
 
-    assert len(_audit_rows("admin_user_updated", target_id)) == 1
-    assert len(_audit_rows("admin_user_deactivated", target_id)) == 1
-    assert len(_audit_rows("admin_role_add", target_id)) == 1
-    assert _audit_rows("admin_user_activated", target_id) == []
+    with SessionLocal() as db:
+        u = db.get(User, target_id)
+        assert u.is_active is True and u.full_name == name_before
+    for event in ("admin_user_updated", "admin_user_deactivated",
+                  "admin_role_add", "admin_user_activated"):
+        assert _audit_rows(event, target_id) == []
+    rows = _failure_rows("admin_user_update_failed", admin_id)
+    assert rows and rows[-1].failure_reason_code == "lifecycle_endpoint_required"
 
 
 def test_role_only_update_writes_role_event_not_user_updated(client):
@@ -367,46 +375,41 @@ def test_role_no_op_writes_nothing(client):
 
 # ── delete ──────────────────────────────────────────────────────────────────
 
-def test_delete_writes_single_admin_user_deleted_and_revokes_sessions(client):
+def test_legacy_delete_is_rejected_without_changes(client):
+    # ADR-028: DELETE больше не удаляет — 410 lifecycle_endpoint_required,
+    # аккаунт, сессии и deleted_at не меняются, admin_user_deleted не пишется.
+    token, admin_id, _ = create_multi_role_user(client, ["admin"])
+    target_id = _make_staff_target_with_session(client, token)
+    target_uuid = _uuid_for(target_id)
+    sessions_before = _active_sessions(target_id)
+
+    r = client.delete(f"/api/admin/users/{target_uuid}", headers=_auth(token))
+    assert r.status_code == 410, r.text
+
+    with SessionLocal() as db:
+        u = db.get(User, target_id)
+        assert u.deleted_at is None and u.is_active is True
+    assert _active_sessions(target_id) == sessions_before
+    assert _audit_rows("admin_user_deleted", target_id) == []
+    rows = _failure_rows("admin_user_delete_failed", admin_id)
+    assert rows[-1].failure_reason_code == "lifecycle_endpoint_required"
+    assert _legacy_auth_log_rows("admin_delete_user") == []
+
+
+def test_repeat_deactivate_returns_409_without_new_success_row(client):
     token, admin_id, _ = create_multi_role_user(client, ["admin"])
     target_id = _make_staff_target(client, token)
     target_uuid = _uuid_for(target_id)
 
-    r = client.delete(f"/api/admin/users/{target_uuid}", headers=_auth(token))
-    assert r.status_code == 204, r.text
+    url = f"/api/admin/users/{target_uuid}/deactivate"
+    r1 = client.post(url, headers=_auth(token), json={"reason": "Первая"})
+    assert r1.status_code == 200, r1.text
+    r2 = client.post(url, headers=_auth(token), json={"reason": "Вторая"})
+    assert r2.status_code == 409, r2.text
 
-    rows = _audit_rows("admin_user_deleted", target_id)
-    assert len(rows) == 1
-    assert rows[0].user_id == admin_id
-    assert (rows[0].log_metadata or {}) == {}
-    # Stage 4B-4 corrective pass: точный контракт success-события.
-    assert rows[0].outcome == "success"
-    assert rows[0].failure_reason_code is None
-    assert rows[0].description is None
-
-    with SessionLocal() as db:
-        active = (
-            db.query(UserSession)
-            .filter(UserSession.user_id == target_id, ~UserSession.is_revoked)
-            .count()
-        )
-        assert active == 0
-
-    assert _legacy_auth_log_rows("admin_delete_user") == []
-
-
-def test_repeat_delete_returns_404_without_new_audit_row(client):
-    token, _, _ = create_multi_role_user(client, ["admin"])
-    target_id = _make_staff_target(client, token)
-    target_uuid = _uuid_for(target_id)
-
-    r1 = client.delete(f"/api/admin/users/{target_uuid}", headers=_auth(token))
-    assert r1.status_code == 204, r1.text
-    r2 = client.delete(f"/api/admin/users/{target_uuid}", headers=_auth(token))
-    assert r2.status_code == 404, r2.text
-
-    rows = _audit_rows("admin_user_deleted", target_id)
-    assert len(rows) == 1   # повторный вызов не добавляет вторую строку
+    assert len(_audit_rows("admin_user_deactivated", target_id)) == 1
+    rows = _failure_rows("admin_user_deactivate_failed", admin_id)
+    _assert_failure_contract(rows[-1], admin_id, "account_already_disabled")
 
 
 # ── malformed IP/UA sanitization (through the public API) ─────────────────────
@@ -523,10 +526,14 @@ def test_create_duplicate_soft_deleted_email_writes_create_failed(client):
     email = _new_email("dupsoft")
     assert _create(client, token, email).status_code == 201
     uid = _user_id_by_email(email)
-    # soft-delete → email всё ещё в users (deleted_at IS NOT NULL)
-    assert client.delete(
-        f"/api/admin/users/{_uuid_for(uid)}", headers=_auth(token),
-    ).status_code == 204
+    # Исторический soft-delete (до ADR-028 его делал DELETE): email всё ещё в
+    # users (deleted_at IS NOT NULL).
+    from datetime import datetime, timezone
+    with SessionLocal() as db:
+        u = db.get(User, uid)
+        u.deleted_at = datetime.now(timezone.utc)
+        u.is_active = False
+        db.commit()
 
     before = len(_failure_rows("admin_user_create_failed", admin_id))
     r = _create(client, token, email)   # повторное создание того же email

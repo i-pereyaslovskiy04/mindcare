@@ -112,6 +112,12 @@ from app.db.models.chat import (  # noqa: F401
 from app.db.models.notifications import (  # noqa: F401
     NotificationTemplate,
     Notification,
+    SystemMessageIntent,
+)
+
+# ── student verification (FK → users) — ADR-029 ──────────────────────────────
+from app.db.models.student_verification import (  # noqa: F401
+    StudentVerificationRequest,
 )
 
 # ── audit ─────────────────────────────────────────────────────────────────────
@@ -163,7 +169,9 @@ __all__ = [
     # chat
     "ChatConversation", "ChatMessage", "ChatAttachment",
     # notifications
-    "NotificationTemplate", "Notification",
+    "NotificationTemplate", "Notification", "SystemMessageIntent",
+    # student verification
+    "StudentVerificationRequest",
     # audit
     "AuditLog", "AuthLog", "DataChangeLog",
     # diary

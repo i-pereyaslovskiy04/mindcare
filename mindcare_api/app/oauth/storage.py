@@ -21,7 +21,7 @@ from app.auth.otp_service import (
 )
 from app.auth.storage import (
     RegistrationDataError, _assign_role, _user_to_dict, create_session_in_tx,
-    required_consent_ids,
+    enqueue_registration_invite_in_tx, required_consent_ids,
 )
 from app.db.models import (
     ConsentRecord, OAuthAuthRequest, OAuthPendingTicket, OtpVerification, User,
@@ -165,9 +165,10 @@ def complete_login_atomic(
     Одна транзакция:
       1. списать ticket (UPDATE ... RETURNING; блокирует строку — параллельный
          complete ждёт и затем получает 0 строк);
-      2. identity (provider, subject, user_id) — FOR SHARE: удалённая или
+      2. identity (provider, subject, user_id) — FOR UPDATE: удалённая или
          переназначенная identity → отказ;
-      3. пользователь (не soft-deleted) — FOR SHARE;
+      3. пользователь (не soft-deleted) — FOR UPDATE (ADR-028: порядок
+         identity → user, без перехода SHARE → UPDATE);
       4. check_user(user_dict) — ensure_user_can_start_session + чистый студент;
       5. create_session_in_tx + last_login_at/last_login;
       6. один commit: ticket + сессия.
@@ -211,7 +212,10 @@ def complete_login_atomic(
                     UserOAuthIdentity.provider_subject == row.provider_subject,
                     UserOAuthIdentity.user_id == row.user_id,
                 )
-                .with_for_update(read=True)
+                # ADR-028: FOR UPDATE (не FOR SHARE): ниже обновляется
+                # last_login_at — переход SHARE → UPDATE у двух параллельных
+                # входов одного пользователя дал бы взаимную блокировку.
+                .with_for_update()
             ).scalar_one_or_none()
             if identity is None:
                 raise OAuthLoginDenied("oauth_identity_unknown")
@@ -219,7 +223,9 @@ def complete_login_atomic(
             user = db.execute(
                 select(User)
                 .where(User.id == row.user_id, User.deleted_at.is_(None))
-                .with_for_update(read=True)
+                # ADR-028: FOR UPDATE — обновляется last_login; та же
+                # блокировка, что у lifecycle-операций и смены пароля.
+                .with_for_update()
             ).scalar_one_or_none()
             if user is None:
                 # soft-delete выставляет и is_active=false — тот же исход.
@@ -530,6 +536,8 @@ def complete_registration_atomic(
             _assign_role(db, user.id, "student")
             _add_consents(db, user.id, consent_ids, ip, user_agent)
             _new_identity(db, user_id=user.id, provider=provider, subject=subject, now=now)
+            # ADR-029: намерение приглашения — в том же UoW, что и аккаунт.
+            enqueue_registration_invite_in_tx(db, user.id)
             db.delete(record)
             ticket.consumed_at = now
             token, expires_at = create_session_in_tx(

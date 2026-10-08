@@ -34,6 +34,10 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "admin_user_created", "admin_user_updated", "admin_user_deleted",
     "admin_user_activated", "admin_user_deactivated", "user_reactivated",
     "admin_user_impersonated",
+    # ADR-028: самоотключение (success) + lifecycle-отказы.
+    "user_self_deactivated",
+    "admin_user_deactivate_failed", "admin_user_restore_failed",
+    "user_self_deactivate_failed",
     "profile_updated",
     "supervisor_create_student", "supervisor_assign_psychologist",
     "supervisor_reactivate_psychologist",
@@ -89,6 +93,10 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     # Stage 8 read-only admin viewer: привилегированное чтение журналов
     # (target FORBIDDEN, success-only, INDEPENDENT + RAISE).
     "audit_logs_viewed",
+    # ADR-029: подтверждение статуса студента ДонГУ.
+    "student_verification_submitted", "student_verification_approved",
+    "student_verification_rejected", "student_verification_content_read",
+    "student_verification_submit_failed", "student_verification_review_failed",
 })
 
 
@@ -103,8 +111,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 104
-    assert len(REGISTRY) == 111
+    assert len(audit_names) == 114
+    assert len(REGISTRY) == 121
 
 
 def test_unknown_event_rejected():
@@ -191,7 +199,12 @@ def test_registry_total_count_stage_5c3():
     # +3 → 102 audit = 109.
     # ADR-025 (impersonation: admin_user_impersonated): +1 → 103 audit = 110.
     # Этап F2.1 (автор снимает published с публикации правкой): +1 → 104 audit = 111.
-    assert len(REGISTRY) == 111
+    # ADR-028 (lifecycle отключения): user_self_deactivated +
+    # admin_user_deactivate_failed / admin_user_restore_failed /
+    # user_self_deactivate_failed: +4 → 108 audit = 115.
+    # ADR-029 (подтверждение студента ДонГУ): submitted/approved/rejected/
+    # content_read + submit_failed/review_failed: +6 → 114 audit = 121.
+    assert len(REGISTRY) == 121
 
 
 def test_role_metadata_enum_excludes_system():
@@ -373,3 +386,63 @@ def test_reject_static_description_too_long():
         description_policy=DescriptionPolicy.STATIC,
         static_description="x" * 201,
     )
+
+
+# ── ADR-028: lifecycle отключения/восстановления — точный контракт ────────────
+
+def test_adr028_self_deactivated_success_contract():
+    spec = REGISTRY["user_self_deactivated"]
+    assert spec.destination is Destination.AUDIT_LOG
+    assert spec.allowed_actor_roles == frozenset({"student"})
+    assert spec.target_policy is TargetPolicy.REQUIRED
+    assert spec.entity_type == "user"
+    assert spec.allowed_outcomes == frozenset({Outcome.SUCCESS})
+    assert dict(spec.metadata_schema) == {}
+    assert spec.tx_mode is TxMode.ATOMIC
+    assert spec.failure_policy is FailurePolicy.RAISE
+
+
+def test_adr028_admin_lifecycle_success_events_unchanged():
+    for name in ("admin_user_deactivated", "admin_user_activated"):
+        spec = REGISTRY[name]
+        assert spec.allowed_actor_roles == frozenset({"admin"})
+        assert spec.entity_type == "user"
+        assert dict(spec.metadata_schema) == {}
+        assert spec.tx_mode is TxMode.ATOMIC
+        assert spec.failure_policy is FailurePolicy.RAISE
+
+
+@pytest.mark.parametrize("name,roles,codes", [
+    ("admin_user_deactivate_failed", {"admin"},
+     {"user_not_found", "self_admin_protected", "invalid_request",
+      "account_already_disabled", "internal_error"}),
+    ("admin_user_restore_failed", {"admin"},
+     {"user_not_found", "account_already_active", "internal_error"}),
+    ("user_self_deactivate_failed",
+     {"student", "psychologist", "supervisor", "admin"},
+     {"self_deactivation_not_allowed", "impersonation_forbidden",
+      "account_already_disabled", "internal_error"}),
+    ("admin_user_delete_failed", {"admin"},
+     {"user_not_found", "self_admin_protected",
+      "lifecycle_endpoint_required", "internal_error"}),
+    ("admin_user_update_failed", {"admin"},
+     {"user_not_found", "invalid_request", "role_policy_violation",
+      "self_admin_protected", "legal_basis_required",
+      "lifecycle_endpoint_required", "internal_error"}),
+])
+def test_adr028_failure_events_contract(name, roles, codes):
+    spec = REGISTRY[name]
+    assert spec.destination is Destination.AUDIT_LOG
+    assert spec.allowed_actor_roles == frozenset(roles)
+    assert spec.target_policy is TargetPolicy.FORBIDDEN
+    assert spec.allowed_outcomes == frozenset({Outcome.FAILURE})
+    assert spec.allowed_failure_codes == frozenset(codes)
+    assert dict(spec.metadata_schema) == {}
+    assert spec.tx_mode is TxMode.INDEPENDENT
+    assert spec.failure_policy is FailurePolicy.SOFT
+
+
+def test_adr028_historical_events_kept():
+    # Писателей больше нет, но классификация старых строк сохраняется.
+    assert "admin_user_deleted" in REGISTRY
+    assert "user_reactivated" in REGISTRY

@@ -8,7 +8,8 @@ Integration-тесты применения email-domain allowlist полити�
   - разрешённый домен проходит; mixed-case нормализуется;
   - login/password reset существующего foreign-email пользователя работают;
   - register/confirm при отключённом домене → 422 и OTP НЕ потреблён;
-  - реактивация soft-deleted аккаунта при запрещённом домене → 422.
+  - регистрация на email soft-deleted аккаунта → 409 при любом домене
+    (ADR-028: реактивирует только администратор).
 """
 
 import uuid as _uuid
@@ -248,14 +249,16 @@ class TestOtpPreservation:
 
 # ─── Soft-deleted реактивация при запрещённом домене ──────────────────────────
 
-class TestSoftDeletedReactivation:
-    def test_reactivation_blocked_when_domain_disabled(
+class TestSoftDeletedNotReactivatedByRegistration:
+    """ADR-028: self-registration больше не реактивирует soft-deleted аккаунт —
+    независимо от состояния домена. Восстанавливает только администратор."""
+
+    def test_registration_rejected_even_with_active_domain(
         self, client, capture_emails, reset_email_domains,
     ):
         temp_domain = f"integ-sd-{_uuid.uuid4().hex[:8]}.ru"
         email = f"integ_sd_{_uuid.uuid4().hex[:8]}@{temp_domain}"
 
-        # Предварительно создать и soft-delete пользователя на temp-домене.
         user = auth_storage.save_user({
             "name": "Soft Deleted", "email": email,
             "hashed_password": _hash(), "role": "student",
@@ -268,24 +271,10 @@ class TestSoftDeletedReactivation:
             db.commit()
 
         _add_domain(temp_domain, is_active=True)
-        # init (домен активен) → OTP
         r = client.post("/api/auth/register/init", json={
             "name": "Soft Deleted", "email": email, "password": PASSWORD,
         })
-        assert r.status_code == 200, r.text
-        code = _code_for(capture_emails, email)
-        # домен отключается → confirm 422, пользователь остаётся удалённым, OTP цел
-        _set_domain_active(temp_domain, False)
-        r = client.post("/api/auth/register/confirm", json={
-            "email": email, "code": code,
-        })
-        assert r.status_code == 422, r.text
-        assert _user_active(email) is False           # всё ещё soft-deleted
-        assert _otp_exists(email) is True
-        # реактивируем домен → тот же код реактивирует пользователя
-        _set_domain_active(temp_domain, True)
-        r = client.post("/api/auth/register/confirm", json={
-            "email": email, "code": code,
-        })
-        assert r.status_code == 201, r.text
-        assert _user_active(email) is True
+        assert r.status_code == 409, r.text
+        assert _otp_exists(email) is False             # OTP не создан
+        assert not any(email in k for k in capture_emails)  # письма нет
+        assert _user_active(email) is False            # аккаунт остался удалённым

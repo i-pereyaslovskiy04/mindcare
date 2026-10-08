@@ -1,6 +1,6 @@
 """
 Stage 4B-4 — no-DB unit-тесты переноса admin user CRUD + self-profile audit на
-record_event(): app.users.storage.{create_user, soft_delete_user,
+record_event(): app.users.storage.{create_user, deactivate_user, restore_user,
 _apply_role_and_scalar_changes} и app.auth.storage.update_profile_atomic.
 
 Мокается либо `record_event`/`build_request_context` на уровне модуля (spy),
@@ -17,9 +17,7 @@ import app.users.storage as users_storage
 import app.auth.storage as auth_storage
 from app.audit.contracts import AuditStorageError
 from app.db.models import UserLegalBasisRecord
-from app.users.storage import (
-    create_user, soft_delete_user, _apply_role_and_scalar_changes,
-)
+from app.users.storage import create_user, _apply_role_and_scalar_changes
 from app.users.storage import RoleChangeError
 from app.users.errors import RoleConfigError
 from app.auth.storage import update_profile_atomic, UserNotFoundError
@@ -164,79 +162,198 @@ def test_create_user_legal_basis_and_audit_share_one_sanitized_context(monkeypat
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# storage.soft_delete_user — admin_user_deleted
+# ADR-028: storage.deactivate_user / restore_user — lifecycle-события
 # ══════════════════════════════════════════════════════════════════════════
 
 VALID_UUID = "aaaaaaaa-0000-0000-0000-000000000001"
 
 
-def test_soft_delete_user_missing_actor_context_fails_closed_before_session(monkeypatch):
-    # SessionLocal не должен даже открываться, если guard срабатывает раньше.
+def _lifecycle_user(**over):
+    base = dict(
+        id=TARGET_ID, deleted_at=None, is_active=True,
+        deactivated_at=None, deactivation_source=None,
+        deactivation_reason_enc=None, updated_at=None,
+    )
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def _lifecycle_db(user):
+    db = MagicMock(name="db")
+    (db.query.return_value.filter.return_value.with_for_update.return_value
+       .populate_existing.return_value.first.return_value) = user
+    return db
+
+
+@pytest.fixture
+def lifecycle_spies(monkeypatch):
+    calls = {"events": [], "revoked": [], "imp_revoked": []}
+    monkeypatch.setattr(users_storage, "record_event",
+                        lambda **kw: calls["events"].append(kw))
+    monkeypatch.setattr(
+        users_storage, "_revoke_all_user_sessions_in_session",
+        lambda db, uid: calls["revoked"].append(uid),
+    )
+    monkeypatch.setattr(
+        users_storage, "_revoke_sessions_impersonated_by",
+        lambda db, uid: calls["imp_revoked"].append(uid),
+    )
+    monkeypatch.setattr(users_storage, "_user_read_dict",
+                        lambda db, user: {"id": user.id})
+    return calls
+
+
+@pytest.mark.parametrize("actor_id,actor_role", [(None, "admin"), (ACTOR_ID, None)])
+def test_deactivate_missing_actor_context_fails_closed_before_session(
+    monkeypatch, actor_id, actor_role,
+):
     def _boom(*a, **kw):
         raise AssertionError("SessionLocal must not be opened before actor guard")
     monkeypatch.setattr(users_storage, "SessionLocal", _boom)
-
     with pytest.raises(RuntimeError):
-        soft_delete_user(VALID_UUID, actor_id=None, actor_role="admin")
-    with pytest.raises(RuntimeError):
-        soft_delete_user(VALID_UUID, actor_id=ACTOR_ID, actor_role=None)
+        users_storage.deactivate_user(
+            VALID_UUID, "reason", actor_id=actor_id, actor_role=actor_role,
+        )
 
 
-def test_soft_delete_user_stages_admin_user_deleted_before_commit(monkeypatch):
-    calls = []
-    monkeypatch.setattr(users_storage, "record_event", lambda **kw: calls.append(kw))
+@pytest.mark.parametrize("reason", ["", "   ", "x" * 501, None])
+def test_deactivate_invalid_reason_rejected_before_session(monkeypatch, reason):
+    """Defense-in-depth: storage сам проверяет причину (trim/обязательность/длина)."""
+    from app.users.errors import InvalidUserRequestError
 
-    db = MagicMock(name="db")
-    found_user = SimpleNamespace(id=TARGET_ID, deleted_at=None, is_active=True)
-    db.query.return_value.filter.return_value.filter.return_value.first.return_value = found_user
+    def _boom(*a, **kw):
+        raise AssertionError("no DB access for invalid reason")
+    monkeypatch.setattr(users_storage, "SessionLocal", _boom)
+    with pytest.raises(InvalidUserRequestError):
+        users_storage.deactivate_user(
+            VALID_UUID, reason, actor_id=ACTOR_ID, actor_role="admin",
+        )
 
+
+def test_deactivate_stages_event_encrypts_reason_and_revokes(monkeypatch, lifecycle_spies):
+    from app.core.encryption import decrypt_text
+
+    user = _lifecycle_user()
+    db = _lifecycle_db(user)
     with patch("app.users.storage.SessionLocal", _mock_session(db)):
-        result = soft_delete_user(
-            VALID_UUID, actor_id=ACTOR_ID, actor_role="admin",
+        users_storage.deactivate_user(
+            VALID_UUID, "  Нарушение правил  ",
+            actor_id=ACTOR_ID, actor_role="admin",
             ip="203.0.113.7", user_agent="pytest-ua",
         )
 
-    assert result is True
-    assert len(calls) == 1
-    kw = calls[0]
-    assert kw["event"] == "admin_user_deleted"
-    assert kw["actor"].user_id == ACTOR_ID
-    assert kw["actor"].role == "admin"
-    assert kw["target"].entity_type == "user"
-    assert kw["target"].entity_id == TARGET_ID
+    assert user.is_active is False
+    assert user.deactivation_source == "admin"
+    assert user.deactivated_at is not None
+    assert user.deactivation_reason_enc.startswith("enc:v1:")
+    assert decrypt_text(user.deactivation_reason_enc) == "Нарушение правил"
+    assert user.deleted_at is None                  # отключение ≠ удаление
+    assert lifecycle_spies["revoked"] == [TARGET_ID]
+    assert lifecycle_spies["imp_revoked"] == [TARGET_ID]
+
+    (kw,) = lifecycle_spies["events"]
+    assert kw["event"] == "admin_user_deactivated"
+    assert (kw["actor"].user_id, kw["actor"].role) == (ACTOR_ID, "admin")
+    assert (kw["target"].entity_type, kw["target"].entity_id) == ("user", TARGET_ID)
     assert kw["metadata"] == {}
+    assert "Нарушение" not in repr(kw)              # причина не в аудите
     assert kw["db"] is db
     db.commit.assert_called_once()
 
 
-def test_soft_delete_user_not_found_no_audit(monkeypatch):
-    calls = []
-    monkeypatch.setattr(users_storage, "record_event", lambda **kw: calls.append(kw))
+def test_deactivate_self_rejected_before_any_mutation(monkeypatch, lifecycle_spies):
+    from app.users.errors import SelfLifecycleProtectedError
 
-    db = MagicMock(name="db")
-    db.query.return_value.filter.return_value.filter.return_value.first.return_value = None
-
+    user = _lifecycle_user(id=ACTOR_ID)
+    db = _lifecycle_db(user)
     with patch("app.users.storage.SessionLocal", _mock_session(db)):
-        result = soft_delete_user(VALID_UUID, actor_id=ACTOR_ID, actor_role="admin")
-
-    assert result is False
-    assert calls == []
+        with pytest.raises(SelfLifecycleProtectedError):
+            users_storage.deactivate_user(
+                VALID_UUID, "r", actor_id=ACTOR_ID, actor_role="admin",
+            )
+    assert user.is_active is True and user.deactivation_reason_enc is None
+    assert lifecycle_spies == {"events": [], "revoked": [], "imp_revoked": []}
     db.commit.assert_not_called()
 
 
-def test_soft_delete_user_audit_failure_propagates_not_swallowed(monkeypatch):
+@pytest.mark.parametrize("state", [
+    {"is_active": False},
+    {"deleted_at": "2026-01-01"},
+])
+def test_deactivate_already_disabled_rejected(monkeypatch, lifecycle_spies, state):
+    from app.users.errors import AccountAlreadyDisabledError
+
+    db = _lifecycle_db(_lifecycle_user(**state))
+    with patch("app.users.storage.SessionLocal", _mock_session(db)):
+        with pytest.raises(AccountAlreadyDisabledError):
+            users_storage.deactivate_user(
+                VALID_UUID, "r", actor_id=ACTOR_ID, actor_role="admin",
+            )
+    assert lifecycle_spies["events"] == [] and lifecycle_spies["revoked"] == []
+    db.commit.assert_not_called()
+
+
+def test_deactivate_audit_failure_propagates_no_commit(monkeypatch, lifecycle_spies):
     def _boom(**kw):
-        raise AuditStorageError("audit storage failure for admin_user_deleted")
+        raise AuditStorageError("audit storage failure")
     monkeypatch.setattr(users_storage, "record_event", _boom)
-
-    db = MagicMock(name="db")
-    found_user = SimpleNamespace(id=TARGET_ID, deleted_at=None, is_active=True)
-    db.query.return_value.filter.return_value.filter.return_value.first.return_value = found_user
-
+    db = _lifecycle_db(_lifecycle_user())
     with patch("app.users.storage.SessionLocal", _mock_session(db)):
         with pytest.raises(AuditStorageError):
-            soft_delete_user(VALID_UUID, actor_id=ACTOR_ID, actor_role="admin")
+            users_storage.deactivate_user(
+                VALID_UUID, "r", actor_id=ACTOR_ID, actor_role="admin",
+            )
+    db.commit.assert_not_called()                   # rollback при выходе из with
+
+
+@pytest.mark.parametrize("state", [
+    {"is_active": False, "deactivation_source": "admin",
+     "deactivated_at": "t", "deactivation_reason_enc": "enc:v1:x"},
+    {"is_active": False, "deleted_at": "t"},         # исторически удалён
+    {"is_active": True, "deleted_at": "t"},          # необычное историческое
+])
+def test_restore_clears_fields_revokes_sessions_and_stages_event(
+    monkeypatch, lifecycle_spies, state,
+):
+    user = _lifecycle_user(**state)
+    db = _lifecycle_db(user)
+    with patch("app.users.storage.SessionLocal", _mock_session(db)):
+        users_storage.restore_user(VALID_UUID, actor_id=ACTOR_ID, actor_role="admin")
+
+    assert user.is_active is True and user.deleted_at is None
+    assert (user.deactivated_at, user.deactivation_source,
+            user.deactivation_reason_enc) == (None, None, None)
+    assert user.id == TARGET_ID                      # тот же аккаунт
+    assert lifecycle_spies["revoked"] == [TARGET_ID] # старые сессии не оживают
+    assert lifecycle_spies["imp_revoked"] == [TARGET_ID]  # и impersonation инициатора
+    (kw,) = lifecycle_spies["events"]
+    assert kw["event"] == "admin_user_activated" and kw["metadata"] == {}
+    db.commit.assert_called_once()
+
+
+@pytest.mark.parametrize("is_active", [True, None])
+def test_restore_active_account_rejected(monkeypatch, lifecycle_spies, is_active):
+    from app.users.errors import AccountAlreadyActiveError
+
+    db = _lifecycle_db(_lifecycle_user(is_active=is_active))
+    with patch("app.users.storage.SessionLocal", _mock_session(db)):
+        with pytest.raises(AccountAlreadyActiveError):
+            users_storage.restore_user(
+                VALID_UUID, actor_id=ACTOR_ID, actor_role="admin",
+            )
+    assert lifecycle_spies["events"] == [] and lifecycle_spies["revoked"] == []
     db.commit.assert_not_called()
+
+
+def test_restore_not_found_and_malformed_uuid(monkeypatch, lifecycle_spies):
+    from app.users.errors import UserNotFoundError as UsersNotFound
+
+    db = _lifecycle_db(None)
+    with patch("app.users.storage.SessionLocal", _mock_session(db)):
+        with pytest.raises(UsersNotFound):
+            users_storage.restore_user(VALID_UUID, actor_id=ACTOR_ID, actor_role="admin")
+    with pytest.raises(UsersNotFound):
+        users_storage.restore_user("not-a-uuid", actor_id=ACTOR_ID, actor_role="admin")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -457,157 +574,91 @@ def test_role_audit_failure_rolls_back_together_with_scalar(monkeypatch):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Stage 5A-1: lifecycle is_active — admin_user_activated / admin_user_deactivated
+# ADR-028: is_active через generic PATCH — только no-op, переход отклоняется
 # ══════════════════════════════════════════════════════════════════════════
 
-def _revoke_update_calls(db):
-    """Вызовы UserSession-revoke: .update({"is_revoked": True}, ...)."""
-    return [
-        c for c in db.query.return_value.filter.return_value.update.call_args_list
-        if c.args and c.args[0] == {"is_revoked": True}
-    ]
+def _apply_is_active(db, user, is_active, *, actor_id=ACTOR_ID, **over):
+    kwargs = dict(
+        current_roles=["student"], target_staff=None,
+        full_name=None, phone=None, is_active=is_active,
+        legal_basis_confirmed=None, basis_type=None, basis_reference=None,
+        legal_basis_comment=None, confirmed_by_user_id=None,
+        actor_id=actor_id, actor_role="admin", ip=None, user_agent=None,
+    )
+    kwargs.update(over)
+    _apply_role_and_scalar_changes(db, user, **kwargs)
 
 
-def test_is_active_true_to_false_stages_deactivated_and_revokes_sessions():
+@pytest.mark.parametrize("before,after", [(True, False), (False, True), (None, False)])
+def test_is_active_transition_via_patch_rejected_without_mutation(before, after):
     calls = []
     with patch.object(users_storage, "record_event", lambda **kw: calls.append(kw)):
         db = MagicMock(name="db")
-        user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=True)
-        _apply_role_and_scalar_changes(
-            db, user,
-            current_roles=["student"], target_staff=None,
-            full_name=None, phone=None, is_active=False,
-            legal_basis_confirmed=None, basis_type=None, basis_reference=None,
-            legal_basis_comment=None, confirmed_by_user_id=None,
-            actor_id=ACTOR_ID, actor_role="admin", ip=None, user_agent=None,
-        )
-    assert user.is_active is False
-    assert len(calls) == 1
-    kw = calls[0]
-    assert kw["event"] == "admin_user_deactivated"
-    assert kw["actor"].user_id == ACTOR_ID and kw["actor"].role == "admin"
-    assert kw["target"].entity_type == "user" and kw["target"].entity_id == TARGET_ID
-    assert kw["metadata"] == {}
-    # Отзыв активных сессий выполнен (True→False).
-    assert len(_revoke_update_calls(db)) == 1
+        user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=before)
+        with pytest.raises(RoleChangeError) as ei:
+            _apply_is_active(db, user, after)
+    assert (ei.value.status_code, ei.value.audit_code) == (
+        422, "lifecycle_endpoint_required",
+    )
+    assert user.is_active is before            # без мутации
+    assert calls == []                          # без lifecycle-события
+    db.query.assert_not_called()                # и без отзыва сессий
 
 
-def test_is_active_false_to_true_stages_activated_no_revoke():
+def test_self_deactivation_via_patch_is_self_admin_protected():
     calls = []
     with patch.object(users_storage, "record_event", lambda **kw: calls.append(kw)):
         db = MagicMock(name="db")
-        user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=False)
-        _apply_role_and_scalar_changes(
-            db, user,
-            current_roles=["student"], target_staff=None,
-            full_name=None, phone=None, is_active=True,
-            legal_basis_confirmed=None, basis_type=None, basis_reference=None,
-            legal_basis_comment=None, confirmed_by_user_id=None,
-            actor_id=ACTOR_ID, actor_role="admin", ip=None, user_agent=None,
-        )
-    assert user.is_active is True
-    assert len(calls) == 1
-    assert calls[0]["event"] == "admin_user_activated"
-    # Активация сессии НЕ отзывает.
-    assert _revoke_update_calls(db) == []
-
-
-def test_is_active_same_value_no_lifecycle_event_no_revoke():
-    calls = []
-    with patch.object(users_storage, "record_event", lambda **kw: calls.append(kw)):
-        db = MagicMock(name="db")
-        user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=True)
-        _apply_role_and_scalar_changes(
-            db, user,
-            current_roles=["student"], target_staff=None,
-            full_name=None, phone=None, is_active=True,   # state → same
-            legal_basis_confirmed=None, basis_type=None, basis_reference=None,
-            legal_basis_comment=None, confirmed_by_user_id=None,
-            actor_id=None, actor_role=None, ip=None, user_agent=None,
-        )
+        user = SimpleNamespace(id=ACTOR_ID, full_name="X", phone=None, is_active=True)
+        with pytest.raises(RoleChangeError) as ei:
+            _apply_is_active(db, user, False, full_name="Other Name")
+    assert (ei.value.status_code, ei.value.audit_code) == (422, "self_admin_protected")
+    assert user.is_active is True and user.full_name == "X"
     assert calls == []
-    assert _revoke_update_calls(db) == []
 
 
-def test_is_active_only_does_not_stage_admin_user_updated():
+@pytest.mark.parametrize("stored", [True, None])
+def test_is_active_same_value_is_no_op(stored):
+    """Совпадающее значение (включая историческое NULL = активен) — no-op."""
     calls = []
     with patch.object(users_storage, "record_event", lambda **kw: calls.append(kw)):
         db = MagicMock(name="db")
-        user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=True)
-        _apply_role_and_scalar_changes(
-            db, user,
-            current_roles=["student"], target_staff=None,
-            full_name=None, phone=None, is_active=False,
-            legal_basis_confirmed=None, basis_type=None, basis_reference=None,
-            legal_basis_comment=None, confirmed_by_user_id=None,
-            actor_id=ACTOR_ID, actor_role="admin", ip=None, user_agent=None,
-        )
-    events = {c["event"] for c in calls}
-    assert "admin_user_updated" not in events
-    assert events == {"admin_user_deactivated"}
+        user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=stored)
+        _apply_is_active(db, user, True, actor_id=None, actor_role=None)
+    assert calls == []
+    assert user.is_active is stored
 
 
-def test_scalar_and_is_active_stage_two_disjoint_events():
+def test_scalar_with_unchanged_is_active_stages_only_admin_user_updated():
+    """Edit-модалка отключённого (не удалённого) аккаунта: ФИО меняется,
+    is_active=false как было — только admin_user_updated, статус не трогается."""
     calls = []
-    with patch.object(users_storage, "record_event", lambda **kw: calls.append(kw)):
-        db = MagicMock(name="db")
-        user = SimpleNamespace(id=TARGET_ID, full_name="Old", phone=None, is_active=True)
-        _apply_role_and_scalar_changes(
-            db, user,
-            current_roles=["student"], target_staff=None,
-            full_name="New Name", phone=None, is_active=False,
-            legal_basis_confirmed=None, basis_type=None, basis_reference=None,
-            legal_basis_comment=None, confirmed_by_user_id=None,
-            actor_id=ACTOR_ID, actor_role="admin", ip=None, user_agent=None,
-        )
-    assert user.full_name == "New Name" and user.is_active is False
-    events = [c["event"] for c in calls]
-    assert sorted(events) == ["admin_user_deactivated", "admin_user_updated"]
-    # admin_user_updated — только scalar; is_active в его metadata не участвует.
-    upd = next(c for c in calls if c["event"] == "admin_user_updated")
-    assert upd["metadata"] == {}
-
-
-def test_role_and_is_active_both_in_one_caller_session():
-    calls = []
-    sentinel_ctx = SimpleNamespace(ip_address=None, user_agent=None)
     with patch.object(users_storage, "record_event", lambda **kw: calls.append(kw)), \
-         patch.object(users_storage, "build_request_context", lambda **kw: sentinel_ctx):
-        role_obj = SimpleNamespace(id=55, name="supervisor")
-        db = _role_lookup_db([role_obj])
+         patch.object(users_storage, "record_data_change", lambda **kw: None):
+        db = MagicMock(name="db")
+        user = SimpleNamespace(id=TARGET_ID, full_name="Old", phone=None, is_active=False)
+        _apply_is_active(db, user, False, full_name="New Name")
+    assert user.full_name == "New Name" and user.is_active is False
+    assert [c["event"] for c in calls] == ["admin_user_updated"]
+
+
+def test_admin_role_removal_revokes_impersonation_sessions_of_that_admin():
+    revoked = []
+    with patch.object(users_storage, "record_event", lambda **kw: None), \
+         patch.object(users_storage, "_revoke_sessions_impersonated_by",
+                      lambda db, uid: revoked.append(uid)):
+        db = _role_lookup_db([SimpleNamespace(id=1, name="admin")])
         user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=True)
         _apply_role_and_scalar_changes(
             db, user,
-            current_roles=["psychologist"],
-            target_staff={"psychologist", "supervisor"},   # added supervisor
-            full_name=None, phone=None, is_active=False,     # + deactivate
-            legal_basis_confirmed=True, basis_type="service_duty",
-            basis_reference="Order #1", legal_basis_comment=None,
-            confirmed_by_user_id=ACTOR_ID,
+            current_roles=["admin", "psychologist", "student"],
+            target_staff={"psychologist"},
+            full_name=None, phone=None, is_active=None,
+            legal_basis_confirmed=None, basis_type=None, basis_reference=None,
+            legal_basis_comment=None, confirmed_by_user_id=None,
             actor_id=ACTOR_ID, actor_role="admin", ip=None, user_agent=None,
         )
-    events = {c["event"] for c in calls}
-    assert events == {"admin_role_add", "admin_user_deactivated"}
-    assert "admin_user_updated" not in events   # full_name/phone не менялись
-    for c in calls:
-        assert c["target"].entity_id == TARGET_ID
-
-
-def test_lifecycle_audit_failure_propagates_not_swallowed():
-    def _boom(**kw):
-        raise AuditStorageError("audit storage failure for admin_user_deactivated")
-    with patch.object(users_storage, "record_event", _boom):
-        db = MagicMock(name="db")
-        user = SimpleNamespace(id=TARGET_ID, full_name="X", phone=None, is_active=True)
-        with pytest.raises(AuditStorageError):
-            _apply_role_and_scalar_changes(
-                db, user,
-                current_roles=["student"], target_staff=None,
-                full_name=None, phone=None, is_active=False,
-                legal_basis_confirmed=None, basis_type=None, basis_reference=None,
-                legal_basis_comment=None, confirmed_by_user_id=None,
-                actor_id=ACTOR_ID, actor_role="admin", ip=None, user_agent=None,
-            )
+    assert revoked == [TARGET_ID]
 
 
 # ══════════════════════════════════════════════════════════════════════════
