@@ -4,7 +4,8 @@
   POST /{provider}/start    → {authorize_url} + HttpOnly state-cookie
   GET  /{provider}/callback → 302 на OAUTH_FRONTEND_CALLBACK_URL#...
   POST /complete            → SessionResponse (тот же, что у входа по паролю)
-  POST /registration/init    → OTP на email провайдера из ticket (Stage 4)
+  POST /registration/preview → что показать на шаге email (VK-1B), без изменений
+  POST /registration/init    → OTP на email ticket (Stage 4); для VK — с выбором email
   POST /registration/confirm → SessionResponse: аккаунт + identity + сессия
 
 Ошибки OAuth-потока — 400/403/404/429, НЕ 401: frontend client.js трактует
@@ -32,6 +33,7 @@ from app.oauth.errors import (
 from app.oauth.schemas import (
     OAuthCompleteRequest, OAuthRegistrationConfirmRequest,
     OAuthRegistrationInitRequest, OAuthRegistrationInitResponse,
+    OAuthRegistrationPreviewRequest, OAuthRegistrationPreviewResponse,
     OAuthStartResponse,
 )
 from app.oauth.security import sha256_hex
@@ -247,14 +249,42 @@ def _audit_registration_failed(
     )
 
 
-@router.post("/registration/init", response_model=OAuthRegistrationInitResponse)
-def oauth_registration_init(body: OAuthRegistrationInitRequest, request: Request):
-    """registration-ticket → OTP на email провайдера из ticket. Повтор с тем же
-    ticket — повторная отправка кода (cooldown 60 с). Отказы init не
-    аудируются (как и у /auth/register/init)."""
+@router.post("/registration/preview", response_model=OAuthRegistrationPreviewResponse)
+def oauth_registration_preview(
+    body: OAuthRegistrationPreviewRequest, request: Request, response: Response,
+):
+    """Шаг email регистрации: провайдер, МАСКИРОВАННЫЙ адрес ticket и можно ли с
+    ним продолжить. Ничего не меняет: ticket не списывается, код не уходит."""
     try:
         enforce_rate_limit(
-            "oauth_registration_init", ip=_client_ip(request),
+            "oauth_registration_preview", ip=_client_ip(request),
+            ticket_digest=sha256_hex(body.ticket),
+        )
+    except RateLimitExceeded:
+        return _rate_limited_response()
+    try:
+        preview = service.registration_preview(body.ticket)
+    except OAuthTicketInvalidError:
+        return _ticket_invalid_response()
+    _no_store(response)
+    return preview
+
+
+@router.post("/registration/init", response_model=OAuthRegistrationInitResponse)
+def oauth_registration_init(body: OAuthRegistrationInitRequest, request: Request):
+    """registration-ticket → OTP на email ticket. Без `email` — на уже привязанный
+    адрес (повторная отправка, cooldown 60 с). С `email` (только VK) — адрес
+    выбирает пользователь: allowlist, занятость, привязка к ticket и код на
+    него. Отказы init не аудируются (как и у /auth/register/init)."""
+    # Выбор адреса — отдельный лимит: исправимые отказы (домен, занятый email)
+    # не должны съедать квоту повторной отправки, а чужой ящик защищён лимитом
+    # по самому адресу.
+    action = (
+        "oauth_registration_init" if body.email is None else "oauth_registration_email"
+    )
+    try:
+        enforce_rate_limit(
+            action, ip=_client_ip(request), email=body.email,
             # Только SHA-256 digest: raw ticket в ключи лимитера не попадает.
             ticket_digest=sha256_hex(body.ticket),
         )
@@ -262,7 +292,7 @@ def oauth_registration_init(body: OAuthRegistrationInitRequest, request: Request
         return _rate_limited_response()
 
     try:
-        email_masked = service.registration_init(body.ticket)
+        email_masked = service.registration_init(body.ticket, body.email)
     except OAuthTicketInvalidError:
         return _ticket_invalid_response()
     except OAuthRegistrationError as exc:

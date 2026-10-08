@@ -284,3 +284,116 @@ def test_complete_login_returns_ticket_provider(monkeypatch):
         "session_token": "t", "expires_at": None, "user": _user(), "provider": "yandex",
     })
     assert service.complete_login("ticket").provider == "yandex"
+
+
+# ── Stage Social Auth VK-1A/1B: VK ID ────────────────────────────────────────
+
+def _vk_fake(**kwargs):
+    fake = FakeProvider("vk", **kwargs)
+    fake.build_authorize_url(
+        state=STATE, code_challenge=code_challenge_s256("verifier"), redirect_uri="r")
+    return fake, fake.issue_code(STATE)
+
+
+def _vk_callback(monkeypatch, **fake_kwargs):
+    created = []
+    monkeypatch.setattr(service.storage, "find_identity_user", lambda **kw: None)
+    monkeypatch.setattr(
+        service.storage, "create_registration_ticket", lambda **kw: created.append(kw),
+    )
+    fake, code = _vk_fake(**fake_kwargs)
+    with registered(fake):
+        outcome = service.handle_callback("vk", {"state": STATE, "code": code}, STATE)
+    return outcome, created, fake
+
+
+def test_unknown_vk_identity_starts_registration_with_email_step(calls, monkeypatch):
+    outcome, created, fake = _vk_callback(
+        monkeypatch, email="  Ivan.Petrov@VK.ru ", suggested_name="  Иван   Петров ")
+
+    assert outcome.audit_code is None and outcome.provider == "vk"
+    assert outcome.clear_cookie is True
+    assert set(outcome.fragment) == {"result", "ticket", "step"}
+    assert outcome.fragment["result"] == "registration"
+    assert outcome.fragment["step"] == "email"
+    # Email провайдера во fragment не попадает — только в ticket.
+    assert "vk.ru" not in repr(outcome.fragment).lower()
+    row, = created
+    ticket = outcome.fragment["ticket"]
+    assert row["ticket_hash"] == service.sha256_hex(ticket) != ticket
+    assert (row["provider"], row["subject"]) == ("vk", fake.subject)
+    assert (row["email"], row["suggested_name"]) == ("ivan.petrov@vk.ru", "Иван Петров")
+    assert calls["ticket"] == 0                       # login-ticket не создан
+
+
+@pytest.mark.parametrize("email", [None, "   ", "not-an-email", "a@@b.ru"])
+def test_unknown_vk_identity_without_email_still_gets_ticket(calls, monkeypatch, email):
+    """VK может не отдать email (живой smoke): регистрация не закрывается —
+    адрес пользователь укажет сам на шаге email."""
+    outcome, created, _ = _vk_callback(monkeypatch, email=email, suggested_name="Иван Петров")
+    assert outcome.fragment["result"] == "registration"
+    assert outcome.fragment["step"] == "email"
+    row, = created
+    assert row["email"] is None and row["suggested_name"] == "Иван Петров"
+
+
+@pytest.mark.parametrize("name", [None, "", "я", "Ив\x00ан", 42])
+def test_unknown_vk_identity_without_usable_name_stores_none(calls, monkeypatch, name):
+    outcome, created, _ = _vk_callback(monkeypatch, email="ivan@vk.ru", suggested_name=name)
+    assert outcome.fragment["step"] == "email"
+    assert created[0]["suggested_name"] is None       # имя подберётся по выбранному email
+
+
+def test_yandex_registration_fragment_has_no_email_step(calls, monkeypatch):
+    """Яндекс не получает шаг email: fragment прежний."""
+    created = []
+    monkeypatch.setattr(service.storage, "find_identity_user", lambda **kw: None)
+    monkeypatch.setattr(
+        service.storage, "create_registration_ticket", lambda **kw: created.append(kw),
+    )
+    fake = _fake_with_code()
+    code = fake.issue_code(STATE)
+    with registered(fake):
+        outcome = service.handle_callback("yandex", {"state": STATE, "code": code}, STATE)
+    assert set(outcome.fragment) == {"result", "ticket"}
+    assert created[0]["email"] == fake.email
+
+
+def test_provider_without_registration_policy_is_terminal(calls, monkeypatch, caplog):
+    """Провайдер без политики регистрации — только вход: новая identity ничего
+    не создаёт и получает безопасный отказ."""
+    monkeypatch.setattr(service, "registration_policy", lambda provider: None)
+    caplog.set_level("INFO", logger=service.__name__)
+    outcome, created, fake = _vk_callback(
+        monkeypatch, subject="SUBJECT_do_not_log_777", email="probe@vk.ru",
+        suggested_name="Иван Пробный")
+    assert outcome.fragment == {"error": "social_registration_not_available"}
+    assert outcome.audit_code == "oauth_identity_unknown" and outcome.provider == "vk"
+    assert created == [] and calls["ticket"] == 0
+    # Временная диагностика probe (VK-1A) убрана — в логах нет ни её, ни данных.
+    assert "[oauth probe]" not in caplog.text
+    for secret in ("SUBJECT_do_not_log_777", "probe@vk.ru", "Иван"):
+        assert secret not in caplog.text
+
+
+def test_known_vk_identity_gets_login_ticket(calls, monkeypatch):
+    monkeypatch.setattr(
+        service.storage, "find_identity_user", lambda **kw: {"user_id": 7, "user": _user()},
+    )
+    fake, code = _vk_fake()
+    with registered(fake):
+        outcome = service.handle_callback("vk", {"state": STATE, "code": code}, STATE)
+    assert set(outcome.fragment) == {"result", "ticket"}     # без шага email
+    assert outcome.fragment["result"] == "login" and outcome.provider == "vk"
+    assert calls["ticket"] == 1
+
+
+def test_callback_redirect_uri_uses_vk_override_only_for_vk(monkeypatch):
+    monkeypatch.setattr(service.settings, "OAUTH_CALLBACK_BASE_URL", "http://localhost:8000")
+    monkeypatch.setattr(service.settings, "VK_OAUTH_CALLBACK_BASE_URL", "http://localhost")
+    assert service.callback_redirect_uri("vk") == "http://localhost/api/auth/oauth/vk/callback"
+    assert service.callback_redirect_uri("yandex") == (
+        "http://localhost:8000/api/auth/oauth/yandex/callback")
+    monkeypatch.setattr(service.settings, "VK_OAUTH_CALLBACK_BASE_URL", "")
+    assert service.callback_redirect_uri("vk") == (
+        "http://localhost:8000/api/auth/oauth/vk/callback")

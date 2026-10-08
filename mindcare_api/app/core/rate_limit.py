@@ -49,6 +49,14 @@ RULES: dict[str, tuple[int, float]] = {
     # ключи/логи не попадает никогда).
     "oauth_registration_init:ip":        (20, 900),
     "oauth_registration_init:ticket":    (3,  900),
+    # VK-1B. preview — только чтение. Выбор адреса (init с email): отдельные
+    # лимиты, чтобы исправимые отказы не съедали квоту повторной отправки;
+    # лимит по самому адресу — как у register_init — защищает чужой ящик.
+    "oauth_registration_preview:ip":     (60, 300),
+    "oauth_registration_preview:ticket": (20, 300),
+    "oauth_registration_email:ip":       (20, 900),
+    "oauth_registration_email:ticket":   (8,  900),
+    "oauth_registration_email:email":    (3,  900),
     "oauth_registration_confirm:ip":     (30, 600),
     "oauth_registration_confirm:ticket": (10, 600),
 }

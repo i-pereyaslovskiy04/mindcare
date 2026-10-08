@@ -112,6 +112,14 @@ uvicorn app.main:app --reload
 
 # ══════════════════════════════════════════════════════════
 
+# DEV + VK ID: callback VK приходит на http://localhost (порт 80) — VK ID не
+# принимает другие localhost-порты. Listener на :80 поднимают DEV-launcher'ы
+# (..\start.ps1 / ../start.sh) вместе с основным backend, когда в .env
+# VK_OAUTH_ENABLED=true и VK_OAUTH_CALLBACK_BASE_URL=http://localhost
+# (решает scripts/dev_oauth_callback_port.py). При ручном запуске одной
+# командой выше listener не стартует. Из приложения (lifespan) его НЕ
+# запускать; в production его нет. Подробности — deploy/README.md.
+
 # Подключение к БД для ручных запросов
 psql -U MindcareUser -d mindcare
 
@@ -395,8 +403,78 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    УЖЕ привязанной identity чистого студента (активные роли == {"student"},
    `auth.roles.is_pure_student`); неизвестная identity — начало РЕГИСТРАЦИИ
    (Stage 4, см. ниже), а не отказ. Production-реестр наполняет только
-   `app/oauth/providers/bootstrap.py` (lifespan) — сейчас лишь Яндекс ID (Stage
-   3A); VK-адаптера нет. FakeProvider живёт только в tests
+   `app/oauth/providers/bootstrap.py` (lifespan) — Яндекс ID (Stage 3A) и VK ID
+   (Stage VK-1A), каждый независимо. FakeProvider живёт только в tests
+✅ VK ID (Stage Social Auth VK-1A, `app/oauth/providers/vk.py`) — ТОЛЬКО адаптер
+   поверх ядра 2B, сверен с документацией VK ID «Авторизация без SDK для Web»
+   и vkid-web-sdk. OAuth 2.1 Authorization Code + PKCE S256, публичный клиент:
+   защищённый и сервисный ключи НЕ используются и в настройках их нет.
+   Адреса — константы: `id.vk.ru/authorize`, `/oauth2/auth`, `/oauth2/user_info`
+   (оба — POST формой; access_token в теле, никогда в query).
+   scope=`vkid.personal_info email` (без phone). Callback принимается и
+   отдельными параметрами (`code`, `state`, `device_id`), и JSON в `payload`
+✅ `device_id` VK: приходит в callback и нужен только для обмена кода в ТОМ ЖЕ
+   запросе — `ProviderCallback.extra` → `resolve_identity(extra=…)`. В БД не
+   сохраняется, не логируется; без валидного device_id обмен не выполняется
+   (`oauth_provider_error`). В обмен также уходит `state`; его эхо в ответе,
+   если есть, обязано совпасть
+✅ Субъект VK — `user.user_id` строкой (int → str, bool/float отклоняются);
+   `user_id` из ответа token, если есть, обязан совпасть с профилем. Из
+   профиля читаются ТОЛЬКО user_id, email (валидный → нормализованный, иначе
+   None) и first_name + last_name. Телефон, аватар, пол, дата рождения,
+   `verified`, refresh_token, id_token не читаются и не сохраняются. Ошибка
+   телом 2xx (`{"error": …}`) — ProviderRejected
+✅ Политика регистрации по провайдерам — `app/oauth/policy.py` (ядро остаётся
+   провайдер-нейтральным, веток «if vk» в service/storage нет):
+   `email_choice` (email выбирает пользователь) и `enforce_allowlist`.
+   Яндекс = (False, False): email профиля фиксирован, код уходит автоматически,
+   allowlist не применяется (ADR-027). VK = (True, True): email выбирает
+   пользователь, allowlist обязателен (ADR-030). Асимметрия allowlist —
+   осознанное продуктовое решение, НЕ инвариант безопасности; менять только
+   отдельным решением. Провайдер без политики — только вход: новая identity →
+   `#error=social_registration_not_available`, `failed_login` /
+   `oauth_identity_unknown`, ничего не создаётся
+✅ Регистрация через VK (Stage VK-1B, ADR-030). Живой smoke показал: VK может
+   НЕ вернуть email даже при «обязательной почте» — поэтому callback создаёт
+   registration-ticket и с `email = NULL`; fragment —
+   `#result=registration&ticket=…&step=email` (email провайдера в URL не
+   попадает). Mail.ru и QR внутри VK ID — тот же provider `vk`, отдельной
+   логики для них нет
+✅ `POST /api/auth/oauth/registration/preview {ticket}` →
+   `{provider, email_masked|null, email_allowed, email_editable}` — только
+   чтение (`storage.get_registration_ticket`): ticket не списывается и не
+   меняется, код не уходит, raw email не отдаётся. `email_allowed` — ранняя
+   проверка allowlist вне транзакции, лишь подсказка UI
+✅ Init для VK: `{ticket}` — код на адрес ticket (нет адреса → 422
+   `email_required`); `{ticket, email}` — адрес выбрал пользователь:
+   нормализация и формат в service (422 `email_invalid`), затем под FOR UPDATE
+   ticket: allowlist in-tx (422 `domain_not_allowed`) → занятость (409
+   `email_already_exists`) → `ticket.email = адрес` + OTP одним commit. Отказы
+   домена/занятости/cooldown ticket НЕ меняют и НЕ сжигают — адрес можно
+   исправить тем же ticket. Для Яндекса любой `email` в запросе → 422
+   `email_not_changeable`, занятый email по-прежнему сжигает ticket
+✅ Смена email до confirm (только VK) — новый init с другим адресом: адрес
+   ticket заменяется, на новый адрес уходит новый код. Запись OTP прежнего
+   адреса не трогается, но confirm проверяет код ТОЛЬКО для текущего
+   `ticket.email` — код от прежнего адреса регистрацию не подтверждает
+✅ Confirm email от клиента НЕ принимает (extra=forbid): только `ticket.email`
+   под FOR UPDATE. Для VK внутри транзакции: OTP → allowlist in-tx (домен могли
+   отключить после init → 422 `domain_not_allowed`, rollback, ticket и OTP целы)
+   → занятость (409, ticket цел — можно выбрать другой адрес). Имя — имя VK, а
+   если его нет — локальная часть ИТОГОВОГО адреса (вычисляется на confirm:
+   `resolve_name`, прежний адрес в профиль не попадает)
+✅ Лимиты VK-1B: `oauth_registration_preview` (IP 60/5 мин, ticket 20/5 мин);
+   выбор адреса — отдельное действие `oauth_registration_email` (IP 20/15 мин,
+   ticket 8/15 мин, сам адрес 3/15 мин), чтобы исправимые отказы не съедали
+   квоту повторной отправки, а чужой ящик был защищён лимитом по адресу
+❌ Не заводить отдельные провайдеры/ветки для Mail.ru и QR внутри VK ID; не
+   делать `users.email` nullable; не создавать social-аккаунт без email; не
+   привязывать VK identity к существующему аккаунту по совпадению email
+✅ `VK_OAUTH_CALLBACK_BASE_URL` — необязательная база redirect_uri только для
+   VK (`bootstrap.callback_base_url`; пусто → `OAUTH_CALLBACK_BASE_URL`): DEV
+   Redirect URL VK — `http://localhost` (порт 80), у Яндекса — `:8000`. Схема
+   обязана совпадать с общей базой (от неё зависит Secure у общего
+   state-cookie), иначе адаптер не регистрируется
 ✅ Callback: provider → parse → browser binding (state == HttpOnly cookie
    `mindcare_oauth_state`, Path=/api/auth/oauth, SameSite=Lax, без Domain,
    Secure по схеме OAUTH_CALLBACK_BASE_URL) → атомарное списание state + commit →
@@ -448,9 +526,12 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    (нормализованный `default_email`; имя — fallback-цепочка адаптера, без неё —
    локальная часть email). Клиент их не передаёт и не меняет (UX hotfix
    2026-10-05). Новая identity без пригодного email → `#error=oauth_email_required`,
-   ticket не создаётся, аудита нет
-✅ POST /api/auth/oauth/registration/init {ticket} → {message, email_masked}.
-   Лишние поля (name/email/consent_accepted/…) → 422. `storage.issue_registration_otp`:
+   ticket не создаётся, аудита нет. Это поведение Яндекса (политика без
+   `email_choice`); у VK email в ticket может быть NULL — см. VK-1B выше
+✅ POST /api/auth/oauth/registration/init {ticket[, email]} → {message,
+   email_masked}. `email` допустим только для VK (см. VK-1B); прочие лишние поля
+   (name/consent_accepted/…) → 422. Ниже — поток Яндекса.
+   `storage.issue_registration_otp`:
    ticket FOR UPDATE → identity уже есть / email занят → ticket сжигается, 409 →
    OTP (`password_hash NULL`) под cooldown 60 с → один commit; письмо на email
    ticket — ПОСЛЕ commit. Повтор тем же ticket — resend. Отказы init не
@@ -465,8 +546,9 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    роль student → consent_records (те же REQUIRED_CONSENTS) → UserOAuthIdentity
    (last_login_at) → удаление OTP → ticket.consumed_at → create_session_in_tx →
    last_login. Имя и email — ТОЛЬКО из ticket
-✅ Allowlist доменов к регистрации через провайдера НЕ применяется (ADR-027
-   п. 5, намеренно): ни на init, ни на confirm. Регистрация по паролю,
+✅ Allowlist доменов к регистрации через ЯНДЕКС НЕ применяется (ADR-027
+   п. 5, намеренно): ни на init, ни на confirm; к VK — применяется (ADR-030).
+   Регистрация по паролю,
    admin-created staff и supervisor-created student проверяют его как прежде
    (регрессия — `test_ordinary_registration_still_enforces_domain_allowlist`)
 ✅ Email провайдера — только адрес для OTP: владение подтверждает OTP MindCare,

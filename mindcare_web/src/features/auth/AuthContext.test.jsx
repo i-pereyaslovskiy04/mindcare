@@ -8,8 +8,10 @@ jest.mock('../../api/client', () => ({
   apiFetch: jest.fn(),
 }));
 const mockNavigate = jest.fn();
+let mockLocation = { pathname: '/' };
 jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => mockLocation,
 }), { virtual: true });
 
 const SESSION_KEY = 'mindcare_session';
@@ -40,7 +42,9 @@ async function waitReady() {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   jest.clearAllMocks();
+  mockLocation = { pathname: '/' };
   authApi.logout.mockResolvedValue({});
 });
 
@@ -290,4 +294,174 @@ test('completeOAuthRegistration: отказ confirm — ни токена, ни 
   expect(localStorage.getItem(SESSION_KEY)).toBeNull();
   expect(screen.getByTestId('roles')).toHaveTextContent('null');
   expect(authApi.me).not.toHaveBeenCalled();
+});
+
+// ── незавершённая регистрация через провайдера: только память приложения ────
+
+const SOCIAL_TICKET = 'tkt_REG_CONTEXT_0123456789abcdefgh';
+
+function SocialConsumer() {
+  const {
+    user, loading, socialRegistration, beginSocialRegistration, clearSocialRegistration,
+    completeOAuthRegistration, logout,
+  } = useAuth();
+  return (
+    <div>
+      <div data-testid="loading">{String(loading)}</div>
+      <div data-testid="roles">{user ? user.roles.join(',') : 'null'}</div>
+      <div data-testid="social">
+        {socialRegistration
+          ? `${socialRegistration.provider}:${String(socialRegistration.emailStep)}:${
+            socialRegistration.ticket === SOCIAL_TICKET ? 'ticket-ok' : 'ticket-other'}`
+          : 'none'}
+      </div>
+      <button
+        onClick={() => beginSocialRegistration({
+          ticket: SOCIAL_TICKET, provider: 'vk', emailStep: true, email: 'leak@donnu.ru',
+        })}
+      >
+        begin
+      </button>
+      <button onClick={() => beginSocialRegistration({ ticket: '', provider: 'vk' })}>begin-empty</button>
+      <button onClick={() => beginSocialRegistration(null)}>begin-null</button>
+      <button onClick={() => clearSocialRegistration()}>clear</button>
+      <button onClick={() => completeOAuthRegistration(SOCIAL_TICKET, '123456', true).catch(() => {})}>
+        confirm
+      </button>
+      <button onClick={() => logout()}>logout</button>
+    </div>
+  );
+}
+
+function renderSocial() {
+  return render(<AuthProvider><SocialConsumer /></AuthProvider>);
+}
+
+const socialState = () => screen.getByTestId('social').textContent;
+
+test('beginSocialRegistration: ticket живёт только в памяти — не в storage, URL и истории', async () => {
+  const setItem = jest.spyOn(Storage.prototype, 'setItem');
+  renderSocial();
+  await waitReady();
+  expect(socialState()).toBe('none');
+
+  fireEvent.click(screen.getByText('begin'));
+  expect(socialState()).toBe('vk:true:ticket-ok');
+
+  expect(setItem).not.toHaveBeenCalled();
+  expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(SOCIAL_TICKET);
+  expect(window.location.href).not.toContain(SOCIAL_TICKET);
+  expect(JSON.stringify(window.history.state ?? null)).not.toContain(SOCIAL_TICKET);
+  expect(JSON.stringify(mockNavigate.mock.calls)).not.toContain(SOCIAL_TICKET);
+  expect(document.body.innerHTML).not.toContain(SOCIAL_TICKET);
+  setItem.mockRestore();
+});
+
+test('в памяти остаются только ticket, provider и emailStep — посторонние поля отброшены', async () => {
+  let captured;
+  function Probe() {
+    captured = useAuth().socialRegistration;
+    return null;
+  }
+  render(<AuthProvider><SocialConsumer /><Probe /></AuthProvider>);
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+
+  expect(captured).toEqual({ ticket: SOCIAL_TICKET, provider: 'vk', emailStep: true });
+  expect(Object.isFrozen(captured)).toBe(true);
+});
+
+test.each(['begin-empty', 'begin-null'])('%s: без ticket продолжение не создаётся', async (button) => {
+  renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText(button));
+  expect(socialState()).toBe('none');
+});
+
+test('clearSocialRegistration забывает ticket («Начать заново», закрытие модалки)', async () => {
+  renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+  expect(socialState()).toBe('vk:true:ticket-ok');
+
+  fireEvent.click(screen.getByText('clear'));
+  expect(socialState()).toBe('none');
+});
+
+test('после «обновления страницы» (новый AuthProvider) продолжение не восстанавливается', async () => {
+  const view = renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+  expect(socialState()).toBe('vk:true:ticket-ok');
+  view.unmount();
+
+  renderSocial();                                   // память приложения начинается с нуля
+  await waitReady();
+  expect(socialState()).toBe('none');
+});
+
+test('успешная регистрация устанавливает сессию и забывает ticket', async () => {
+  authApi.oauthRegistrationConfirm.mockResolvedValue({ session_token: 'reg-token' });
+  authApi.me.mockResolvedValue({ roles: ['student'] });
+  renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+
+  fireEvent.click(screen.getByText('confirm'));
+  await waitFor(() => expect(screen.getByTestId('roles')).toHaveTextContent('student'));
+  await waitFor(() => expect(socialState()).toBe('none'));
+  expect(JSON.stringify({ ...localStorage })).not.toContain(SOCIAL_TICKET);
+});
+
+test('отказ confirm ticket не забывает — пользователь может исправить код', async () => {
+  authApi.oauthRegistrationConfirm.mockRejectedValue(
+    Object.assign(new Error('x'), { status: 400, code: 'otp_invalid' }));
+  renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+
+  fireEvent.click(screen.getByText('confirm'));
+  await waitFor(() => expect(authApi.oauthRegistrationConfirm).toHaveBeenCalled());
+  expect(socialState()).toBe('vk:true:ticket-ok');
+});
+
+test('уже вошедшему пользователю продолжение регистрации не сохраняется', async () => {
+  localStorage.setItem(SESSION_KEY, 'tok');
+  authApi.me.mockResolvedValue({ roles: ['student'] });
+  renderSocial();
+  await waitReady();
+
+  fireEvent.click(screen.getByText('begin'));
+  await waitFor(() => expect(socialState()).toBe('none'));
+});
+
+test.each(['/auth/callback', '/'])('на %s продолжение сохраняется', async (pathname) => {
+  mockLocation = { pathname };
+  renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+  expect(socialState()).toBe('vk:true:ticket-ok');
+});
+
+test('уход с главной забывает ticket', async () => {
+  const view = renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+  expect(socialState()).toBe('vk:true:ticket-ok');
+
+  mockLocation = { pathname: '/news' };
+  view.rerender(<AuthProvider><SocialConsumer /></AuthProvider>);
+  await waitFor(() => expect(socialState()).toBe('none'));
+
+  mockLocation = { pathname: '/' };                 // возврат на главную его не возвращает
+  view.rerender(<AuthProvider><SocialConsumer /></AuthProvider>);
+  expect(socialState()).toBe('none');
+});
+
+test('logout забывает незавершённую регистрацию', async () => {
+  renderSocial();
+  await waitReady();
+  fireEvent.click(screen.getByText('begin'));
+  fireEvent.click(screen.getByText('logout'));
+  await waitFor(() => expect(socialState()).toBe('none'));
 });

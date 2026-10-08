@@ -85,3 +85,25 @@ test('ссылка назад вызывает onBack', () => {
   fireEvent.click(screen.getByRole('button', { name: '← Начать заново' }));
   expect(props.onBack).toHaveBeenCalledTimes(1);
 });
+
+test('ссылка на политику открывается в новой вкладке: шаг кода и ticket в памяти не теряются', () => {
+  const consent = { checked: false, error: false, onChange: jest.fn(), onMissing: jest.fn() };
+  const { props } = setup({ consent });
+
+  const link = screen.getByRole('link', { name: 'политикой персональных данных' });
+  expect(link).toHaveAttribute('href', '/privacy-policy');            // адрес и текст прежние
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(screen.getAllByRole('link')).toHaveLength(1);                // других ссылок на шаге нет
+
+  // Клик по ссылке — не отметка согласия и не подтверждение кода.
+  fireEvent.click(link);
+  expect(consent.onChange).not.toHaveBeenCalled();
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
+  expect(props.onConfirm).not.toHaveBeenCalled();
+});
+
+test('без согласия (обычная регистрация) ссылок на шаге кода нет', () => {
+  setup();
+  expect(screen.queryByRole('link')).toBeNull();
+});

@@ -1,34 +1,34 @@
+/**
+ * /auth/callback — технический маршрут: вход известной identity завершается
+ * здесь же (→ /dashboard), ticket регистрации передаётся в память приложения
+ * (AuthContext) и страница уходит на главную, терминальные ошибки уходят на
+ * главную с сообщением. Экранов регистрации (шаг email, шаг кода) и своей
+ * карточки у маршрута нет — они в AuthModal
+ * (см. ui/SocialRegistrationFlow.test.jsx и socialRegistration.integration.test.jsx).
+ */
+import fs from 'fs';
+import path from 'path';
 import { StrictMode } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import OAuthCallbackPage from './OAuthCallbackPage';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import OAuthCallbackPage, { PHASE } from './OAuthCallbackPage';
 import * as AuthContext from '../AuthContext';
 import * as authApi from '../../../api/auth.api';
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
-  // state/replace Link'а выводятся в data-атрибуты — так тест видит, куда и с
-  // каким router state ведёт ссылка.
-  Link: ({ to, state, replace, children, ...rest }) => (
-    <a href={to} data-state={JSON.stringify(state ?? null)} data-replace={String(!!replace)} {...rest}>
-      {children}
-    </a>
-  ),
+  Link: ({ to, children, ...rest }) => <a href={to} {...rest}>{children}</a>,
 }), { virtual: true });
 jest.mock('../AuthContext', () => ({ useAuth: jest.fn() }));
-jest.mock('../../../api/auth.api', () => ({ oauthRegistrationInit: jest.fn() }));
-// Шпион над НАСТОЯЩИМ общим шагом кода: считает монтирования, рендер не
-// подменяется (реализация восстанавливается в beforeEach — CRA resetMocks).
-jest.mock('../ui/RegistrationOtpStep', () => {
-  const actual = jest.requireActual('../ui/RegistrationOtpStep');
-  return { __esModule: true, ...actual, default: jest.fn() };
-});
-// eslint-disable-next-line import/first
-import RegistrationOtpStep from '../ui/RegistrationOtpStep';
-
-const ActualRegistrationOtpStep = jest.requireActual('../ui/RegistrationOtpStep').default;
+// Маршрут сам в сеть не ходит: любые вызовы регистрации здесь — ошибка.
+jest.mock('../../../api/auth.api', () => ({
+  oauthRegistrationInit: jest.fn(),
+  oauthRegistrationPreview: jest.fn(),
+  oauthRegistrationConfirm: jest.fn(),
+}));
 
 const TICKET = 'tkt_SYNTHETIC_0123456789abcdefghij';
+const REG_TICKET = 'tkt_REG_SYNTHETIC_zyxwvutsrqponmlk';
 
 const MSG = Object.freeze({
   disabled: 'Доступ к аккаунту сейчас недоступен. Обратитесь к администратору.',
@@ -55,16 +55,30 @@ function expectCanonicalModalError(message, messageTone) {
   expect(screen.queryByRole('alert')).toBeNull();
   expect(screen.queryByRole('link', { name: 'Вернуться ко входу' })).toBeNull();
   expect(screen.queryByText(message)).toBeNull();
+  expect(beginSocialRegistration).not.toHaveBeenCalled();
 }
 
 /** В router state — только фиксированный текст, без ticket и деталей сервера. */
 function expectNoLeakInNavigation(...secrets) {
   const blob = JSON.stringify(mockNavigate.mock.calls);
-  for (const secret of [TICKET, ...secrets]) expect(blob).not.toContain(secret);
+  for (const secret of [TICKET, REG_TICKET, ...secrets]) expect(blob).not.toContain(secret);
 }
+
+/** Ни шага email, ни шага кода, ни сетевых вызовов регистрации. */
+function expectNoRegistrationUi() {
+  expect(screen.queryByRole('heading')).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+  expect(authApi.oauthRegistrationPreview).not.toHaveBeenCalled();
+  expect(authApi.oauthRegistrationConfirm).not.toHaveBeenCalled();
+}
+
 const events = [];
 let completeOAuthLogin;
-let completeOAuthRegistration;
+let beginSocialRegistration;
 let replaceSpy;
 
 function setUrl(hash) {
@@ -73,20 +87,23 @@ function setUrl(hash) {
 
 function mockAuth(over = {}) {
   AuthContext.useAuth.mockReturnValue({
-    completeOAuthLogin, completeOAuthRegistration, loading: false, ...over,
+    completeOAuthLogin, beginSocialRegistration, loading: false, ...over,
   });
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  RegistrationOtpStep.mockImplementation(ActualRegistrationOtpStep);
+  sessionStorage.clear();
+  localStorage.clear();
   events.length = 0;
-  completeOAuthLogin = jest.fn((ticket) => {
+  completeOAuthLogin = jest.fn(() => {
     events.push(`complete:${window.location.hash === '' ? 'scrubbed' : 'dirty'}`);
     return Promise.resolve({ roles: ['student'] });
   });
-  completeOAuthRegistration = jest.fn().mockResolvedValue({ roles: ['student'] });
-  authApi.oauthRegistrationInit.mockResolvedValue({ message: 'ok', email_masked: 'i***@yandex.ru' });
+  beginSocialRegistration = jest.fn(() => {
+    events.push(`handoff:${window.location.hash === '' ? 'scrubbed' : 'dirty'}`);
+  });
+  mockNavigate.mockImplementation((to) => { events.push(`navigate:${to}`); });
   mockAuth();
 });
 
@@ -104,7 +121,28 @@ function spyReplace() {
   });
 }
 
-// ── успех ────────────────────────────────────────────────────────────────────
+/**
+ * Пишет КАЖДОЕ состояние DOM с момента первого коммита: появлялись ли шаг
+ * кода, шаг email и какой статус был виден. MutationObserver ловит даже
+ * кратковременную вставку узлов («вспышку»).
+ */
+function recordDom() {
+  const seen = [];
+  const snapshot = () => {
+    seen.push({
+      otp: screen.queryByLabelText('Цифра 1') !== null
+        || screen.queryByText('Подтверждение регистрации') !== null,
+      email: screen.queryByText('Почта для регистрации') !== null
+        || screen.queryByRole('textbox') !== null,
+      status: screen.queryByRole('status')?.textContent ?? '',
+    });
+  };
+  const observer = new MutationObserver(snapshot);
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+  return { seen, snapshot, stop: () => observer.disconnect() };
+}
+
+// ── вход известной identity ──────────────────────────────────────────────────
 
 test('fragment вычищается ДО обмена ticket, complete ровно один', async () => {
   setUrl(`#result=login&ticket=${TICKET}`);
@@ -113,7 +151,7 @@ test('fragment вычищается ДО обмена ticket, complete ровн�
 
   await waitFor(() => expect(completeOAuthLogin).toHaveBeenCalledTimes(1));
   expect(completeOAuthLogin).toHaveBeenCalledWith(TICKET);
-  expect(events).toEqual(['scrub', 'complete:scrubbed']);
+  expect(events.slice(0, 2)).toEqual(['scrub', 'complete:scrubbed']);
   expect(window.location.hash).toBe('');
   expect(window.location.pathname).toBe('/auth/callback');
 });
@@ -123,6 +161,7 @@ test('успех → replace-переход на /dashboard (не на каби�
   render(<OAuthCallbackPage />);
   await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
   expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(beginSocialRegistration).not.toHaveBeenCalled();
 });
 
 test('пока идёт обмен — статус «Выполняем вход через Яндекс…», ticket не в DOM', async () => {
@@ -168,6 +207,34 @@ test('адрес перехода из fragment игнорируется', async
   expect(window.location.hash).toBe('');
 });
 
+test.each([
+  ['обычный режим', (ui) => ui],
+  ['StrictMode', (ui) => <StrictMode>{ui}</StrictMode>],
+])('result=login (%s): ни шаг кода, ни шаг email не появляются ни на один кадр', async (_, wrap) => {
+  setUrl(`#result=login&ticket=${TICKET}`);
+  let resolveLogin;
+  completeOAuthLogin.mockReturnValue(new Promise((r) => { resolveLogin = r; }));
+  const dom = recordDom();
+
+  render(wrap(<OAuthCallbackPage />));
+  dom.snapshot();
+  expect(screen.getByRole('status')).toHaveTextContent('Выполняем вход через Яндекс…');
+  await waitFor(() => expect(completeOAuthLogin).toHaveBeenCalledTimes(1));
+  await act(async () => { resolveLogin({ roles: ['student'] }); });
+  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
+  dom.snapshot();
+  dom.stop();
+
+  expect(dom.seen.length).toBeGreaterThan(1);
+  expect(dom.seen.some((s) => s.otp || s.email)).toBe(false);
+  expect(dom.seen.some((s) => /Отправляем код|Готовим регистрацию/.test(s.status))).toBe(false);
+  expectNoRegistrationUi();
+  expect(beginSocialRegistration).not.toHaveBeenCalled();   // продолжения в модалке не будет
+  expect(completeOAuthLogin).toHaveBeenCalledTimes(1);
+  expect(completeOAuthLogin).toHaveBeenCalledWith(TICKET);
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+});
+
 // ── терминальные ошибки → главная + AuthModal (не карточка callback) ─────────
 
 test.each([
@@ -186,7 +253,7 @@ test.each([
   await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
   expectCanonicalModalError(message, 'error');
   expectNoLeakInNavigation('RAW server detail', 'SECRET');
-  expect(RegistrationOtpStep).not.toHaveBeenCalled();
+  expectNoRegistrationUi();
 });
 
 test.each([
@@ -209,7 +276,7 @@ test.each([
   expect(window.location.hash).toBe('');
   expectCanonicalModalError(message, tone);
   expect(completeOAuthLogin).not.toHaveBeenCalled();
-  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+  expectNoRegistrationUi();
 });
 
 test('ошибка провайдера: текст провайдера во fragment не попадает в сообщение', () => {
@@ -229,12 +296,15 @@ test('неизвестный код ошибки не показывается �
 test.each([
   ['без fragment', ''],
   ['мусорный fragment', '#result=login&ticket=bad ticket!'],
+  ['неизвестный шаг регистрации', `#result=registration&ticket=${REG_TICKET}&step=password`],
+  ['шаг у входа', `#result=login&ticket=${TICKET}&step=email`],
 ])('недействительная ссылка (%s) → AuthModal «Вход», ничего не вызывается', (_, hash) => {
   setUrl(hash);
   render(<OAuthCallbackPage />);
   expectCanonicalModalError(MSG.invalidLink, 'error');
+  expectNoLeakInNavigation();
   expect(completeOAuthLogin).not.toHaveBeenCalled();
-  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+  expectNoRegistrationUi();
 });
 
 test('StrictMode: терминальная ошибка — ровно один переход на главную', () => {
@@ -243,301 +313,206 @@ test('StrictMode: терминальная ошибка — ровно один 
   expectCanonicalModalError(MSG.disabled, 'error');
 });
 
-// ── регистрация через Яндекс (Stage Social Auth 4, UX hotfix) ────────────────
-
-const REG_TICKET = 'tkt_REG_SYNTHETIC_zyxwvutsrqponmlk';
-const MASKED = 'i***@yandex.ru';
-
-async function codeStep() {
-  return screen.findByRole('group', { name: 'Код подтверждения' });
-}
-
-function typeCode(value = '123456') {
-  fireEvent.paste(screen.getByLabelText('Цифра 1'), {
-    clipboardData: { getData: () => value },
-  });
-}
-
-test('#result=registration → код отправляется автоматически, fragment вычищен сразу', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  spyReplace();
-  let resolveInit;
-  authApi.oauthRegistrationInit.mockReturnValue(new Promise((r) => { resolveInit = r; }));
-  const { container } = render(<OAuthCallbackPage />);
-
-  expect(events).toEqual(['scrub']);
-  expect(window.location.hash).toBe('');
-  expect(screen.getByRole('status')).toHaveTextContent('Отправляем код подтверждения…');
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(1);
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledWith({ ticket: REG_TICKET });
-
-  resolveInit({ message: 'ok', email_masked: MASKED });
-  await codeStep();
-  expect(screen.getByText('Подтверждение регистрации')).toBeInTheDocument();
-  expect(screen.getByText(MASKED)).toBeInTheDocument();
-  expect(container.innerHTML).not.toContain(REG_TICKET);
-  expect(window.location.href).not.toContain(REG_TICKET);
-  // Это не вход: обмен ticket на сессию не запускается.
-  expect(completeOAuthLogin).not.toHaveBeenCalled();
-});
-
-test('registration: нет полей имени, email, пароля и вкладок — только код и согласие', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-
-  expect(screen.queryByLabelText('Имя')).toBeNull();
-  expect(screen.queryByLabelText('Email')).toBeNull();
-  expect(screen.queryByLabelText(/Пароль/)).toBeNull();
-  expect(screen.queryAllByRole('textbox').filter((el) => !/Цифра/.test(el.getAttribute('aria-label') || ''))).toEqual([]);
-  expect(screen.queryByRole('tablist')).toBeNull();
-  expect(screen.queryByRole('tab')).toBeNull();
-  expect(screen.getByRole('checkbox')).not.toBeChecked();
-  expect(screen.getByText(/Отправить повторно через/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '← Начать заново' })).toBeInTheDocument();
-});
-
-test('registration в StrictMode: init уходит ровно один раз', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<StrictMode><OAuthCallbackPage /></StrictMode>);
-  await codeStep();
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(1);
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledWith({ ticket: REG_TICKET });
-});
-
-test('registration: ticket не пишется в storage и navigation state', async () => {
-  const setItem = jest.spyOn(Storage.prototype, 'setItem');
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-
-  expect(setItem).not.toHaveBeenCalled();
-  expect(JSON.stringify(window.history.state ?? null)).not.toContain(REG_TICKET);
-  expect(mockNavigate).not.toHaveBeenCalled();
-  setItem.mockRestore();
-});
-
-test('registration: без согласия код не подтверждается', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-  typeCode();
-  fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
-
-  expect(await screen.findByText('Необходимо принять политику персональных данных'))
-    .toBeInTheDocument();
-  await new Promise((r) => setTimeout(r, 200));
-  expect(completeOAuthRegistration).not.toHaveBeenCalled();
-});
-
-test('registration: код + согласие → сессия через AuthContext → /dashboard (replace)', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-  fireEvent.click(screen.getByRole('checkbox'));
-  typeCode();
-
-  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
-  expect(completeOAuthRegistration).toHaveBeenCalledTimes(1);
-  expect(completeOAuthRegistration).toHaveBeenCalledWith(REG_TICKET, '123456', true);
-  expect(completeOAuthLogin).not.toHaveBeenCalled();
-});
-
-test('registration: повторная отправка — тот же ticket, таймер заново', async () => {
-  jest.useFakeTimers();
-  try {
-    setUrl(`#result=registration&ticket=${REG_TICKET}`);
-    render(<OAuthCallbackPage />);
-    await act(async () => { await Promise.resolve(); });
-    for (let i = 0; i < 61; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
-      await act(async () => { jest.advanceTimersByTime(1000); });
-    }
-    const resend = screen.getByRole('button', { name: 'Отправить повторно' });
-    fireEvent.click(resend);
-    await waitFor(() => expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(2));
-
-    expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(2);
-    expect(authApi.oauthRegistrationInit.mock.calls[1][0]).toEqual({ ticket: REG_TICKET });
-    expect(await screen.findByText(/Отправить повторно через/)).toBeInTheDocument();
-  } finally {
-    jest.useRealTimers();
-  }
-});
-
-test.each([
-  [{ status: 409, code: 'email_already_exists' },
-    'Аккаунт с таким email уже существует. Войдите по email и паролю.'],
-  [{ status: 400, code: 'oauth_ticket_invalid' },
-    'Время на завершение регистрации истекло. Начните заново через Яндекс.'],
-  [{ status: 500, code: 'email_delivery_failed' }, 'Не удалось отправить письмо. Попробуйте позже.'],
-  [{ status: 500 }, 'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
-])('registration: ошибка init %j → AuthModal «Вход» с текстом, тон error', async (props, text) => {
-  authApi.oauthRegistrationInit.mockRejectedValue(
-    Object.assign(new Error('RAW server SECRET'), props),
-  );
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-
-  await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
-  expect(mockNavigate).toHaveBeenCalledTimes(1);
-  expect(mockNavigate).toHaveBeenCalledWith('/', {
-    replace: true, state: { openAuth: 'login', message: text, messageTone: 'error' },
-  });
-  expect(JSON.stringify(mockNavigate.mock.calls)).not.toMatch(/RAW server|SECRET|tkt_REG/);
-  expect(screen.queryByRole('alert')).toBeNull();
-  expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
-  expect(RegistrationOtpStep).not.toHaveBeenCalled();
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(1);
-});
-
-test('registration: email занят на confirm → отказ, подтверждение и повтор заблокированы', async () => {
-  completeOAuthRegistration.mockRejectedValue(Object.assign(new Error('x'), {
-    status: 409, code: 'email_already_exists',
-  }));
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-  fireEvent.click(screen.getByRole('checkbox'));
-  typeCode();
-
-  expect(await screen.findByText(
-    'Аккаунт с таким email уже существует. Войдите по email и паролю.',
-  )).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeDisabled();
-  expect(screen.queryByText(/Отправить повторно/)).toBeNull();
-  expect(mockNavigate).not.toHaveBeenCalled();
-});
-
-test('«← Начать заново» → главная + AuthModal «Регистрация», backend не вызывается', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-  authApi.oauthRegistrationInit.mockClear();
-
-  fireEvent.click(screen.getByRole('button', { name: '← Начать заново' }));
-
-  expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true, state: { openAuth: 'register' } });
-  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
-  expect(completeOAuthRegistration).not.toHaveBeenCalled();
-});
-
-
-// ── регрессия: вспышка шага кода при входе известной identity ───────────────
+// ── регистрация: техническая передача на главную (AuthModal) ────────────────
 
 /**
- * Пишет КАЖДОЕ состояние DOM с момента первого коммита: появлялись ли поле
- * кода, заголовок шага кода и какой статус был виден. MutationObserver ловит
- * даже кратковременную вставку узлов (то, что пользователь видит «вспышкой»).
+ * Ровно одна передача ticket в память приложения и ровно один replace на `/`
+ * БЕЗ router state. Больше ничего маршрут не делает.
  */
-function recordDom() {
-  const seen = [];
-  const snapshot = () => {
-    seen.push({
-      otpField: screen.queryByLabelText('Цифра 1') !== null,
-      otpGroup: screen.queryByRole('group', { name: 'Код подтверждения' }) !== null,
-      otpTitle: screen.queryByText('Подтверждение регистрации') !== null,
-      status: screen.queryByRole('status')?.textContent ?? '',
-    });
-  };
-  const observer = new MutationObserver(snapshot);
-  observer.observe(document.body, { subtree: true, childList: true, characterData: true });
-  return { seen, snapshot, stop: () => observer.disconnect() };
+function expectHandoff(continuation) {
+  expect(beginSocialRegistration).toHaveBeenCalledTimes(1);
+  expect(beginSocialRegistration).toHaveBeenCalledWith(continuation);
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+  expect(completeOAuthLogin).not.toHaveBeenCalled();
+  expectNoRegistrationUi();
 }
 
-test.each([
-  ['обычный режим', (ui) => ui],
-  ['StrictMode', (ui) => <StrictMode>{ui}</StrictMode>],
-])('result=login (%s): шаг кода не монтируется ни на один кадр', async (_, wrap) => {
-  setUrl(`#result=login&ticket=${TICKET}`);
-  let resolveLogin;
-  completeOAuthLogin.mockReturnValue(new Promise((r) => { resolveLogin = r; }));
-  const dom = recordDom();
+describe('регистрация: передача ticket главной', () => {
+  test('новая VK identity (#result=registration&step=email) → память приложения → replace на `/`', () => {
+    sessionStorage.setItem('mindcare_oauth_provider', 'vk');
+    setUrl(`#result=registration&ticket=${REG_TICKET}&step=email`);
+    spyReplace();
+    const dom = recordDom();
+    const { container } = render(<OAuthCallbackPage />);
+    dom.snapshot();
+    dom.stop();
 
-  render(wrap(<OAuthCallbackPage />));
-  dom.snapshot();
-  expect(screen.getByRole('status')).toHaveTextContent('Выполняем вход через Яндекс…');
-  await waitFor(() => expect(completeOAuthLogin).toHaveBeenCalledTimes(1));
-  await act(async () => { resolveLogin({ roles: ['student'] }); });
-  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
-  dom.snapshot();
-  dom.stop();
+    expectHandoff({ ticket: REG_TICKET, provider: 'vk', emailStep: true });
+    // Сначала вычищен fragment, потом передача, потом переход.
+    expect(events).toEqual(['scrub', 'handoff:scrubbed', 'navigate:/']);
+    expect(window.location.hash).toBe('');
+    // Самого шага email на /auth/callback нет ни на один кадр.
+    expect(dom.seen.some((s) => s.email || s.otp)).toBe(false);
+    expect(dom.seen.some((s) => s.status !== '')).toBe(false);
+    expect(container.innerHTML).not.toContain(REG_TICKET);
+  });
 
-  expect(RegistrationOtpStep).not.toHaveBeenCalled();          // ни одного монтирования
-  expect(dom.seen.length).toBeGreaterThan(1);
-  expect(dom.seen.some((s) => s.otpField || s.otpGroup || s.otpTitle)).toBe(false);
-  expect(dom.seen.some((s) => /Отправляем код/.test(s.status))).toBe(false);
-  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
-  expect(completeOAuthLogin).toHaveBeenCalledTimes(1);
-  expect(completeOAuthLogin).toHaveBeenCalledWith(TICKET);
-  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  test('Яндекс (#result=registration без step) → та же передача, emailStep=false', () => {
+    setUrl(`#result=registration&ticket=${REG_TICKET}`);
+    spyReplace();
+    const dom = recordDom();
+    render(<OAuthCallbackPage />);
+    dom.snapshot();
+    dom.stop();
+
+    expectHandoff({ ticket: REG_TICKET, provider: 'yandex', emailStep: false });
+    expect(events).toEqual(['scrub', 'handoff:scrubbed', 'navigate:/']);
+    // Код здесь не отправляется и шаг кода не рисуется — это делает AuthModal.
+    expect(dom.seen.some((s) => s.email || s.otp)).toBe(false);
+  });
+
+  test.each([
+    ['VK', '&step=email', { emailStep: true }],
+    ['Яндекс', '', { emailStep: false }],
+  ])('StrictMode (%s): одна передача и один переход', (_, step, expected) => {
+    setUrl(`#result=registration&ticket=${REG_TICKET}${step}`);
+    render(<StrictMode><OAuthCallbackPage /></StrictMode>);
+    expectHandoff({ ticket: REG_TICKET, provider: 'yandex', ...expected });
+  });
+
+  test('ticket не попадает в URL, router state, storage и DOM', () => {
+    const setItem = jest.spyOn(Storage.prototype, 'setItem');
+    setUrl(`#result=registration&ticket=${REG_TICKET}&step=email`);
+    const { container } = render(<OAuthCallbackPage />);
+
+    expect(beginSocialRegistration).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });   // без state
+    expectNoLeakInNavigation();
+    expect(window.location.href).not.toContain(REG_TICKET);
+    expect(JSON.stringify(window.history.state ?? null)).not.toContain(REG_TICKET);
+    expect(setItem).not.toHaveBeenCalled();
+    expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(REG_TICKET);
+    expect(container.innerHTML).not.toContain(REG_TICKET);
+    setItem.mockRestore();
+  });
+
+  test('передача не ждёт восстановления сессии и не повторяется при перерисовке', () => {
+    setUrl(`#result=registration&ticket=${REG_TICKET}&step=email`);
+    mockAuth({ loading: true });
+    const { rerender } = render(<OAuthCallbackPage />);
+    expect(beginSocialRegistration).toHaveBeenCalledTimes(1);
+
+    mockAuth({ loading: false });
+    rerender(<OAuthCallbackPage />);
+    rerender(<OAuthCallbackPage />);
+    expect(beginSocialRegistration).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  test('адрес перехода из fragment игнорируется — только `/`', () => {
+    setUrl(`#result=registration&ticket=${REG_TICKET}&step=email&next=https://evil.example/`);
+    render(<OAuthCallbackPage />);
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+  });
 });
 
-test('result=login + ошибка complete: шаг кода тоже не появляется', async () => {
-  setUrl(`#result=login&ticket=${TICKET}`);
-  completeOAuthLogin.mockRejectedValue(Object.assign(new Error('x'), { status: 400, code: 'oauth_ticket_invalid' }));
-  const dom = recordDom();
+// ── VK ID: тексты входа и ошибок ─────────────────────────────────────────────
+
+describe('VK ID', () => {
+  beforeEach(() => { sessionStorage.setItem('mindcare_oauth_provider', 'vk'); });
+
+  test('известная VK identity: статус про VK → /dashboard, без email и кода', async () => {
+    setUrl(`#result=login&ticket=${TICKET}`);
+    let resolveLogin;
+    completeOAuthLogin.mockReturnValue(new Promise((r) => { resolveLogin = r; }));
+    const dom = recordDom();
+    render(<OAuthCallbackPage />);
+    dom.snapshot();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Выполняем вход через VK…');
+    await waitFor(() => expect(completeOAuthLogin).toHaveBeenCalledTimes(1));
+    await act(async () => { resolveLogin({ roles: ['student'] }); });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
+    dom.stop();
+
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(beginSocialRegistration).not.toHaveBeenCalled();
+    expect(dom.seen.some((s) => s.email || s.otp)).toBe(false);
+    expectNoRegistrationUi();
+  });
+
+  test('fallback: код «регистрации нет» по-прежнему даёт AuthModal «Вход» с текстом про VK', () => {
+    setUrl('#error=social_registration_not_available');
+    render(<OAuthCallbackPage />);
+    expectCanonicalModalError(
+      'Аккаунт VK пока не привязан к MindCare. '
+      + 'Вход через VK доступен только для уже связанных аккаунтов.',
+      'error',
+    );
+    expect(completeOAuthLogin).not.toHaveBeenCalled();
+  });
+
+  test('отмена на странице VK → текст про VK, тон info', () => {
+    setUrl('#error=oauth_cancelled');
+    render(<OAuthCallbackPage />);
+    expectCanonicalModalError('Вход через VK отменён.', 'info');
+  });
+
+  test('страница callback ничего не пишет в storage', async () => {
+    const setItem = jest.spyOn(Storage.prototype, 'setItem');
+    setUrl(`#result=login&ticket=${TICKET}`);
+    render(<OAuthCallbackPage />);
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
+  });
+});
+
+test('без запомненного провайдера тексты остаются про Яндекс', () => {
+  sessionStorage.clear();
+  setUrl('#error=oauth_cancelled');
   render(<OAuthCallbackPage />);
-  await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
-  dom.stop();
-  expect(RegistrationOtpStep).not.toHaveBeenCalled();
-  expect(dom.seen.some((s) => s.otpField || s.otpTitle)).toBe(false);
-  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+  expectCanonicalModalError('Вход через Яндекс отменён.', 'info');
 });
 
-test('result=registration: пока init не завершён, шага кода нет; после успеха — есть', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  let resolveInit;
-  authApi.oauthRegistrationInit.mockReturnValue(new Promise((r) => { resolveInit = r; }));
-  const dom = recordDom();
+// ── технический маршрут: ни карточки, ни форм, ни своих шагов ───────────────
 
-  render(<OAuthCallbackPage />);
-  dom.snapshot();
-  expect(screen.getByRole('status')).toHaveTextContent('Отправляем код подтверждения…');
-  expect(RegistrationOtpStep).not.toHaveBeenCalled();
-  expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
-  // Статус входа для регистрации не показывается вовсе.
-  expect(dom.seen.some((s) => /Выполняем вход/.test(s.status))).toBe(false);
-  expect(dom.seen.some((s) => s.otpField || s.otpTitle)).toBe(false);
+describe('у /auth/callback нет своей карточки и экранов регистрации', () => {
+  const read = (file) => fs.readFileSync(path.join(__dirname, file), 'utf8');
 
-  await act(async () => { resolveInit({ message: 'ok', email_masked: MASKED }); });
-  dom.stop();
+  test.each([
+    ['вход', `#result=login&ticket=${TICKET}`],
+    ['регистрация VK', `#result=registration&ticket=${REG_TICKET}&step=email`],
+    ['регистрация Яндекс', `#result=registration&ticket=${REG_TICKET}`],
+    ['ошибка', '#error=oauth_failed'],
+  ])('%s: в DOM только нейтральная страница (и статус входа)', (_, hash) => {
+    completeOAuthLogin.mockReturnValue(new Promise(() => {}));
+    setUrl(hash);
+    const { container } = render(<OAuthCallbackPage />);
 
-  expect(await codeStep()).toBeInTheDocument();
-  expect(RegistrationOtpStep).toHaveBeenCalled();
-  expect(screen.queryByRole('status')).toBeNull();
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(1);
-  expect(completeOAuthLogin).not.toHaveBeenCalled();
-});
+    // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+    const classes = [...container.querySelectorAll('[class]')].flatMap((el) => [...el.classList]);
+    expect(new Set(classes)).toEqual(new Set(
+      hash.includes('result=login') ? ['page', 'status'] : ['page'],
+    ));
+    expect(screen.queryByText('MindCare')).toBeNull();                 // шапки карточки нет
+    expect(screen.queryByText('Психологическая служба ДонГУ')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();                   // и своей модалки тоже
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
 
-test('result=registration в StrictMode: init один, complete входа не вызывается', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<StrictMode><OAuthCallbackPage /></StrictMode>);
-  await codeStep();
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(1);
-  expect(completeOAuthLogin).not.toHaveBeenCalled();
-});
+  test('стили маршрута: только страница и статус — классов карточки нет', () => {
+    const css = read('OAuthCallbackPage.module.css');
+    const selectors = [...css.matchAll(/^\s*\.([A-Za-z][\w-]*)/gm)].map((m) => m[1]);
+    expect(new Set(selectors)).toEqual(new Set(['page', 'status']));
+    expect(css).not.toMatch(/font-family/);
+  });
 
-test('после успешной регистрации шаг кода не возвращается и статус регистрации не мелькает', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-  fireEvent.click(screen.getByRole('checkbox'));
-  typeCode();
-  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
-  expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
-  expect(screen.queryByText('Отправляем код подтверждения…')).toBeNull();
-  expect(authApi.oauthRegistrationInit).toHaveBeenCalledTimes(1);
-});
+  test('маршрут не подключает шаги регистрации, стили модалки и API регистрации', () => {
+    const source = read('OAuthCallbackPage.jsx');
+    const imports = source.match(/^import [\s\S]*?;$/gm).join('\n');
+    expect(imports).not.toMatch(/SocialEmailStep|RegistrationOtpStep|SocialRegistrationFlow/);
+    expect(imports).not.toMatch(/AuthModal/);
+    expect(imports).not.toMatch(/auth\.api/);
+  });
 
-// ── регистрация остаётся на callback, вход — /dashboard ─────────────────────
-
-test('регистрация: шаг кода остаётся на /auth/callback, перехода на главную нет', async () => {
-  setUrl(`#result=registration&ticket=${REG_TICKET}`);
-  render(<OAuthCallbackPage />);
-  await codeStep();
-  expect(RegistrationOtpStep).toHaveBeenCalled();
-  expect(window.location.pathname).toBe('/auth/callback');
-  expect(mockNavigate).not.toHaveBeenCalled();
+  test('фазы маршрута: шагов регистрации среди них нет', () => {
+    expect(Object.values(PHASE).sort()).toEqual([
+      'completed', 'error', 'loginCompleting', 'registrationHandoff', 'resolving',
+    ]);
+  });
 });

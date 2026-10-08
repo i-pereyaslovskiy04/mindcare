@@ -134,11 +134,15 @@ class OAuthPendingTicket(Base):
     не передаётся: сессия создаётся только при complete.
       kind=login         — identity уже привязана, user_id обязателен;
       kind=registration  — новая identity, аккаунта ещё нет (user_id NULL).
-                           email / suggested_name — email и имя из профиля
-                           провайдера, записанные callback'ом при создании
-                           ticket (Stage Social Auth 4); после этого не
-                           меняются, клиент их не передаёт. Email считается
-                           подтверждённым только после OTP MindCare на confirm;
+                           email — адрес, на который уходит код и с которым
+                           будет создан аккаунт. Яндекс: email профиля,
+                           записан callback'ом и не меняется. VK: адрес VK
+                           (может быть NULL) либо адрес, выбранный
+                           пользователем на init; до успешного confirm его
+                           можно заменить (Stage VK-1B). suggested_name — имя
+                           из профиля провайдера (может быть NULL). Email
+                           считается подтверждённым только после OTP MindCare
+                           на confirm; клиент на confirm его не передаёт;
       kind=link_required — email принадлежит существующему аккаунту
                            (in-flow linking не реализуется; ticket нужен для
                            безопасного ответа «войдите и привяжите в настройках»).

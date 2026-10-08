@@ -15,6 +15,8 @@ jest.mock('../lib/oauthCallback', () => ({
 }));
 
 const AUTHORIZE_URL = 'https://oauth.yandex.ru/authorize?state=SYNTHETIC';
+const VK_AUTHORIZE_URL = 'https://id.vk.ru/authorize?state=SYNTHETIC_VK';
+const PROVIDER_KEY = 'mindcare_oauth_provider';
 // Собирается из частей: литерал script-URL в исходнике запрещён линтером.
 const SCRIPT_URL = ['javascript', 'alert(1)'].join(':');
 
@@ -23,12 +25,19 @@ const vkButton = () => screen.getByRole('button', { name: /ВКонтакте/ }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  sessionStorage.clear();
   configApi.getPublicConfig.mockResolvedValue({ social_providers: ['yandex'] });
 });
 
 async function showWithYandex() {
   render(<SocialButtons />);
   await waitFor(() => expect(yandexButton()).toBeEnabled());
+}
+
+async function showWithBoth() {
+  configApi.getPublicConfig.mockResolvedValue({ social_providers: ['yandex', 'vk'] });
+  render(<SocialButtons />);
+  await waitFor(() => expect(vkButton()).toBeEnabled());
 }
 
 // ── состав блока ─────────────────────────────────────────────────────────────
@@ -42,7 +51,7 @@ test('ровно две кнопки — VK и Яндекс; Telegram нет', a
   expect(screen.getByText('или продолжить с email')).toBeInTheDocument();
 });
 
-test('VK — видимая заглушка: disabled и без единого запроса', async () => {
+test('VK без адаптера на backend: видна, но disabled и без единого запроса', async () => {
   await showWithYandex();
   expect(vkButton()).toBeDisabled();
   fireEvent.click(vkButton());
@@ -50,10 +59,77 @@ test('VK — видимая заглушка: disabled и без единого 
   expect(oauthLib.navigateToProvider).not.toHaveBeenCalled();
 });
 
-test('VK остаётся disabled, даже если backend однажды вернёт vk', async () => {
-  configApi.getPublicConfig.mockResolvedValue({ social_providers: ['yandex', 'vk'] });
-  await showWithYandex();
-  expect(vkButton()).toBeDisabled();
+test('VK активна, только когда backend сообщил провайдера vk', async () => {
+  await showWithBoth();
+  expect(vkButton()).toBeEnabled();
+  expect(vkButton()).not.toHaveAttribute('title');
+  expect(yandexButton()).toBeEnabled();
+});
+
+test('только vk на backend → VK активна, Яндекс disabled', async () => {
+  configApi.getPublicConfig.mockResolvedValue({ social_providers: ['vk'] });
+  render(<SocialButtons />);
+  await waitFor(() => expect(vkButton()).toBeEnabled());
+  expect(yandexButton()).toBeDisabled();
+  fireEvent.click(yandexButton());
+  expect(authApi.oauthStart).not.toHaveBeenCalled();
+});
+
+// ── клик по VK ───────────────────────────────────────────────────────────────
+
+test('клик по VK → один oauthStart("vk"), переход и запомненный провайдер', async () => {
+  authApi.oauthStart.mockResolvedValue({ authorize_url: VK_AUTHORIZE_URL });
+  await showWithBoth();
+  fireEvent.click(vkButton());
+
+  await waitFor(() => expect(oauthLib.navigateToProvider).toHaveBeenCalledWith(VK_AUTHORIZE_URL));
+  expect(authApi.oauthStart).toHaveBeenCalledTimes(1);
+  expect(authApi.oauthStart).toHaveBeenCalledWith('vk');
+  expect(sessionStorage.getItem(PROVIDER_KEY)).toBe('vk');
+});
+
+test('загрузка не смешивается: идёт старт VK — «Переход…» только у VK, второй старт невозможен', async () => {
+  authApi.oauthStart.mockReturnValue(new Promise(() => {}));
+  await showWithBoth();
+  fireEvent.click(vkButton());
+
+  await waitFor(() => expect(vkButton()).toHaveAttribute('aria-busy', 'true'));
+  expect(vkButton()).toHaveTextContent('Переход…');
+  expect(yandexButton()).not.toHaveAttribute('aria-busy');
+  expect(yandexButton()).toHaveTextContent('Яндекс');
+  expect(yandexButton()).toBeDisabled();          // общий state-cookie: один старт за раз
+  fireEvent.click(yandexButton());
+  fireEvent.click(vkButton());
+  expect(authApi.oauthStart).toHaveBeenCalledTimes(1);
+  expect(authApi.oauthStart).toHaveBeenCalledWith('vk');
+});
+
+test('идёт старт Яндекса — «Переход…» только у Яндекса', async () => {
+  authApi.oauthStart.mockReturnValue(new Promise(() => {}));
+  await showWithBoth();
+  fireEvent.click(yandexButton());
+
+  await waitFor(() => expect(yandexButton()).toHaveAttribute('aria-busy', 'true'));
+  expect(vkButton()).not.toHaveAttribute('aria-busy');
+  expect(vkButton()).toHaveTextContent('VK');
+  expect(authApi.oauthStart).toHaveBeenCalledWith('yandex');
+});
+
+test.each([
+  [{ status: 404, code: 'oauth_provider_unavailable' },
+    'Вход через VK сейчас недоступен. Войдите по email и паролю.'],
+  [{ status: 500 }, 'Не удалось начать вход через VK. Попробуйте ещё раз.'],
+])('ошибка start VK %j → текст про VK, обе кнопки снова доступны', async (props, message) => {
+  authApi.oauthStart.mockRejectedValue(Object.assign(new Error('RAW internal detail'), props));
+  await showWithBoth();
+  fireEvent.click(vkButton());
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(message);
+  expect(screen.queryByText(/RAW internal/)).toBeNull();
+  expect(oauthLib.navigateToProvider).not.toHaveBeenCalled();
+  expect(vkButton()).toBeEnabled();
+  expect(yandexButton()).toBeEnabled();
+  expect(sessionStorage.getItem(PROVIDER_KEY)).toBeNull();   // переход не состоялся
 });
 
 // ── доступность Яндекса ──────────────────────────────────────────────────────
@@ -105,13 +181,15 @@ test('во время старта повторный клик не шлёт в�
   expect(yandexButton()).toHaveAttribute('aria-busy', 'true');
 });
 
-test('authorize_url не сохраняется в storage', async () => {
+test('в storage пишется только имя провайдера — ни адрес, ни state', async () => {
   const setItem = jest.spyOn(Storage.prototype, 'setItem');
   authApi.oauthStart.mockResolvedValue({ authorize_url: AUTHORIZE_URL });
   await showWithYandex();
   fireEvent.click(yandexButton());
   await waitFor(() => expect(oauthLib.navigateToProvider).toHaveBeenCalled());
-  expect(setItem).not.toHaveBeenCalled();
+  expect(setItem.mock.calls).toEqual([[PROVIDER_KEY, 'yandex']]);
+  expect(JSON.stringify(setItem.mock.calls)).not.toMatch(/authorize|SYNTHETIC|state/);
+  expect(localStorage.length).toBe(0);
   setItem.mockRestore();
 });
 

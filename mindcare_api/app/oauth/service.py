@@ -5,14 +5,17 @@ Social login core (Stage Social Auth 2B/4) — бизнес-логика, без
 решает callback по факту:
   * identity (provider, subject) уже привязана → login-ticket → complete →
     обычная сессия (только чистый студент);
-  * identity неизвестна → registration-ticket с email и именем из профиля
-    провайдера → init (OTP на этот email) → confirm (код + согласие MindCare)
-    → аккаунт без пароля + identity + сессия.
-Пользователь не вводит ни имя, ни email, ни пароль. Callback сам не создаёт ни
-пользователя, ни identity, ни сессию. Привязки к существующему аккаунту по
-совпадению email нет; email провайдера подтверждает OTP MindCare. Обычный
-allowlist доменов к регистрации через провайдера НЕ применяется (ADR-027) —
-регистрация по паролю его по-прежнему соблюдает.
+  * identity неизвестна → registration-ticket → init (OTP MindCare на email)
+    → confirm (код + согласие MindCare) → аккаунт без пароля + identity +
+    сессия. Чем отличаются провайдеры, задаёт app/oauth/policy.py:
+      - Яндекс: email и имя — из профиля, email фиксирован, код уходит
+        автоматически, allowlist доменов не применяется (ADR-027);
+      - VK: email выбирает пользователь (адрес VK — лишь предложение, его может
+        не быть), allowlist доменов обязателен, занятый email можно заменить
+        другим тем же ticket (ADR-030).
+Callback сам не создаёт ни пользователя, ни identity, ни сессию. Привязки к
+существующему аккаунту по совпадению email нет; любой email подтверждает OTP
+MindCare. Confirm email от клиента не принимает — только из ticket.
 
 Поток: start (state + PKCE + browser binding) → callback (state проверен и
 списан ДО разбора исхода провайдера) → одноразовый ticket.
@@ -23,17 +26,23 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Mapping, Optional
 
+from email_validator import EmailNotValidError, validate_email
+
 from app.auth import service as auth_service
 from app.auth.roles import is_pure_student
 from app.core.config import settings
 from app.core.encryption import decrypt_text, encrypt_text
 from app.core.normalization import mask_email, normalize_email
+from app.email_domains.errors import EmailDomainNotAllowedError
+from app.email_domains.service import assert_email_domain_allowed
 from app.oauth import storage
 from app.oauth.errors import (
     OAuthLoginDenied, OAuthProviderUnavailableError, OAuthRegistrationError,
     OAuthTicketInvalidError,
 )
+from app.oauth.policy import registration_policy
 from app.oauth.providers import get_provider
+from app.oauth.providers.bootstrap import callback_base_url
 from app.oauth.providers.base import CANCELLED_ERROR, ProviderError
 from app.oauth.security import (
     code_challenge_s256, constant_time_equals, generate_code_verifier,
@@ -60,6 +69,10 @@ ERROR_FAILED = "oauth_failed"
 ERROR_CANCELLED = "oauth_cancelled"
 # Новая identity без пригодного email у провайдера: регистрации нет (fail closed).
 ERROR_EMAIL_REQUIRED = "oauth_email_required"
+# Новая identity у провайдера без политики регистрации (app/oauth/policy.py).
+ERROR_REGISTRATION_NOT_AVAILABLE = "social_registration_not_available"
+# Маркер fragment: перед кодом нужен шаг выбора email (политика email_choice).
+STEP_EMAIL = "email"
 
 
 @dataclass(frozen=True)
@@ -92,7 +105,9 @@ def _now() -> datetime:
 
 
 def callback_redirect_uri(provider_name: str) -> str:
-    base = settings.OAUTH_CALLBACK_BASE_URL.rstrip("/")
+    # База — общая OAUTH_CALLBACK_BASE_URL либо собственная настройка
+    # провайдера (VK_OAUTH_CALLBACK_BASE_URL), если она задана.
+    base = callback_base_url(provider_name, settings)
     return f"{base}/api/auth/oauth/{provider_name}/callback"
 
 
@@ -211,26 +226,44 @@ def handle_callback(
         return _failed("oauth_provider_error", clear_cookie=True, provider=name)
 
     found = storage.find_identity_user(provider=name, subject=identity.subject)
+    policy = registration_policy(name)
+    if found is None and policy is None:
+        # Провайдер разрешил identity, но регистрации через него нет: только
+        # вход по уже привязанной identity. Ничего не создаётся.
+        return CallbackOutcome(
+            {"error": ERROR_REGISTRATION_NOT_AVAILABLE}, True,
+            "oauth_identity_unknown", name,
+        )
     if found is None:
-        # Новая identity — штатное начало регистрации (Stage 4), не отказ входа:
-        # аудит не пишется. Здесь НЕ создаются ни пользователь, ни identity, ни
-        # сессия — только одноразовый registration-ticket с email и именем
-        # провайдера. Автосвязывания по email нет.
+        # Новая identity — штатное начало регистрации, не отказ входа: аудит не
+        # пишется. Здесь НЕ создаются ни пользователь, ни identity, ни сессия —
+        # только одноразовый registration-ticket. Автосвязывания по email нет.
         email = _provider_email(identity.email)
-        if email is None:
-            return CallbackOutcome({"error": ERROR_EMAIL_REQUIRED}, True, None, name)
+        fragment = {"result": RESULT_REGISTRATION}
+        if policy.email_choice:
+            # Email выбирает пользователь: адрес провайдера (если есть) — лишь
+            # предложение; во fragment он не попадает, только в ticket.
+            suggested_name = _clean_name(identity.suggested_name)
+            fragment_step = STEP_EMAIL
+        else:
+            # Email провайдера фиксирован: без него регистрации нет (fail closed).
+            if email is None:
+                return CallbackOutcome({"error": ERROR_EMAIL_REQUIRED}, True, None, name)
+            suggested_name = _initial_name(identity.suggested_name, email)
+            fragment_step = None
         ticket = generate_ticket()
         storage.create_registration_ticket(
             ticket_hash=sha256_hex(ticket),
             provider=name,
             subject=identity.subject,
             email=email,
-            suggested_name=_initial_name(identity.suggested_name, email),
+            suggested_name=suggested_name,
             expires_at=_now() + REGISTRATION_TICKET_TTL,
         )
-        return CallbackOutcome(
-            {"result": RESULT_REGISTRATION, "ticket": ticket}, True, None, name,
-        )
+        fragment["ticket"] = ticket
+        if fragment_step is not None:
+            fragment["step"] = fragment_step
+        return CallbackOutcome(fragment, True, None, name)
 
     user = found["user"]
     try:
@@ -317,7 +350,7 @@ def _clean_name(name: object) -> Optional[str]:
 def _initial_name(suggested: Optional[str], email: str) -> str:
     """Начальное имя профиля: имя провайдера, иначе локальная часть email,
     иначе сам email (≥ 3 символов всегда). Заглушка «Пользователь» не нужна;
-    имя затем меняется в профиле."""
+    имя затем меняется в профиле. Это не подтверждённое ФИО."""
     return (
         _clean_name(suggested)
         or _clean_name(email.partition("@")[0])
@@ -325,34 +358,101 @@ def _initial_name(suggested: Optional[str], email: str) -> str:
     )
 
 
-def registration_init(ticket: str) -> str:
+def _chosen_email(email: object) -> Optional[str]:
+    """Адрес, введённый пользователем: нормализованный и синтаксически
+    валидный, иначе None. Доставляемость не проверяется — владение адресом
+    подтверждает OTP MindCare."""
+    value = _provider_email(email)
+    if value is None:
+        return None
+    try:
+        validate_email(value, check_deliverability=False)
+    except EmailNotValidError:
+        return None
+    return value
+
+
+def _email_allowed_now(email: str) -> bool:
+    """Ранняя (вне транзакции) проверка allowlist — только для подсказки UI."""
+    try:
+        assert_email_domain_allowed(email)
+    except EmailDomainNotAllowedError:
+        return False
+    return True
+
+
+def registration_preview(ticket: str) -> dict:
     """
-    Отправка (и повторная отправка) кода регистрации. Клиент передаёт ТОЛЬКО
-    ticket: email и имя берутся из ticket (их записал callback из профиля
-    провайдера). Повтор с тем же ticket — новый код под cooldown 60 с.
+    Что показать на шаге email — без изменения состояния: ticket не списывается
+    и не меняется, код не отправляется.
+
+    {"provider", "email_masked" | None, "email_allowed", "email_editable"}:
+      * email_masked   — МАСКИРОВАННЫЙ адрес, привязанный к ticket сейчас (адрес
+                         провайдера или ранее выбранный); raw email не отдаётся;
+      * email_allowed  — можно ли продолжить с этим адресом (есть и проходит
+                         allowlist, если политика его требует);
+      * email_editable — может ли пользователь указать другой адрес.
+    """
+    if not ticket:
+        raise OAuthTicketInvalidError()
+    row = storage.get_registration_ticket(sha256_hex(ticket))
+    policy = registration_policy(row["provider"])
+    if policy is None:
+        raise OAuthTicketInvalidError()
+    email = row["email"]
+    allowed = email is not None and (
+        not policy.enforce_allowlist or _email_allowed_now(email)
+    )
+    return {
+        "provider": row["provider"],
+        "email_masked": mask_email(email) if email else None,
+        "email_allowed": allowed,
+        "email_editable": policy.email_choice,
+    }
+
+
+def registration_init(ticket: str, email: Optional[str] = None) -> str:
+    """
+    Отправка (и повторная отправка) кода регистрации.
+
+    email=None — код уходит на адрес, уже привязанный к ticket (Яндекс: адрес
+    профиля; VK: адрес VK либо ранее выбранный). email задан — пользователь
+    выбрал адрес сам: допустимо только при политике email_choice (VK); адрес
+    нормализуется, проходит allowlist и проверку занятости и под блокировкой
+    ticket становится его адресом — код уходит именно на него. Повтор с тем же
+    ticket — новый код под cooldown 60 с.
 
     Письмо уходит ПОСЛЕ commit; его сбой состояние в БД не откатывает.
     Возвращает маскированный email (для экрана «Отправили код на …»).
     """
     if not ticket:
         raise OAuthTicketInvalidError()
-    code, email = storage.issue_registration_otp(sha256_hex(ticket))
+    chosen = None
+    if email is not None:
+        chosen = _chosen_email(email)
+        if chosen is None:
+            raise OAuthRegistrationError(
+                "email_invalid", "Введите корректный адрес электронной почты.", 422,
+            )
+    code, bound_email = storage.issue_registration_otp(
+        sha256_hex(ticket), chosen_email=chosen, resolve_name=_initial_name,
+    )
 
     from app.services.email_service import send_registration_otp
     delivered = True
     try:
-        send_registration_otp(email, code)
+        send_registration_otp(bound_email, code)
     except Exception as exc:   # noqa: BLE001 — без текста SMTP и без кода в логах
         delivered = False
         log.warning(
             "[oauth registration_init] failed to send email to %s (%s)",
-            mask_email(email), type(exc).__name__,
+            mask_email(bound_email), type(exc).__name__,
         )
     if not delivered:
         raise OAuthRegistrationError(
             "email_delivery_failed", _EMAIL_DELIVERY_FAILED_MESSAGE, 500,
         )
-    return mask_email(email)
+    return mask_email(bound_email)
 
 
 def registration_confirm(
@@ -378,6 +478,7 @@ def registration_confirm(
     result = storage.complete_registration_atomic(
         sha256_hex(ticket), code,
         required_consent_types=auth_service.REQUIRED_CONSENTS,
+        resolve_name=_initial_name,
         ip=ip, user_agent=user_agent,
     )
     auth_service.run_post_registration_actions(

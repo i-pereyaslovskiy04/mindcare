@@ -58,9 +58,12 @@ mindcare_web/
     │   │   ├── ui/
     │   │   │   ├── AuthModal.jsx + .module.css
     │   │   │   ├── LoginForm.jsx
-    │   │   │   └── RegisterForm.jsx
+    │   │   │   ├── RegisterForm.jsx
+    │   │   │   ├── RegistrationOtpStep.jsx      # общий шаг кода (пароль, Яндекс, VK)
+    │   │   │   ├── SocialEmailStep.jsx          # шаг «Почта для регистрации» (VK)
+    │   │   │   └── SocialRegistrationFlow.jsx   # регистрация через провайдера внутри AuthModal
     │   │   ├── pages/
-    │   │   │   └── OAuthCallbackPage.jsx   # /auth/callback (Яндекс ID)
+    │   │   │   └── OAuthCallbackPage.jsx   # /auth/callback — технический маршрут (Яндекс ID, VK ID)
     │   │   └── forgot-password/
     │   │       ├── ForgotPasswordModal.jsx
     │   │       ├── ForgotPasswordStepper.jsx
@@ -370,7 +373,7 @@ src/data/
 | `/health` | `HealthPage` | Public |
 | `/login` | `LegacyAuthRedirect tab="login"` | Совместимость: replace → `/` + AuthModal «Вход» |
 | `/register` | `LegacyAuthRedirect tab="register"` | Совместимость: replace → `/` + AuthModal «Регистрация» |
-| `/auth/callback` | `OAuthCallbackPage` | Public (завершение входа или регистрации через Яндекс ID) |
+| `/auth/callback` | `OAuthCallbackPage` | Public, технический маршрут возврата от Яндекс ID / VK ID: вход → `/dashboard`; регистрация и ошибки → replace на `/` + AuthModal. Своих форм и карточки нет |
 | `/dashboard` | `DashboardRedirect` | Auth (active/default role redirect) |
 | `/profile` | `ProfilePage` | Auth |
 | `/student` | `ClientDashboard` (Outlet) | Auth + role membership: student |
@@ -491,38 +494,98 @@ OAuthCallbackPage
 - **Stage Social Auth 4 — «Продолжить через Яндекс».** Блок кнопок общий:
   `features/auth/ui/SocialButtons.jsx` в LoginForm и RegisterForm. Яндекс на
   обеих вкладках вызывает один и тот же `oauthStart('yandex')` — вкладка не
-  передаёт «намерение». VK — видимая заглушка: всегда `disabled`, запросов не
-  шлёт; Telegram убран. Яндекс активен только если backend вернул его в
-  `social_providers`, иначе виден, но `disabled`.
-- **Регистрация (UX hotfix).** `#result=registration&ticket=…` → на той же
-  странице `/auth/callback` (карточка MindCare + контейнер `authBody` модалки)
-  автоматически, ровно один раз (в т.ч. в StrictMode — ref-флаг) вызывается
-  `oauthRegistrationInit({ ticket })`; пока он идёт — «Отправляем код
-  подтверждения…». Email и имя backend взял из профиля Яндекса и держит в
-  ticket; клиент их не передаёт. После init — общий шаг
-  `features/auth/ui/RegistrationOtpStep.jsx` («Подтверждение регистрации»,
-  маскированный email из `email_masked`, `CodeInput`, таймер 60 с, повтор,
-  компактный чекбокс согласия) → `AuthContext.completeOAuthRegistration(ticket,
-  code, true)` (`consent_accepted: true`; тот же путь установки сессии) →
-  `/dashboard`. Полей имени, email и пароля нет; отдельного входа по паролю нет.
-  Ошибка init — терминальная ошибка (см. ниже).
+  передаёт «намерение». Telegram убран.
+- **Stage VK-1A — кнопка VK.** Обе кнопки рендерятся из одного списка и
+  вызывают общий `start(provider)` → `oauthStart(provider)`. Кнопка активна
+  только если backend вернул провайдера в `social_providers`, иначе видна, но
+  `disabled`. Пока идёт старт одного провайдера, «Переход…» показывает только
+  его кнопка, а вторая заблокирована (общий state-cookie — один старт за раз).
+  Перед переходом кнопка запоминает ИМЯ провайдера в `sessionStorage`
+  (`rememberOAuthProvider`; ни адрес, ни state не пишутся), страница callback
+  читает его (`recallOAuthProvider`) только для текстов: «Выполняем вход через
+  VK…», «Вход через VK отменён.» и т.п. Новая VK identity — терминальный
+  результат `social_registration_not_available` остаётся безопасным fallback
+  (провайдер без регистрации).
+- **Канонический контейнер авторизации — главная `/` + `AuthModal`.**
+  `/auth/callback` — только технический маршрут: разбирает fragment, вычищает
+  его и уходит. Экранов регистрации, своей карточки и своих стилей форм у него
+  нет (в `OAuthCallbackPage.module.css` — только `.page` и `.status` для
+  нейтрального статуса «Выполняем вход через …»). Отдельной страницы или
+  отдельной модалки для регистрации через провайдера нет.
+- **Передача регистрации в AuthModal (in-memory continuation).**
+  `#result=registration&ticket=…[&step=email]` → `OAuthCallbackPage` вызывает
+  `AuthContext.beginSocialRegistration({ ticket, provider, emailStep })` и
+  делает `navigate('/', { replace: true })` БЕЗ router state. Ticket живёт
+  только в React state `AuthProvider` (`socialRegistration`): не в URL, router
+  state, `localStorage` и `sessionStorage`. `Home` читает его из `useAuth()` и
+  держит `AuthModal` открытой (`isOpen = auth.open || social`), передавая
+  `social` и `onSocialExit`. Обновление страницы память теряет — продолжение не
+  восстанавливается, пользователь начинает вход через провайдера заново.
+  `AuthProvider` забывает ticket сам: при появлении сессии (регистрация
+  завершена либо пользователь уже вошёл), при выходе и при уходе с `/`
+  (допустимы только `/` и `/auth/callback`). `Home` забывает его по «Начать
+  заново», по терминальной ошибке и при закрытии модалки
+  (`clearSocialRegistration`).
+- **Режимы `AuthModal`** (`AUTH_MODAL_MODE`, виден в `data-mode` контейнера
+  `authBody`): `entry` — вкладки «Вход | Регистрация» и их формы;
+  `socialLoading` → `socialEmail` → `socialOtp` — регистрация через провайдера.
+  В social-режимах вкладок нет, `LoginForm` и `RegisterForm` не монтируются;
+  режим не связан с состоянием вкладки «Регистрация». Режим следует за шагом
+  `SocialRegistrationFlow` (`onStepChange` в layout effect — без кадра
+  рассинхронизации). Восстановление пароля — отдельная `ForgotPasswordModal`,
+  как и раньше.
+- **`features/auth/ui/SocialRegistrationFlow.jsx`** — машина шагов внутри
+  AuthModal (`SOCIAL_STEP`): `loading` → (VK, `emailStep`) один
+  `oauthRegistrationPreview` → `email` → `oauthRegistrationInit({ticket,
+  email})` → `otp`; (Яндекс) один автоматический `oauthRegistrationInit({
+  ticket })` → `otp`. Один preview и один автоматический init на ticket, в том
+  числе в StrictMode (ref-флаги), один init на действие пользователя. Шаг кода
+  монтируется только после успешного init, шаг email — только после успешного
+  preview либо по «Изменить email». Ответ, пришедший после выхода из потока
+  (закрыли модалку, «Начать заново»), игнорируется. Успех →
+  `AuthContext.completeOAuthRegistration(ticket, code, true)` →
+  `navigate('/dashboard')`.
+- **Stage VK-1B — шаг email.** `features/auth/ui/SocialEmailStep.jsx`: адрес VK
+  есть и разрешён — маска только для чтения, «Продолжить» и «Нет доступа к этой
+  почте? Указать другую»; адреса нет или его домен не разрешён — поле ввода и
+  «Получить код». Затем общий `RegistrationOtpStep` (согласие MindCare,
+  `backLabel` «Изменить email» возвращает на шаг email). Исправимые ошибки
+  (домен, занятый адрес, формат, лимит) остаются внутри шага email;
+  терминальные (ticket истёк, identity уже привязана) возвращают обычную
+  AuthModal «Вход» с сообщением. Raw email провайдера на клиент не приходит
+  (только маска); адрес, введённый пользователем, живёт в поле ввода и теле
+  запроса init. Тексты шага — без длинных тире, стрелок-символов и названия
+  провайдера; подпись поля — «Электронная почта» обычным регистром
+  (`.authField.plainLabel`).
+- **Оформление шагов — только общие классы `AuthModal.module.css`**
+  (`authPanel`, `stepTitle`, `stepDesc`, `authField`, `authBtn`, `apiError`,
+  `ghost`). Своих шрифтов шаги не задают; `.stepTitle` объявляет
+  `font-family: inherit`, чтобы заголовок `h2` брал шрифт модалки, а не
+  глобальный serif для заголовков.
+- **Яндекс.** Продуктовое поведение прежнее: fragment без `step`, код уходит
+  автоматически, шага email нет, адрес изменить нельзя («Начать заново»),
+  занятый email при confirm блокирует шаг кода. Изменился только контейнер:
+  шаг кода показывает та же AuthModal на главной, а не карточка на
+  `/auth/callback`.
 - **Машина состояний `/auth/callback`** (`PHASE` в `OAuthCallbackPage.jsx`):
-  `resolving` → `loginCompleting` («Выполняем вход через Яндекс…») |
-  `registrationInitializing` («Отправляем код подтверждения…») →
-  `registrationOtp` | `error`; после успеха — `completed`. Шаг кода монтируется
-  ТОЛЬКО в `registrationOtp`, куда ведёт лишь успешный init для
-  `result=registration`: известная identity (`result=login`) его не видит ни
-  на один кадр (регрессия — MutationObserver + счётчик монтирований в
-  `OAuthCallbackPage.test.jsx`).
+  `resolving` → `loginCompleting` («Выполняем вход через …») → `completed` |
+  `registrationHandoff` (передача ticket в память и replace на `/`) | `error`.
+  Известная identity (`result=login`) не видит ни шага email, ни шага кода ни
+  на один кадр и не создаёт продолжения в модалке (регрессия —
+  MutationObserver в `OAuthCallbackPage.test.jsx` и сквозной
+  `socialRegistration.integration.test.jsx`: настоящий `AuthProvider`,
+  StrictMode, подсчёт физических вызовов `fetch`).
 - **Терминальные ошибки callback** (ошибка во fragment, недействительная
-  ссылка, отказ `complete`, ошибка init регистрации) своей карточки не имеют:
+  ссылка, отказ `complete`) своей карточки не имеют:
   фаза `error` ничего не рисует и один раз делает replace на `/` со state
   `{ openAuth: 'login', message, messageTone }`. Текст — только фиксированные
   сообщения из `lib/oauthCallback.js` (без текста провайдера, query, ticket,
   email); тон — `fragmentTone`: отмена на Яндексе — `info`, всё остальное
   (аккаунт недоступен, сбой провайдера, устаревшая ссылка, лимит) — `error`.
-  Ошибки на шаге кода (неверный код, email занят при confirm) остаются внутри
-  шага кода на callback.
+  Терминальные ошибки регистрации (сбой preview/автоматического init, истёкший
+  ticket) приходят не через router state, а через `onSocialExit` — тот же
+  результат: AuthModal «Вход» с сообщением. Ошибки на шаге кода (неверный код,
+  email занят при confirm) остаются внутри шага кода в AuthModal.
 - **Router state канонического входа** — `features/auth/lib/authEntry.js`:
   `{ openAuth: 'login' | 'register', message?: string, messageTone?: 'info' |
   'error' }`; `authRequestFrom` валидирует (неизвестная вкладка — модалка не
@@ -533,14 +596,24 @@ OAuthCallbackPage
   формой входа: `info` — `.infoMessage` + `role="status"`, `error` —
   `.errorMessage` + `role="alert"`.
 - **Общий шаг кода.** `RegistrationOtpStep` используют и регистрация по паролю
-  (`RegisterForm`), и регистрация через Яндекс — разметка не дублируется. На
-  шаге кода вкладок «Вход | Регистрация» нет: `RegisterForm` сообщает шаг через
-  `onStepChange`, `AuthModal` прячет tablist. «← Изменить данные» (пароль)
-  возвращает к форме и вкладкам; «← Начать заново» (Яндекс) — только локальный
-  сброс и переход на `/` с AuthModal на вкладке «Регистрация», backend не
-  вызывается, ticket истечёт сам.
-- Ticket регистрации живёт только в памяти страницы (state/prop): не в DOM,
-  storage, URL и navigation state; перезагрузка страницы его теряет.
+  (`RegisterForm`), и регистрация через Яндекс и VK
+  (`SocialRegistrationFlow`) — разметка не дублируется. На шаге кода вкладок
+  «Вход | Регистрация» нет: `RegisterForm` сообщает шаг через `onStepChange`,
+  `AuthModal` прячет tablist; в social-режимах вкладок нет вовсе.
+  «← Изменить данные» (пароль) возвращает к форме и вкладкам; «Начать заново»
+  (Яндекс, шаг email VK) — только локальный выход: `Home` забывает ticket и
+  показывает обычную AuthModal на вкладке «Регистрация», backend не вызывается,
+  ticket истечёт сам; «Изменить email» (VK) возвращает на шаг email.
+- Ticket регистрации живёт только в памяти приложения
+  (`AuthContext.socialRegistration` → prop): не в DOM, storage, URL и router
+  state; перезагрузка страницы его теряет.
+- **Юридические ссылки внутри auth-потока** (согласие с политикой
+  персональных данных в `RegisterForm` и на шаге кода `RegistrationOtpStep`)
+  открываются только в новой вкладке: `target="_blank"` +
+  `rel="noopener noreferrer"`. Переход в той же вкладке выгружает страницу —
+  пропадает заполненная форма, а при регистрации через Яндекс/VK и ticket из
+  памяти. Новые ссылки в `features/auth` добавлять так же (регрессия —
+  `AuthModal.test.jsx`).
 - Legacy-код `social_registration_not_available` в карте сообщений оставлен как
   безопасный fallback, backend его больше штатно не выдаёт.
 - Привязки к существующему аккаунту нет: занятый email — отказ с текстом

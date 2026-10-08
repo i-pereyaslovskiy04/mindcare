@@ -195,6 +195,13 @@
   text-transform: uppercase;
 }
 
+/* Подпись обычным регистром (шаг «Почта для регистрации»): размер, вес и цвет
+   те же, что у остальных подписей. */
+.authField.plainLabel label {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .authField input {
   width: 100%;
   background: var(--cream);
@@ -428,6 +435,8 @@
 /* Registration OTP step (RegistrationOtpStep: email и Яндекс) */
 .stepTitle {
   margin: 0;
+  /* Заголовок шага — шрифт модалки, а не глобальный serif для h2. */
+  font-family: inherit;
   font-size: 17px;
   font-weight: 600;
   line-height: 1.35;

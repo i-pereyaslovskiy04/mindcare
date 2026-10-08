@@ -104,7 +104,7 @@ describe('isSafeAuthorizeUrl', () => {
 describe('регистрация (Stage Social Auth 4)', () => {
   test('result=registration разбирается отдельно от login', () => {
     expect(parseCallbackFragment('#result=registration&ticket=abc_DEF-123'))
-      .toEqual({ kind: 'registration', ticket: 'abc_DEF-123' });
+      .toEqual({ kind: 'registration', ticket: 'abc_DEF-123', emailStep: false });
     expect(parseCallbackFragment('#result=login&ticket=abc'))
       .toEqual({ kind: 'login', ticket: 'abc' });
   });
@@ -131,8 +131,14 @@ describe('регистрация (Stage Social Auth 4)', () => {
     // Снятые в UX hotfix коды больше не имеют своего текста — общее сообщение.
     [{ status: 409, code: 'oauth_registration_data_mismatch', message: 'RAW' },
       'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
-    [{ status: 422, code: 'domain_not_allowed', message: 'RAW domain' },
+    // VK-1B: отказ по домену — фиксированный текст backend (как у обычной регистрации).
+    [{ status: 422, code: 'domain_not_allowed', message: 'Домен почты не разрешён.' },
+      'Домен почты не разрешён.'],
+    [{ status: 422, code: 'domain_not_allowed' },
       'Не удалось завершить регистрацию. Попробуйте ещё раз.'],
+    [{ status: 422, code: 'email_required', message: 'RAW' }, 'Укажите адрес электронной почты.'],
+    [{ status: 422, code: 'email_invalid', message: 'RAW' },
+      'Введите корректный адрес электронной почты.'],
     [{ status: 400, code: 'otp_invalid', message: 'Неверный код. Осталось попыток: 2' },
       'Неверный код. Осталось попыток: 2'],
     [{ status: 429, code: 'otp_cooldown', message: 'Повторная отправка доступна через 30 с' },
@@ -155,5 +161,135 @@ describe('регистрация (Stage Social Auth 4)', () => {
     expect(isRegistrationTerminal({ code: 'email_already_exists' })).toBe(true);
     expect(isRegistrationTerminal({ code: 'consent_required' })).toBe(false);
     expect(isRegistrationTerminal(undefined)).toBe(false);
+  });
+});
+
+describe('провайдер (Stage Social Auth VK-1A)', () => {
+  const {
+    DEFAULT_PROVIDER, PROVIDER_LABELS, completeErrorMessage: completeMsg,
+    fragmentMessage: fragmentMsg, loginStatusMessage, providerLabel,
+    recallOAuthProvider, rememberOAuthProvider, safeProvider, startErrorMessage: startMsg,
+  } = jest.requireActual('./oauthCallback');
+
+  const memoryStorage = () => {
+    const data = new Map();
+    return {
+      setItem: (k, v) => data.set(k, String(v)),
+      getItem: (k) => (data.has(k) ? data.get(k) : null),
+      data,
+    };
+  };
+
+  test('закрытый список провайдеров, иное → по умолчанию', () => {
+    expect(PROVIDER_LABELS).toEqual({ yandex: 'Яндекс', vk: 'VK' });
+    expect(DEFAULT_PROVIDER).toBe('yandex');
+    expect(safeProvider('vk')).toBe('vk');
+    for (const bad of ['telegram', '', null, undefined, 42, {}, '__proto__', 'constructor']) {
+      expect(safeProvider(bad)).toBe('yandex');
+    }
+    expect(providerLabel('vk')).toBe('VK');
+    expect(providerLabel('nope')).toBe('Яндекс');
+  });
+
+  test('remember/recall хранит только допустимое имя провайдера', () => {
+    const storage = memoryStorage();
+    expect(recallOAuthProvider(storage)).toBe('yandex');
+    rememberOAuthProvider('vk', storage);
+    expect([...storage.data.entries()]).toEqual([['mindcare_oauth_provider', 'vk']]);
+    expect(recallOAuthProvider(storage)).toBe('vk');
+    rememberOAuthProvider('https://evil.example/?ticket=1', storage);
+    expect(recallOAuthProvider(storage)).toBe('yandex');
+  });
+
+  test('недоступный storage не ломает ни запись, ни чтение', () => {
+    const broken = {
+      setItem: () => { throw new Error('denied'); },
+      getItem: () => { throw new Error('denied'); },
+    };
+    expect(() => rememberOAuthProvider('vk', broken)).not.toThrow();
+    expect(recallOAuthProvider(broken)).toBe('yandex');
+    expect(() => rememberOAuthProvider('vk', null)).not.toThrow();
+    expect(recallOAuthProvider(null)).toBe('yandex');
+  });
+
+  test('тексты называют провайдера, через которого начат вход', () => {
+    const cancelled = { kind: 'error', code: 'oauth_cancelled' };
+    expect(fragmentMsg(cancelled, 'vk')).toBe('Вход через VK отменён.');
+    expect(fragmentMsg(cancelled, 'yandex')).toBe('Вход через Яндекс отменён.');
+    expect(fragmentMsg(cancelled)).toBe('Вход через Яндекс отменён.');   // по умолчанию
+    expect(fragmentMsg({ kind: 'error', code: 'social_registration_not_available' }, 'vk')).toBe(
+      'Аккаунт VK пока не привязан к MindCare. '
+      + 'Вход через VK доступен только для уже связанных аккаунтов.',
+    );
+    expect(fragmentMsg({ kind: 'error', code: 'oauth_failed' }, 'vk'))
+      .toBe('Не удалось выполнить вход через VK. Попробуйте ещё раз.');
+    expect(completeMsg({ status: 403, code: 'social_login_not_allowed' }, 'vk'))
+      .toBe('Вход через VK для этой учётной записи недоступен.');
+    expect(completeMsg({ status: 403, code: 'account_unavailable' }, 'vk'))
+      .toBe('Доступ к аккаунту сейчас недоступен. Обратитесь к администратору.');
+    expect(startMsg({ status: 500 }, 'vk'))
+      .toBe('Не удалось начать вход через VK. Попробуйте ещё раз.');
+    expect(loginStatusMessage('vk')).toBe('Выполняем вход через VK…');
+    expect(loginStatusMessage()).toBe('Выполняем вход через Яндекс…');
+  });
+
+  test('набор кодов fragment одинаков для всех провайдеров', () => {
+    const codes = Object.keys(jest.requireActual('./oauthCallback').FRAGMENT_ERROR_MESSAGES);
+    for (const code of codes) {
+      expect(typeof fragmentMsg({ kind: 'error', code }, 'vk')).toBe('string');
+    }
+  });
+});
+
+describe('шаг email и исправимые ошибки (Stage Social Auth VK-1B)', () => {
+  const lib = jest.requireActual('./oauthCallback');
+
+  test('step=email помечает регистрацию с выбором адреса', () => {
+    expect(lib.parseCallbackFragment('#result=registration&ticket=abc&step=email'))
+      .toEqual({ kind: 'registration', ticket: 'abc', emailStep: true });
+    expect(lib.parseCallbackFragment('#result=registration&ticket=abc'))
+      .toEqual({ kind: 'registration', ticket: 'abc', emailStep: false });
+  });
+
+  test.each([
+    '#result=registration&ticket=abc&step=otp',
+    '#result=registration&ticket=abc&step=',
+    '#result=registration&ticket=abc&step=EMAIL',
+    '#result=login&ticket=abc&step=email',            // у входа шагов нет
+  ])('неизвестный или неуместный step → invalid (%p)', (hash) => {
+    expect(lib.parseCallbackFragment(hash)).toEqual({ kind: 'invalid' });
+  });
+
+  test('email провайдера из fragment не читается', () => {
+    const parsed = lib.parseCallbackFragment(
+      '#result=registration&ticket=abc&step=email&email=user%40vk.ru&name=Ivan',
+    );
+    expect(parsed).toEqual({ kind: 'registration', ticket: 'abc', emailStep: true });
+    expect(JSON.stringify(parsed)).not.toContain('vk.ru');
+  });
+
+  test('занятый email: терминален при фиксированном адресе, исправим при выборе', () => {
+    const taken = { code: 'email_already_exists' };
+    expect(lib.isRegistrationTerminal(taken)).toBe(true);                       // Яндекс
+    expect(lib.isRegistrationTerminal(taken, { emailEditable: false })).toBe(true);
+    expect(lib.isRegistrationTerminal(taken, { emailEditable: true })).toBe(false);   // VK
+    for (const code of ['oauth_ticket_invalid', 'oauth_identity_already_linked']) {
+      expect(lib.isRegistrationTerminal({ code }, { emailEditable: true })).toBe(true);
+    }
+    for (const code of ['domain_not_allowed', 'email_required', 'email_invalid',
+      'otp_invalid', 'otp_cooldown', 'rate_limited']) {
+      expect(lib.isRegistrationTerminal({ code }, { emailEditable: true })).toBe(false);
+    }
+  });
+
+  test('тексты регистрации называют провайдера', () => {
+    expect(lib.registrationErrorMessage({ code: 'oauth_ticket_invalid' }, 'vk'))
+      .toBe('Время на завершение регистрации истекло. Начните заново через VK.');
+    expect(lib.registrationErrorMessage({ code: 'oauth_identity_already_linked' }, 'vk'))
+      .toBe('Этот аккаунт VK уже привязан к MindCare. Нажмите «VK» ещё раз, чтобы войти.');
+    expect(lib.registrationErrorMessage({ code: 'oauth_ticket_invalid' }))
+      .toBe('Время на завершение регистрации истекло. Начните заново через Яндекс.');
+    expect(lib.registrationErrorMessage({ code: 'email_already_exists' }, 'vk'))
+      .toBe('Аккаунт с таким email уже существует. Войдите по email и паролю.');
   });
 });

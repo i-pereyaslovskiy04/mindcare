@@ -3,6 +3,8 @@
 Успешный complete возвращает существующий app.auth.schemas.SessionResponse —
 тот же контракт, что у входа по паролю; отдельной OAuth-сессии нет.
 """
+from typing import Optional
+
 from pydantic import BaseModel, Field, StrictBool, field_validator
 
 
@@ -16,12 +18,33 @@ class OAuthCompleteRequest(BaseModel):
     ticket: str = Field(min_length=1, max_length=128)
 
 
-class OAuthRegistrationInitRequest(BaseModel):
-    """Отправка кода регистрации через провайдера (Stage Social Auth 4).
-    Только ticket: email, имя, провайдер и subject берутся из ticket — от
-    клиента они не принимаются (лишние поля → 422)."""
+class OAuthRegistrationPreviewRequest(BaseModel):
+    """Что показать на шаге email (Stage Social Auth VK-1B). Только ticket."""
     model_config = {"extra": "forbid"}
     ticket: str = Field(min_length=1, max_length=128)
+
+
+class OAuthRegistrationPreviewResponse(BaseModel):
+    provider: str
+    # Маскированный адрес ticket (`i***@domain.ru`) или null. Raw email не отдаётся.
+    email_masked: Optional[str] = None
+    # Можно ли продолжить с этим адресом (есть и проходит allowlist, если нужен).
+    email_allowed: bool
+    # Может ли пользователь указать другой адрес (VK — да, Яндекс — нет).
+    email_editable: bool
+
+
+class OAuthRegistrationInitRequest(BaseModel):
+    """Отправка кода регистрации через провайдера (Stage Social Auth 4 / VK-1B).
+
+    Имя, провайдер и subject берутся из ticket — от клиента они не принимаются
+    (лишние поля → 422). `email` — необязателен и допустим только для
+    провайдера с выбором email (VK): адрес, который пользователь указал сам.
+    Для Яндекса любой переданный email → 422 `email_not_changeable`. Формат,
+    allowlist и занятость проверяет service/storage (стабильные коды ошибок)."""
+    model_config = {"extra": "forbid"}
+    ticket: str = Field(min_length=1, max_length=128)
+    email: Optional[str] = Field(default=None, min_length=1, max_length=320)
 
 
 class OAuthRegistrationInitResponse(BaseModel):

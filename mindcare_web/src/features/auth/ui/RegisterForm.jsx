@@ -299,7 +299,14 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
         label={
           <>
             Согласен(на) с{' '}
-            <a href="/privacy-policy" className={styles.consentLink}>
+            {/* Новая вкладка: переход в этой же вкладке выгружает страницу и
+                стирает заполненную форму регистрации. */}
+            <a
+              href="/privacy-policy"
+              className={styles.consentLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               политикой персональных данных
             </a>
           </>

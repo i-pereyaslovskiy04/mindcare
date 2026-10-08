@@ -6,27 +6,34 @@ import { getPublicConfig, socialProvidersOf } from '../../../api/config.api';
 import {
   isSafeAuthorizeUrl,
   navigateToProvider,
+  rememberOAuthProvider,
   startErrorMessage,
 } from '../lib/oauthCallback';
 
+// Порядок и подписи кнопок — как раньше: VK, затем Яндекс.
+const BUTTONS = Object.freeze([
+  { provider: 'vk', label: 'VK', ariaLabel: 'Войти через ВКонтакте', Icon: VKIcon },
+  { provider: 'yandex', label: 'Яндекс', ariaLabel: 'Войти через Яндекс', Icon: YandexIcon },
+]);
+
 /**
  * Блок «Быстрая авторизация» — общий для вкладок «Вход» и «Регистрация»
- * (Stage Social Auth 4). Кнопка Яндекса в обеих вкладках запускает ОДИН и тот
- * же поток: backend после callback сам решает, вход это (identity уже
- * привязана) или продолжение регистрации (identity новая). Отдельного
- * «намерения» вкладка не передаёт.
+ * (Stage Social Auth 4, VK-1A). Кнопка провайдера в обеих вкладках запускает
+ * ОДИН и тот же поток `oauthStart(provider)`: backend после callback сам
+ * решает, вход это или продолжение регистрации. Отдельного «намерения» вкладка
+ * не передаёт.
  *
- *   Яндекс — активна, только если backend реально зарегистрировал адаптер
- *            (GET /api/public/config → social_providers); иначе видима, но
- *            disabled.
- *   VK     — видимая заглушка: всегда disabled, запросов не шлёт (адаптера
- *            ещё нет — отдельный этап).
+ * Кнопка активна, только если backend реально зарегистрировал адаптер
+ * (GET /api/public/config → social_providers); иначе видима, но disabled и
+ * запросов не шлёт. Пока идёт старт одного провайдера, вторая кнопка тоже
+ * заблокирована: два параллельных старта перезаписали бы общий state-cookie.
  */
 export default function SocialButtons() {
-  // Пока список не получен или запрос упал — Яндекс disabled; формы входа и
+  // Пока список не получен или запрос упал — кнопки disabled; формы входа и
   // регистрации по email работают независимо.
   const [providers, setProviders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Имя провайдера, для которого сейчас идёт старт (или null).
+  const [starting, setStarting] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -41,22 +48,22 @@ export default function SocialButtons() {
     return () => { cancelled = true; };
   }, []);
 
-  const yandexAvailable = providers.includes('yandex');
-
-  const handleYandex = async () => {
-    if (loading || !yandexAvailable) return;
+  const start = async (provider) => {
+    if (starting !== null || !providers.includes(provider)) return;
     setError('');
-    setLoading(true);
+    setStarting(provider);
     try {
-      const data = await oauthStart('yandex');
+      const data = await oauthStart(provider);
       const url = data?.authorize_url;
       if (!isSafeAuthorizeUrl(url)) throw new Error('invalid authorize_url');
-      // Top-level переход на страницу Яндекса; state привязан HttpOnly-cookie,
-      // поэтому ни адрес, ни state нигде на клиенте не сохраняются.
+      // Только ИМЯ провайдера — для текстов страницы callback. State привязан
+      // HttpOnly-cookie: ни адрес, ни state на клиенте не сохраняются.
+      rememberOAuthProvider(provider);
+      // Top-level переход на страницу провайдера.
       navigateToProvider(url);
     } catch (err) {
-      setError(startErrorMessage(err));
-      setLoading(false);
+      setError(startErrorMessage(err, provider));
+      setStarting(null);
     }
   };
 
@@ -65,30 +72,27 @@ export default function SocialButtons() {
       <div className={styles.socialSection}>
         <div className={styles.socialLabel}>Быстрая авторизация</div>
         <div className={styles.socialBtns}>
-          <button
-            type="button"
-            className={styles.socBtn}
-            aria-label="Войти через ВКонтакте (скоро)"
-            title="Скоро"
-            disabled
-          >
-            <div className={styles.socBtnIcon} aria-hidden="true"><VKIcon /></div>
-            <span className={styles.socBtnLabel}>VK</span>
-          </button>
-          <button
-            type="button"
-            className={styles.socBtn}
-            aria-label="Войти через Яндекс"
-            title={yandexAvailable ? undefined : 'Сейчас недоступно'}
-            onClick={handleYandex}
-            disabled={!yandexAvailable || loading}
-            aria-busy={loading ? 'true' : undefined}
-          >
-            <div className={styles.socBtnIcon} aria-hidden="true"><YandexIcon /></div>
-            <span className={styles.socBtnLabel}>
-              {loading ? 'Переход…' : 'Яндекс'}
-            </span>
-          </button>
+          {BUTTONS.map(({ provider, label, ariaLabel, Icon }) => {
+            const available = providers.includes(provider);
+            const busy = starting === provider;
+            return (
+              <button
+                key={provider}
+                type="button"
+                className={styles.socBtn}
+                aria-label={ariaLabel}
+                title={available ? undefined : 'Сейчас недоступно'}
+                onClick={() => start(provider)}
+                disabled={!available || starting !== null}
+                aria-busy={busy ? 'true' : undefined}
+              >
+                <div className={styles.socBtnIcon} aria-hidden="true"><Icon /></div>
+                <span className={styles.socBtnLabel}>
+                  {busy ? 'Переход…' : label}
+                </span>
+              </button>
+            );
+          })}
         </div>
         {error && (
           <div className={styles.apiError} role="alert">{error}</div>
