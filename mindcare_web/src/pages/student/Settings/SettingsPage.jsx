@@ -4,9 +4,18 @@ import Icon from '../../../components/Icon/Icon';
 import Select from '../../../components/UI/Select/Select';
 import Button from '../../../components/UI/Button/Button';
 import Toggle from '../../../components/UI/Toggle/Toggle';
+import Badge from '../../../components/UI/Badge/Badge';
+import Modal from '../../../components/Modal/Modal';
 import { useAuth } from '../../../features/auth/AuthContext';
 import { formatPhoneInput, PHONE_PLACEHOLDER } from '../../../features/admin/users/phone';
 import * as authApi from '../../../api/auth.api';
+import { roleLabel } from '../../../shared/lib/roles';
+import useMyStudentVerification from '../../../features/studentVerification/hooks/useMyStudentVerification';
+import StudentVerificationSection from '../../../features/studentVerification/ui/StudentVerificationSection';
+import {
+  VERIFIED_BADGE_LABEL,
+  canUseVerificationSelfService,
+} from '../../../features/studentVerification/lib/status';
 import styles from './SettingsPage.module.css';
 
 const SOCIAL_TYPES = ['Telegram', 'Instagram', 'LinkedIn', 'VK', 'Facebook', 'X (Twitter)', 'Сайт'];
@@ -16,13 +25,6 @@ const TIMEZONE_OPTIONS = [
   { value: 'msk', label: 'Москва (UTC+3)' },
   { value: 'ekb', label: 'Екатеринбург (UTC+5)' },
 ];
-
-const ROLE_LABEL = {
-  student: 'Студент',
-  psychologist: 'Психолог',
-  supervisor: 'Супервизор',
-  admin: 'Администратор',
-};
 
 function avatarLetter(name) {
   const t = (name || '').trim();
@@ -42,7 +44,9 @@ function NotifRow({ label, desc, on, onToggle }) {
 }
 
 export default function SettingsPage() {
-  const { logout, refreshUser } = useAuth();
+  const {
+    user, logout, refreshUser, isImpersonating, deactivateOwnAccount, clearSession,
+  } = useAuth();
   const navigate = useNavigate();
 
   // ── Профиль (реальные данные текущего пользователя) ──
@@ -129,6 +133,47 @@ export default function SettingsPage() {
     }
   }
 
+  // ── Самоотключение (ADR-028) ──
+  // Доступно только чистому студенту и не в режиме «под именем»: staff
+  // получают student неявно (ADR-024), backend всё равно проверяет авторитетно.
+  const roles = user?.roles || [];
+  const canSelfDeactivate =
+    roles.length === 1 && roles[0] === 'student' && !isImpersonating;
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+
+  // ── Подтверждение студента ДонГУ (ADR-029) ──
+  // Отдельный статус, не роль: подпись роли остаётся «Пользователь».
+  // Self-service — только чистый student вне режима «под именем».
+  const verificationEnabled = canUseVerificationSelfService(roles, isImpersonating);
+  const verification = useMyStudentVerification(verificationEnabled);
+  const isVerifiedStudent = verification.data?.status === 'approved';
+  const showVerificationImpersonationNote =
+    isImpersonating && roles.length === 1 && roles[0] === 'student';
+  const [deactivating, setDeactivating] = useState(false);
+  const [deactivateError, setDeactivateError] = useState('');
+
+  async function handleSelfDeactivate() {
+    setDeactivateError('');
+    setDeactivating(true);
+    try {
+      await deactivateOwnAccount();
+    } catch (err) {
+      setDeactivateError(err.message || 'Не удалось отключить аккаунт');
+      setDeactivating(false);
+      return;
+    }
+    // Сессии уже отозваны на сервере: сначала уходим на публичную страницу,
+    // затем очищаем клиентскую авторизацию (порядок как в useLogout).
+    navigate('/', {
+      replace: true,
+      state: {
+        openAuth: 'login',
+        message: 'Аккаунт отключён. Для восстановления обратитесь к администратору.',
+      },
+    });
+    clearSession();
+  }
+
   const [notif, setNotif] = useState({
     session:  true,
     tasks:    true,
@@ -187,8 +232,13 @@ export default function SettingsPage() {
                       {profile.full_name || 'Без имени'}
                     </div>
                     <div className={styles.profileRole}>
-                      {ROLE_LABEL[profile.role] || profile.role}
+                      {roleLabel(profile.role)}
                     </div>
+                    {isVerifiedStudent && (
+                      <Badge tone="success" className={styles.verifiedBadge}>
+                        {VERIFIED_BADGE_LABEL}
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
@@ -255,6 +305,24 @@ export default function SettingsPage() {
             )}
           </div>
 
+          {verificationEnabled && (
+            <StudentVerificationSection
+              className={styles.card}
+              verification={verification.data}
+              loading={verification.loading}
+              error={verification.error}
+              onSubmitted={verification.setData}
+            />
+          )}
+          {showVerificationImpersonationNote && (
+            <div className={styles.card}>
+              <h2 className={styles.sectionTitle}>Подтверждение студента ДонГУ</h2>
+              <p className={styles.dangerText}>
+                Недоступно при входе под именем пользователя.
+              </p>
+            </div>
+          )}
+
           {/* Security */}
           <div className={styles.card}>
             <h2 className={styles.sectionTitle}>Безопасность</h2>
@@ -308,6 +376,24 @@ export default function SettingsPage() {
               </Button>
             </form>
           </div>
+
+          {canSelfDeactivate && (
+            <div className={`${styles.card} ${styles.cardDanger}`}>
+              <h2 className={styles.sectionTitle}>Отключение аккаунта</h2>
+              <p className={styles.dangerText}>
+                Вы потеряете доступ к MindCare на всех устройствах. Ваши данные
+                и email сохранятся — восстановить аккаунт может только
+                администратор по вашему обращению.
+              </p>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => { setDeactivateError(''); setDeactivateOpen(true); }}
+              >
+                Отключить аккаунт
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* ---- RIGHT COLUMN ---- */}
@@ -413,6 +499,42 @@ export default function SettingsPage() {
 
         </div>
       </div>
+
+      <Modal
+        open={deactivateOpen}
+        onClose={() => { if (!deactivating) setDeactivateOpen(false); }}
+        ariaLabel="Подтверждение отключения аккаунта"
+      >
+        <div className={styles.confirmBody}>
+          <h2 className={styles.sectionTitle}>Отключить аккаунт?</h2>
+          <ul className={styles.confirmList}>
+            <li>Доступ к аккаунту прекратится, все сессии будут завершены.</li>
+            <li>Ваши данные и email сохранятся.</li>
+            <li>Восстановить аккаунт можно только через администратора.</li>
+          </ul>
+          {deactivateError && (
+            <div className={styles.formError} role="alert">{deactivateError}</div>
+          )}
+          <div className={styles.confirmActions}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setDeactivateOpen(false)}
+              disabled={deactivating}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleSelfDeactivate}
+              loading={deactivating}
+            >
+              Отключить аккаунт
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

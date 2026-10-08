@@ -263,6 +263,23 @@ test('old panel heading "Моё состояние" is not rendered', async () =
   expect(screen.queryByText('Моё состояние')).not.toBeInTheDocument();
 });
 
+// ─── приветствие без имени: подпись роли — из общей карты ─────────────────────
+
+test('без имени приветствие использует подпись роли «Пользователь», не «Студент»', async () => {
+  AuthContext.useAuth.mockReturnValue({ user: {} });
+  render(<StudentHome />);
+  const heading = await screen.findByRole('heading', { level: 1 });
+  expect(heading).toHaveTextContent('Здравствуйте, Пользователь');
+  expect(heading).not.toHaveTextContent('Студент');
+  await screen.findByText('Самонаблюдение за 14 дней');   // дождаться загрузки данных
+});
+
+test('с именем в профиле приветствие по-прежнему по имени', async () => {
+  render(<StudentHome />);
+  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Здравствуйте, Тест');
+  await screen.findByText('Самонаблюдение за 14 дней');   // дождаться загрузки данных
+});
+
 test('old panel heading "Поддержка" is not rendered', async () => {
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getDiarySummary).toHaveBeenCalledTimes(1));

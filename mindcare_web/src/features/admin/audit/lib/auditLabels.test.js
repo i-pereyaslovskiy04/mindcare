@@ -24,7 +24,7 @@ import {
 
 /**
  * Ожидаемые множества кодов — снимок живого backend registry (Stage 8):
- * 87 событий audit_log, 7 auth_log, 17 кодов отказа, 23 типа объектов,
+ * 97 событий audit_log, 7 auth_log, 36 кодов отказа, 24 типа объектов,
  * 4 таблицы data_change_log и 25 пар таблица/поле.
  *
  * Тест держит карты и registry в согласии: новое backend-событие без подписи
@@ -33,7 +33,9 @@ import {
 const AUDIT_EVENT_CODES = [
   'admin_role_add', 'admin_role_remove', 'admin_role_update',
   'admin_user_activated', 'admin_user_create_failed', 'admin_user_created',
+  'admin_user_deactivate_failed',
   'admin_user_deactivated', 'admin_user_delete_failed', 'admin_user_deleted',
+  'admin_user_restore_failed',
   'admin_user_update_failed', 'admin_user_updated',
   'appointment_cancel_failed', 'appointment_cancelled',
   'appointment_confirm_failed', 'appointment_confirmed',
@@ -71,6 +73,12 @@ const AUDIT_EVENT_CODES = [
   'unregistered_student_card_created', 'unregistered_student_card_linked',
   'unregistered_student_card_updated',
   'user_reactivated',
+  // ADR-028: lifecycle отключения.
+  'user_self_deactivate_failed', 'user_self_deactivated',
+  // ADR-029: подтверждение статуса студента ДонГУ.
+  'student_verification_approved', 'student_verification_content_read',
+  'student_verification_rejected', 'student_verification_review_failed',
+  'student_verification_submit_failed', 'student_verification_submitted',
 ];
 
 const AUTH_EVENT_CODES = [
@@ -79,14 +87,22 @@ const AUTH_EVENT_CODES = [
 ];
 
 const FAILURE_CODES = [
-  'access_denied', 'account_disabled', 'account_inactive', 'consent_required',
+  'access_denied', 'account_already_active', 'account_already_disabled',
+  'account_disabled', 'account_inactive', 'consent_required',
   'domain_not_allowed', 'email_already_exists', 'engagement_required',
+  'impersonation_forbidden',
   'internal_error', 'invalid_credentials', 'invalid_request',
-  'legal_basis_required', 'no_active_roles', 'oauth_identity_already_linked',
+  'legal_basis_required', 'lifecycle_endpoint_required',
+  'no_active_roles', 'oauth_identity_already_linked',
   'oauth_identity_unknown',
   'oauth_provider_error', 'oauth_state_invalid', 'oauth_ticket_invalid',
   'otp_expired', 'otp_invalid', 'password_policy', 'role_policy_violation',
-  'self_admin_protected', 'social_login_not_allowed', 'user_not_found',
+  'self_admin_protected', 'self_deactivation_not_allowed',
+  'social_login_not_allowed', 'user_not_found',
+  // ADR-029.
+  'already_verified', 'reviewer_not_allowed', 'self_review_forbidden',
+  'verification_already_decided', 'verification_not_allowed',
+  'verification_not_found', 'verification_pending_exists',
 ];
 
 const ENTITY_TYPES = [
@@ -95,7 +111,7 @@ const ENTITY_TYPES = [
   'group_session', 'group_session_registration', 'meeting_type', 'news',
   'schedule_break', 'schedule_exception', 'schedule_rule', 'schedule_series',
   'session_note', 'tag', 'test', 'test_result', 'therapy_engagement',
-  'unregistered_student_card', 'user',
+  'student_verification_request', 'unregistered_student_card', 'user',
 ];
 
 const CHANGE_PAIRS = [
@@ -118,8 +134,8 @@ const CHANGE_PAIRS = [
 ];
 
 describe('полнота карт относительно registry', () => {
-  test('87 событий audit_log имеют подпись', () => {
-    expect(AUDIT_EVENT_CODES).toHaveLength(87);
+  test('97 событий audit_log имеют подпись', () => {
+    expect(AUDIT_EVENT_CODES).toHaveLength(97);
     expect(Object.keys(AUDIT_EVENT_LABELS).sort()).toEqual([...AUDIT_EVENT_CODES].sort());
     AUDIT_EVENT_CODES.forEach((code) => {
       expect(labelFor(AUDIT_EVENT_LABELS, code)).not.toBe(UNKNOWN_LABEL);
@@ -131,8 +147,8 @@ describe('полнота карт относительно registry', () => {
     expect(Object.keys(AUTH_EVENT_LABELS).sort()).toEqual([...AUTH_EVENT_CODES].sort());
   });
 
-  test('24 кода отказа имеют подпись (включая social auth 2A/2B/4)', () => {
-    expect(FAILURE_CODES).toHaveLength(24);
+  test('36 кодов отказа имеют подпись (включая social auth, ADR-028 и ADR-029)', () => {
+    expect(FAILURE_CODES).toHaveLength(36);
     expect(Object.keys(FAILURE_CODE_LABELS).sort()).toEqual([...FAILURE_CODES].sort());
   });
 
@@ -143,7 +159,7 @@ describe('полнота карт относительно registry', () => {
     expect(labelFor(AUTH_METHOD_LABELS, 'telegram')).toBe(UNKNOWN_LABEL);
   });
 
-  test('23 типа объектов имеют подпись', () => {
+  test('24 типа объектов имеют подпись', () => {
     expect(Object.keys(ENTITY_TYPE_LABELS).sort()).toEqual([...ENTITY_TYPES].sort());
   });
 
@@ -154,9 +170,9 @@ describe('полнота карт относительно registry', () => {
     expect(Object.keys(OPERATION_LABELS).sort()).toEqual(['DELETE', 'INSERT', 'UPDATE']);
   });
 
-  test('каждый из 94 кодов отнесён к существующей категории', () => {
+  test('каждый из 104 кодов отнесён к существующей категории', () => {
     const all = [...AUDIT_EVENT_CODES, ...AUTH_EVENT_CODES];
-    expect(all).toHaveLength(94);
+    expect(all).toHaveLength(104);
     expect(Object.keys(EVENT_CATEGORIES).sort()).toEqual([...all].sort());
     all.forEach((code) => {
       const category = categoryOf(code);

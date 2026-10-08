@@ -86,6 +86,7 @@ import ServiceCardsPage    from '../pages/supervisor/ServiceCardsPage';
 import GroupSessionsPage   from '../pages/supervisor/GroupSessionsPage';
 import SchedulePage        from '../pages/supervisor/SchedulePage';
 import BookingPage         from '../pages/supervisor/BookingPage';
+import StudentVerificationsPage from '../pages/supervisor/StudentVerificationsPage';
 
 // ── Shared cabinet pages ──────────────────────────────────────────────────────
 import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage';
@@ -171,6 +172,7 @@ export default function AppRouter() {
         <Route path="schedule"              element={<SchedulePage />} />
         <Route path="booking"               element={<BookingPage />} />
         <Route path="group-sessions"        element={<GroupSessionsPage />} />
+        <Route path="student-verifications" element={<StudentVerificationsPage />} />
         <Route path="settings"              element={<CabinetSettingsPage cabinetRole="supervisor" />} />
       </Route>
 

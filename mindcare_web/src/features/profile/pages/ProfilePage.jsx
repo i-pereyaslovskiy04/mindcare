@@ -7,16 +7,27 @@ import {
   ROLE_BADGE_TONES,
   normalizeRoles,
 } from '../../../shared/lib/roles';
+import useMyStudentVerification from '../../studentVerification/hooks/useMyStudentVerification';
+import {
+  VERIFIED_BADGE_LABEL,
+  canUseVerificationSelfService,
+} from '../../studentVerification/lib/status';
 import styles from './ProfilePage.module.css';
 
 export default function ProfilePage() {
-  const { user, activeRole } = useAuth();
+  const { user, activeRole, isImpersonating } = useAuth();
   const logout = useLogout();
-
-  if (!user) return null;
 
   // Все активные роли — источник истины `roles[]` (явный [] тоже валиден).
   const roles = normalizeRoles(user);
+
+  // ADR-029: «Студент ДонГУ подтверждён» — отдельный статус, не роль.
+  // Запрашивается только для чистого student вне режима «под именем».
+  const verification = useMyStudentVerification(
+    Boolean(user) && canUseVerificationSelfService(roles, isImpersonating),
+  );
+
+  if (!user) return null;
 
   return (
     <div className={styles.page}>
@@ -34,6 +45,9 @@ export default function ProfilePage() {
               {ROLE_LABELS[role] ?? role}
             </Badge>
           ))}
+          {verification.data?.status === 'approved' && (
+            <Badge tone="success">{VERIFIED_BADGE_LABEL}</Badge>
+          )}
         </div>
 
         {roles.length > 1 && (

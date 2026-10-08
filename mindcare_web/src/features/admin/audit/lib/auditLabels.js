@@ -49,24 +49,36 @@ export const EVENT_CATEGORY_LABELS = {
   audit_access:  'Просмотр аудита',
 };
 
-// ── audit_log: 87 событий ────────────────────────────────────────────────────
+// ── audit_log: 97 событий ────────────────────────────────────────────────────
 
 export const AUDIT_EVENT_LABELS = {
-  // Пользователи и роли (20)
+  // Пользователи и роли (30, вкл. ADR-029). ADR-028: единый lifecycle отключения —
+  // admin_user_deleted / user_reactivated больше не пишутся (исторические).
   admin_role_add:                          'Администратор добавил роль',
   admin_role_remove:                       'Администратор снял роль',
   admin_role_update:                       'Администратор изменил набор ролей',
-  admin_user_activated:                    'Учётная запись разблокирована',
+  admin_user_activated:                    'Учётная запись восстановлена администратором',
   admin_user_create_failed:                'Создание учётной записи отклонено',
   admin_user_created:                      'Учётная запись создана администратором',
-  admin_user_deactivated:                  'Учётная запись заблокирована',
+  admin_user_deactivate_failed:            'Отключение учётной записи отклонено',
+  admin_user_deactivated:                  'Учётная запись отключена администратором',
   admin_user_delete_failed:                'Удаление учётной записи отклонено',
-  admin_user_deleted:                      'Учётная запись удалена',
+  admin_user_deleted:                      'Учётная запись удалена (историческое)',
+  admin_user_restore_failed:               'Восстановление учётной записи отклонено',
   admin_user_update_failed:                'Изменение учётной записи отклонено',
   admin_user_updated:                      'Учётная запись изменена администратором',
   profile_updated:                         'Пользователь изменил свой профиль',
   profile_update_failed:                   'Изменение профиля отклонено',
-  user_reactivated:                        'Учётная запись восстановлена',
+  user_reactivated:                        'Учётная запись восстановлена при регистрации (историческое)',
+  user_self_deactivate_failed:             'Самостоятельное отключение отклонено',
+  user_self_deactivated:                   'Пользователь отключил свою учётную запись',
+  // ADR-029: подтверждение статуса студента ДонГУ (статус, не роль).
+  student_verification_submitted:          'Подана заявка на подтверждение студента ДонГУ',
+  student_verification_approved:           'Статус студента ДонГУ подтверждён',
+  student_verification_rejected:           'Заявка на подтверждение студента ДонГУ отклонена',
+  student_verification_content_read:       'Просмотр номера студенческого билета',
+  student_verification_submit_failed:      'Заявка на подтверждение студента не принята',
+  student_verification_review_failed:      'Решение по заявке студента отклонено',
   supervisor_create_student:               'Супервизор создал аккаунт студента',
   unregistered_student_card_archived:      'Карточка клиента без аккаунта архивирована',
   unregistered_student_card_create_failed: 'Создание карточки клиента отклонено',
@@ -178,14 +190,24 @@ export const EVENT_CATEGORIES = {
   admin_user_activated: 'users_roles',
   admin_user_create_failed: 'users_roles',
   admin_user_created: 'users_roles',
+  admin_user_deactivate_failed: 'users_roles',
   admin_user_deactivated: 'users_roles',
   admin_user_delete_failed: 'users_roles',
   admin_user_deleted: 'users_roles',
+  admin_user_restore_failed: 'users_roles',
   admin_user_update_failed: 'users_roles',
   admin_user_updated: 'users_roles',
   profile_updated: 'users_roles',
   profile_update_failed: 'users_roles',
   user_reactivated: 'users_roles',
+  user_self_deactivate_failed: 'users_roles',
+  user_self_deactivated: 'users_roles',
+  student_verification_submitted: 'users_roles',
+  student_verification_approved: 'users_roles',
+  student_verification_rejected: 'users_roles',
+  student_verification_content_read: 'users_roles',
+  student_verification_submit_failed: 'users_roles',
+  student_verification_review_failed: 'users_roles',
   supervisor_create_student: 'users_roles',
   unregistered_student_card_archived: 'users_roles',
   unregistered_student_card_create_failed: 'users_roles',
@@ -279,20 +301,25 @@ export const EVENT_CATEGORIES = {
   registration_succeeded: 'auth_security',
 };
 
-// ── Коды отказа (24) ─────────────────────────────────────────────────────────
+// ── Коды отказа (36) ─────────────────────────────────────────────────────────
 
 export const FAILURE_CODE_LABELS = {
   access_denied:         'Доступ запрещён',
+  account_already_active: 'Учётная запись уже активна',
+  account_already_disabled: 'Учётная запись уже отключена',
+  already_verified:      'Статус студента уже подтверждён',
   account_disabled:      'Учётная запись отключена',
   account_inactive:      'Учётная запись заблокирована',
   consent_required:      'Требуется согласие',
   domain_not_allowed:    'Домен почты не разрешён',
   email_already_exists:  'Email уже используется',
   engagement_required:   'Нужно активное сопровождение',
+  impersonation_forbidden: 'Недоступно при входе под именем пользователя',
   internal_error:        'Внутренняя ошибка',
   invalid_credentials:   'Неверные учётные данные',
   invalid_request:       'Некорректный запрос',
   legal_basis_required:  'Требуется документированное основание',
+  lifecycle_endpoint_required: 'Используйте «Отключить аккаунт» или «Восстановить»',
   no_active_roles:       'Нет активных ролей',
   oauth_identity_already_linked: 'Внешняя учётная запись уже привязана',
   oauth_identity_unknown: 'Внешняя учётная запись не привязана',
@@ -302,10 +329,17 @@ export const FAILURE_CODE_LABELS = {
   otp_expired:           'Код подтверждения истёк',
   otp_invalid:           'Неверный код подтверждения',
   password_policy:       'Пароль не отвечает требованиям',
+  reviewer_not_allowed:  'Нет права проверять заявки',
   role_policy_violation: 'Нарушение политики ролей',
-  self_admin_protected:  'Нельзя снять роль администратора у себя',
+  self_admin_protected:  'Действие над собственной учётной записью запрещено',
+  self_deactivation_not_allowed: 'Самоотключение недоступно служебной учётной записи',
+  self_review_forbidden: 'Проверка собственной заявки запрещена',
   social_login_not_allowed: 'Социальный вход для аккаунта запрещён',
   user_not_found:        'Пользователь не найден',
+  verification_already_decided: 'По заявке уже принято другое решение',
+  verification_not_allowed: 'Подтверждение доступно только пользователю без служебных ролей',
+  verification_not_found: 'Заявка не найдена',
+  verification_pending_exists: 'Заявка уже на проверке',
 };
 
 // ── Способ входа auth_log.auth_method (3) ────────────────────────────────────
@@ -319,7 +353,7 @@ export const AUTH_METHOD_LABELS = {
 /** Fallback для значения вне карты: сырой код не показывается. */
 export const UNKNOWN_AUTH_METHOD_LABEL = 'Неизвестный способ';
 
-// ── Типы объектов (23) ───────────────────────────────────────────────────────
+// ── Типы объектов (24) ───────────────────────────────────────────────────────
 
 export const ENTITY_TYPE_LABELS = {
   allowed_email_domain:       'Домен регистрации',
@@ -339,6 +373,7 @@ export const ENTITY_TYPE_LABELS = {
   schedule_rule:              'Рабочее окно',
   schedule_series:            'Серия расписания',
   session_note:               'Заметка сессии',
+  student_verification_request: 'Заявка на подтверждение студента',
   tag:                        'Тема',
   test:                       'Методика',
   test_result:                'Результат теста',

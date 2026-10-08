@@ -50,9 +50,10 @@ test('staff role checkboxes are rendered; student shown read-only (no student ch
   expect(screen.getByRole('checkbox', { name: 'Психолог' })).toBeInTheDocument();
   expect(screen.getByRole('checkbox', { name: 'Супервизор' })).toBeInTheDocument();
   expect(screen.getByRole('checkbox', { name: 'Администратор' })).toBeInTheDocument();
-  // student НЕ чекбокс — только read-only badge
-  expect(screen.queryByRole('checkbox', { name: 'Студент' })).toBeNull();
-  expect(screen.getByText('Студент')).toBeInTheDocument();
+  // student НЕ чекбокс — только read-only badge с подписью «Пользователь»
+  expect(screen.queryByRole('checkbox', { name: 'Пользователь' })).toBeNull();
+  expect(screen.getByText('Пользователь')).toBeInTheDocument();
+  expect(screen.queryByText('Студент')).toBeNull();
 });
 
 test('student-only: staff checkboxes are disabled with an explanation, no legal basis reveal', async () => {
@@ -120,4 +121,20 @@ test('user with an existing staff role: checking another staff role reveals the 
   await waitFor(() => {
     expect(screen.getByText('Документ-основание')).toBeInTheDocument();
   });
+});
+
+test('ADR-028: no "Активен" toggle — status is read-only, lifecycle lives in the list', async () => {
+  render(
+    <UserEditModal
+      open
+      uuid="u1"
+      userInfo={{ ...USER_INFO, is_active: false }}
+      onClose={jest.fn()}
+      onUpdated={jest.fn()}
+    />,
+  );
+  await screen.findByRole('checkbox', { name: 'Психолог' });
+  expect(screen.queryByRole('checkbox', { name: 'Активен' })).toBeNull();
+  expect(screen.getByText('Статус')).toBeInTheDocument();
+  expect(screen.getByText('Отключён')).toBeInTheDocument();
 });

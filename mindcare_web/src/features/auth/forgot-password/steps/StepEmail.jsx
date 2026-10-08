@@ -35,7 +35,7 @@ export default function StepEmail({ email, setEmail, errors, setErrors, loading,
           className={`${styles.input} ${errors.email ? styles.inputError : ''}`}
           type="email"
           id="fp-email"
-          placeholder="example@donnu.ru"
+          placeholder="Введите email"
           autoComplete="email"
           value={email}
           onChange={handleChange}

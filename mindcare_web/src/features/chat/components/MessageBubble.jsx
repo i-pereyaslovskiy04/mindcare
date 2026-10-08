@@ -42,7 +42,9 @@ export default function MessageBubble({
         </div>
       ) : (
         <div className={styles.text}>
-          <LinkifiedText text={text} />
+          {/* Внутренние ссылки (точный allowlist) — только у system-сообщений
+              MindCare: пользователь не может сформировать такую ссылку сам. */}
+          <LinkifiedText text={text} allowInternalLinks={isSystem} />
         </div>
       )}
       <div className={styles.meta}>

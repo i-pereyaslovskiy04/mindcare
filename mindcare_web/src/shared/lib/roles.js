@@ -54,11 +54,11 @@ export function normalizeRoles(source) {
  * Роли, среди которых пользователь выбирает кабинет при логине.
  *
  * Роль student неявно выдаётся всем staff-пользователям (backend), поэтому при
- * входе staff НЕ должен видеть «Студент» как вариант выбора: если есть хотя бы
- * одна не-student роль — student отбрасывается. У чистого студента (единственная
- * роль student) она остаётся. Используется в RoleChooser и DashboardRedirect;
- * CabinetSwitcher намеренно этим НЕ пользуется — там student остаётся точкой
- * входа в кабинет студента.
+ * входе staff НЕ должен видеть «Пользователь» (student) как вариант выбора:
+ * если есть хотя бы одна не-student роль — student отбрасывается. У чистого
+ * пользователя (единственная роль student) она остаётся. Используется в
+ * RoleChooser и DashboardRedirect; CabinetSwitcher намеренно этим НЕ
+ * пользуется — там student остаётся точкой входа в кабинет /student.
  */
 export function selectableRoles(source) {
   const all = normalizeRoles(source);
@@ -80,8 +80,11 @@ export function primaryRole(roles) {
 
 // Канонические подписи и тон Badge ролей — единый источник для лейблов кабинетов,
 // профиля и switcher/chooser (сводит прежнее расхождение «Пациент»/«Студент»).
+// Подпись student — «Пользователь»: это только UI-метка. Код роли `student`,
+// маршруты /student, membership и permissions не меняются. Локальных копий
+// этой карты быть не должно: настройки, фильтры и т. п. берут подпись отсюда.
 export const ROLE_LABELS = {
-  student:      'Студент',
+  student:      'Пользователь',
   psychologist: 'Психолог',
   supervisor:   'Супервизор',
   admin:        'Администратор',

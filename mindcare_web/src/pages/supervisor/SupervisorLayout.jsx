@@ -13,7 +13,8 @@ const NAV_SECTIONS = [
       { key: 'schedule',      label: 'Расписание',           icon: 'calendar', to: '/supervisor/schedule',           end: true,  disabled: false },
       { key: 'booking',       label: 'Запись',               icon: 'calendar', to: '/supervisor/booking',            end: true,  disabled: false },
       { key: 'group-sessions',label: 'Групповые занятия',    icon: 'users',    to: '/supervisor/group-sessions',     end: true,  disabled: false },
-      { key: 'psych',         label: 'Психологи',            icon: 'users',    to: '/supervisor/psychologists',                  disabled: true  },
+      { key: 'student-verifications', label: 'Подтверждение студентов', icon: 'check', to: '/supervisor/student-verifications', end: true, disabled: false },
+      { key: 'psych',        label: 'Психологи',            icon: 'users',    to: '/supervisor/psychologists',                  disabled: true  },
       { key: 'reports',       label: 'Отчёты',               icon: 'articles', to: '/supervisor/reports',                        disabled: true  },
     ],
   },
@@ -35,6 +36,7 @@ const CRUMB_LABELS = {
   '/supervisor/schedule':         'Расписание',
   '/supervisor/booking':          'Запись',
   '/supervisor/group-sessions':   'Групповые занятия',
+  '/supervisor/student-verifications': 'Подтверждение студентов',
   '/supervisor/settings':         'Настройки',
 };
 

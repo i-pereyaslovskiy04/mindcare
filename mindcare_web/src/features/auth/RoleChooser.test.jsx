@@ -31,3 +31,14 @@ test('choosing a cabinet sets activeRole and navigates', () => {
   expect(setActiveRole).toHaveBeenCalledWith('supervisor');
   expect(mockNavigate).toHaveBeenCalledWith('/supervisor', { replace: true });
 });
+
+test('роль student подписана «Пользователь»; код роли и маршрут /student прежние', () => {
+  AuthContext.useAuth.mockReturnValue({ user: { roles: ['student'] }, setActiveRole });
+  render(<RoleChooser roles={['student']} />);
+
+  expect(screen.queryByRole('button', { name: 'Студент' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Пользователь' }));
+
+  expect(setActiveRole).toHaveBeenCalledWith('student');
+  expect(mockNavigate).toHaveBeenCalledWith('/student', { replace: true });
+});

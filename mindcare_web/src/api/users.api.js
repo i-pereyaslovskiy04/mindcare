@@ -51,8 +51,10 @@ export function createUser(data) {
  * требует legal_basis_confirmed + basis_type + basis_reference; useUserForm
  * гарантирует их присутствие только когда роль реально добавляется.
  */
+// is_active намеренно НЕ редактируется через PATCH (ADR-028): отключение и
+// восстановление — только deactivateUser/restoreUser.
 const EDITABLE_FIELDS = [
-  'full_name', 'phone', 'is_active',
+  'full_name', 'phone',
   'role', 'roles',
   'legal_basis_confirmed', 'basis_type', 'basis_reference', 'legal_basis_comment',
 ];
@@ -68,9 +70,24 @@ export function updateUser(uuid, data) {
   });
 }
 
-/** DELETE /api/admin/users/:uuid — soft delete, revokes all sessions. */
-export function deleteUser(uuid) {
-  return apiFetch(`${BASE}/${uuid}`, { method: 'DELETE' });
+/**
+ * POST /api/admin/users/:uuid/deactivate — отключение аккаунта (ADR-028).
+ * reason обязательна (trim, ≤ 500). Аккаунт, email и данные сохраняются,
+ * все сессии отзываются. Возвращает AdminUserRead.
+ */
+export function deactivateUser(uuid, reason) {
+  return apiFetch(`${BASE}/${uuid}/deactivate`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+/**
+ * POST /api/admin/users/:uuid/restore — восстановление отключённого или ранее
+ * удалённого аккаунта (ADR-028). Старые сессии не оживают.
+ */
+export function restoreUser(uuid) {
+  return apiFetch(`${BASE}/${uuid}/restore`, { method: 'POST' });
 }
 
 /**

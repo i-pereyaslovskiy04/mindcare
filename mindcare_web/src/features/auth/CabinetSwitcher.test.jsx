@@ -26,6 +26,26 @@ test('single-role renders a static label, no switcher button', () => {
   expect(screen.queryByRole('button')).toBeNull();
 });
 
+test('чистый пользователь: статичный лейбл «Пользователь», без «Студент» и без кнопки', () => {
+  mockAuth(['student']);
+  render(<CabinetSwitcher currentRole="student" />);
+  expect(screen.getByText('Пользователь')).toBeInTheDocument();
+  expect(screen.queryByText('Студент')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+});
+
+test('staff: пункт кабинета student подписан «Пользователь»; код роли и маршрут /student прежние', () => {
+  mockAuth(['psychologist', 'student']);
+  render(<CabinetSwitcher currentRole="psychologist" />);
+
+  fireEvent.click(screen.getByRole('button', { name: /Психолог/ }));
+  expect(screen.queryByRole('button', { name: 'Студент' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Пользователь' }));
+
+  expect(setActiveRole).toHaveBeenCalledWith('student');
+  expect(mockNavigate).toHaveBeenCalledWith('/student');
+});
+
 test('currentRole=null renders "Выбрать кабинет"', () => {
   mockAuth(['admin', 'supervisor']);
   render(<CabinetSwitcher currentRole={null} />);

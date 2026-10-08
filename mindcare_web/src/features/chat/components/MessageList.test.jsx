@@ -1,6 +1,14 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import MessageList from './MessageList';
 
+// react-router-dom (v7) не резолвится jest-резолвером проекта — virtual mock
+// (LinkifiedText рендерит router <Link> для внутренних ссылок system-сообщений).
+jest.mock('react-router-dom', () => ({
+  Link: ({ to, children, ...rest }) => require('react').createElement(
+    'a', { href: to, 'data-router-link': 'true', ...rest }, children,
+  ),
+}), { virtual: true });
+
 // jsdom не реализует scrollIntoView (используется в MessageList useEffect).
 beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = jest.fn();

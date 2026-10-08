@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getDiarySummary, getTodayDiaryEntry, getDiaryEmotions } from '../../api/diary.api';
+import { ROLE_LABELS } from '../../shared/lib/roles';
 import styles from './StudentHome.module.css';
 
 const MOOD_WORDS = [
@@ -18,7 +19,7 @@ function formatTodayLabel() {
 }
 
 function getFirstName(fullName) {
-  if (!fullName) return 'Студент';
+  if (!fullName) return ROLE_LABELS.student;
   return fullName.trim().split(' ')[0];
 }
 

@@ -1,4 +1,4 @@
-import { updateUser } from './users.api';
+import { deactivateUser, restoreUser, updateUser } from './users.api';
 import { apiFetch } from './client';
 
 jest.mock('./client');
@@ -27,7 +27,6 @@ describe('updateUser — PATCH allowlist', () => {
     expect(JSON.parse(opts.body)).toEqual({
       full_name: 'A',
       phone: 'p',
-      is_active: true,
       role: 'psychologist',
       legal_basis_confirmed: true,
       basis_type: 'employment',
@@ -49,7 +48,29 @@ describe('updateUser — PATCH allowlist', () => {
     expect(JSON.parse(opts.body)).toEqual({
       full_name: 'C',
       phone: 'x',
-      is_active: false,
     });
+  });
+
+  test('ADR-028: is_active is never sent through PATCH', () => {
+    updateUser('u4', { full_name: 'D', is_active: false });
+    const [, opts] = apiFetch.mock.calls[0];
+    expect(JSON.parse(opts.body)).not.toHaveProperty('is_active');
+  });
+});
+
+describe('lifecycle (ADR-028)', () => {
+  test('deactivateUser posts the reason to /deactivate', () => {
+    deactivateUser('u5', 'Причина');
+    const [url, opts] = apiFetch.mock.calls[0];
+    expect(url).toBe('/api/admin/users/u5/deactivate');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual({ reason: 'Причина' });
+  });
+
+  test('restoreUser posts to /restore without a body', () => {
+    restoreUser('u6');
+    const [url, opts] = apiFetch.mock.calls[0];
+    expect(url).toBe('/api/admin/users/u6/restore');
+    expect(opts).toEqual({ method: 'POST' });
   });
 });

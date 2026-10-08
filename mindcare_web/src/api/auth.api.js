@@ -86,6 +86,18 @@ export function passwordResetConfirm({ email, code, new_password }) {
   });
 }
 
+/**
+ * POST /api/auth/account/deactivate — самоотключение (ADR-028). Только для
+ * студенческого аккаунта; target — текущий пользователь (id не передаётся).
+ * Все сессии отзываются — после успеха клиент очищает авторизацию.
+ */
+export function deactivateOwnAccount() {
+  return apiFetch(`${BASE}/account/deactivate`, {
+    method: 'POST',
+    body: JSON.stringify({ confirm: true }),
+  });
+}
+
 /** POST /api/auth/change-password — changes password for the authenticated user.
  *  Revokes all sessions including current; client must logout after success. */
 export function changePassword({ current_password, new_password, new_password_confirm }) {

@@ -1,4 +1,7 @@
-import { normalizeRoles, primaryRole, selectableRoles, ROLE_PRIORITY } from './roles';
+import {
+  normalizeRoles, primaryRole, selectableRoles, roleLabel,
+  ROLE_PRIORITY, ROLE_LABELS, ROLE_BADGE_TONES,
+} from './roles';
 
 describe('normalizeRoles', () => {
   test('explicit roles[] is source of truth (even empty)', () => {
@@ -53,4 +56,32 @@ describe('selectableRoles', () => {
 
 test('ROLE_PRIORITY order', () => {
   expect(ROLE_PRIORITY).toEqual(['admin', 'supervisor', 'psychologist', 'student']);
+});
+
+describe('подписи ролей (единая карта)', () => {
+  test('student подписан «Пользователь», подписи остальных ролей прежние', () => {
+    expect(ROLE_LABELS).toEqual({
+      student: 'Пользователь',
+      psychologist: 'Психолог',
+      supervisor: 'Супервизор',
+      admin: 'Администратор',
+    });
+  });
+
+  test('код роли, приоритет и тон badge не зависят от подписи', () => {
+    ROLE_PRIORITY.forEach((r) => {
+      expect(typeof ROLE_LABELS[r]).toBe('string');
+      expect(ROLE_BADGE_TONES[r]).toBe(`role-${r}`);
+    });
+    expect(normalizeRoles({ roles: ['student'] })).toEqual(['student']);
+    expect(primaryRole(['student'])).toBe('student');
+  });
+
+  test('roleLabel: известная роль → подпись, неизвестная → как есть, пусто → пустая строка', () => {
+    expect(roleLabel('student')).toBe('Пользователь');
+    expect(roleLabel('admin')).toBe('Администратор');
+    expect(roleLabel('wizard')).toBe('wizard');
+    expect(roleLabel(undefined)).toBe('');
+    expect(roleLabel(null)).toBe('');
+  });
 });

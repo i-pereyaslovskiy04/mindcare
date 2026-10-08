@@ -1,5 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import LinkifiedText from './LinkifiedText';
+import MessageBubble from '../components/MessageBubble';
+
+// react-router-dom (v7) не резолвится jest-резолвером проекта — virtual mock:
+// router <Link> рендерится как <a data-router-link> (переход внутри SPA).
+jest.mock('react-router-dom', () => ({
+  Link: ({ to, children, ...rest }) => require('react').createElement(
+    'a', { href: to, 'data-router-link': 'true', ...rest }, children,
+  ),
+}), { virtual: true });
+
+const SETTINGS_PATH = '/student/settings#student-verification';
+const INVITE = 'Укажите номер студенческого билета в настройках аккаунта.\n\n'
+  + `Открыть раздел: ${SETTINGS_PATH}`;
 
 // eslint-disable-next-line no-script-url -- намеренно опасная схема для security-теста
 const JS_URL = 'javascript:alert(1)';
@@ -59,6 +72,56 @@ describe('LinkifiedText — security & linkify', () => {
 
   test('empty text renders no link', () => {
     render(<LinkifiedText text="" />);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+});
+
+describe('LinkifiedText — внутренние ссылки system-сообщений (ADR-029)', () => {
+  test('allowlisted path becomes a router link with a readable label', () => {
+    render(<LinkifiedText text={INVITE} allowInternalLinks />);
+    const link = screen.getByRole('link', { name: 'Подтверждение студента ДонГУ' });
+    expect(link).toHaveAttribute('href', SETTINGS_PATH);
+    expect(link).toHaveAttribute('data-router-link', 'true');
+    expect(link).not.toHaveAttribute('target');
+    expect(screen.queryByText(SETTINGS_PATH)).toBeNull();
+  });
+
+  test('without the flag the path stays plain text', () => {
+    render(<LinkifiedText text={INVITE} />);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  test.each([
+    `${SETTINGS_PATH}-evil`,
+    `x${SETTINGS_PATH}`,
+    `//evil.example${SETTINGS_PATH}`,
+    '/student/settings',
+    '/admin/users',
+    '/student/settings#other',
+  ])('non-allowlisted or glued path %s is not linked', (value) => {
+    render(<LinkifiedText text={`Перейти: ${value}`} allowInternalLinks />);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  test('trailing punctuation and brackets are kept outside the link', () => {
+    render(<LinkifiedText text={`(см. ${SETTINGS_PATH}).`} allowInternalLinks />);
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', SETTINGS_PATH);
+  });
+
+  test('external URL that embeds the path stays an external link', () => {
+    render(<LinkifiedText text={`https://evil.example${SETTINGS_PATH}`} allowInternalLinks />);
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).not.toHaveAttribute('data-router-link');
+  });
+
+  test('MessageBubble links the path only for system messages', () => {
+    const { unmount } = render(<MessageBubble variant="system" text={INVITE} time="10:00" />);
+    expect(screen.getByRole('link', { name: 'Подтверждение студента ДонГУ' }))
+      .toHaveAttribute('href', SETTINGS_PATH);
+    unmount();
+    render(<MessageBubble variant="incoming" text={INVITE} time="10:00" />);
     expect(screen.queryByRole('link')).toBeNull();
   });
 });

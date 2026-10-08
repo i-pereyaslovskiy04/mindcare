@@ -6,7 +6,7 @@ import UsersFilters from '../components/UsersFilters';
 import UsersTable from '../components/UsersTable';
 import UserCreateModal from '../components/UserCreateModal';
 import UserEditModal from '../components/UserEditModal';
-import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
+import UserLifecycleDialog from '../components/UserLifecycleDialog';
 import Button from '../../../../components/UI/Button/Button';
 import styles from './UsersPage.module.css';
 
@@ -53,7 +53,8 @@ export default function UsersPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);   // user object for edit
-  const [deleteTarget, setDeleteTarget] = useState(null); // user object for delete
+  // ADR-028: { user, mode: 'deactivate' | 'restore' } — отключение/восстановление.
+  const [lifecycleTarget, setLifecycleTarget] = useState(null);
   const [impersonating, setImpersonating] = useState(null); // uuid in progress
   const [impersonateError, setImpersonateError] = useState('');
 
@@ -104,7 +105,8 @@ export default function UsersPage() {
         error={error}
         currentUserId={user ? Number(user.id) : null}
         onEdit={(u) => setEditTarget(u)}
-        onDelete={(u) => setDeleteTarget(u)}
+        onDeactivate={(u) => setLifecycleTarget({ user: u, mode: 'deactivate' })}
+        onRestore={(u) => setLifecycleTarget({ user: u, mode: 'restore' })}
         onImpersonate={handleImpersonate}
       />
 
@@ -130,11 +132,12 @@ export default function UsersPage() {
         onUpdated={() => { setEditTarget(null); refetch(); }}
       />
 
-      <DeleteConfirmDialog
-        open={!!deleteTarget}
-        userInfo={deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onDeleted={() => { setDeleteTarget(null); refetch(); }}
+      <UserLifecycleDialog
+        open={!!lifecycleTarget}
+        mode={lifecycleTarget?.mode}
+        userInfo={lifecycleTarget?.user}
+        onClose={() => setLifecycleTarget(null)}
+        onDone={() => { setLifecycleTarget(null); refetch(); }}
       />
     </div>
   );

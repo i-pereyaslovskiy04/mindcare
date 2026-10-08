@@ -49,8 +49,9 @@ test('edit without role change sends only profile fields, no roles/legal basis',
   expect(payload).toEqual({
     full_name: 'Иван Петров',
     phone: '+7 900 000-00-00',
-    is_active: true,
   });
+  // ADR-028: is_active не отправляется — lifecycle только отдельными действиями.
+  expect(payload).not.toHaveProperty('is_active');
   expect(payload).not.toHaveProperty('roles');
   expect(payload).not.toHaveProperty('legal_basis_confirmed');
 });
@@ -193,7 +194,6 @@ test('student-only: scalar edit succeeds without touching roles', async () => {
   expect(payload).toEqual({
     full_name: 'Студент Иванов (обновлено)',
     phone: '',
-    is_active: true,
   });
   expect(payload).not.toHaveProperty('roles');
 });
@@ -356,4 +356,25 @@ test('create with multiple staff roles sends both', async () => {
   expect(payload.roles).toEqual(
     expect.arrayContaining(['psychologist', 'supervisor']),
   );
+});
+
+
+test('ADR-028: disabled user stays editable and payload never carries is_active', async () => {
+  api.getUser.mockResolvedValueOnce({
+    full_name: 'Отключённый Психолог', phone: '', roles: ['psychologist'],
+    role: 'psychologist', is_active: false,
+  });
+  const { result } = renderHook(() =>
+    useUserForm({ mode: 'edit', uuid: 'u9', onSuccess: jest.fn() }),
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.values).not.toHaveProperty('is_active');
+
+  set(result, 'full_name', 'Новое Имя');
+  submit(result);
+
+  await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
+  const [, payload] = api.updateUser.mock.calls[0];
+  expect(payload.full_name).toBe('Новое Имя');
+  expect(payload).not.toHaveProperty('is_active');
 });

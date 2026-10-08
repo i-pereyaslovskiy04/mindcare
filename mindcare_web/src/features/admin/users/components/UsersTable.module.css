@@ -117,3 +117,17 @@
   text-decoration: line-through;
   color: var(--text-light);
 }
+
+/* ── Статус lifecycle (ADR-028) ── */
+.status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.statusNote {
+  font-size: 11.5px;
+  color: var(--text-light);
+  line-height: 1.3;
+}

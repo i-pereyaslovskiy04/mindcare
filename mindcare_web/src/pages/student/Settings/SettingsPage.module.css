@@ -332,3 +332,51 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Отключение аккаунта (ADR-028) ── */
+.cardDanger {
+  border-color: rgba(var(--error-rgb), 0.25);
+}
+
+.dangerText {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-main);
+}
+
+.confirmBody {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirmList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-main);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .confirmBody {
+    padding: 20px 18px 24px;
+  }
+
+  .confirmActions {
+    flex-direction: column-reverse;
+  }
+}
+
+/* Бейдж «Студент ДонГУ подтверждён» (ADR-029) — статус, не роль. */
+.verifiedBadge {
+  margin-top: 6px;
+}

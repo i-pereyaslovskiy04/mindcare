@@ -18,6 +18,12 @@ jest.mock('../../../api/config.api', () => ({
   ...jest.requireActual('../../../api/config.api'),
   getPublicConfig: jest.fn(),
 }));
+// RegisterForm читает публичный список доменов; здесь он не важен — пустой.
+// Обычная функция, а не jest.fn(): resetMocks (CRA) обнулил бы её реализацию.
+jest.mock('../../../api/domains.api', () => ({
+  ...jest.requireActual('../../../api/domains.api'),
+  getPublicEmailDomains: () => Promise.resolve({ domains: [] }),
+}));
 jest.mock('../forgot-password/ForgotPasswordModal', () => () => null);
 
 beforeEach(() => {

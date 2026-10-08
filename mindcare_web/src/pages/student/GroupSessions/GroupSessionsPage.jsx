@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Icon from '../../../components/Icon/Icon';
 import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
+import { ROLE_LABELS } from '../../../shared/lib/roles';
 import {
   getGroupSessions,
   registerGroupSession,
@@ -82,7 +83,7 @@ export default function StudentGroupSessionsPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>Студент</div>
+          <div className={styles.labelTag}>{ROLE_LABELS.student}</div>
           <h1 className={styles.pageTitle}>Групповые <em>занятия</em></h1>
           <p className={styles.pageSub}>Запись на открытые групповые сессии.</p>
         </div>

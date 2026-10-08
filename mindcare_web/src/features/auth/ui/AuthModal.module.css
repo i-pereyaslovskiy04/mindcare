@@ -243,6 +243,13 @@
   display: block;
 }
 
+/* Постоянная подсказка под полем (не ошибка): разрешённые домены email. */
+.authNote {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 .authForgot {
   display: flex;
   justify-content: flex-end;

@@ -106,12 +106,14 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
               />
             </div>
 
-            <div className={styles.checkboxField}>
-              <Checkbox
-                checked={values.is_active}
-                onChange={(val) => handleChange({ target: { name: 'is_active', type: 'checkbox', checked: val } })}
-                label="Активен"
-              />
+            {/* ADR-028: статус здесь только отображается. Отключение (с
+                причиной) и восстановление — отдельные действия в списке;
+                собственный аккаунт отключить нельзя. */}
+            <div className={styles.roField}>
+              <span className={styles.roLabel}>Статус</span>
+              <span className={styles.roValue}>
+                {userInfo?.is_active === false ? 'Отключён' : 'Активен'}
+              </span>
             </div>
 
             {showLegalBasis && (

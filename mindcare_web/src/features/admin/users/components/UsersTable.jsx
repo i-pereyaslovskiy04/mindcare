@@ -22,18 +22,44 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('ru-RU');
 }
 
+/** Отключён = is_active=false ИЛИ исторически soft-deleted (ADR-028). */
+export function isDisabled(item) {
+  return Boolean(item.deleted_at) || item.is_active === false;
+}
+
+function StatusBadge({ item }) {
+  if (item.deleted_at) {
+    return <Badge tone="neutral">Отключён (удалён ранее)</Badge>;
+  }
+  if (item.is_active === false) {
+    return (
+      <span className={styles.status}>
+        <Badge tone="error">Отключён</Badge>
+        {item.deactivation_source === 'self' && (
+          <span className={styles.statusNote}>по запросу пользователя</span>
+        )}
+      </span>
+    );
+  }
+  return <Badge tone="success">Активен</Badge>;
+}
+
 export default function UsersTable({
-  items, loading, error, onEdit, onDelete, onImpersonate, currentUserId,
+  items, loading, error, onEdit, onDeactivate, onRestore, onImpersonate,
+  currentUserId,
 }) {
   const cols = 7; // ФИО, Email, Роль, Статус, Регистрация, Вход, Действия
 
   // «Зайти под именем» доступно только для активного не-удалённого не-админа
   // и не самого себя (backend дублирует guard — defense-in-depth, ADR-025).
   const canImpersonate = (item) =>
-    !item.deleted_at &&
-    item.is_active &&
+    !isDisabled(item) &&
     !(item.roles || []).includes('admin') &&
     item.id !== currentUserId;
+
+  // Собственный аккаунт администратора отключить нельзя (backend отвечает
+  // 422 self_admin_protected) — действие не показывается вовсе.
+  const canDeactivate = (item) => !isDisabled(item) && item.id !== currentUserId;
 
   return (
     <div className={styles.wrapper}>
@@ -87,18 +113,14 @@ export default function UsersTable({
                 </div>
               </td>
               <td>
-                {item.deleted_at ? (
-                  <Badge tone="neutral">Удалён</Badge>
-                ) : (
-                  <Badge tone={item.is_active ? 'success' : 'error'}>
-                    {item.is_active ? 'Активен' : 'Заблокирован'}
-                  </Badge>
-                )}
+                <StatusBadge item={item} />
               </td>
               <td className={styles.date}>{formatDate(item.created_at)}</td>
               <td className={styles.date}>{formatDate(item.last_login)}</td>
               <td className={styles.actionsCell}>
                 <div className={styles.actions}>
+                  {/* Редактирование доступно и отключённому (не удалённому)
+                      аккаунту; lifecycle — отдельные действия. */}
                   {!item.deleted_at && (
                     <>
                       {canImpersonate(item) && (
@@ -121,17 +143,31 @@ export default function UsersTable({
                       >
                         <Icon name="edit" size={15} />
                       </Button>
-                      <Button
-                        variant="icon"
-                        size="sm"
-                        tone="danger"
-                        onClick={() => onDelete?.(item)}
-                        aria-label={`Удалить ${item.full_name}`}
-                        title="Удалить"
-                      >
-                        <Icon name="trash" size={15} />
-                      </Button>
                     </>
+                  )}
+                  {canDeactivate(item) && (
+                    <Button
+                      variant="icon"
+                      size="sm"
+                      tone="danger"
+                      onClick={() => onDeactivate?.(item)}
+                      aria-label={`Отключить аккаунт ${item.full_name}`}
+                      title="Отключить аккаунт"
+                    >
+                      <Icon name="power" size={15} />
+                    </Button>
+                  )}
+                  {isDisabled(item) && (
+                    <Button
+                      variant="icon"
+                      size="sm"
+                      tone="success"
+                      onClick={() => onRestore?.(item)}
+                      aria-label={`Восстановить ${item.full_name}`}
+                      title="Восстановить"
+                    >
+                      <Icon name="undo" size={15} />
+                    </Button>
                   )}
                 </div>
               </td>

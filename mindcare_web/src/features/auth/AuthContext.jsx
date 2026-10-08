@@ -259,6 +259,22 @@ export function AuthProvider({ children }) {
     _clearSession();
   }, [_clearSession]);
 
+  /**
+   * Самоотключение аккаунта (ADR-028). Backend отзывает ВСЕ сессии, поэтому
+   * logout() не вызывается: запрос с уже отозванным токеном дал бы 401 и
+   * сценарий «сессия истекла». Навигацию выполняет вызывающий (как useLogout:
+   * сначала navigate, затем очистка), чтобы RoleRoute не открыл модалку входа
+   * с чужим сообщением.
+   */
+  const deactivateOwnAccount = useCallback(async () => {
+    await authApi.deactivateOwnAccount();
+  }, []);
+
+  /** Очистить клиентскую авторизацию без запроса к API (сессия уже отозвана). */
+  const clearSession = useCallback(() => {
+    _clearSession();
+  }, [_clearSession]);
+
   /** Re-fetch /me и обновить user (например, после смены профиля). */
   const refreshUser = useCallback(async () => {
     const userData = await authApi.me();
@@ -350,6 +366,8 @@ export function AuthProvider({ children }) {
     completeOAuthLogin,
     completeOAuthRegistration,
     logout,
+    deactivateOwnAccount,
+    clearSession,
     refreshUser,
     getToken,
     // Impersonation: серверная правда из /me (user.impersonating), возврат —

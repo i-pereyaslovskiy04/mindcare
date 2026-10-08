@@ -19,7 +19,8 @@ const EDIT_INITIAL = {
   full_name: '',
   phone: '',
   roles: [], // целевой набор STAFF-ролей (student сохраняется backend'ом)
-  is_active: true,
+  // is_active не редактируется формой (ADR-028): отключение/восстановление —
+  // отдельные действия с обязательной причиной.
   // Документированное основание при добавлении staff-роли (НЕ «согласие»).
   legal_basis_confirmed: false,
   basis_type: 'service_duty',
@@ -134,7 +135,7 @@ function buildCreatePayload(values) {
 
 /**
  * Минимальный PATCH-payload для edit:
- *   - всегда: full_name, phone, is_active;
+ *   - всегда: full_name, phone (is_active не отправляется — ADR-028);
  *   - roles (target staff set) — только если набор реально изменился;
  *   - legal basis fields — только при добавлении новой staff-роли.
  * `student` не отправляется — backend сохраняет его сам.
@@ -143,7 +144,6 @@ function buildEditPayload(values, initialStaffRoles) {
   const payload = {
     full_name: values.full_name,
     phone:     values.phone,
-    is_active: values.is_active,
   };
   if (!sameSet(values.roles, initialStaffRoles)) {
     payload.roles = values.roles;
@@ -195,7 +195,6 @@ export function useUserForm({ mode, uuid, onSuccess, currentUserId }) {
           full_name: user.full_name,
           phone:     user.phone || '',
           roles:     staff,
-          is_active: user.is_active,
         });
       })
       .catch((err) => {

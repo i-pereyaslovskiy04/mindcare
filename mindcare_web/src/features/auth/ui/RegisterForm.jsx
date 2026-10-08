@@ -6,6 +6,7 @@ import { registerInit, registerConfirm } from '../../../api/auth.api';
 import SocialButtons from './SocialButtons';
 import RegistrationOtpStep, { EMPTY_CODE, useResendTimer } from './RegistrationOtpStep';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
+import useAllowedEmailDomains from '../hooks/useAllowedEmailDomains';
 
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
@@ -49,6 +50,18 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
   // Shared
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
+
+  // Разрешённые домены — ТОЛЬКО из ответа backend (GET /api/public/email-domains),
+  // подсказкой под полем Email. Допуск решает backend (init и confirm); список его
+  // не заменяет и форму не блокирует. Тексты отказов приходят с backend как есть.
+  const { data: allowedDomains, refetch: refetchDomains } = useAllowedEmailDomains();
+  const domainsHint = allowedDomains.length
+    ? `Разрешённые домены: ${allowedDomains.map((d) => `@${d}`).join(', ')}`
+    : '';
+  const emailDescribedBy = [
+    errors.email ? 'r-email-hint' : null,
+    domainsHint ? 'r-email-domains' : null,
+  ].filter(Boolean).join(' ') || undefined;
 
   // Родитель узнаёт о шаге в том же обновлении, что и сама форма — без кадра,
   // где одновременно видны вкладки и шаг кода.
@@ -101,6 +114,9 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
       goToStep('code');
     } catch (err) {
       setApiError(err.message || 'Ошибка. Попробуйте снова.');
+      // Отказ 422 мог означать, что список доменов изменился, — перечитываем,
+      // чтобы подсказка не расходилась с текстом ошибки.
+      if (err.status === 422) refetchDomains();
     } finally {
       setIsLoading(false);
     }
@@ -120,10 +136,12 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
     } catch (err) {
       setOtpError(err.message || 'Неверный код. Попробуйте снова.');
       setOtp(EMPTY_CODE);
+      // Домен могли отключить между init и confirm — обновляем подсказку.
+      if (err.status === 422) refetchDomains();
     } finally {
       setIsLoading(false);
     }
-  }, [email, password, login, navigate, onSuccess]);
+  }, [email, password, login, navigate, onSuccess, refetchDomains]);
 
   // --- Resend ---
   const handleResend = async () => {
@@ -136,6 +154,7 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
       restartTimer();
     } catch (err) {
       setOtpError(err.message || 'Не удалось отправить код. Попробуйте позже.');
+      if (err.status === 422) refetchDomains();
     } finally {
       setIsLoading(false);
     }
@@ -189,18 +208,23 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
         <input
           type="email"
           id="r-email"
-          placeholder="example@donnu.ru"
+          placeholder="Введите email"
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onBlur={() => setErrors((p) => ({ ...p, email: !validateEmail() }))}
           className={errors.email ? styles.err : email && isEmail(email) ? styles.ok : ''}
           aria-invalid={errors.email ? 'true' : undefined}
-          aria-describedby={errors.email ? 'r-email-hint' : undefined}
+          aria-describedby={emailDescribedBy}
         />
         <span className={styles.authHint} id="r-email-hint" role="alert">
           Введите корректный email
         </span>
+        {domainsHint && (
+          <span className={styles.authNote} id="r-email-domains">
+            {domainsHint}
+          </span>
+        )}
       </div>
 
       <div className={`${styles.authField} ${errors.password ? styles.hasErr : ''}`}>

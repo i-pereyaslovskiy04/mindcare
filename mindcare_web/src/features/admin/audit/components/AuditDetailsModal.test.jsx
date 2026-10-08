@@ -132,11 +132,21 @@ describe('только разрешённые поля', () => {
   });
 
   test('разрешённые ключи details переведены подписями', () => {
-    openModal();
+    // Роли подобраны так, чтобы строки были уникальными: слово «Пользователь»
+    // встречается и как подпись роли student, и как тип участника/объекта.
+    openModal({
+      ...AUDIT_ITEM,
+      details: {
+        roles_before: ['student', 'supervisor'],
+        roles_after: ['student', 'supervisor', 'psychologist'],
+        added: ['psychologist'],
+      },
+    });
     expect(screen.getByText('Роли до')).toBeInTheDocument();
-    expect(screen.getByText('Студент')).toBeInTheDocument();
+    expect(screen.getByText('Пользователь, Супервизор')).toBeInTheDocument();
     expect(screen.getByText('Роли после')).toBeInTheDocument();
-    expect(screen.getByText('Студент, Психолог')).toBeInTheDocument();
+    expect(screen.getByText('Пользователь, Супервизор, Психолог')).toBeInTheDocument();
+    expect(screen.queryByText(/Студент/)).toBeNull();
     expect(screen.getByText('Добавлено')).toBeInTheDocument();
   });
 

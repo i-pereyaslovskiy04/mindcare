@@ -65,7 +65,7 @@ export default function LoginForm({ onSuccess, onForgotPassword }) {
         <input
           type="email"
           id="l-email"
-          placeholder="example@donnu.ru"
+          placeholder="Введите email"
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}

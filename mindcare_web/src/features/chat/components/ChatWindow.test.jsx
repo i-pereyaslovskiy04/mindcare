@@ -2,6 +2,14 @@ import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, createEvent } from '@testing-library/react';
 import ChatWindow from './ChatWindow';
 
+// react-router-dom (v7) не резолвится jest-резолвером проекта — virtual mock
+// (LinkifiedText рендерит router <Link> для внутренних ссылок system-сообщений).
+jest.mock('react-router-dom', () => ({
+  Link: ({ to, children, ...rest }) => require('react').createElement(
+    'a', { href: to, 'data-router-link': 'true', ...rest }, children,
+  ),
+}), { virtual: true });
+
 // jsdom не реализует scrollIntoView (используется в MessageList).
 beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = jest.fn();

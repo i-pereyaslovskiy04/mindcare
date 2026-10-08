@@ -1,0 +1,126 @@
+/* StudentVerificationsPage — кабинет супервизора, подтверждение студентов ДонГУ */
+
+.page {
+  padding: 32px 28px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.labelTag {
+  display: inline-block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--coffee);
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  border-radius: 20px;
+  padding: 2px 10px;
+  margin-bottom: 8px;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--espresso);
+  margin: 0;
+  line-height: 1.15;
+}
+
+.sub {
+  margin: 6px 0 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  max-width: 640px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.searchWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  color: var(--text-muted);
+  min-width: 240px;
+}
+
+.searchInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.88rem;
+  color: var(--text-main);
+  width: 100%;
+  font-family: 'Nunito', sans-serif;
+}
+
+.searchInput::placeholder {
+  color: var(--text-muted);
+}
+
+.notice {
+  border: 1px solid var(--nav-border);
+  background: var(--cream);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.stateBox {
+  display: flex;
+  justify-content: center;
+  padding: 48px 20px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  background: var(--warm-white);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.pageInfo {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .page { padding: 20px 14px; }
+  .searchWrap { min-width: unset; width: 100%; }
+}

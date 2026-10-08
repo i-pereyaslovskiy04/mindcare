@@ -23,6 +23,13 @@ jest.mock('../../api/config.api', () => ({
   ...jest.requireActual('../../api/config.api'),
   getPublicConfig: jest.fn(),
 }));
+// Открытая AuthModal монтирует RegisterForm, а он читает публичный список доменов;
+// здесь он не важен — пустой. Обычная функция, а не jest.fn(): resetMocks (CRA)
+// обнулил бы её реализацию.
+jest.mock('../../api/domains.api', () => ({
+  ...jest.requireActual('../../api/domains.api'),
+  getPublicEmailDomains: () => Promise.resolve({ domains: [] }),
+}));
 // Тяжёлые/сетевые части главной не участвуют в сценарии входа.
 jest.mock('../../components/Navbar/Navbar', () => ({ onOpenAuth }) => (
   <button type="button" onClick={onOpenAuth}>NAVBAR-ВОЙТИ</button>
