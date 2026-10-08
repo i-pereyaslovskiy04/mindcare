@@ -2,7 +2,36 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff: `docs/HANDOFFS/2026-09-02-test-moderation-followups.md` —
+Актуальный handoff: `docs/HANDOFFS/2026-10-07-student-verification-dongu.md` —
+подтверждение статуса студента ДонГУ (**ADR-029**, миграция `f5a3c8d1e7b2`):
+отдельный статус, не роль (роль `student` и подпись «Пользователь» прежние);
+заявку (факультет из каталога 12 + номер билета, `enc:v1:`) подаёт только
+чистый student вне impersonation, проверяет только прямой supervisor (номер —
+в карточке под fail-closed аудитом, impersonation и self-review запрещены);
+одобрение финально; сериализация на `users` (заявитель и reviewer в порядке
+id). Приглашение и результат — system-сообщения через outbox
+`system_message_intents` + retry-скрипт `scripts/deliver_system_message_intents.py`
+(таймер `mindcare-deliver-system-messages.timer`); ссылка
+`/student/settings#student-verification` кликабельна только в system-сообщениях.
+REGISTRY 115 → 121.
+
+Предыдущий handoff: `docs/HANDOFFS/2026-10-07-registration-domain-hint-user-role-label.md` —
+понятный отказ по домену при регистрации по email (init и confirm отвечают одним
+текстом со списком активных доменов из БД, публичный `GET /api/public/email-domains`,
+подсказка в форме; регистрация через Яндекс по ADR-027 п. 5 от allowlist освобождена
+и не менялась) и подпись роли `student` в UI — «Пользователь» (единая карта
+`shared/lib/roles.js`; код роли, маршруты `/student`, membership и permissions
+прежние). Схемы БД и миграций нет, REGISTRY 115 без изменений.
+
+Ранее: `docs/HANDOFFS/2026-10-06-account-lifecycle-deactivation.md` —
+единый обратимый lifecycle аккаунтов (**ADR-028**, миграция `d7e2a9c4f1b6`):
+«Отключить аккаунт» с обязательной причиной вместо «Удалить»/блокировки;
+отключение сохраняет аккаунт, email и данные; восстанавливает только
+администратор (в т.ч. ранее soft-deleted); себя отключить нельзя; чистый
+student отключает себя в настройках; регистрация отключение не обходит;
+выдача сессий и lifecycle сериализованы на строке `users`. REGISTRY 111 → 115.
+
+Ранее: `docs/HANDOFFS/2026-09-02-test-moderation-followups.md` —
 доработки модерации тестов поверх Этапов E/F1/F2: (1) модерация тестов открыта
 supervisor во фронтенде (`/supervisor/tests`, был только backend-доступ, UI
 отсутствовал — реальный баг, не недоделка; `AdminTestsPage`/`TestFormPage`

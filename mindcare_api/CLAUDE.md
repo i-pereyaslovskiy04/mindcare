@@ -59,6 +59,13 @@ python scripts/extend_schedules.py --dry-run
 # регистрации; теперь read-пути НЕ мутируют данные, поэтому без планировщика
 # status групповых занятий перестаёт актуализироваться.
 python scripts/complete_group_sessions.py
+
+# Повторная доставка намерений system-сообщений (outbox, ADR-029):
+# приглашение подтвердить статус студента ДонГУ и результат решения по заявке.
+# Таймер mindcare-deliver-system-messages.timer (каждые 5 мин). Идемпотентно
+# (event_key); exit 1 при ошибке чтения outbox / публикации / отметки.
+python scripts/deliver_system_message_intents.py
+python scripts/deliver_system_message_intents.py --dry-run   # только счёт
 ```
 
 > **Эксплуатационное требование Stage 5C-3:** `extend_schedules.py` и
@@ -123,7 +130,7 @@ cd mindcare_api/ && alembic history
 
 > **Важно:** схема БД управляется **только** через Alembic.
 > `Base.metadata.create_all()` **удалён** — не использовать.
-> Все 58 таблиц создаются через `alembic upgrade head`.
+> Все 60 таблиц создаются через `alembic upgrade head`.
 > Audit-таблицы (`auth_log`, `audit_log`, `data_change_log`) включены в Alembic
 > начиная с migration `3a7c5e2b8f1d`.
 >
@@ -141,7 +148,7 @@ cd mindcare_api/ && alembic history
 normalization, rate_limit), `db/` (session, init_db, seed, models/), `auth/`,
 `services/` (SMTP, email), `scripts/` (create_admin, ensure_audit_partitions,
 backfill_legal_basis, extend_schedules, complete_group_sessions,
-repair_missing_chat_conversations,
+repair_missing_chat_conversations, deliver_system_message_intents,
 cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 
 **Правила бэка:**
@@ -214,17 +221,95 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ Администратор не может снять у самого себя membership-роль admin. Backend
    сравнивает actor_id и target user id; frontend lock — только UX-дублирование.
    Другой администратор может изменить роли пользователя.
-✅ Все HTTP/API creation flows допускают новый аккаунт только для активного точного
-   нормализованного домена из allowed_email_domains: self-registration,
-   admin-created staff и supervisor/admin-created student. Existing login/password
-   reset не блокировать. Authoritative check выполняется в creation transaction;
-   в register confirm — до consume OTP. Локальный bootstrap `scripts/create_admin.py`
-   остаётся отдельным privileged ops-path вне allowlist; использовать только при
-   развёртывании и вручную выбирать разрешённый организацией домен.
+✅ Lifecycle аккаунта (ADR-028): ЕДИНСТВЕННЫЙ способ отключения —
+   POST /api/admin/users/{uuid}/deactivate {reason} (trim, непустая, ≤500; иначе
+   422), восстановления — POST …/restore. Отключение СОХРАНЯЕТ аккаунт, email и
+   все связанные данные (роли, профиль, identity, консультации, психологические
+   данные; статусы консультаций не меняются, deleted_at не ставится).
+   Восстанавливает ТОЛЬКО администратор, в т.ч. исторически soft-deleted
+   (deleted_at → NULL, is_active → true, прежние id/uuid/роли; новые роли не
+   назначаются; allowlist доменов НЕ проверяется)
+✅ Отключение: is_active=false + users.deactivated_at / deactivation_source
+   ('admin'|'self') / deactivation_reason_enc (только Fernet enc:v1, CHECK; три
+   поля — вместе, CHECK ck_users_deactivation_fields_consistent) + отзыв ВСЕХ
+   сессий пользователя и созданных им impersonation-сессий + success-аудит — одна
+   транзакция. Restore очищает три поля и тоже отзывает ВСЕ оставшиеся сессии
+   (пользователь входит заново). Текст причины наружу не отдаётся, decrypt-пути нет
+✅ Guard собственного аккаунта (actor_id == target_id) ДО любых мутаций на всех
+   путях: POST deactivate, PATCH is_active=false, DELETE → 422 self_admin_protected
+✅ Устаревшие пути: DELETE /api/admin/users/{uuid} НЕ удаляет — 404 / 422 (себя) /
+   410 lifecycle_endpoint_required без изменений БД; PATCH с реальной сменой
+   is_active → 422 lifecycle_endpoint_required (то же значение — no-op: отключённый,
+   но не удалённый аккаунт по-прежнему редактируется). Lifecycle-события generic
+   PATCH не пишет
+✅ Самоотключение: POST /api/auth/account/deactivate {confirm:true}; target — только
+   authenticated user (лишние поля → 422). Только при активных ролях ровно {student}
+   (is_pure_student, авторитетно под FOR UPDATE) — require_role("student") мало,
+   student есть у всех staff (ADR-024). В impersonation-сессии → 403. Причина
+   фиксированная «По запросу пользователя», source=self
+✅ Self-registration НЕ восстанавливает аккаунт: register_init и
+   register_confirm_atomic отклоняют email ЛЮБОЙ строки users (активной,
+   отключённой, soft-deleted) одним 409 «Email уже зарегистрирован»
+   (email_already_exists); confirm — после верного OTP и до мутаций, OTP не
+   потребляется. UNIQUE email не ослаблять
+✅ Инвариант блокировки строки users (ADR-028): каждая операция, которая выдаёт
+   сессию, меняет lifecycle или membership СУЩЕСТВУЮЩЕГО пользователя, сначала
+   блокирует его строку; перехода FOR SHARE → UPDATE нет нигде.
+   password login — FOR UPDATE в auth.storage.start_session_atomic (повторная
+   проверка допуска + неизменности password_hash относительно хеша, для которого
+   прошёл bcrypt; изменился → 401 invalid_credentials; last_login — только здесь и
+   в OAuth); impersonation — admin+target одним ORDER BY id FOR SHARE (last_login
+   цели не меняется); OAuth complete — identity → user, оба FOR UPDATE; смена/сброс
+   пароля, deactivate/restore/self, admin PATCH ролей, grant admin
+   (users.storage.grant_admin_role_to_existing_in_tx, scripts/create_admin.py) —
+   FOR UPDATE. Bcrypt не выполнять под блокировкой
+✅ Impersonation-сессия действительна, только пока инициатор существует, не
+   отключён и имеет membership admin (get_current_user: иначе revoke + 401).
+   Атрибуция инициатора гарантирована ТОЛЬКО для отказа самоотключения
+   (user_self_deactivate_failed от админа, не от target); прочие ограничения
+   ADR-025 сохраняются
+✅ is_active NULL = активен везде: фильтры find_users (is_active=true →
+   IS NOT FALSE AND deleted_at IS NULL; false → IS FALSE OR deleted_at IS NOT NULL,
+   удалённые включаются автоматически), DTO (всегда bool), lifecycle, допуск
+✅ Отказ dependency get_current_user (401) auth_log НЕ пишет — проверка валидности
+   сессии на каждом запросе; причина уже зафиксирована вызвавшим её событием
+❌ Не возвращать soft-delete/реактивацию через DELETE или регистрацию; не менять
+   is_active в обход deactivate/restore; не отдавать и не логировать причину
+✅ HTTP/API creation flows по email допускают новый аккаунт только для активного
+   точного нормализованного домена из allowed_email_domains: self-registration по
+   email и паролю, admin-created staff и supervisor/admin-created student.
+   ИСКЛЮЧЕНИЕ — регистрация через провайдера (Яндекс, ADR-027 п. 5): allowlist к ней
+   не применяется. Existing login/password reset не блокировать. Authoritative
+   check выполняется в creation transaction; в register confirm — до consume OTP.
+   Локальный bootstrap `scripts/create_admin.py` остаётся отдельным privileged
+   ops-path вне allowlist; использовать только при развёртывании и вручную
+   выбирать разрешённый организацией домен.
 ✅ Allowlist управляется только admin через GET/POST/PATCH
    /api/admin/email-domains. DELETE нет; отключённую строку реактивировать PATCH,
    не повторным POST. Последний активный домен отключить нельзя. Audit не содержит
    сырой comment.
+✅ Отказ по домену при ОБЫЧНОЙ регистрации — один статус (422) и один текст на init
+   и confirm: «Для регистрации по электронной почте используйте адрес с одним из
+   разрешённых доменов: @a, @b.» Список — активные домены из БД на момент отказа
+   (в коде их нет): его кладут в `EmailDomainNotAllowedError.allowed_domains` и
+   ранняя проверка (`email_domains.service.assert_email_domain_allowed`), и
+   authoritative `storage.assert_email_domain_allowed_in_tx` (читает список только в
+   ветке отказа, обычным SELECT без блокировок). Текст строит ОДНА функция
+   `email_domains.service.registration_domain_message` через
+   `auth.service._domain_not_allowed_error`. Нет активных доменов — «Регистрация по
+   электронной почте сейчас недоступна. Обратитесь в поддержку.» Точное сравнение
+   домена (поддомен не разрешён), authoritative in-tx проверка и сохранность OTP
+   (rollback до consume) не менялись; аудит прежний: confirm →
+   `registration_failed`/`domain_not_allowed`, ранний отказ init не аудируется;
+   введённый email в ответ и логи не попадает. Тексты отказов admin-created staff и
+   supervisor-created student не менялись
+✅ GET /api/public/email-domains (без auth, `Cache-Control: no-store`) →
+   {"domains": [...]}: ТОЛЬКО имена активных доменов по возрастанию — подсказка
+   формы регистрации. id, comment, даты и отключённые строки не отдаются, аудит не
+   пишется. Это подсказка, а не проверка. В `/api/public/config` список НЕ
+   добавлять: тот ответ не ходит в БД, его ключи зафиксированы тестом
+❌ Не утверждать в текстах и документации, что allowlist действует на ЛЮБУЮ
+   регистрацию: регистрация через Яндекс (ADR-027 п. 5) от него освобождена
 ❌ Не слать role changes без legal basis при добавлении staff-роли
 ❌ Не писать «админ подтверждает согласие пользователя» — только «документированное
    основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
@@ -285,7 +370,9 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ OTP consume только ПОСЛЕ успешных core DB-изменений, тем же commit
    (validate без удаления; при сбое core-шага OTP не теряется)
 ✅ Хеш нового пароля считать ДО открытия транзакции (bcrypt медленный)
-✅ Новую сессию выдаёт только тот, кто прошёл service.ensure_user_can_start_session:
+✅ Новую сессию выдаёт только тот, кто прошёл service.ensure_user_can_start_session
+   (для пароля и impersonation — повторно под блокировкой строки users в
+   auth.storage.start_session_atomic, ADR-028):
    нет пользователя → 401 invalid_credentials; `is_active is False` → 403
    account_disabled; нет активных ролей → 403 no_active_roles (оба 403 — одно
    обобщённое сообщение). NULL is_active = активен (колонка без DB-default).
@@ -326,8 +413,9 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    Один ticket → максимум одна сессия. Строка user_sessions создаётся только
    через auth.storage.create_session_in_tx (create_session — обёртка с commit)
 ✅ get_current_user: сессия пользователя с `is_active is False` отзывается и даёт
-   401 (закрывает гонку входа с деактивацией: при autoflush=False деактивация
-   отзывает сессии ДО UPDATE users). Повторная активация такую сессию не оживляет
+   401. Гонку входа с отключением закрывает блокировка строки users (ADR-028),
+   а restore дополнительно отзывает ВСЕ оставшиеся сессии — старая сессия после
+   восстановления не оживает
 ✅ Access log uvicorn: фильтр `app/core/log_redaction.py` маскирует query у
    /api/auth/oauth/*/callback (`?<redacted>`). ⚠ Перед публичным HTTPS-деплоем то же
    обязательно на reverse proxy/TLS-терминаторе (в repo его конфига нет)
@@ -407,8 +495,65 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    `oauth_registration_confirm` (IP 30/10 мин, ticket 10/10 мин). Ключ ticket —
    ПОЛНЫЙ SHA-256 digest (`enforce(ticket_digest=…)` отклоняет иное значение);
    raw ticket в ключи и логи не попадает никогда
-✅ Post-commit действия регистрации (привязка карточек, welcome) — общий
+✅ Post-commit действия регистрации (привязка карточек, welcome, доставка
+   приглашения ДонГУ) — общий
    `auth.service.run_post_registration_actions` для пароля и провайдера, soft-fail
+✅ Подтверждение студента ДонГУ (ADR-029, `app/student_verification/`) — СТАТУС,
+   НЕ роль: роль student, её подпись «Пользователь», маршруты /student,
+   membership/permissions и доступ к тестам/консультациям не меняются.
+   `student_profiles.faculty` подтверждением не является (миграция никого не
+   подтверждает). Каталог 12 факультетов — ТОЛЬКО `faculties.py` (стабильные
+   коды; API принимает только их, CHECK в БД намеренно нет); фронт получает его
+   `GET /api/student-verification/faculties` (любой аутентифицированный)
+✅ Номер билета — строка (ведущие нули сохраняются): trim, обязателен, ≤ 50, без
+   управляющих символов; формат и уникальность НЕ проверяются. Номер и пояснение
+   отказа — только Fernet `enc:v1:` (CHECK). Номер не отдаётся ни в собственном
+   статусе, ни в списке — только в карточке supervisor'а
+✅ Self-service `GET/POST /api/student-verification/me` — только активные роли
+   ровно {student} и не impersonation (require_role("student") мало, ADR-024).
+   Одна pending; pending неизменяема (PATCH нет); после отказа — новая заявка
+   (история — строки); ОДОБРЕНИЕ ФИНАЛЬНО (новая подача → 409 already_verified)
+✅ Проверка — `/api/supervisor/student-verifications` (router-level
+   require_role("supervisor") + запрет impersonation-сессии → 403 до handler).
+   admin без supervisor и psychologist — 403; прямой admin+supervisor — допущен.
+   Список без номера и без аудита; карточка — номер ПОСЛЕ записи
+   `student_verification_content_read` (INDEPENDENT+RAISE): сбой аудита → 503
+   без номера. Решение — по uuid конкретной заявки: переход + reviewer/время +
+   success-событие + outbox-намерение — один commit; отказ требует пояснения;
+   повтор того же решения — no-op без события/уведомления; противоположное →
+   409 verification_already_decided; approve отключённого → 409
+   account_inactive (reject допустим); своя заявка → 403 self_review_forbidden
+✅ Блокировки (ADR-029, в рамках инварианта ADR-028): подача — users заявителя
+   FOR UPDATE; решение — users заявителя И reviewer'а FOR UPDATE в порядке
+   users.id, затем заявка FOR UPDATE с populate_existing. Reviewer блокировать
+   обязательно: FK reviewed_by и FK актора audit_log берут FOR KEY SHARE. После
+   ожидания блокировок допуск reviewer'а перепроверяется (403
+   reviewer_not_allowed)
+✅ Outbox system-сообщений (`system_message_intents`, `app/notifications/`):
+   намерение (только message_code, без текста) пишется в транзакции операции —
+   приглашение в ОБОИХ core UoW регистрации
+   (`auth.storage.enqueue_registration_invite_in_tx`), результат — в транзакции
+   решения; после commit — `deliver_by_key_soft` (soft-fail); delivered — только
+   после успешного результата publisher. Повтор —
+   `scripts/deliver_system_message_intents.py` (exit 1 при ошибке чтения,
+   публикации или отметки). Ключи: `student_verification_invite:user:{id}`,
+   `student_verification_result:{request_uuid}`
+✅ `chat.storage.create_system_message`: дублем (created=False) считается ТОЛЬКО
+   IntegrityError с `diag.constraint_name == ux_chat_messages_event_key`;
+   прочие IntegrityError пробрасываются (publisher → None, outbox не отмечает)
+✅ student_verification/storage.py: SELECT — только явные проекции колонок
+   (без загрузки ORM-сущностей User/заявки). Список/история/свой статус — без
+   ticket_number_enc; rejection_reason_enc — только карточка и свой статус при
+   rejected; auth-поля users (password_hash и пр.) не выбираются нигде
+✅ Неожиданная SQLAlchemyError ЛЮБОГО обращения к БД модуля — чтения
+   (list/status/card, блокировки подачи и решения: phase=read) и записи
+   (flush/UPDATE/outbox/commit) → rollback, stderr `op/phase/error-class`,
+   наружу VerificationStorageError (вне except, from None, не
+   VerificationError → 500 без *_failed и без content_read). Известные
+   конфликты ux_svr_user_pending/ux_svr_user_approved — прежние typed codes.
+   Новый запрос в модуле — только внутри такого try/except SQLAlchemyError
+❌ Не включать номер билета, факультет, пояснение отказа или email в текст
+   уведомления, audit/DCL и логи; не хранить HTML в тексте system-сообщения
 ❌ Не привязывать identity к существующему аккаунту по совпадению email и не
    реактивировать soft-deleted аккаунт из social-регистрации
 ❌ Не генерировать пароль/заглушку для social-аккаунта; первый пароль — только
@@ -652,7 +797,7 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 
 ### База данных: схема
 
-58 таблиц в 14 доменных модулях. Схема управляется через Alembic.
+60 таблиц в 15 доменных модулях. Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения).** Полный rationale каждой ревизии — в
@@ -724,13 +869,15 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `a1c2e3f4b5d6` | add_impersonator_to_user_sessions (`user_sessions.impersonator_user_id`, nullable FK→users, ON DELETE SET NULL) |
 | `f3b8d1e6a4c2` | add_users_email_normalized_check (CHECK `ck_users_email_normalized`: `email = lower(trim(email))`; существующие ненормализованные email сначала приводятся к `lower(trim)` — коллизий нет благодаря `ux_users_email_normalized`) |
 | `c6e1a4f8b2d7` | social_auth_foundation (Stage Social Auth 2A): `users.password_hash` и `otp_verifications.password_hash` → NULLABLE; таблицы `user_oauth_identities`, `oauth_auth_requests`, `oauth_pending_tickets` (только фундамент, OAuth flow не реализован). Downgrade fail-closed при наличии users без пароля |
-| `b8d2f6a3c9e4` | auth_log_auth_method (Stage Social Auth 3A): `auth_log.auth_method VARCHAR(20) NULL` + CHECK `ck_auth_log_auth_method` (`password`/`yandex`/`vk`), без индекса; DDL на partitioned parent (наследуется всеми партициями). Backfill: `login` → `password`; `failed_login` → `password` только с `user_email` и не-OAuth кодом, иначе NULL. Downgrade fail-closed при строках `yandex`/`vk` — **head** |
+| `b8d2f6a3c9e4` | auth_log_auth_method (Stage Social Auth 3A): `auth_log.auth_method VARCHAR(20) NULL` + CHECK `ck_auth_log_auth_method` (`password`/`yandex`/`vk`), без индекса; DDL на partitioned parent (наследуется всеми партициями). Backfill: `login` → `password`; `failed_login` → `password` только с `user_email` и не-OAuth кодом, иначе NULL. Downgrade fail-closed при строках `yandex`/`vk` |
+| `d7e2a9c4f1b6` | add_user_deactivation_fields (ADR-028): `users.deactivated_at`, `deactivation_source` (`admin`/`self`), `deactivation_reason_enc` (только `enc:v1:`) + 3 CHECK (в т.ч. согласованность трёх полей). Backfill нет. Downgrade fail-closed при наличии текущих отключений |
+| `f5a3c8d1e7b2` | add_student_verification_and_message_intents (ADR-029): `student_verification_requests` (uuid, user_id CASCADE, faculty_code, `ticket_number_enc`/`rejection_reason_enc` только `enc:v1:`, status pending/approved/rejected, reviewed_by SET NULL, CHECK согласованности, partial UNIQUE одна pending/одна approved на пользователя) и `system_message_intents` (outbox: recipient, event_key, message_code, attempts, delivered_at; UNIQUE recipient+event_key). Backfill нет. Downgrade fail-closed при наличии строк — **head** |
 
 **Ключевые таблицы:**
 
 | Таблица | Описание |
 |---------|----------|
-| `users` | Все пользователи системы. FK из всех модулей |
+| `users` | Все пользователи системы. FK из всех модулей. Lifecycle (ADR-028): `is_active` (NULL = активен), `deleted_at` (только исторический soft-delete), текущее отключение — `deactivated_at`/`deactivation_source`/`deactivation_reason_enc` |
 | `roles`, `user_roles`, `permissions`, `role_permissions` | RBAC. Роли через M:N |
 | `student_profiles`, `psychologist_profiles` | Профили 1:1 с users |
 | `user_sessions` | Сессии (заменяют JWT). Soft-revoke через `is_revoked`. `impersonator_user_id` (ADR-025) — id админа при входе «под именем»; NULL у обычных сессий |
@@ -753,6 +900,8 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `tags`, `article_tags`, `news_tags`, `test_tags` | Темы/теги контента. M:N с articles, news, tests. Уникальность через `lower(name)` |
 | `auth_log`, `audit_log`, `data_change_log` | Три журнала с разделёнными зонами ответственности (см. «Три журнала аудита» ниже). Партиционированы по месяцам; схема — только через Alembic |
 | `diary_emotions` | Справочник эмоций дневника: 12 активных состояний (after c3a7f8e2d1b9); key, label, sort_order, is_active; angry/light — деактивированы (is_active=false), legacy labels в DiaryEntryItem.jsx |
+| `student_verification_requests` | Заявки на подтверждение статуса студента ДонГУ (ADR-029): статус, не роль; номер билета и пояснение отказа — только `enc:v1:`; одна pending и одна approved на пользователя; решённые строки неизменны (история) |
+| `system_message_intents` | Outbox system-сообщений (ADR-029): намерение доставки (только message_code, без текста), пишется в транзакции операции; delivered_at — после успешного publisher; повтор — `scripts/deliver_system_message_intents.py` |
 | `diary_entries` | Дневник студента: одна активная запись в день (partial UNIQUE по student_id + entry_date WHERE NOT deleted); mood_score_enc, entry_text_enc, emotions_enc — Fernet encrypted; только student |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
@@ -781,7 +930,15 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 110 событий** (`AUTH_LOG=7`, `AUDIT_LOG=103`; среди последних —
+**Event REGISTRY: 121 событие** (`AUTH_LOG=7`, `AUDIT_LOG=114`; ADR-029 добавил
+`student_verification_submitted` ({student}), `…_approved`/`…_rejected`
+({supervisor}) — ATOMIC/RAISE, target `student_verification_request`, metadata
+пустая; `…_content_read` ({supervisor}, INDEPENDENT/RAISE, fail-closed) и
+failure `…_submit_failed` / `…_review_failed` (INDEPENDENT/SOFT); ADR-028 добавил
+`user_self_deactivated` ({student}, ATOMIC/RAISE) и failure-события
+`admin_user_deactivate_failed` / `admin_user_restore_failed` /
+`user_self_deactivate_failed` (INDEPENDENT/SOFT); исторические
+`admin_user_deleted` и `user_reactivated` writer'ов больше не имеют; среди прочих —
 `media_uploaded` (admin+supervisor, target media_file, metadata
 file_type/mime_type/file_size), `test_result_content_read` (Этап E: staff-чтение
 результата, {supervisor,psychologist}, target test_result, INDEPENDENT/SOFT,
@@ -983,8 +1140,8 @@ storage (SQL-предикаты), И service (проекция DTO) — это �
   Чистая роль `supervisor` не наследует доступ к admin panel.
 - Администратор не может снять у самого себя активную membership-роль `admin`.
   Guard авторитетно работает на backend по стабильному actor/user id; другой
-  администратор может изменить этот набор ролей. Самодеактивация и самоудаление
-  этим guard не запрещены и требуют отдельного продуктового решения.
+  администратор может изменить этот набор ролей. Отключить или «удалить» себя
+  администратор тоже не может (ADR-028, `self_admin_protected`).
 - Аккаунт может фактически остаться без активных ролей (единственная роль
   истекла по `expires_at` или снята). Контракт разделён по стадиям:
   - **новый вход отклоняется контролируемым 403**: `service.authenticate_user`
@@ -1008,16 +1165,22 @@ storage (SQL-предикаты), И service (проекция DTO) — это �
 - Через HTTP/API новый аккаунт можно создать только с точным нормализованным
   доменом, для которого в `allowed_email_domains` есть активная строка. Отсутствие
   домена в allowlist означает запрет; отдельного denylist нет.
-- Политика применяется к self-registration, admin-created staff и
-  supervisor/admin-created student. В registration flow ранняя проверка выполняется
+- Политика применяется к self-registration по email и паролю, admin-created staff
+  и supervisor/admin-created student; к регистрации через провайдера (Яндекс,
+  ADR-027 п. 5) она НЕ применяется. В registration flow ранняя проверка выполняется
   до отправки OTP, а authoritative проверка — в транзакции confirm до consume OTP.
 - Существующие пользователи с доменом, который отсутствует или был отключён,
   сохраняют login и password reset. Политика не является ретроактивной блокировкой.
-- Реактивация soft-deleted пользователя считается созданием/возвратом аккаунта и
-  требует активного домена.
+- Self-registration soft-deleted/отключённый аккаунт НЕ реактивирует (ADR-028,
+  409). Восстановление администратором (POST …/restore) возвращает существующий
+  аккаунт и allowlist не проверяет.
 - Admin API: `GET/POST/PATCH /api/admin/email-domains`; физического DELETE нет.
   Повторный POST существующего отключённого домена даёт 409, реактивация делается
   только PATCH `is_active=true`. Последний активный домен отключить нельзя.
+- Отказ по домену при обычной регистрации — на init и confirm один статус (422) и
+  один текст со списком активных доменов из БД (ADR-019, дополнение 2026-10-07);
+  публичная подсказка формы — `GET /api/public/email-domains` (только имена
+  активных доменов, без аудита).
 - Это управляемая организационная политика проекта, а не утверждение об
   официальном или исчерпывающем государственном перечне почтовых сервисов.
 - `scripts/create_admin.py` — отдельный локальный bootstrap/ops path и сейчас не

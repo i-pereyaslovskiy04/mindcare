@@ -18,6 +18,26 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 ✅ Серверная фильтрация и пагинация для списков > 50 элементов
 ✅ Hook-контракт для списков: { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch }
 ✅ CSS Modules — один .module.css на компонент
+✅ Подпись роли — только из shared/lib/roles.js (ROLE_LABELS / roleLabel); student в
+   UI — «Пользователь» (код роли student и маршруты /student не меняются). Локальных
+   копий карты ролей и хардкода подписи роли в компонентах быть не должно
+✅ Разрешённые домены регистрации по email — только из ответа backend
+   (GET /api/public/email-domains → api/domains.api.js → features/auth/hooks/
+   useAllowedEmailDomains, «побеждает последний запрос»); доменов в JSX не зашивать,
+   placeholder email — «Введите email». Список — подсказка, форму не блокирует
+✅ Подтверждение студента ДонГУ (ADR-029) — СТАТУС, не роль: подпись роли
+   по-прежнему из roles.js («Пользователь»), бейдж «Студент ДонГУ подтверждён» —
+   отдельно. Факультеты только с backend (GET /api/student-verification/faculties,
+   shared Select); статусы/подписи кодов — features/studentVerification/lib/status.js.
+   Self-service раздел (/student/settings#student-verification) — только чистый
+   student вне режима «под именем»; supervisor-раздел /supervisor/student-verifications
+   в режиме «под именем» запросов не делает
+✅ LinkifiedText: внутренние ссылки — ТОЛЬКО для system-сообщений
+   (MessageBubble → allowInternalLinks) и ТОЛЬКО пути из точного allowlist
+   INTERNAL_LINKS → router <Link> с подписью из allowlist; прочие относительные и
+   //host-пути — текст. Новый путь — только добавлением в allowlist. Тесты,
+   рендерящие LinkifiedText, мокают react-router-dom виртуально (v7 не резолвится
+   jest-резолвером)
 ❌ Не добавлять fetch в components/ или pages/ напрямую
 ❌ Не фильтровать items на клиенте если список из БД
 ❌ Не использовать data/ как постоянный источник данных
