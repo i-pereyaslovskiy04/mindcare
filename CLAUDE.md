@@ -2,7 +2,7 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff: `docs/HANDOFFS/2026-10-14-cabinet-header.md` — единая
+Актуальный handoff: `docs/HANDOFFS/2026-10-14-a11y-basics.md` — единая
 шапка кабинетов (**ADR-031**, frontend-only): `components/CabinetHeader/` у
 CabinetLayout и AdminLayout; brand — ссылка на корень кабинета, home-иконка и
 кнопка почты удалены, крошки — ссылки из явных подписей; поиск и колокольчик —
