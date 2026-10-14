@@ -146,6 +146,20 @@ mindcare_web/src/components/UI
 
 Если элемент числится как feature-specific в `docs/UI_TECH_DEBT.md` — не мигрировать без отдельного решения.
 
+### Модалки, drawer и touch-цели (гарантировано, 2026-10-14)
+
+- Shared `components/Modal`: закрытая модалка смонтирована, но overlay `inert`
+  и после fade-out `visibility: hidden` — её контролы не в порядке Tab и не в
+  дереве доступности. Новые модалки — через shared Modal или условный рендер;
+  не прятать dialog только `opacity`/`aria-hidden`.
+- `CabinetDrawer`: фокус внутрь при открытии, Tab по кругу, Escape/backdrop,
+  возврат фокуса на hamburger, фон (sidebar, `<main>`) — `inert`.
+- Поле формы — `<label htmlFor>` + `id` (или shared-компонент, который так
+  связывает); форменная ошибка — `role="alert"` + `aria-describedby`.
+- Touch-цели меньше ~44px расширяются прозрачным `::before` в
+  `@media (hover: none)` только там, где зона не пересекается с соседними
+  контролами (`Toggle`, чекбокс задачи, «⋯» записи дневника, «⋯» сообщения).
+
 ---
 
 ## 4. Role policy

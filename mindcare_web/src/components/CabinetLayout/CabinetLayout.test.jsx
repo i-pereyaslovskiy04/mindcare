@@ -8,9 +8,10 @@ let mockPathname = '/psychologist';
 
 // react-router-dom (v7) не резолвится jest-резолвером в этом проекте — как и
 // во всех существующих тестах, мокаем виртуально.
+const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: mockPathname }),
-  useNavigate: () => jest.fn(),
+  useNavigate: () => mockNavigate,
   Outlet: () => <div>OUTLET</div>,
   NavLink: ({ children }) => <div>{children}</div>,
   Link: ({ children, to, className, 'aria-label': ariaLabel, title, onClick }) => (
@@ -174,4 +175,42 @@ test('mobile drawer: фокус на «Закрыть меню», Escape зак�
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(screen.queryByRole('dialog', { name: 'Меню кабинета' })).toBeNull();
   expect(burger).toHaveFocus();
+});
+
+test('открытый drawer изолирует sidebar и main (inert), закрытие снимает', () => {
+  mockAuth({ roles: ['student'], activeRole: 'student' });
+  mockPathname = '/student';
+  const { container } = render(<CabinetLayout cabinetRole="student" navSections={[]} crumbLabels={{}} />);
+  // Оболочка и её прямые потомки — предмет проверки (inert ставится на соседей drawer'а).
+  // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+  const shell = container.querySelector('[data-cabinet-shell]');
+  // eslint-disable-next-line testing-library/no-node-access
+  const [sidebar, main] = shell.children;
+
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+  expect(sidebar.tagName).toBe('ASIDE');
+  expect(sidebar).toHaveAttribute('inert');
+  expect(main).toHaveAttribute('inert');
+  expect(shell).not.toHaveAttribute('inert');
+  expect(screen.getByRole('dialog', { name: 'Меню кабинета' })).not.toHaveAttribute('inert');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть меню' }));
+  expect(sidebar).not.toHaveAttribute('inert');
+  expect(main).not.toHaveAttribute('inert');
+});
+
+test('CabinetSwitcher внутри открытого drawer работает', () => {
+  mockAuth({ roles: ['psychologist', 'student'], activeRole: 'student' });
+  mockPathname = '/student';
+  render(<CabinetLayout cabinetRole="student" navSections={[]} crumbLabels={{}} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+  const drawer = screen.getByRole('dialog', { name: 'Меню кабинета' });
+  const switcher = within(drawer).getByRole('button', { name: /Пользователь/ });
+  fireEvent.click(switcher);
+  expect(switcher).toHaveAttribute('aria-expanded', 'true');
+
+  fireEvent.click(within(drawer).getByRole('button', { name: /Психолог/ }));
+  expect(setActiveRole).toHaveBeenCalledWith('psychologist');
+  expect(mockNavigate).toHaveBeenCalledWith('/psychologist');
 });

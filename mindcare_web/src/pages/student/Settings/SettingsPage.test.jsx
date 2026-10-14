@@ -238,3 +238,91 @@ test('ссылка из уведомления (#student-verification) прок�
   expect(scrollSpy.mock.instances[0]).toBe(section);
   expect(section).toHaveFocus();
 });
+
+// ── Доступность формы смены пароля ──────────────────────────────────────────
+
+/** Раздел подтверждения студента грузит статус и факультеты асинхронно —
+    дожидаемся их, чтобы обновления не приходили после конца теста. */
+async function renderSettingsReady() {
+  render(<SettingsPage />);
+  const section = await screen.findByRole('region', { name: 'Подтверждение студента ДонГУ' });
+  await within(section).findByText('Не подтверждено');
+  await waitFor(() => expect(verificationApi.getFaculties).toHaveBeenCalled());
+}
+
+test('поля профиля связаны с подписями; Email остаётся только для чтения', async () => {
+  useAuth.mockReturnValue(authState());
+  await renderSettingsReady();
+
+  const fullName = await screen.findByLabelText('ФИО');
+  const email = screen.getByLabelText('Email');
+  const phone = screen.getByLabelText('Номер телефона');
+  expect(fullName).toHaveValue('Студент Тестов');
+  expect(email).toHaveValue('s@donnu.ru');
+  expect(email).toHaveAttribute('readonly');
+  expect(phone).toHaveAttribute('type', 'tel');
+  expect(new Set([fullName.id, email.id, phone.id]).size).toBe(3);
+
+  // Часовой пояс — кастомный Select (кнопка): имя через aria-labelledby на
+  // видимую подпись, без фиктивного htmlFor.
+  const tz = screen.getByRole('button', { name: 'Часовой пояс' });
+  expect(tz).toHaveAttribute('aria-haspopup', 'listbox');
+  expect(screen.getByText('Часовой пояс')).not.toHaveAttribute('for');
+});
+
+test('поля пароля имеют доступные имена и сохраняют autocomplete', async () => {
+  useAuth.mockReturnValue(authState());
+  await renderSettingsReady();
+
+  const current = screen.getByLabelText('Текущий пароль');
+  const next = screen.getByLabelText('Новый пароль');
+  const confirm = screen.getByLabelText('Подтверждение нового пароля');
+
+  expect(current).toHaveAttribute('autocomplete', 'current-password');
+  expect(next).toHaveAttribute('autocomplete', 'new-password');
+  expect(confirm).toHaveAttribute('autocomplete', 'new-password');
+  expect(new Set([current.id, next.id, confirm.id]).size).toBe(3);
+  [current, next, confirm].forEach((el) => expect(el).not.toHaveAttribute('aria-describedby'));
+});
+
+test('ошибка смены пароля объявляется и описывает поля формы', async () => {
+  useAuth.mockReturnValue(authState());
+  authApi.changePassword.mockRejectedValue(new Error('Неверный текущий пароль'));
+  await renderSettingsReady();
+
+  fireEvent.change(screen.getByLabelText('Текущий пароль'), { target: { value: 'old-pass-1' } });
+  fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'new-pass-12' } });
+  fireEvent.change(screen.getByLabelText('Подтверждение нового пароля'), { target: { value: 'new-pass-12' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Изменить пароль' }));
+
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Неверный текущий пароль');
+  ['Текущий пароль', 'Новый пароль', 'Подтверждение нового пароля'].forEach((name) => {
+    expect(screen.getByLabelText(name)).toHaveAccessibleDescription('Неверный текущий пароль');
+  });
+});
+
+// ── Закрытая модалка не доступна с клавиатуры (shared Modal) ────────────────
+
+test('закрытая модалка отключения изолирована (inert), открытая — нет', async () => {
+  useAuth.mockReturnValue(authState());
+  await renderSettingsReady();
+  const trigger = screen.getByRole('button', { name: 'Отключить аккаунт' });
+
+  // Кнопка «Отключить аккаунт» внутри закрытой модалки не видна дереву
+  // доступности и лежит под inert-overlay — до неё не дойти Tab'ом.
+  expect(screen.getAllByRole('button', { name: 'Отключить аккаунт' })).toHaveLength(1);
+  const closed = screen.getByRole('dialog', { hidden: true, name: 'Подтверждение отключения аккаунта' });
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(closed.closest('[inert]')).not.toBeNull();
+
+  trigger.focus();
+  fireEvent.click(trigger);
+  const dialog = screen.getByRole('dialog', { name: 'Подтверждение отключения аккаунта' });
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(dialog.closest('[inert]')).toBeNull();
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(trigger).toHaveFocus();
+});

@@ -710,7 +710,7 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
 
 *Ограничения MVP:* presence приблизительный (не realtime, порог 10 минут, зависит от
 `user_sessions.last_active` и debounce `touch_session` 300с); read-receipt live-обновление —
-только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer — focus-trap есть (`CabinetDrawer`), `inert` фона нет.
+только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer — focus-trap и `inert` фона (`CabinetDrawer`).
 
 **Вложения (Stage 32b–32j + hotfixes):** файлы в student↔psychologist engagement чате; отправка через
 скрепку + drag & drop; несколько файлов в одном сообщении; attachment-only message;

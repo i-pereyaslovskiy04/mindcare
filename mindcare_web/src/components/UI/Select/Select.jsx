@@ -31,6 +31,9 @@ const CheckIcon = () => (
  *   displayLabel — optional label to show when `value` has no matching option
  *                  (e.g. a current value intentionally excluded from selectable
  *                  options). Display only — it never appears in the dropdown.
+ *   labelledBy  — id of an external visible label (when the form renders its own
+ *                 label instead of `label`): becomes aria-labelledby of the
+ *                 trigger and the listbox. Ignored when `label` is set.
  */
 export default function Select({
   label,
@@ -44,6 +47,7 @@ export default function Select({
   style,
   panelZIndex = 2100,
   displayLabel,
+  labelledBy,
 }) {
   const [isOpen, setIsOpen]       = useState(false);
   const [activeIndex, setActive]  = useState(-1);
@@ -169,7 +173,7 @@ export default function Select({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listboxId : undefined}
-        aria-labelledby={label ? labelId : undefined}
+        aria-labelledby={label ? labelId : labelledBy}
         disabled={disabled}
         onClick={() => (isOpen ? closeDropdown() : openDropdown())}
         onKeyDown={handleKeyDown}
@@ -196,6 +200,7 @@ export default function Select({
             zIndex: panelZIndex,
           }}
           aria-label={label}
+          aria-labelledby={label ? undefined : labelledBy}
         >
           {options.length === 0 ? (
             <li className={styles.empty} role="presentation">

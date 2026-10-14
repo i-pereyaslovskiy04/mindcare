@@ -12,11 +12,17 @@
  *     включая переход по пункту меню) фокус возвращается на returnFocusRef
  *     (кнопку-hamburger в шапке).
  *
+ * Изоляция фона: пока drawer открыт, его соседи в оболочке кабинета (sidebar
+ * и <main> с шапкой и контентом) получают `inert` — недоступны мыши,
+ * клавиатуре и дереву доступности. На предка drawer'а inert/aria-hidden не
+ * ставится. Атрибут снимается в layout-фазе, до возврата фокуса на hamburger
+ * (он внутри <main>). Соседей, которые уже были inert, drawer не трогает.
+ *
  * Рендерит фрагмент: aside остаётся прямым потомком оболочки кабинета
  * ([data-cabinet-shell] > aside — правила режима для слабовидящих).
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import styles from './CabinetDrawer.module.css';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -31,7 +37,20 @@ export default function CabinetDrawer({
   children,
 }) {
   const drawerRef = useRef(null);
+  const backdropRef = useRef(null);
   const closeRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const drawer = drawerRef.current;
+    const parent = drawer?.parentElement;
+    if (!parent) return undefined;
+    const background = Array.from(parent.children).filter(
+      (el) => el !== drawer && el !== backdropRef.current && !el.hasAttribute('inert'),
+    );
+    background.forEach((el) => el.setAttribute('inert', ''));
+    return () => background.forEach((el) => el.removeAttribute('inert'));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -68,7 +87,7 @@ export default function CabinetDrawer({
 
   return (
     <>
-      <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
+      <div ref={backdropRef} className={styles.backdrop} onClick={onClose} aria-hidden="true" />
       <aside
         id={id}
         ref={drawerRef}

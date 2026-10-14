@@ -10,12 +10,18 @@
   padding: 20px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  /* Закрытая модалка после fade-out скрыта целиком (visibility: hidden — вне
+     порядка Tab и дерева доступности); задержка = длительность opacity, чтобы
+     анимация закрытия доигрывала. На время анимации её изолирует inert. */
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
 }
 
 .open {
   opacity: 1;
   pointer-events: all;
+  visibility: visible;
+  transition: opacity 0.3s ease, visibility 0s;
 }
 
 .card {

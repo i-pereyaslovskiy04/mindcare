@@ -271,7 +271,7 @@
       `user_sessions.last_active` и debounce `touch_session` 300с;
     - read-receipt live-обновление только в пределах snapshot `limit=50`;
     - без WebSocket/SSE (polling 8s/30s);
-    - mobile drawer: focus-trap есть (`CabinetDrawer`, 2026-10-14), `inert` фона — нет;
+    - mobile drawer: focus-trap и `inert` фона есть (`CabinetDrawer`, 2026-10-14);
     - snapshot reconcile при polling ограничен последними 50 сообщениями; история
       старше snapshot window синхронизируется только при переоткрытии диалога
   - **Group chat — postponed / future:**
@@ -326,7 +326,7 @@
     antivirus/ClamAV scanning; at-rest encryption физических файлов в FS; S3/MinIO
     storage backend; добавление новых файлов в edit-mode; staff break-glass access;
     Action Center / колокольчик; system messages для заданий/материалов/анкет/legal
-    announcements; усиление a11y mobile drawer (`inert` фона; focus-trap уже есть);
+    announcements;
     глубокий рефакторинг chat-модуля
   - **Orphan attachments cleanup helper — существует:** `scripts/cleanup_orphan_attachments.py`
     работает в dry-run режиме по умолчанию, `--apply` включает выполнение, scope —
@@ -560,6 +560,25 @@
 ---
 
 ## 🔵 Запланировано (следующие задачи)
+
+### Доступность — продолжение (после Student / Shared Accessibility Basics, 2026-10-14)
+
+Сделано в этапе: shared Modal закрытый — `inert` + `visibility: hidden`;
+`CabinetDrawer` — `inert` фона; подписи полей пароля и профиля в `/student/settings`;
+touch-зоны `Toggle`, чекбокса задачи, «⋯» записи дневника и «⋯» сообщения.
+Осталось (отдельными решениями):
+
+- **Календарь** — семантика сетки (grid/таблица, навигация стрелками), H1 страницы.
+- **A++ (200%)** — переполнение и reflow в кабинетах; сознательно отложено.
+- **Мобильное меню публичного Navbar** — скрыто только `opacity`/`aria-hidden`,
+  ссылки остаются в порядке Tab (тот же анти-паттерн, что был у Modal; не modal).
+- **Touch-цели, требующие продуктового/раскладочного решения:** превью и
+  скачивание вложения (28×28, стоят вплотную), удаление выбранного/редактируемого
+  вложения (22×22, список с gap 4px), пункты меню «⋯» (~32px, стопкой), чипы
+  эмоций/периода/отметок дневника (22–26px, плотные, исключения UI governance),
+  иконки шапки (36–38px, между ними 6px).
+- Неиспользуемый `pages/student/Calendar/components/SessionPopover.jsx`
+  (role="dialog" без фокус-менеджмента) — удалить или подключить.
 
 ### Шапка кабинетов — продолжение (после ADR-031, 2026-10-14)
 

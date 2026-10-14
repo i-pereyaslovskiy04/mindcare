@@ -441,3 +441,18 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Touch: «⋯» (вход в «Редактировать» / «Удалить») визуально 34×34, область
+   нажатия ~44×44; 5px расширения помещаются в padding карточки (14/16px) и
+   gap до мета-строки (12px). */
+@media (hover: none) {
+  .kebabButton {
+    position: relative;
+  }
+
+  .kebabButton::before {
+    content: '';
+    position: absolute;
+    inset: -5px;
+  }
+}

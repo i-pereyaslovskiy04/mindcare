@@ -69,3 +69,18 @@
 .itemDanger:hover {
   background: var(--error-bg);
 }
+
+/* Touch: kebab сообщения визуально 26×26, область нажатия 32×44. По
+   горизонтали — только 3px: до bubble 6px (.bubbleRow gap), шире — наложится
+   на сообщение; по вертикали между сообщениями 12px. */
+@media (hover: none) {
+  .trigger {
+    position: relative;
+  }
+
+  .trigger::before {
+    content: '';
+    position: absolute;
+    inset: -9px -3px;
+  }
+}

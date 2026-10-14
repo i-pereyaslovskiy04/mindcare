@@ -83,3 +83,55 @@ test('клик по backdrop закрывает drawer', () => {
   fireEvent.click(container.firstChild);
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+describe('изоляция фона', () => {
+  /** Как в layout'ах: drawer — сосед sidebar и main внутри оболочки. */
+  function Shell() {
+    const [open, setOpen] = useState(false);
+    const triggerRef = useRef(null);
+    return (
+      <div data-testid="shell">
+        <aside data-testid="sidebar"><a href="/x">Пункт sidebar</a></aside>
+        <main data-testid="main">
+          <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>Открыть меню</button>
+        </main>
+        <section data-testid="already-inert" inert>старое</section>
+        <CabinetDrawer open={open} onClose={() => setOpen(false)} returnFocusRef={triggerRef}>
+          <a href="/a">Пункт А</a>
+        </CabinetDrawer>
+      </div>
+    );
+  }
+
+  test('открыт: sidebar и main — inert, сам drawer и оболочка — нет', () => {
+    render(<Shell />);
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('inert');
+    expect(screen.getByTestId('main')).toHaveAttribute('inert');
+    expect(screen.getByTestId('shell')).not.toHaveAttribute('inert');
+    expect(screen.getByTestId('shell')).not.toHaveAttribute('aria-hidden');
+    const drawer = screen.getByRole('dialog', { name: 'Меню кабинета' });
+    expect(drawer).not.toHaveAttribute('inert');
+    expect(within(drawer).getByRole('link', { name: 'Пункт А' })).toBeInTheDocument();
+  });
+
+  test('закрытие снимает inert и возвращает фокус на hamburger', () => {
+    render(<Shell />);
+    const trigger = screen.getByRole('button', { name: 'Открыть меню' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.getByTestId('sidebar')).not.toHaveAttribute('inert');
+    expect(screen.getByTestId('main')).not.toHaveAttribute('inert');
+    expect(trigger).toHaveFocus();
+  });
+
+  test('чужой inert drawer не снимает', () => {
+    render(<Shell />);
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Закрыть меню' }));
+    expect(screen.getByTestId('already-inert')).toHaveAttribute('inert');
+  });
+});

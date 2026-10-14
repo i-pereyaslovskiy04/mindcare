@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../components/Icon/Icon';
 import Select from '../../../components/UI/Select/Select';
@@ -105,6 +105,14 @@ export default function SettingsPage() {
     }
   }
 
+  // label ↔ control профиля по id (как у полей пароля).
+  const profileIds = {
+    fullName: useId(),
+    email: useId(),
+    phone: useId(),
+    timezone: useId(),
+  };
+
   const [pwForm, setPwForm] = useState({
     current_password: '',
     new_password: '',
@@ -113,6 +121,15 @@ export default function SettingsPage() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
+  // label ↔ input по id: без htmlFor у полей пароля не было доступного имени.
+  const pwIds = {
+    current: useId(),
+    next: useId(),
+    confirm: useId(),
+    error: useId(),
+  };
+  // Ошибка смены пароля — серверная, на всю форму: описывает все три поля.
+  const pwDescribedBy = pwError ? pwIds.error : undefined;
 
   async function handleChangePassword(e) {
     e.preventDefault();
@@ -243,8 +260,9 @@ export default function SettingsPage() {
                 </div>
 
                 <div className={styles.field}>
-                  <label>ФИО</label>
+                  <label htmlFor={profileIds.fullName}>ФИО</label>
                   <input
+                    id={profileIds.fullName}
                     className={styles.input}
                     value={profile.full_name}
                     onChange={(e) => {
@@ -258,8 +276,9 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className={styles.field}>
-                  <label>Email</label>
+                  <label htmlFor={profileIds.email}>Email</label>
                   <input
+                    id={profileIds.email}
                     className={styles.input}
                     type="email"
                     value={profile.email}
@@ -267,8 +286,9 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className={styles.field}>
-                  <label>Номер телефона</label>
+                  <label htmlFor={profileIds.phone}>Номер телефона</label>
                   <input
+                    id={profileIds.phone}
                     className={styles.input}
                     type="tel"
                     value={profile.phone}
@@ -282,8 +302,11 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className={styles.field}>
-                  <label>Часовой пояс</label>
+                  {/* Select — кастомная кнопка-триггер без native-связи с <label>:
+                      подпись подключается через aria-labelledby (labelledBy). */}
+                  <label id={profileIds.timezone}>Часовой пояс</label>
                   <Select
+                    labelledBy={profileIds.timezone}
                     value={timezone}
                     options={TIMEZONE_OPTIONS}
                     onChange={setTimezone}
@@ -328,8 +351,9 @@ export default function SettingsPage() {
             <h2 className={styles.sectionTitle}>Безопасность</h2>
             <form onSubmit={handleChangePassword}>
               <div className={styles.field}>
-                <label>Текущий пароль</label>
+                <label htmlFor={pwIds.current}>Текущий пароль</label>
                 <input
+                  id={pwIds.current}
                   className={styles.input}
                   type="password"
                   value={pwForm.current_password}
@@ -337,11 +361,13 @@ export default function SettingsPage() {
                   required
                   disabled={pwLoading || pwSuccess}
                   autoComplete="current-password"
+                  aria-describedby={pwDescribedBy}
                 />
               </div>
               <div className={styles.field}>
-                <label>Новый пароль</label>
+                <label htmlFor={pwIds.next}>Новый пароль</label>
                 <input
+                  id={pwIds.next}
                   className={styles.input}
                   type="password"
                   value={pwForm.new_password}
@@ -349,11 +375,13 @@ export default function SettingsPage() {
                   required
                   disabled={pwLoading || pwSuccess}
                   autoComplete="new-password"
+                  aria-describedby={pwDescribedBy}
                 />
               </div>
               <div className={styles.field}>
-                <label>Подтверждение нового пароля</label>
+                <label htmlFor={pwIds.confirm}>Подтверждение нового пароля</label>
                 <input
+                  id={pwIds.confirm}
                   className={styles.input}
                   type="password"
                   value={pwForm.new_password_confirm}
@@ -361,9 +389,12 @@ export default function SettingsPage() {
                   required
                   disabled={pwLoading || pwSuccess}
                   autoComplete="new-password"
+                  aria-describedby={pwDescribedBy}
                 />
               </div>
-              {pwError && <div className={styles.formError}>{pwError}</div>}
+              {pwError && (
+                <div id={pwIds.error} className={styles.formError} role="alert">{pwError}</div>
+              )}
               {pwSuccess && <div className={styles.formSuccess}>Пароль изменён. Войдите снова.</div>}
               <Button
                 type="submit"

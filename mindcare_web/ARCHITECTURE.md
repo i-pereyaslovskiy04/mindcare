@@ -155,9 +155,9 @@ mindcare_web/
     │   ├── CabinetHeader/     ← общая шапка всех кабинетов и админки (ADR-031)
     │   │   ├── CabinetHeader.jsx + .module.css
     │   │   └── breadcrumbs.js ← resolveBreadcrumbs (только явные подписи)
-    │   ├── Modal/
-    │   │   ├── Modal.jsx
-    │   │   └── Modal.module.css
+    │   ├── Modal/             ← общая модалка: смонтирована всегда, закрытая —
+    │   │   ├── Modal.jsx         inert + visibility:hidden после fade-out
+    │   │   └── Modal.module.css  (вне Tab и дерева доступности)
     │   ├── CodeInput/
     │   │   └── CodeInput.jsx + .module.css
     │   ├── Navbar/
@@ -705,7 +705,9 @@ sidebar, 601–980px icon-rail 72px, <=600px sidebar скрыт → hamburger в
 
 `CabinetDrawer` (`components/CabinetDrawer/`) — общий mobile drawer обоих layout'ов:
 фокус при открытии на «Закрыть меню», Tab по кругу внутри, Escape / backdrop /
-переход по пункту закрывают, фокус возвращается на hamburger.
+переход по пункту закрывают, фокус возвращается на hamburger. Пока открыт —
+соседи drawer'а в оболочке (sidebar, `<main>`) получают `inert`; на предка
+drawer'а inert/aria-hidden не ставится, чужой inert не снимается.
 
 ### CabinetHeader
 
