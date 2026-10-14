@@ -2,7 +2,17 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff: `docs/HANDOFFS/2026-10-14-a11y-basics.md` — единая
+Актуальный handoff: `docs/HANDOFFS/2026-10-14-a11y-basics.md` — Student /
+Shared Accessibility Basics (frontend-only, этап завершён, commit `e4f222b`):
+закрытая shared `Modal` изолирована (`inert`, после fade-out `visibility: hidden`
+— вне Tab и дерева доступности); открытый `CabinetDrawer` делает фон (sidebar,
+`<main>`) `inert`; в `/student/settings` подписи полей пароля и профиля связаны
+с полями (`htmlFor`/`id`, ошибка пароля — `role="alert"` + `aria-describedby`);
+`Select` получил `labelledBy` для внешней подписи; touch-зоны (`hover: none`)
+у `Toggle`, чекбокса задачи и «⋯» дневника/сообщения.
+
+Предыдущий handoff (завершённый UI-shell этап):
+`docs/HANDOFFS/2026-10-14-cabinet-header.md` — единая
 шапка кабинетов (**ADR-031**, frontend-only): `components/CabinetHeader/` у
 CabinetLayout и AdminLayout; brand — ссылка на корень кабинета, home-иконка и
 кнопка почты удалены, крошки — ссылки из явных подписей; поиск и колокольчик —
