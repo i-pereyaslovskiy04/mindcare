@@ -10,17 +10,28 @@ jest.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: mockPathname }),
   useNavigate: () => jest.fn(),
   Outlet: () => <div>OUTLET</div>,
-  NavLink: ({ children, to, 'aria-label': ariaLabel, className }) => {
+  NavLink: ({ children, to, 'aria-label': ariaLabel, className, onClick }) => {
     const isActive = to === mockPathname;
     const cls = typeof className === 'function' ? className({ isActive }) : className;
     return (
-      <a href={to} aria-label={ariaLabel} className={cls}>
+      <a
+        href={to}
+        aria-label={ariaLabel}
+        className={cls}
+        onClick={(e) => { e.preventDefault(); onClick?.(e); }}
+      >
         {children}
       </a>
     );
   },
-  Link: ({ children, to, 'aria-label': ariaLabel, className, title }) => (
-    <a href={to} aria-label={ariaLabel} className={className} title={title}>
+  Link: ({ children, to, 'aria-label': ariaLabel, className, title, onClick }) => (
+    <a
+      href={to}
+      aria-label={ariaLabel}
+      className={className}
+      title={title}
+      onClick={(e) => { e.preventDefault(); onClick?.(e); }}
+    >
       {children}
     </a>
   ),
@@ -177,4 +188,73 @@ test('active link matches current pathname (/admin/email-domains)', () => {
   render(<AdminLayout />);
   expect(screen.getByRole('link', { name: 'Домены регистрации' })).toHaveClass('active');
   expect(screen.getByRole('link', { name: 'Пользователи' })).not.toHaveClass('active');
+});
+
+describe('mobile drawer админки (<=600px — та же модель, что у кабинетов)', () => {
+  const openDrawer = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+    return screen.getByRole('dialog', { name: 'Меню панели управления' });
+  };
+
+  test('по умолчанию drawer закрыт: навигация — в sidebar (rail/полный), hamburger есть', () => {
+    mockAuth({ roles: ['admin'], activeRole: 'admin' });
+    render(<AdminLayout />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Sidebar с той же навигацией остаётся основным механизмом шире 600px.
+    expect(screen.getAllByRole('link', { name: 'Пользователи' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Открыть меню' }))
+      .toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('drawer содержит полный brand → /admin, пользователя и ту же admin-навигацию', () => {
+    mockAuth({ roles: ['admin', 'supervisor'], activeRole: 'admin' });
+    render(<AdminLayout />);
+    const drawer = openDrawer();
+
+    const brand = within(drawer).getByRole('link', {
+      name: 'Психология ДонГУ, панель управления — на главную',
+    });
+    expect(brand).toHaveAttribute('href', '/admin');
+    expect(brand).toHaveTextContent('Панель управления');
+
+    ['Пользователи', 'Материалы', 'Новости', 'Тесты', 'Баннер', 'Карточки услуг',
+      'Типы материалов', 'Темы', 'Типы встреч', 'Домены регистрации',
+      'Журнал действий', 'Безопасность'].forEach((name) => {
+      expect(within(drawer).getByRole('link', { name })).toBeInTheDocument();
+    });
+    expect(within(drawer).getByText('Система')).toBeInTheDocument();
+    // Переключатель кабинета и поддержка — как в sidebar.
+    expect(within(drawer).getByRole('button', { name: /Администратор/ })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'support@donnu.ru' })).toBeInTheDocument();
+  });
+
+  test('фокус в drawer на «Закрыть меню»; Escape закрывает и возвращает фокус', () => {
+    mockAuth({ roles: ['admin'], activeRole: 'admin' });
+    render(<AdminLayout />);
+    const burger = screen.getByRole('button', { name: 'Открыть меню' });
+    const drawer = openDrawer();
+    expect(within(drawer).getByRole('button', { name: 'Закрыть меню' })).toHaveFocus();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(burger).toHaveFocus();
+  });
+
+  test('переход по пункту навигации закрывает drawer', () => {
+    mockAuth({ roles: ['admin'], activeRole: 'admin' });
+    render(<AdminLayout />);
+    const drawer = openDrawer();
+    fireEvent.click(within(drawer).getByRole('link', { name: 'Журнал действий' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  test('клик по brand в drawer закрывает drawer', () => {
+    mockAuth({ roles: ['admin'], activeRole: 'admin' });
+    render(<AdminLayout />);
+    const drawer = openDrawer();
+    fireEvent.click(within(drawer).getByRole('link', {
+      name: 'Психология ДонГУ, панель управления — на главную',
+    }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });

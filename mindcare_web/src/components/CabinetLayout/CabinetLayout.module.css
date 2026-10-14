@@ -273,83 +273,12 @@
   margin: 0 auto;
 }
 
-/* ── MOBILE NAV (hamburger + drawer) ────────────────────────────── */
-/* Кнопка-гамбургер: скрыта на desktop, показывается на мобильной ширине */
-.mobileMenuButton {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--nav-border);
-  border-radius: 10px;
-  background: var(--warm-white);
-  color: var(--espresso);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
-}
-.mobileMenuButton:hover {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-
-/* Drawer + backdrop: position:fixed → вне grid, не влияют на layout */
-.mobileBackdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim);
-  z-index: 90;
-}
-.mobileDrawer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: min(82vw, 300px);
-  background: var(--nav-bg);
-  border-right: 1px solid var(--nav-border);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  z-index: 100;
-  box-shadow: 0 8px 30px rgba(var(--shadow-rgb), 0.28);
-}
-/* Drawer — отдельный fixed-элемент вне .app, общий .app::after до него не
-   достаёт, поэтому brand'у возвращаем собственный нижний разделитель. */
+/* ── MOBILE DRAWER (<=600px) ────────────────────────────────────── */
+/* Hamburger — в CabinetHeader, drawer/backdrop/«Закрыть» — CabinetDrawer.
+   Здесь только правила содержимого: drawer — отдельный fixed-элемент вне
+   .app::after, поэтому brand'у возвращаем собственный нижний разделитель. */
 .mobileDrawer .brand {
   border-bottom: 1px solid var(--nav-border);
-}
-
-.drawerClose {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 8px;
-  z-index: 1;
-  transition: background 0.15s, color 0.15s;
-}
-.drawerClose:hover {
-  background: var(--sand);
-  color: var(--espresso);
-}
-
-/* Подстраховка: на desktop drawer/backdrop никогда не видны */
-@media (min-width: 601px) {
-  .mobileDrawer,
-  .mobileBackdrop {
-    display: none;
-  }
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────── */
@@ -441,10 +370,7 @@
   .sidebar {
     display: none;
   }
-  /* Навигация доступна через мобильное меню */
-  .mobileMenuButton {
-    display: inline-flex;
-  }
-  /* Мобильная шапка (hamburger, крошки, «Оформление», выход) — правила в
-     CabinetHeader.module.css: заглушка уведомлений скрыта, крошки сокращаются. */
+  /* Навигация — через мобильное меню (hamburger в CabinetHeader). Мобильная
+     шапка (hamburger, крошки, уведомления, «Оформление», выход) — правила в
+     CabinetHeader.module.css. */
 }

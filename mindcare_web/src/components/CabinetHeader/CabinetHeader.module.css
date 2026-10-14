@@ -11,13 +11,42 @@
   flex-shrink: 0;
 }
 
-/* Левая группа: слот layout'а (hamburger) + хлебные крошки. Сжимается
-   только она — кнопки справа всегда доступны целиком. */
+/* Левая группа: hamburger + хлебные крошки. Сжимается только она —
+   кнопки справа всегда доступны целиком. */
 .lead {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+/* Hamburger мобильного drawer'а: скрыт шире 600px (там sidebar/rail).
+   Перенесён из CabinetLayout.module.css без изменения внешнего вида. */
+.menuBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  color: var(--espresso);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.menuBtn:hover {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.menuBtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
 }
 
 /* ── Хлебные крошки ─────────────────────────────────────────────── */
@@ -165,13 +194,17 @@
 }
 
 @media (max-width: 600px) {
+  .menuBtn {
+    display: inline-flex;
+  }
+
   .actions {
     gap: 6px;
   }
 
-  /* Тесная мобильная шапка: заглушка уведомлений скрыта, выход и
-     «Оформление» остаются. */
-  .iconBtnOptional {
+  /* Sidebar скрыт, переключатель кабинета — в блоке пользователя drawer'а.
+     Остаются колокольчик, «Оформление» и выход (см. ADR-031, дополнение). */
+  .switcher {
     display: none;
   }
 

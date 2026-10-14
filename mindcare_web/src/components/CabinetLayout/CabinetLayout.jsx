@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation, Outlet, NavLink, Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import CabinetSwitcher from '../../features/auth/CabinetSwitcher';
 import Icon from '../Icon/Icon';
 import CabinetHeader from '../CabinetHeader/CabinetHeader';
+import CabinetDrawer from '../CabinetDrawer/CabinetDrawer';
 import { resolveBreadcrumbs } from '../CabinetHeader/breadcrumbs';
 import A11yPanel from '../../features/a11y/A11yPanel';
 import { getInitials } from '../../shared/lib/utils';
@@ -35,20 +36,15 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
     }
   }, [cabinetRole, activeRole, user, setActiveRole]);
 
-  // Мобильное меню (drawer). На desktop кнопка скрыта, drawer не открыть.
+  // Мобильное меню (drawer, <=600px). Шире hamburger скрыт, drawer не открыть.
+  // Escape, backdrop и фокус — в CabinetDrawer.
   const [menuOpen, setMenuOpen] = useState(false);
-  const closeMenu = () => setMenuOpen(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const menuButtonRef = useRef(null);
+  const drawerId = useId();
 
   // Закрывать drawer при переходе в другой раздел.
   useEffect(() => { setMenuOpen(false); }, [pathname]);
-
-  // Escape закрывает drawer.
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [menuOpen]);
 
   // Разметка сайдбара переиспользуется и в desktop aside, и в mobile drawer.
   // navSections приходят по роли через props — отдельной мобильной навигации нет.
@@ -132,16 +128,10 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
           className={styles.topbar}
           cabinetRole={cabinetRole}
           breadcrumbs={breadcrumbs}
-          leading={(
-            <button
-              className={styles.mobileMenuButton}
-              type="button"
-              aria-label="Открыть меню"
-              onClick={() => setMenuOpen(true)}
-            >
-              <span aria-hidden="true">☰</span>
-            </button>
-          )}
+          onMenuOpen={() => setMenuOpen(true)}
+          menuOpen={menuOpen}
+          menuId={drawerId}
+          menuButtonRef={menuButtonRef}
         />
 
         {/* Панель настроек ГОСТ — под шапкой кабинета, видна только в режиме */}
@@ -154,32 +144,16 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
         </div>
       </main>
 
-      {/* ── MOBILE DRAWER (only when open; hidden on desktop via CSS) ─ */}
-      {menuOpen && (
-        <>
-          <div
-            className={styles.mobileBackdrop}
-            onClick={closeMenu}
-            aria-hidden="true"
-          />
-          <aside
-            className={styles.mobileDrawer}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Меню кабинета"
-          >
-            <button
-              className={styles.drawerClose}
-              type="button"
-              aria-label="Закрыть меню"
-              onClick={closeMenu}
-            >
-              <span aria-hidden="true">✕</span>
-            </button>
-            {sidebarInner}
-          </aside>
-        </>
-      )}
+      {/* ── MOBILE DRAWER (<=600px, only when open) ───────────────── */}
+      <CabinetDrawer
+        open={menuOpen}
+        onClose={closeMenu}
+        returnFocusRef={menuButtonRef}
+        id={drawerId}
+        className={styles.mobileDrawer}
+      >
+        {sidebarInner}
+      </CabinetDrawer>
     </div>
   );
 }

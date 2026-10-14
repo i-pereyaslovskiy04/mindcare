@@ -1,0 +1,58 @@
+/* Drawer + backdrop: position: fixed → вне grid оболочки, на layout не влияют.
+   Перенесено из CabinetLayout.module.css без изменения внешнего вида. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 90;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(82vw, 300px);
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 8px 30px rgba(var(--shadow-rgb), 0.28);
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 8px;
+  z-index: 1;
+  transition: background 0.15s, color 0.15s;
+}
+
+.close:hover {
+  background: var(--sand);
+  color: var(--espresso);
+}
+
+.close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* Подстраховка: шире 600px drawer/backdrop никогда не видны (sidebar/rail). */
+@media (min-width: 601px) {
+  .drawer,
+  .backdrop {
+    display: none;
+  }
+}

@@ -290,20 +290,32 @@
   margin: 0 auto;
 }
 
-/* ── responsive ── */
+/* ── mobile drawer (<=600px) ── */
+/* Hamburger — в CabinetHeader, drawer/backdrop/«Закрыть» — CabinetDrawer.
+   Drawer — отдельный fixed-элемент вне .app::after, поэтому brand'у
+   возвращаем собственный нижний разделитель. */
+.mobileDrawer .brand {
+  border-bottom: 1px solid var(--nav-border);
+}
+
+/* ── responsive ──
+   Та же модель, что у CabinetLayout: >980px полный sidebar, 601–980px
+   icon-rail 72px, <=600px sidebar скрыт, навигация — в drawer. */
 @media (max-width: 980px) {
   .app {
     grid-template-columns: 72px 1fr;
   }
 
-  .brand {
+  /* Сворачивание ТОЛЬКО desktop-сайдбара. Drawer использует те же классы,
+     но сворачиваться не должен → правила скоупятся под .sidebar. */
+  .sidebar .brand {
     padding: 18px 0;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  .brandShort {
+  .sidebar .brandShort {
     display: block;
     font-family: 'Cormorant Garamond', serif;
     font-size: 26px;
@@ -312,17 +324,17 @@
     font-style: italic;
   }
 
-  .brandFull,
-  .brandSub {
+  .sidebar .brandFull,
+  .sidebar .brandSub {
     display: none;
   }
 
-  .user {
+  .sidebar .user {
     padding: 14px 0;
     justify-content: center;
   }
 
-  .userInfo {
+  .sidebar .userInfo {
     display: none;
   }
 
@@ -337,35 +349,35 @@
     gap: 10px;
   }
 
-  .nav {
+  .sidebar .nav {
     padding: 10px 8px;
   }
 
-  .navSectionLabel {
+  .sidebar .navSectionLabel {
     display: none;
   }
 
-  .navItem {
+  .sidebar .navItem {
     justify-content: center;
     padding: 10px 0;
     gap: 0;
   }
 
-  .navLabel {
+  .sidebar .navLabel {
     display: none;
   }
 
-  .navItemDisabled {
+  .sidebar .navItemDisabled {
     justify-content: center;
     padding: 10px 0;
     gap: 0;
   }
 
-  .navItemSoon {
+  .sidebar .navItemSoon {
     display: none;
   }
 
-  .foot {
+  .sidebar .foot {
     display: none;
   }
 
@@ -374,21 +386,14 @@
   }
 }
 
-/* Мобильная шапка админки: рядом с icon-rail места мало — сжимаем отступы
-   (крошки обрезаются, кнопки не сжимаются — правила в CabinetHeader). */
 @media (max-width: 600px) {
-  .topbar {
-    padding: 12px 14px;
-    gap: 10px;
+  /* Sidebar/rail скрыт → в сетке один in-flow элемент (.main), колонка 1fr
+     (при "0 1fr" .main попал бы в нулевой трек и схлопнулся). */
+  .app {
+    grid-template-columns: 1fr;
   }
-}
 
-/* Очень узкие ширины (телефоны, включая ~390px): sidebar остаётся 72px
-   icon-rail (правило выше), main-column — совсем узкая, топбару нужен
-   минимальный padding/gap, чтобы crumbs+actions поместились без overflow. */
-@media (max-width: 480px) {
-  .topbar {
-    padding: 10px 10px;
-    gap: 6px;
+  .sidebar {
+    display: none;
   }
 }

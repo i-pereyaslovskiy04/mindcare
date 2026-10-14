@@ -2,9 +2,12 @@
  * CabinetHeader — общая шапка (topbar) всех кабинетов: student, psychologist,
  * supervisor (через CabinetLayout) и admin (через AdminLayout).
  *
- * Слева — слот `leading` (hamburger мобильного drawer'а CabinetLayout; у
- * AdminLayout его нет) и хлебные крошки. Справа строгий порядок:
- *   [CabinetSwitcher, только <=980px] → Поиск → Уведомления → Оформление → Выход.
+ * Слева — hamburger мобильного drawer'а (только <=600px, если layout передал
+ * onMenuOpen) и хлебные крошки. Справа строгий порядок:
+ *   [CabinetSwitcher, только 601–980px] → Поиск → Уведомления → Оформление → Выход.
+ * На <=600px CabinetSwitcher в шапке скрыт: тот же переключатель есть в блоке
+ * пользователя внутри drawer'а, а место в шапке нужно колокольчику,
+ * «Оформлению» и выходу.
  *
  * Brand и sidebar остаются в своих layout'ах; layout передаёт `className` с
  * собственными отступами шапки, общая высота — var(--cabinet-header-height)
@@ -58,20 +61,44 @@ function Breadcrumbs({ items }) {
   );
 }
 
-export default function CabinetHeader({ cabinetRole, breadcrumbs, leading = null, className }) {
+/**
+ * onMenuOpen / menuOpen / menuId / menuButtonRef — hamburger мобильного drawer'а
+ * (CabinetDrawer layout'а): aria-expanded/aria-controls и ref для возврата фокуса.
+ */
+export default function CabinetHeader({
+  cabinetRole,
+  breadcrumbs,
+  className,
+  onMenuOpen,
+  menuOpen = false,
+  menuId,
+  menuButtonRef,
+}) {
   const logout = useLogout();
 
   return (
     <header className={[styles.header, className].filter(Boolean).join(' ')}>
       <div className={styles.lead}>
-        {leading}
+        {onMenuOpen && (
+          <button
+            ref={menuButtonRef}
+            className={styles.menuBtn}
+            type="button"
+            aria-label="Открыть меню"
+            aria-haspopup="dialog"
+            aria-expanded={menuOpen}
+            aria-controls={menuOpen ? menuId : undefined}
+            onClick={onMenuOpen}
+          >
+            <span aria-hidden="true">☰</span>
+          </button>
+        )}
         <Breadcrumbs items={breadcrumbs} />
       </div>
 
       <div className={styles.actions}>
         {/* Дублирует switcher из sidebar .userInfo, но видим только когда
-            sidebar свёрнут в icon-rail/скрыт (<=980px) — одновременно виден
-            только один из двух. */}
+            sidebar свёрнут в icon-rail (601–980px); на <=600px он в drawer. */}
         <div className={styles.switcher}>
           <CabinetSwitcher currentRole={cabinetRole} />
         </div>
@@ -87,10 +114,11 @@ export default function CabinetHeader({ cabinetRole, breadcrumbs, leading = null
           />
         </div>
 
-        {/* Заглушка уведомлений: без счётчика и индикатора непрочитанного. */}
+        {/* Заглушка уведомлений: без счётчика и индикатора непрочитанного.
+            Будущая рабочая функция — на мобильной ширине не скрывается. */}
         <button
           type="button"
-          className={`${styles.iconBtn} ${styles.iconBtnPlaceholder} ${styles.iconBtnOptional}`}
+          className={`${styles.iconBtn} ${styles.iconBtnPlaceholder}`}
           aria-label="Уведомления — скоро"
           title="Уведомления — скоро"
           aria-disabled="true"

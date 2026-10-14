@@ -156,3 +156,22 @@ test('mobile drawer: brand в drawer ведёт на главную кабине
   fireEvent.click(brand);
   expect(screen.queryByRole('dialog', { name: 'Меню кабинета' })).toBeNull();
 });
+
+test('mobile drawer: фокус на «Закрыть меню», Escape закрывает и возвращает фокус на hamburger', () => {
+  mockAuth({ roles: ['student'], activeRole: 'student' });
+  mockPathname = '/student';
+  render(<CabinetLayout cabinetRole="student" navSections={[]} crumbLabels={{}} />);
+
+  const burger = screen.getByRole('button', { name: 'Открыть меню' });
+  expect(burger).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(burger);
+
+  const drawer = screen.getByRole('dialog', { name: 'Меню кабинета' });
+  expect(burger).toHaveAttribute('aria-expanded', 'true');
+  expect(burger).toHaveAttribute('aria-controls', drawer.id);
+  expect(within(drawer).getByRole('button', { name: 'Закрыть меню' })).toHaveFocus();
+
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Меню кабинета' })).toBeNull();
+  expect(burger).toHaveFocus();
+});

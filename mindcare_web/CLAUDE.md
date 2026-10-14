@@ -53,7 +53,8 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 
 **Шапка кабинетов (ADR-031):** одна — `components/CabinetHeader/` для
 CabinetLayout (student/psychologist/supervisor) и AdminLayout. Порядок справа:
-[CabinetSwitcher <=980px] → Поиск → Уведомления → Оформление → Выход. Поиск и
+[CabinetSwitcher 601–980px] → Поиск → Уведомления → Оформление → Выход; на <=600px
+слева hamburger, switcher — в drawer (CabinetDrawer, общий для admin). Поиск и
 колокольчик — честные заглушки (disabled / `aria-disabled`, без fake unread);
 кнопки почты и home-иконки нет; brand — ссылка на корень кабинета. Крошки — только
 из явных `crumbLabels`/`dynamicCrumbs` (`parent` — промежуточный уровень), не из

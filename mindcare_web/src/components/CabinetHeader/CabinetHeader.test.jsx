@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { createRef } from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import CabinetHeader from './CabinetHeader';
 import { resolveBreadcrumbs } from './breadcrumbs';
@@ -173,12 +176,87 @@ describe('CabinetHeader', () => {
     expect(screen.getByRole('button', { name: /Психолог/ })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('слот leading рендерится слева от крошек', () => {
-    renderHeader({ leading: <button type="button">Открыть меню</button> });
-    expectBefore(
+  test('без onMenuOpen hamburger не рендерится', () => {
+    renderHeader();
+    expect(screen.queryByRole('button', { name: 'Открыть меню' })).toBeNull();
+  });
+
+  test('hamburger: слева от крошек, открывает меню, aria-expanded/controls, ref для фокуса', () => {
+    const onMenuOpen = jest.fn();
+    const ref = createRef();
+    const { rerender } = renderHeader({ onMenuOpen, menuId: 'drawer-1', menuButtonRef: ref });
+
+    const burger = screen.getByRole('button', { name: 'Открыть меню' });
+    expectBefore(burger, screen.getByRole('navigation', { name: 'Навигационная цепочка' }));
+    expect(burger).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(burger).toHaveAttribute('aria-expanded', 'false');
+    expect(burger).not.toHaveAttribute('aria-controls');
+    expect(ref.current).toBe(burger);
+
+    fireEvent.click(burger);
+    expect(onMenuOpen).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ThemeProvider>
+        <A11yProvider>
+          <CabinetHeader
+            cabinetRole="student"
+            breadcrumbs={CRUMBS}
+            onMenuOpen={onMenuOpen}
+            menuOpen
+            menuId="drawer-1"
+            menuButtonRef={ref}
+          />
+        </A11yProvider>
+      </ThemeProvider>
+    );
+    expect(burger).toHaveAttribute('aria-expanded', 'true');
+    expect(burger).toHaveAttribute('aria-controls', 'drawer-1');
+  });
+
+  test('мобильный порядок: hamburger → крошки → уведомления → оформление → выход', () => {
+    renderHeader({ onMenuOpen: jest.fn() });
+    const order = [
       screen.getByRole('button', { name: 'Открыть меню' }),
       screen.getByRole('navigation', { name: 'Навигационная цепочка' }),
-    );
+      screen.getByRole('button', { name: 'Уведомления — скоро' }),
+      screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' }),
+      screen.getByRole('button', { name: 'Выйти' }),
+    ];
+    order.slice(1).forEach((el, i) => expectBefore(order[i], el));
+  });
+});
+
+// Ширины jsdom не моделирует — проверяем сами responsive-правила CSS
+// (визуальные брейкпоинты — ручной smoke).
+describe('CabinetHeader.module.css: responsive-правила', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'CabinetHeader.module.css'), 'utf8');
+  const mediaBlock = (width) => {
+    const start = css.indexOf(`@media (max-width: ${width}px) {`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const next = css.indexOf('@media', start + 1);
+    return css.slice(start, next === -1 ? undefined : next);
+  };
+  const hides = (block, cls) =>
+    new RegExp(`\\.${cls}\\s*\\{[^}]*display:\\s*none`).test(block);
+
+  test('<=980px: поиск-заглушка скрыта, switcher показан', () => {
+    const block = mediaBlock(980);
+    expect(hides(block, 'search')).toBe(true);
+    expect(block).toMatch(/\.switcher\s*\{[^}]*display:\s*inline-flex/);
+  });
+
+  test('<=600px: hamburger показан, switcher уходит в drawer, колокольчик и выход не скрываются', () => {
+    const block = mediaBlock(600);
+    expect(block).toMatch(/\.menuBtn\s*\{[^}]*display:\s*inline-flex/);
+    expect(hides(block, 'switcher')).toBe(true);
+    expect(hides(block, 'iconBtn')).toBe(false);
+    expect(hides(block, 'iconBtnPlaceholder')).toBe(false);
+    expect(css).not.toMatch(/iconBtnOptional/);
+  });
+
+  test('шире 600px hamburger скрыт', () => {
+    expect(css).toMatch(/\.menuBtn\s*\{[^}]*display:\s*none/);
   });
 });
 

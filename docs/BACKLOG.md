@@ -271,7 +271,7 @@
       `user_sessions.last_active` и debounce `touch_session` 300с;
     - read-receipt live-обновление только в пределах snapshot `limit=50`;
     - без WebSocket/SSE (polling 8s/30s);
-    - mobile drawer пока без focus-trap / `inert` фона;
+    - mobile drawer: focus-trap есть (`CabinetDrawer`, 2026-10-14), `inert` фона — нет;
     - snapshot reconcile при polling ограничен последними 50 сообщениями; история
       старше snapshot window синхронизируется только при переоткрытии диалога
   - **Group chat — postponed / future:**
@@ -326,7 +326,7 @@
     antivirus/ClamAV scanning; at-rest encryption физических файлов в FS; S3/MinIO
     storage backend; добавление новых файлов в edit-mode; staff break-glass access;
     Action Center / колокольчик; system messages для заданий/материалов/анкет/legal
-    announcements; усиление a11y mobile drawer (focus-trap/`inert`);
+    announcements; усиление a11y mobile drawer (`inert` фона; focus-trap уже есть);
     глубокий рефакторинг chat-модуля
   - **Orphan attachments cleanup helper — существует:** `scripts/cleanup_orphan_attachments.py`
     работает в dry-run режиме по умолчанию, `--apply` включает выполнение, scope —
@@ -575,8 +575,8 @@
   (sidebar/footer/меню профиля) отдельно.
 - **Пересобрать `guides/*.docx` / `*.pdf`** — обновлены только `.md`
   (кнопка «Оформление», заглушки, палитры без «Контраст»).
-- **Drawer админки.** AdminLayout на <=600px остаётся icon-rail 72px без
-  hamburger/drawer; унификация с CabinetLayout — отдельный этап.
+- ~~**Drawer админки.**~~ Сделано (mobile shell, 2026-10-14): AdminLayout —
+  rail 601–980px, drawer <=600px через общий `CabinetDrawer`.
 
 ### Подтверждение студента ДонГУ — продолжение (после ADR-029, 2026-10-07)
 

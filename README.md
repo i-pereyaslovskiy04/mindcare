@@ -703,13 +703,14 @@ student ↔ psychologist поверх `therapy_engagements` + read-only system c
   drawer (открывается по hamburger, закрывается backdrop/✕/Escape/кликом по пункту);
 - шапка всех кабинетов — общий `CabinetHeader` (ADR-031): крошки-ссылки, поиск и
   колокольчик — заглушки, одна кнопка «Оформление» (тема + версия для слабовидящих), выход;
-- `≤600px` шапка разгружена: скрыта заглушка уведомлений, оставлены hamburger + крошки +
-  «Оформление» + выход (кнопки почты в шапке больше нет);
+- `≤600px` шапка: hamburger + крошки + уведомления + «Оформление» + выход; переключатель
+  кабинета — в drawer (кнопки почты в шапке нет); admin — та же модель (rail 601–980px,
+  drawer ≤600px);
 - фикс пустого кабинета на `<600px`: при скрытом sidebar `.app` остаётся `grid-template-columns: 1fr`.
 
 *Ограничения MVP:* presence приблизительный (не realtime, порог 10 минут, зависит от
 `user_sessions.last_active` и debounce `touch_session` 300с); read-receipt live-обновление —
-только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer пока без focus-trap/`inert`.
+только в пределах snapshot `limit=50`; без WebSocket/SSE; mobile drawer — focus-trap есть (`CabinetDrawer`), `inert` фона нет.
 
 **Вложения (Stage 32b–32j + hotfixes):** файлы в student↔psychologist engagement чате; отправка через
 скрепку + drag & drop; несколько файлов в одном сообщении; attachment-only message;

@@ -686,8 +686,8 @@ CabinetLayout (components/CabinetLayout/)
 ├── Brand — ссылка на корень кабинета (/student, /psychologist, /supervisor)
 ├── Avatar с getInitials() из shared/lib/utils.js
 ├── CabinetSwitcher: sidebar на desktop, в CabinetHeader на узких viewport
-├── CabinetHeader (крошки из crumbLabels/dynamicCrumbs, leading = hamburger)
-├── Mobile drawer (<=600px)
+├── CabinetHeader (крошки из crumbLabels/dynamicCrumbs, hamburger <=600px)
+├── CabinetDrawer — mobile drawer (<=600px) с той же разметкой sidebar
 └── <Outlet /> для вложенных маршрутов
 
 StudentLayout      → CabinetLayout (navSections = самопомощь/терапия/аккаунт)
@@ -698,19 +698,25 @@ CabinetSettingsPage — общая страница настроек, подкл
   через /psychologist/settings и /supervisor/settings
 ```
 
-AdminLayout (`features/admin/`) — отдельный layout (свой sidebar, icon-rail без
-drawer на узких ширинах), но та же шапка `CabinetHeader`; brand ведёт на `/admin`.
+AdminLayout (`features/admin/`) — отдельный layout (свой sidebar и навигация
+`ADMIN_NAV_GROUPS`), но та же модель ширин и те же общие части: >980px полный
+sidebar, 601–980px icon-rail 72px, <=600px sidebar скрыт → hamburger в
+`CabinetHeader` + `CabinetDrawer` с той же разметкой sidebar; brand ведёт на `/admin`.
+
+`CabinetDrawer` (`components/CabinetDrawer/`) — общий mobile drawer обоих layout'ов:
+фокус при открытии на «Закрыть меню», Tab по кругу внутри, Escape / backdrop /
+переход по пункту закрывают, фокус возвращается на hamburger.
 
 ### CabinetHeader
 
 ```
 CabinetHeader (components/CabinetHeader/)        ADR-031
-├── leading (слот layout'а: hamburger CabinetLayout) + крошки
+├── hamburger (<=600px, если layout передал onMenuOpen) + крошки
 │     <nav aria-label="Навигационная цепочка"><ol> «Главная» (ссылка) / … / текущая
 │     resolveBreadcrumbs(): crumbLabels → dynamicCrumbs (parent) → ближайший раздел
-├── CabinetSwitcher (только <=980px — sidebar свёрнут/скрыт)
+├── CabinetSwitcher (только 601–980px — rail; на <=600px он в drawer)
 ├── Поиск — заглушка: <input type="search" disabled>, скрыт <=980px
-├── Уведомления — заглушка: aria-disabled, без счётчика/точки, скрыт <=600px
+├── Уведомления — заглушка: aria-disabled, без счётчика/точки (на mobile не скрыт)
 ├── Оформление — ThemeToggle compact + extraSection «Версия для слабовидящих»
 │     (существующий A11yToggle variant block; A11yPanel остаётся под шапкой)
 └── Выход — useLogout()
