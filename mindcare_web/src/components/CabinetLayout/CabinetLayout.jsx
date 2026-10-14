@@ -1,22 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useLocation, Outlet, NavLink, Link } from 'react-router-dom';
-import { useAuth, useLogout } from '../../features/auth/AuthContext';
+import { useAuth } from '../../features/auth/AuthContext';
 import CabinetSwitcher from '../../features/auth/CabinetSwitcher';
 import Icon from '../Icon/Icon';
-import ThemeToggle from '../../features/theme/ThemeToggle';
-import A11yToggle from '../../features/a11y/A11yToggle';
+import CabinetHeader from '../CabinetHeader/CabinetHeader';
+import { resolveBreadcrumbs } from '../CabinetHeader/breadcrumbs';
 import A11yPanel from '../../features/a11y/A11yPanel';
 import { getInitials } from '../../shared/lib/utils';
 import { ROLE_LABELS, normalizeRoles } from '../../shared/lib/roles';
 import styles from './CabinetLayout.module.css';
 
+/**
+ * dynamicCrumbs — [{ prefix, label, parent? }] для страниц с параметром в пути;
+ * parent — путь раздела из crumbLabels (промежуточная крошка-ссылка).
+ */
 export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, dynamicCrumbs }) {
   const { pathname } = useLocation();
   const { user, activeRole, setActiveRole } = useAuth();
-  const logout       = useLogout();
-  const crumb        = crumbLabels?.[pathname]
-    ?? dynamicCrumbs?.find(({ prefix }) => pathname.startsWith(prefix))?.label
-    ?? 'Личный кабинет';
+  // Корень кабинета = префикс его маршрутов (/student, /psychologist, /supervisor).
+  const homePath     = `/${cabinetRole}`;
+  const breadcrumbs  = resolveBreadcrumbs({ pathname, homePath, crumbLabels, dynamicCrumbs });
   // Лейбл — из cabinetRole (текущего кабинета), а не из legacy user.role.
   const roleLabel    = ROLE_LABELS[cabinetRole] ?? '';
 
@@ -51,11 +54,20 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
   // navSections приходят по роли через props — отдельной мобильной навигации нет.
   const sidebarInner = (
     <>
-      <div className={styles.brand}>
-        <span className={styles.brandShort}>М</span>
+      {/* Текстовый brand — ссылка на главную текущего кабинета (и монограмма
+          в icon-rail, и brand в mobile drawer). */}
+      <Link
+        to={homePath}
+        className={styles.brand}
+        aria-label="Психология ДонГУ, личный кабинет — на главную"
+        title="На главную кабинета"
+        onClick={closeMenu}
+      >
+        {/* Монограмма icon-rail (<=980px): «ПД» — Психология ДонГУ. */}
+        <span className={styles.brandShort} aria-hidden="true">ПД</span>
         <span className={styles.brandFull}>Психо<em>логия</em> ДонГУ</span>
         <span className={styles.brandSub}>Личный кабинет</span>
-      </div>
+      </Link>
 
       <div className={styles.user}>
         <div className={styles.avatar}>{getInitials(user?.name)}</div>
@@ -116,8 +128,11 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
 
       {/* ── MAIN ─────────────────────────────────────────────────── */}
       <main className={styles.main} data-cabinet-main>
-        <div className={styles.topbar}>
-          <div className={styles.topbarLeft}>
+        <CabinetHeader
+          className={styles.topbar}
+          cabinetRole={cabinetRole}
+          breadcrumbs={breadcrumbs}
+          leading={(
             <button
               className={styles.mobileMenuButton}
               type="button"
@@ -126,51 +141,8 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
             >
               <span aria-hidden="true">☰</span>
             </button>
-            <div className={styles.crumbs}>
-              Личный кабинет / <span>{crumb}</span>
-            </div>
-          </div>
-          <div className={styles.actions}>
-            {/* Дублирует switcher из sidebar .userInfo, но видим только когда
-                sidebar свёрнут в icon-rail/скрыт (<=980px) — сами блоки
-                взаимно исключены через CSS, одновременно виден только один. */}
-            <div className={styles.topbarSwitcher}>
-              <CabinetSwitcher currentRole={cabinetRole} />
-            </div>
-            <div className={styles.search}>
-              <Icon name="search" size={14} />
-              <input type="text" placeholder="Поиск по материалам, записям…" readOnly />
-            </div>
-            <Link
-              to="/"
-              className={styles.homeLink}
-              aria-label="На главную"
-              title="На главную"
-            >
-              <Icon name="home" size={16} />
-            </Link>
-            <A11yToggle compact />
-            <ThemeToggle compact />
-            <button
-              className={`${styles.iconBtn} ${styles.iconBtnOptional}`}
-              aria-label="Уведомления"
-              type="button"
-            >
-              <Icon name="bell" size={16} />
-              <span className={styles.dot} aria-hidden="true" />
-            </button>
-            <button
-              className={`${styles.iconBtn} ${styles.iconBtnOptional}`}
-              aria-label="Почта"
-              type="button"
-            >
-              <Icon name="mail" size={16} />
-            </button>
-            <button className={styles.iconBtn} aria-label="Выйти" type="button" onClick={logout}>
-              <Icon name="logout" size={16} />
-            </button>
-          </div>
-        </div>
+          )}
+        />
 
         {/* Панель настроек ГОСТ — под шапкой кабинета, видна только в режиме */}
         <A11yPanel />

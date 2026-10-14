@@ -38,7 +38,11 @@ localStorage дублируется всегда, т.к. анти-FOUC скри�
   localStorage `app-theme-palette`/`app-theme-mode`, matchMedia-подписка);
   подключён в `src/app/providers.jsx`.
 - `src/features/theme/ThemeToggle.jsx` — сегмент-контрол (режим + палитра)
-  в Navbar (desktop + mobile drawer) и topbar CabinetLayout.
+  в Navbar (desktop + mobile drawer); в шапке кабинетов (`CabinetHeader`,
+  ADR-031) — `compact`: одна кнопка «Оформление», панель с режимом, палитрой и
+  секцией «Версия для слабовидящих» (`extraSection` с существующим A11yToggle).
+  Палитра `hc` в обычном списке не предлагается — только если уже активна
+  (prefers-contrast / прежний выбор); сама палитра и её токены не менялись.
 - Анти-FOUC скрипт в `public/index.html` (списки палитр/режимов синхронизировать
   с ThemeContext.jsx).
 - `npm run test:contrast` (`scripts/check-contrast.js`) — WCAG-проверка пар
@@ -63,7 +67,8 @@ localStorage дублируется всегда, т.к. анти-FOUC скри�
 
 Отдельный режим, не палитра: `src/features/a11y/` (A11yContext / A11yToggle /
 A11yPanel) + `src/styles/tokens/a11y.css`. Включается кнопкой «Версия для
-слабовидящих» в Navbar и в topbar кабинета; настройки (размер шрифта 100/150/200%,
+слабовидящих» в Navbar и в панели «Оформление» шапки кабинета (отдельной иконки
+«глаз» в шапке кабинета нет — ADR-031); настройки (размер шрифта 100/150/200%,
 схемы Ч/Б, Б/Ч, синяя, бежевая; межбуквенный/межстрочный интервал; шрифт с
 засечками; изображения показать/скрыть/оттенки серого; сброс) сохраняются в
 localStorage. Все 4 схемы проходят AAA (`npm run test:contrast`).

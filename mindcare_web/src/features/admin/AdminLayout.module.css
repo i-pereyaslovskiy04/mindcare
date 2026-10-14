@@ -45,6 +45,14 @@
   letter-spacing: 0.04em;
   line-height: 1.3;
   flex-shrink: 0;
+  /* brand — ссылка на главную панели управления: без подчёркивания, фокус
+     внутри (sidebar с overflow: hidden обрезал бы внешний outline). */
+  text-decoration: none;
+}
+
+.brand:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: calc(var(--focus-ring-width) * -1);
 }
 
 .brand em {
@@ -262,71 +270,12 @@
 }
 
 /* ── topbar ── */
+/* Шапка — CabinetHeader (components/CabinetHeader): высота, крошки, поиск,
+   уведомления, «Оформление», выход и topbar-копия CabinetSwitcher (<=980px).
+   Здесь только отступы ряда этого layout'а. */
 .topbar {
-  box-sizing: border-box;
-  min-height: var(--cabinet-header-height);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 16px 36px;
-  background: var(--warm-white);
-  flex-shrink: 0;
   gap: 16px;
-}
-
-.crumbs {
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  color: var(--text-light);
-  text-transform: uppercase;
-  font-weight: 600;
-  white-space: nowrap;
-  /* Позволяет сжиматься ниже intrinsic-ширины текста (flex item default —
-     min-width: auto) и обрезаться многоточием вместо горизонтального overflow. */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.crumbs span {
-  color: var(--espresso);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  /* Logout и CabinetSwitcher должны оставаться полностью доступны и не
-     сжиматься/перекрываться с breadcrumbs — сжимаются только crumbs. */
-  flex-shrink: 0;
-}
-
-/* Ссылка «На главную» (публичный /) — визуально как icon-кнопки топбара. */
-.homeLink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.homeLink:hover {
-  background: rgba(var(--espresso-rgb), 0.08);
-  color: var(--espresso);
-}
-.homeLink:focus-visible {
-  outline: 2px solid var(--coffee);
-  outline-offset: 2px;
-}
-
-/* Скрыт на desktop (>980px) — там switcher виден в sidebar .userInfo.
-   Показывается только когда sidebar сворачивается в icon-rail. */
-.topbarSwitcher {
-  display: none;
-  color: var(--espresso);
 }
 
 /* ── content area ── */
@@ -377,11 +326,8 @@
     display: none;
   }
 
-  /* Sidebar switcher скрыт вместе с userInfo — показываем topbar-копию. */
-  .topbarSwitcher {
-    display: inline-flex;
-    align-items: center;
-  }
+  /* Sidebar switcher скрыт вместе с userInfo — topbar-копию показывает
+     CabinetHeader. */
 
   /* Sidebar сжат до 72px icon-rail — topbar должен ужаться вместе с ним,
      иначе исходный padding 16px 36px съедает большую часть узкого main-column
@@ -428,24 +374,12 @@
   }
 }
 
-/* Мобильная шапка админки: рядом с icon-rail места мало — сжимаем отступы и
-   обрезаем breadcrumb, чтобы он не выталкивал кнопки оформления и выхода. */
+/* Мобильная шапка админки: рядом с icon-rail места мало — сжимаем отступы
+   (крошки обрезаются, кнопки не сжимаются — правила в CabinetHeader). */
 @media (max-width: 600px) {
   .topbar {
     padding: 12px 14px;
     gap: 10px;
-  }
-
-  .crumbs {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
-
-  .actions {
-    flex-shrink: 0;
-    gap: 6px;
   }
 }
 
@@ -455,10 +389,6 @@
 @media (max-width: 480px) {
   .topbar {
     padding: 10px 10px;
-    gap: 6px;
-  }
-
-  .actions {
     gap: 6px;
   }
 }

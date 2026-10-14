@@ -189,6 +189,28 @@ describe('A11y (ГОСТ) режим', () => {
     ).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('block: подпись видна, onToggle вызывается после того же переключения', () => {
+    const onToggle = jest.fn();
+    render(
+      <A11yProvider>
+        <A11yToggle block onToggle={onToggle} />
+      </A11yProvider>
+    );
+
+    const btn = screen.getByRole('button', { name: 'Версия для слабовидящих' });
+    expect(btn).toHaveTextContent('Версия для слабовидящих');
+    fireEvent.click(btn);
+    expect(root().getAttribute('data-a11y')).toBe('on');
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    const back = screen.getByRole('button', { name: 'Обычная версия сайта' });
+    expect(back).toHaveTextContent('Обычная версия');
+    expect(back).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(back);
+    expect(root().hasAttribute('data-a11y')).toBe(false);
+    expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+
   test('все контролы панели — button с aria-pressed (клавиатурная доступность)', () => {
     renderA11y();
     fireEvent.click(screen.getByRole('button', { name: 'Версия для слабовидящих' }));

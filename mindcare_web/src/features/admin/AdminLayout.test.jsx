@@ -1,5 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import AdminLayout from './AdminLayout';
+import { ThemeProvider } from '../theme/ThemeContext';
+import { A11yProvider } from '../a11y/A11yContext';
 import * as AuthContext from '../auth/AuthContext';
 
 let mockPathname = '/admin/users';
@@ -23,9 +25,10 @@ jest.mock('react-router-dom', () => ({
     </a>
   ),
 }), { virtual: true });
+const mockLogout = jest.fn();
 jest.mock('../auth/AuthContext', () => ({
   useAuth: jest.fn(),
-  useLogout: () => jest.fn(),
+  useLogout: () => mockLogout,
 }));
 
 const setActiveRole = jest.fn();
@@ -104,12 +107,60 @@ test('renders links to the new email-domains and settings pages', () => {
   expect(securityLink).toHaveAttribute('href', '/admin/settings');
 });
 
-test('renders a "На главную" link to the public home (/)', () => {
+// Отдельная home-иконка на публичный «/» удалена: на главную панели ведёт
+// текстовый brand (а «Главная» в крошках — туда же).
+test('brand «Панель управления» ведёт на /admin; ссылки на публичный «/» нет', () => {
   mockAuth({ roles: ['admin'], activeRole: 'admin' });
   render(<AdminLayout />);
 
-  const homeLink = screen.getByRole('link', { name: 'На главную' });
-  expect(homeLink).toHaveAttribute('href', '/');
+  const brand = screen.getByRole('link', {
+    name: 'Психология ДонГУ, панель управления — на главную',
+  });
+  expect(brand).toHaveAttribute('href', '/admin');
+  expect(brand).toHaveTextContent('Панель управления');
+  // Монограмма свёрнутого sidebar — «ПД» внутри той же ссылки; legacy «М» нет.
+  expect(within(brand).getByText('ПД')).toHaveAttribute('aria-hidden', 'true');
+  expect(within(brand).queryByText('М')).toBeNull();
+
+  expect(screen.queryByRole('link', { name: 'На главную' })).toBeNull();
+  expect(screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === '/')).toHaveLength(0);
+});
+
+test('admin использует общий CabinetHeader: крошки, поиск, уведомления, оформление, выход', () => {
+  mockAuth({ roles: ['admin', 'supervisor'], activeRole: 'admin' });
+  render(
+    <ThemeProvider>
+      <A11yProvider>
+        <AdminLayout />
+      </A11yProvider>
+    </ThemeProvider>,
+  );
+
+  const nav = screen.getByRole('navigation', { name: 'Навигационная цепочка' });
+  expect(within(nav).getByRole('link', { name: 'Главная' })).toHaveAttribute('href', '/admin');
+  expect(within(nav).getByText('Пользователи')).toHaveAttribute('aria-current', 'page');
+
+  expect(screen.getByRole('searchbox', { name: 'Поиск — будет доступен позже' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Уведомления — скоро' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' })).toBeInTheDocument();
+  // Отдельных кнопок «глаз» и почты в шапке нет.
+  expect(screen.queryByRole('button', { name: 'Версия для слабовидящих' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Почта' })).toBeNull();
+  // Multi-role: topbar-копия переключателя кабинета на месте.
+  expect(screen.getAllByRole('button', { name: /Администратор/ }).length).toBeGreaterThanOrEqual(1);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Выйти' }));
+  expect(mockLogout).toHaveBeenCalledTimes(1);
+});
+
+test('страница теста: «Главная / Тесты / Тест»', () => {
+  mockPathname = '/admin/tests/abc';
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(<AdminLayout />);
+
+  const nav = screen.getByRole('navigation', { name: 'Навигационная цепочка' });
+  expect(within(nav).getByRole('link', { name: 'Тесты' })).toHaveAttribute('href', '/admin/tests');
+  expect(within(nav).getByText('Тест')).toHaveAttribute('aria-current', 'page');
 });
 
 test('active link matches current pathname (/admin/users)', () => {

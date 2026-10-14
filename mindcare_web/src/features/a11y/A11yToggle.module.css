@@ -58,6 +58,47 @@
   color: var(--text-on-dark);
 }
 
+/* block: строка во всю ширину внутри панели «Оформление» шапки кабинета.
+   Подпись видна всегда (медиа-правило ниже касается только .label). */
+.blockBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  color: var(--text-main);
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.blockBtn:hover {
+  background: var(--cream);
+}
+
+.blockBtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.blockBtn.on,
+.blockBtn.on:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+.blockLabel {
+  line-height: 1.2;
+}
+
 /* На узких экранах остаётся только иконка — текст скрыт визуально,
    доступное имя даёт aria-label. */
 @media (max-width: 900px) {

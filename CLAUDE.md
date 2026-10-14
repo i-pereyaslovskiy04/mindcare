@@ -2,7 +2,15 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff: `docs/HANDOFFS/2026-10-07-student-verification-dongu.md` —
+Актуальный handoff: `docs/HANDOFFS/2026-10-14-cabinet-header.md` — единая
+шапка кабинетов (**ADR-031**, frontend-only): `components/CabinetHeader/` у
+CabinetLayout и AdminLayout; brand — ссылка на корень кабинета, home-иконка и
+кнопка почты удалены, крошки — ссылки из явных подписей; поиск и колокольчик —
+честные заглушки; тема и версия для слабовидящих — одна кнопка «Оформление»
+(существующий A11yToggle внутри панели, логика A11y не менялась); палитра `hc`
+не предлагается в обычном списке тем.
+
+Предыдущий handoff: `docs/HANDOFFS/2026-10-07-student-verification-dongu.md` —
 подтверждение статуса студента ДонГУ (**ADR-029**, миграция `f5a3c8d1e7b2`):
 отдельный статус, не роль (роль `student` и подпись «Пользователь» прежние);
 заявку (факультет из каталога 12 + номер билета, `enc:v1:`) подаёт только
@@ -15,7 +23,7 @@ id). Приглашение и результат — system-сообщения 
 `/student/settings#student-verification` кликабельна только в system-сообщениях.
 REGISTRY 115 → 121.
 
-Предыдущий handoff: `docs/HANDOFFS/2026-10-07-registration-domain-hint-user-role-label.md` —
+Ранее: `docs/HANDOFFS/2026-10-07-registration-domain-hint-user-role-label.md` —
 понятный отказ по домену при регистрации по email (init и confirm отвечают одним
 текстом со списком активных доменов из БД, публичный `GET /api/public/email-domains`,
 подсказка в форме; регистрация через Яндекс по ADR-027 п. 5 от allowlist освобождена

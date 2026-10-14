@@ -1,6 +1,6 @@
 /**
  * A11yToggle — кнопка «Версия для слабовидящих» / «Обычная версия».
- * Доступна на каждой странице: в Navbar и в topbar кабинета.
+ * Доступна на каждой странице: в Navbar и в панели «Оформление» шапки кабинета.
  * Вне A11yProvider рендерится null (безопасно для изолированных тестов).
  */
 
@@ -21,10 +21,13 @@ const EyeIcon = () => (
 );
 
 /**
- * compact — только иконка (шапка кабинета/админки, где нет места на подпись).
- * Доступное имя даёт aria-label, состояние — aria-pressed.
+ * compact — только иконка. Доступное имя даёт aria-label, состояние — aria-pressed.
+ * block — строка во всю ширину с подписью, видимой на любой ширине экрана
+ * (секция «Версия для слабовидящих» в панели «Оформление» шапки кабинета).
+ * onToggle — вызывается после переключения (панель «Оформление» закрывается);
+ * само переключение — прежние enable/disable контекста.
  */
-export default function A11yToggle({ className, compact = false }) {
+export default function A11yToggle({ className, compact = false, block = false, onToggle }) {
   const ctx = useContext(A11yContext);
   if (!ctx) return null;
 
@@ -35,17 +38,25 @@ export default function A11yToggle({ className, compact = false }) {
   return (
     <button
       type="button"
-      className={[compact ? styles.iconBtn : styles.btn, on && styles.on, className]
+      className={[
+        compact ? styles.iconBtn : block ? styles.blockBtn : styles.btn,
+        on && styles.on,
+        className,
+      ]
         .filter(Boolean)
         .join(' ')}
       aria-pressed={on}
       aria-label={label}
       title={label}
-      onClick={on ? disable : enable}
+      onClick={() => {
+        if (on) disable();
+        else enable();
+        onToggle?.();
+      }}
     >
       <EyeIcon />
       {!compact && (
-        <span className={styles.label}>
+        <span className={block ? styles.blockLabel : styles.label}>
           {on ? 'Обычная версия' : 'Версия для слабовидящих'}
         </span>
       )}

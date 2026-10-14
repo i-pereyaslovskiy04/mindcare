@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
 import { useLocation, Outlet, NavLink, Link } from 'react-router-dom';
-import { useAuth, useLogout } from '../auth/AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import CabinetSwitcher from '../auth/CabinetSwitcher';
 import Icon from '../../components/Icon/Icon';
-import Button from '../../components/UI/Button/Button';
-import ThemeToggle from '../theme/ThemeToggle';
-import A11yToggle from '../a11y/A11yToggle';
+import CabinetHeader from '../../components/CabinetHeader/CabinetHeader';
+import { resolveBreadcrumbs } from '../../components/CabinetHeader/breadcrumbs';
 import A11yPanel from '../a11y/A11yPanel';
 import { getInitials } from '../../shared/lib/utils';
 import { normalizeRoles } from '../../shared/lib/roles';
@@ -53,11 +52,22 @@ const CRUMB_LABELS = ADMIN_NAV_GROUPS.reduce((acc, group) => {
   return acc;
 }, {});
 
+const DYNAMIC_CRUMBS = [
+  { prefix: '/admin/tests/', label: 'Тест', parent: '/admin/tests' },
+];
+
+// Корень админки: index-маршрут /admin перенаправляет на /admin/users.
+const ADMIN_HOME = '/admin';
+
 export default function AdminLayout() {
   const { pathname } = useLocation();
   const { user, activeRole, setActiveRole } = useAuth();
-  const logout = useLogout();
-  const crumb = CRUMB_LABELS[pathname] ?? 'Панель';
+  const breadcrumbs = resolveBreadcrumbs({
+    pathname,
+    homePath: ADMIN_HOME,
+    crumbLabels: CRUMB_LABELS,
+    dynamicCrumbs: DYNAMIC_CRUMBS,
+  });
 
   // Синхронизируем activeRole с открытым admin-кабинетом (прямой URL/reload).
   useEffect(() => {
@@ -70,13 +80,20 @@ export default function AdminLayout() {
     <div className={styles.app} data-cabinet-shell>
       <aside className={styles.sidebar}>
 
-        <div className={styles.brand}>
-          <span className={styles.brandShort}>М</span>
+        {/* Текстовый brand — ссылка на главную панели управления. */}
+        <Link
+          to={ADMIN_HOME}
+          className={styles.brand}
+          aria-label="Психология ДонГУ, панель управления — на главную"
+          title="На главную панели управления"
+        >
+          {/* Монограмма icon-rail (<=980px): «ПД» — Психология ДонГУ. */}
+          <span className={styles.brandShort} aria-hidden="true">ПД</span>
           <span className={styles.brandFull}>
             Психо<em>логия</em> ДонГУ
           </span>
           <span className={styles.brandSub}>Панель управления</span>
-        </div>
+        </Link>
 
         <div className={styles.user}>
           <div className={styles.avatar}>{getInitials(user?.name)}</div>
@@ -121,38 +138,13 @@ export default function AdminLayout() {
       </aside>
 
       <main className={styles.main} data-cabinet-main>
-        <div className={styles.topbar}>
-          <div className={styles.crumbs}>
-            Администратор / <span>{crumb}</span>
-          </div>
-          <div className={styles.actions}>
-            {/* Дублирует switcher из sidebar .userInfo, но видим только
-                когда sidebar свёрнут в icon-rail (<=980px). */}
-            <div className={styles.topbarSwitcher}>
-              <CabinetSwitcher currentRole="admin" />
-            </div>
-            <Link
-              to="/"
-              className={styles.homeLink}
-              aria-label="На главную"
-              title="На главную"
-            >
-              <Icon name="home" size={16} />
-            </Link>
-            <A11yToggle compact />
-            <ThemeToggle compact />
-            <Button
-              type="button"
-              variant="icon"
-              size="sm"
-              aria-label="Выйти"
-              title="Выйти"
-              onClick={logout}
-            >
-              <Icon name="logout" size={16} />
-            </Button>
-          </div>
-        </div>
+        {/* Общая шапка кабинетов; у админки нет hamburger/drawer — sidebar
+            на узких ширинах остаётся icon-rail. */}
+        <CabinetHeader
+          className={styles.topbar}
+          cabinetRole="admin"
+          breadcrumbs={breadcrumbs}
+        />
 
         {/* Панель настроек ГОСТ — под шапкой, видна только в режиме */}
         <A11yPanel />

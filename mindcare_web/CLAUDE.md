@@ -51,6 +51,16 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 **Breakpoints:** разные по слоям осознанно — Messenger 900px, CabinetLayout 600px
 (+980px icon-rail). Не «выравнивать» их между собой.
 
+**Шапка кабинетов (ADR-031):** одна — `components/CabinetHeader/` для
+CabinetLayout (student/psychologist/supervisor) и AdminLayout. Порядок справа:
+[CabinetSwitcher <=980px] → Поиск → Уведомления → Оформление → Выход. Поиск и
+колокольчик — честные заглушки (disabled / `aria-disabled`, без fake unread);
+кнопки почты и home-иконки нет; brand — ссылка на корень кабинета. Крошки — только
+из явных `crumbLabels`/`dynamicCrumbs` (`parent` — промежуточный уровень), не из
+URL. Тема и версия для слабовидящих — одна кнопка «Оформление»: ThemeToggle
+compact + существующий A11yToggle секцией `extraSection`. Новые кнопки в шапку —
+только в CabinetHeader, не в layout'ы.
+
 ---
 
 ### Frontend: темы и доступность
@@ -63,7 +73,9 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 ✅ Цвета — ТОЛЬКО через CSS-переменные из src/styles/tokens/ (per-theme файлы,
    ключ — data-theme на <html>). Ни одного raw hex/rgba в компонентах
 ✅ Палитры: dongu (по умолчанию, фирменная бело-синяя гамма ДонГУ), coffee
-   (прежний дизайн), nature, classic, hc (AAA);
+   (прежний дизайн), nature, classic, hc (AAA). hc в обычном списке тем
+   (ThemeToggle) не предлагается — только если уже активна (prefers-contrast /
+   прежний выбор); контрастные схемы — в версии для слабовидящих (ADR-031);
    режимы: light / dark / system (следит за prefers-color-scheme вживую).
    Итог: data-theme="{palette}-{light|dark}"
 ✅ Новый код пишется на ролевых токенах (--surface, --primary, --on-surface,
@@ -165,7 +177,7 @@ Feature-specific UI разрешён только с обоснованием в
 - Calendar format chips
 - CabinetLayout nav badges
 - CabinetLayout navBadgeSoon
-- CabinetLayout notification dot
+- CabinetHeader .iconBtn (36×36, геометрия триггера ThemeToggle compact)
 - SearchBar count overlay
 - SearchBar removable chips
 - TaskItem badges

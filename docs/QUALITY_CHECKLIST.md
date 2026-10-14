@@ -134,7 +134,7 @@ mindcare_web/src/components/UI
 - Calendar time slots / slot picker
 - Calendar format chips
 - `CabinetLayout` nav badges / `navBadgeSoon`
-- `CabinetLayout` notification dot
+- `CabinetHeader` icon buttons (`.iconBtn`, геометрия триггера `ThemeToggle compact`)
 - `SearchBar` count overlay / removable chips
 - `TaskItem` badges
 - Chat controls (feature-specific для реализованного Chat MVP)
