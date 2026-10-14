@@ -23,6 +23,7 @@ import bcrypt
 import pytest
 from sqlalchemy import event, func, text
 
+from app.audit.admin_schemas import DataChangeOut
 from app.auth import storage as auth_storage
 from app.db.models import AuditLog, AuthLog, DataChangeLog, User
 from app.db.session import SessionLocal, engine
@@ -698,19 +699,56 @@ def test_hostile_legacy_rows_do_not_leak(client, admin, unique_day):
         assert marker not in payload, f"утечка {name}"
 
 
+def _json_keys_and_leaves(value):
+    """Все ключи и все листовые значения JSON-структуры на любой глубине."""
+    keys, leaves = set(), []
+    stack = [value]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            keys.update(node)
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+        else:
+            leaves.append(node)
+    return keys, leaves
+
+
 def test_data_change_values_are_never_returned(client, admin, unique_day):
+    """Redaction проверяется по СТРУКТУРЕ ответа, а не подстрокой по str(item):
+    значения вроде «30» законно встречаются в occurred_at (например,
+    2026-09-30), entry_id и других безопасных полях — такая проверка зависела
+    от календаря и давала ложные срабатывания."""
+    old_value, new_value = 4517, 9283   # отличимые от id, дат и счётчиков
     _insert([_change(unique_day, table_name="meeting_types", record_id=7,
                      changed_fields=["duration_minutes"],
-                     old_values={"duration_minutes": 30},
-                     new_values={"duration_minutes": 60})])
+                     old_values={"duration_minutes": old_value},
+                     new_values={"duration_minutes": new_value})])
     token, _ = admin
 
     body = client.get(CHANGES_URL, headers=_auth(token),
                       params=_window(unique_day)).json()
+    assert body["total"] == 1
     item = body["items"][0]
+
+    # 1. Только поля публичного DTO: колонок значений в ответе нет вовсе.
+    assert set(item) == set(DataChangeOut.model_fields)
+    keys, leaves = _json_keys_and_leaves(body)
+    assert not {"old_values", "new_values", "ip_address"} & keys
+    # Имя изменённого поля — только элемент списка, а не ключ карты значений.
+    assert "duration_minutes" not in keys
+
+    # 2. Безопасные поля на месте.
     assert item["changed_fields"] == ["duration_minutes"]
-    assert "old_values" not in item and "new_values" not in item
-    assert "30" not in str(item) and "60" not in str(item)
+    assert item["table_name"] == "meeting_types"
+    assert item["record_id"] == 7
+
+    # 3. Ни одно листовое значение на любой глубине не равно старому/новому
+    #    значению — ни числом, ни строкой.
+    for secret in (old_value, new_value):
+        assert secret not in leaves
+        assert str(secret) not in leaves
 
 
 def test_legacy_operation_outside_the_table_contract_is_redacted(
