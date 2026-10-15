@@ -97,6 +97,7 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "student_verification_submitted", "student_verification_approved",
     "student_verification_rejected", "student_verification_content_read",
     "student_verification_submit_failed", "student_verification_review_failed",
+    "user_contacts_content_read", "user_contacts_read_failed",
 })
 
 
@@ -111,8 +112,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 114
-    assert len(REGISTRY) == 121
+    assert len(audit_names) == 116
+    assert len(REGISTRY) == 123
 
 
 def test_unknown_event_rejected():
@@ -203,8 +204,8 @@ def test_registry_total_count_stage_5c3():
     # admin_user_deactivate_failed / admin_user_restore_failed /
     # user_self_deactivate_failed: +4 → 108 audit = 115.
     # ADR-029 (подтверждение студента ДонГУ): submitted/approved/rejected/
-    # content_read + submit_failed/review_failed: +6 → 114 audit = 121.
-    assert len(REGISTRY) == 121
+    # content_read + submit_failed/review_failed: +6 → 114 audit = 121; контакты (ADR-031) +2 → 116 audit = 123.
+    assert len(REGISTRY) == 123
 
 
 def test_role_metadata_enum_excludes_system():

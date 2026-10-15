@@ -79,6 +79,8 @@ const AUDIT_EVENT_CODES = [
   'student_verification_approved', 'student_verification_content_read',
   'student_verification_rejected', 'student_verification_review_failed',
   'student_verification_submit_failed', 'student_verification_submitted',
+  // ADR-031: контакты пользователя.
+  'user_contacts_content_read', 'user_contacts_read_failed',
 ];
 
 const AUTH_EVENT_CODES = [
@@ -89,6 +91,7 @@ const AUTH_EVENT_CODES = [
 const FAILURE_CODES = [
   'access_denied', 'account_already_active', 'account_already_disabled',
   'account_disabled', 'account_inactive', 'consent_required',
+  'contacts_version_conflict',
   'domain_not_allowed', 'email_already_exists', 'engagement_required',
   'impersonation_forbidden',
   'internal_error', 'invalid_credentials', 'invalid_request',
@@ -134,8 +137,8 @@ const CHANGE_PAIRS = [
 ];
 
 describe('полнота карт относительно registry', () => {
-  test('97 событий audit_log имеют подпись', () => {
-    expect(AUDIT_EVENT_CODES).toHaveLength(97);
+  test('99 событий audit_log имеют подпись', () => {
+    expect(AUDIT_EVENT_CODES).toHaveLength(99);
     expect(Object.keys(AUDIT_EVENT_LABELS).sort()).toEqual([...AUDIT_EVENT_CODES].sort());
     AUDIT_EVENT_CODES.forEach((code) => {
       expect(labelFor(AUDIT_EVENT_LABELS, code)).not.toBe(UNKNOWN_LABEL);
@@ -147,8 +150,8 @@ describe('полнота карт относительно registry', () => {
     expect(Object.keys(AUTH_EVENT_LABELS).sort()).toEqual([...AUTH_EVENT_CODES].sort());
   });
 
-  test('36 кодов отказа имеют подпись (включая social auth, ADR-028 и ADR-029)', () => {
-    expect(FAILURE_CODES).toHaveLength(36);
+  test('37 кодов отказа имеют подпись (включая social auth, ADR-028, ADR-029 и ADR-031)', () => {
+    expect(FAILURE_CODES).toHaveLength(37);
     expect(Object.keys(FAILURE_CODE_LABELS).sort()).toEqual([...FAILURE_CODES].sort());
   });
 
@@ -170,9 +173,9 @@ describe('полнота карт относительно registry', () => {
     expect(Object.keys(OPERATION_LABELS).sort()).toEqual(['DELETE', 'INSERT', 'UPDATE']);
   });
 
-  test('каждый из 104 кодов отнесён к существующей категории', () => {
+  test('каждый из 106 кодов отнесён к существующей категории', () => {
     const all = [...AUDIT_EVENT_CODES, ...AUTH_EVENT_CODES];
-    expect(all).toHaveLength(104);
+    expect(all).toHaveLength(106);
     expect(Object.keys(EVENT_CATEGORIES).sort()).toEqual([...all].sort());
     all.forEach((code) => {
       const category = categoryOf(code);

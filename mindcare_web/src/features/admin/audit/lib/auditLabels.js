@@ -49,7 +49,7 @@ export const EVENT_CATEGORY_LABELS = {
   audit_access:  'Просмотр аудита',
 };
 
-// ── audit_log: 97 событий ────────────────────────────────────────────────────
+// ── audit_log: 99 событий ────────────────────────────────────────────────────
 
 export const AUDIT_EVENT_LABELS = {
   // Пользователи и роли (30, вкл. ADR-029). ADR-028: единый lifecycle отключения —
@@ -79,6 +79,9 @@ export const AUDIT_EVENT_LABELS = {
   student_verification_content_read:       'Просмотр номера студенческого билета',
   student_verification_submit_failed:      'Заявка на подтверждение студента не принята',
   student_verification_review_failed:      'Решение по заявке студента отклонено',
+  // ADR-031: контакты пользователя (значения в журнал не попадают).
+  user_contacts_content_read:              'Просмотр контактов пользователя',
+  user_contacts_read_failed:               'Просмотр контактов пользователя отклонён',
   supervisor_create_student:               'Супервизор создал аккаунт студента',
   unregistered_student_card_archived:      'Карточка клиента без аккаунта архивирована',
   unregistered_student_card_create_failed: 'Создание карточки клиента отклонено',
@@ -208,6 +211,8 @@ export const EVENT_CATEGORIES = {
   student_verification_content_read: 'users_roles',
   student_verification_submit_failed: 'users_roles',
   student_verification_review_failed: 'users_roles',
+  user_contacts_content_read: 'users_roles',
+  user_contacts_read_failed: 'users_roles',
   supervisor_create_student: 'users_roles',
   unregistered_student_card_archived: 'users_roles',
   unregistered_student_card_create_failed: 'users_roles',
@@ -301,7 +306,7 @@ export const EVENT_CATEGORIES = {
   registration_succeeded: 'auth_security',
 };
 
-// ── Коды отказа (36) ─────────────────────────────────────────────────────────
+// ── Коды отказа (37) ─────────────────────────────────────────────────────────
 
 export const FAILURE_CODE_LABELS = {
   access_denied:         'Доступ запрещён',
@@ -311,6 +316,7 @@ export const FAILURE_CODE_LABELS = {
   account_disabled:      'Учётная запись отключена',
   account_inactive:      'Учётная запись заблокирована',
   consent_required:      'Требуется согласие',
+  contacts_version_conflict: 'Контакты изменены в другом окне (конфликт версий)',
   domain_not_allowed:    'Домен почты не разрешён',
   email_already_exists:  'Email уже используется',
   engagement_required:   'Нужно активное сопровождение',

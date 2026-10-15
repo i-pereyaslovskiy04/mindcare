@@ -1,0 +1,210 @@
+/* Общие стили карточек разделов настроек. Только токены дизайн-системы. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 760px;
+}
+
+.card {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
+}
+
+.cardDanger {
+  border-color: rgba(var(--error-rgb), 0.25);
+}
+
+.sectionTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin: 0 0 14px;
+}
+
+.lead {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profileHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--coffee), var(--mocha));
+  color: var(--milk);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 500;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.18);
+}
+
+.profileName {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  color: var(--espresso);
+  font-weight: 500;
+}
+
+.profileRole {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+.verifiedBadge {
+  margin-top: 6px;
+}
+
+.empty {
+  padding: 16px 0;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.formError {
+  font-size: 13px;
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid rgba(var(--error-rgb), 0.2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  line-height: 1.5;
+}
+
+.formSuccess {
+  font-size: 13px;
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  line-height: 1.5;
+}
+
+.dangerText {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-main);
+}
+
+.confirmBody {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirmList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-main);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---- помощь в кризисный момент ---- */
+.crisis {
+  background: var(--cream);
+  border: 1px solid rgba(var(--error-rgb), 0.18);
+  border-radius: 16px;
+  padding: 18px 22px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 760px;
+}
+
+.crisisIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(var(--error-rgb), 0.12);
+  color: var(--error);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.crisisTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--espresso);
+  margin: 0 0 4px;
+}
+
+.crisisText {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0 0 10px;
+}
+
+.crisisLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--cream);
+  color: var(--error);
+  border: 1px solid rgba(var(--error-rgb), 0.3);
+}
+
+.crisisLink:hover {
+  background: var(--sand);
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 18px;
+  }
+
+  .confirmBody {
+    padding: 20px 18px 24px;
+  }
+
+  .confirmActions {
+    flex-direction: column-reverse;
+  }
+}

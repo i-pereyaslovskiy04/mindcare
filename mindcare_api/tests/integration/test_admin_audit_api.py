@@ -263,7 +263,7 @@ def test_options_reflect_the_live_registry(client, admin):
 
     assert body["operations"] == ["UPDATE"]
     assert body["actor_kinds"]["data_change_log"] == ["user", "unavailable"]
-    assert len(body["audit_events"]) == 114
+    assert len(body["audit_events"]) == 116
     assert len(body["auth_events"]) == 7
     assert body["limits"]["max_range_days"] == 90
 
@@ -699,18 +699,35 @@ def test_hostile_legacy_rows_do_not_leak(client, admin, unique_day):
 
 
 def test_data_change_values_are_never_returned(client, admin, unique_day):
+    """Значения изменений не отдаются ни под ключами old_values/new_values, ни иначе.
+
+    Контрольные значения — уникальные маркеры, сравниваемые ТОЧНО по листьям
+    ответа (_leaf_values), а не подстрокой: короткие числа вроде 30/60 встречаются
+    в датах, UUID и id и давали бы ложное срабатывание.
+    """
+    old_marker = "old-value-marker-7f3a91c2"
+    new_marker = "new-value-marker-5be04d68"
+    old_number, new_number = 7_300_145, 9_600_271
     _insert([_change(unique_day, table_name="meeting_types", record_id=7,
                      changed_fields=["duration_minutes"],
-                     old_values={"duration_minutes": 30},
-                     new_values={"duration_minutes": 60})])
+                     old_values={"duration_minutes": old_number, "note": old_marker},
+                     new_values={"duration_minutes": new_number, "note": new_marker})])
     token, _ = admin
 
-    body = client.get(CHANGES_URL, headers=_auth(token),
-                      params=_window(unique_day)).json()
-    item = body["items"][0]
+    response = client.get(CHANGES_URL, headers=_auth(token),
+                          params=_window(unique_day))
+    assert response.status_code == 200
+    item = response.json()["items"][0]
     assert item["changed_fields"] == ["duration_minutes"]
     assert "old_values" not in item and "new_values" not in item
-    assert "30" not in str(item) and "60" not in str(item)
+
+    leaves = _leaf_values(item)
+    for secret in (old_marker, new_marker, old_number, new_number):
+        assert secret not in leaves, f"утечка значения {secret!r}"
+    # Маркеры не должны встретиться и в сыром тексте ответа (уникальные строки,
+    # ложных срабатываний на датах/UUID у них нет).
+    for secret in (old_marker, new_marker, str(old_number), str(new_number)):
+        assert secret not in response.text, f"утечка значения {secret!r}"
 
 
 def test_legacy_operation_outside_the_table_contract_is_redacted(

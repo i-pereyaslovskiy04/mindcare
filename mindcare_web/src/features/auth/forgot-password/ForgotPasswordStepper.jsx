@@ -6,7 +6,7 @@ import StepSuccess from './steps/StepSuccess';
 
 const STEP_COUNT = 3;
 
-export default function ForgotPasswordStepper({ state, onClose }) {
+export default function ForgotPasswordStepper({ state, onClose, emailLocked = false }) {
   const {
     step,
     email, setEmail,
@@ -44,6 +44,7 @@ export default function ForgotPasswordStepper({ state, onClose }) {
           errors={errors}
           setErrors={setErrors}
           loading={loading}
+          readOnly={emailLocked}
           onSubmit={submitEmail}
         />
       )}

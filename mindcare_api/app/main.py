@@ -165,6 +165,8 @@ from app.service_cards.routes_public import router as public_service_cards_route
 from app.student_verification.routes import router as student_verification_router  # noqa: E402
 from app.student_verification.routes import catalog_router as student_verification_catalog_router  # noqa: E402
 from app.student_verification.routes_supervisor import router as supervisor_student_verification_router  # noqa: E402
+from app.user_contacts.routes import router as user_contacts_router        # noqa: E402
+from app.user_contacts.routes_staff import router as staff_user_contacts_router  # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(oauth_router,              prefix="/api")
@@ -204,6 +206,8 @@ app.include_router(public_service_cards_router,     prefix="/api")
 app.include_router(student_verification_catalog_router,     prefix="/api")
 app.include_router(student_verification_router,             prefix="/api")
 app.include_router(supervisor_student_verification_router,  prefix="/api")
+app.include_router(user_contacts_router,                    prefix="/api")
+app.include_router(staff_user_contacts_router,              prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

@@ -6,6 +6,8 @@ import { getInitials } from '../../shared/lib/utils';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
 import { getPsychologistStudentChatPath } from '../../features/psychologist/chatLinks';
 import StudentTestResults from '../../features/tests/ui/StudentTestResults';
+import useUserContacts from '../../features/contacts/hooks/useUserContacts';
+import UserContactsSection from '../../features/contacts/ui/ContactsReadOnly';
 import styles from './PsychologistStudentCardPage.module.css';
 
 function formatDate(iso) {
@@ -37,6 +39,12 @@ const FUTURE_ITEMS = [
   'Запрос супервизии',
 ];
 
+/** Контакты студента (ADR-031): запрос — только когда карточка загружена; данные привязаны к uuid. */
+function StudentContacts({ studentUuid }) {
+  const contacts = useUserContacts(studentUuid);
+  return <UserContactsSection contacts={contacts} />;
+}
+
 export default function PsychologistStudentCardPage() {
   const { studentId } = useParams();
   const numericId = parseInt(studentId, 10);
@@ -60,7 +68,6 @@ export default function PsychologistStudentCardPage() {
       </Link>
 
       <div className={styles.header}>
-        <div className={styles.labelTag}>Кабинет психолога</div>
         <h1 className={styles.pageTitle}>Карточка <em>студента</em></h1>
         <p className={styles.pageSub}>Базовая информация о студенте и сопровождении.</p>
       </div>
@@ -194,6 +201,12 @@ export default function PsychologistStudentCardPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Контакты студента (ADR-031) */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Контакты</h3>
+            <StudentContacts key={student.student_uuid} studentUuid={student.student_uuid} />
           </div>
 
           {/* Результаты психодиагностики (Этап E) */}

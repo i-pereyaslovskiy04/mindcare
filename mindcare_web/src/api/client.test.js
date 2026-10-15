@@ -259,3 +259,21 @@ describe('apiFetch — err.code', () => {
     expect(err2.code).toBeUndefined();
   });
 });
+
+describe('apiFetch — err.body', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('объектное тело ошибки сохраняется (structured errors / current_version)', async () => {
+    const body = { detail: 'Конфликт', code: 'contacts_version_conflict', current_version: 4 };
+    _mockJsonError(409, body);
+    const err = await apiFetch('/x').catch((e) => e);
+    expect(err.body).toEqual(body);
+    expect(err).toMatchObject({ status: 409, code: 'contacts_version_conflict' });
+  });
+
+  test('пустое/нe-объектное тело — body не появляется', async () => {
+    _mockJsonError(500, []);
+    const err = await apiFetch('/x').catch((e) => e);
+    expect(err.body).toBeUndefined();
+  });
+});

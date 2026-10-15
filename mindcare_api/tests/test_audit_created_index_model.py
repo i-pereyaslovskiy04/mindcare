@@ -24,7 +24,7 @@ REVISION = "e6c3a9f1d574"
 # REVISION выше — это собственная неизменная идентичность ревизии Stage 8,
 # а не текущий head; их совпадение было верно только до появления следующей
 # миграции.
-CURRENT_HEAD = "f5a3c8d1e7b2"
+CURRENT_HEAD = "a7d3f1c8e5b2"
 
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 
