@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import CabinetLayout from './CabinetLayout';
 import * as AuthContext from '../../features/auth/AuthContext';
 
@@ -8,7 +8,9 @@ jest.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/psychologist' }),
   useNavigate: () => jest.fn(),
   Outlet: () => <div>OUTLET</div>,
-  NavLink: ({ children }) => <div>{children}</div>,
+  NavLink: ({ children, to, 'aria-label': ariaLabel }) => (
+    <a href={to} aria-label={ariaLabel}>{children}</a>
+  ),
   Link: ({ children, to, 'aria-label': ariaLabel, title }) => (
     <a href={to} aria-label={ariaLabel} title={title}>{children}</a>
   ),
@@ -52,4 +54,40 @@ test('cabinetRole outside membership does not call setActiveRole', () => {
     <CabinetLayout cabinetRole="admin" navSections={[]} crumbLabels={{}} />,
   );
   expect(setActiveRole).not.toHaveBeenCalled();
+});
+
+
+const NAV = [{
+  label: 'Работа',
+  items: [
+    { key: 'queue', label: 'Подтверждение студентов', icon: 'check', to: '/q',
+      badge: '3', badgeLabel: 'ожидают проверки: 3' },
+    { key: 'chat', label: 'Сообщения', icon: 'chat', to: '/c', badge: '2' },
+  ],
+}];
+
+test('badgeLabel даёт пункту понятное доступное имя; бейдж без подписи — как раньше', () => {
+  mockAuth({ roles: ['supervisor', 'student'], activeRole: 'supervisor' });
+  render(<CabinetLayout cabinetRole="supervisor" navSections={NAV} crumbLabels={{}} />);
+  const link = screen.getByRole('link', { name: 'Подтверждение студентов, ожидают проверки: 3' });
+  expect(link).toHaveAttribute('href', '/q');
+  expect(within(link).getByText('3')).toHaveAttribute('aria-hidden', 'true');
+  const chat = screen.getByRole('link', { name: /Сообщения/ });
+  expect(chat).not.toHaveAttribute('aria-label');
+  expect(within(chat).getByText('2')).not.toHaveAttribute('aria-hidden');
+});
+
+test('переключатель кабинета есть в sidebar, topbar и в мобильном меню', () => {
+  mockAuth({ roles: ['supervisor', 'student'], activeRole: 'supervisor' });
+  render(<CabinetLayout cabinetRole="supervisor" navSections={NAV} crumbLabels={{}} />);
+  // sidebar + topbar-копия (CSS показывает одну из них по ширине экрана)
+  expect(screen.getAllByRole('button', { name: 'Сменить кабинет (текущий: Супервизор)' }))
+    .toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+  const drawer = screen.getByRole('dialog', { name: 'Меню кабинета' });
+  expect(within(drawer).getByRole('button', { name: 'Сменить кабинет (текущий: Супервизор)' }))
+    .toBeInTheDocument();
+  expect(within(drawer).getByRole('link', { name: /ожидают проверки: 3/ })).toBeInTheDocument();
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Меню кабинета' })).toBeNull();
 });

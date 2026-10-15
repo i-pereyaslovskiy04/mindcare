@@ -1,11 +1,17 @@
 """
 Подтверждение студента ДонГУ — бизнес-логика без FastAPI/HTTP (ADR-029).
 
-Расшифровка (decrypt_text) выполняется только в двух местах:
+Расшифровка (decrypt_text) выполняется только в трёх местах:
   * собственный статус пользователя — пояснение отказа (его данные, без аудита);
-  * карточка supervisor'а — номер билета и пояснение, СТРОГО после успешной
-    записи student_verification_content_read (INDEPENDENT + RAISE): сбой аудита
-    → AuditError наружу, номер не отдаётся.
+  * карточка supervisor'а — номер билета и пояснение текущей заявки, а также
+    пояснения прежних отказов в первой порции истории;
+  * порция истории «Показать ещё» — пояснения отказов этой порции.
+Ответ с номером или пояснением отдаётся СТРОГО после успешной записи
+student_verification_content_read (INDEPENDENT + RAISE) — по одному событию на
+КАЖДУЮ заявку, чьё содержимое раскрывается (текущая заявка карточки — одним
+событием, без дубля за её строку в истории). Сбой любого из событий →
+AuditError наружу, ни номер, ни пояснения не отдаются. Уже записанные события
+серии остаются: фиксируют попытку чтения (перекос в сторону лишнего аудита).
 Post-commit доставка уведомления о решении — soft-fail (outbox добирает).
 """
 from typing import Optional
@@ -107,6 +113,78 @@ def list_for_review(
     return [_list_item_dto(i) for i in items], total
 
 
+def pending_count() -> int:
+    """Число заявок в очереди. Агрегат без содержимого — без аудита."""
+    return storage.count_pending()
+
+
+# ── история подтверждения ─────────────────────────────────────────────────────
+
+def _actor(full_name: Optional[str]) -> Optional[dict]:
+    # None — исполнитель недоступен (проверявший удалён: reviewed_by SET NULL).
+    return {"full_name": full_name} if full_name is not None else None
+
+
+def _history_reasons(rows: list) -> dict:
+    """{id заявки: пояснение} — только отказы с сохранённым пояснением."""
+    return {
+        r["id"]: decrypt_text(r["rejection_reason_enc"])
+        for r in rows
+        if r["status"] == "rejected" and r.get("rejection_reason_enc")
+    }
+
+
+def _history_request_dto(row: dict, reason: Optional[str], current_id: int) -> dict:
+    # События заявки — от новых к старым: решение (если есть), затем подача.
+    # У подачи и одобрения отдельной причины нет — она не выдумывается.
+    events = []
+    if row["status"] in ("approved", "rejected"):
+        events.append({
+            "type": row["status"],
+            "at": row["reviewed_at"],
+            "actor": _actor(row["reviewer_full_name"]),
+            "reason": reason if row["status"] == "rejected" else None,
+        })
+    events.append({
+        "type": "submitted" if row["is_first"] else "resubmitted",
+        "at": row["submitted_at"],
+        "actor": _actor(row["applicant_full_name"]),
+        "reason": None,
+    })
+    return {
+        "uuid": row["uuid"],
+        "status": row["status"],
+        "faculty": faculty_dto(row["faculty_code"]),
+        "is_current": row["id"] == current_id,
+        "events": events,
+    }
+
+
+def _history_dto(portion: dict, *, current_id: int, reasons: dict) -> dict:
+    rows = portion["rows"]
+    return {
+        "items": [
+            _history_request_dto(r, reasons.get(r["id"]), current_id) for r in rows
+        ],
+        "has_more": portion["has_more"],
+        # Курсор — uuid последней заявки порции (keyset по submitted_at, id).
+        "next_cursor": rows[-1]["uuid"] if portion["has_more"] and rows else None,
+    }
+
+
+def _record_content_reads(request_ids, *, reviewer_id: int, ip, user_agent) -> None:
+    """content_read на каждую заявку, содержимое которой раскрывается."""
+    for request_id in request_ids:
+        record_event(
+            event="student_verification_content_read",
+            actor=Actor.user(int(reviewer_id), "supervisor"),
+            target=Target(storage.ENTITY_TYPE, request_id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=build_request_context(ip=ip, user_agent=user_agent),
+        )
+
+
 def get_card_for_review(
     request_uuid,
     *,
@@ -115,11 +193,13 @@ def get_card_for_review(
     user_agent: Optional[str] = None,
 ) -> dict:
     """
-    Карточка с полным номером. Порядок fail-closed: выборка → расшифровка в
-    памяти → content_read (INDEPENDENT + RAISE) → ответ. AuditError
-    пробрасывается: route отдаёт 503 без номера.
+    Карточка с полным номером и первой порцией истории. Порядок fail-closed:
+    выборка → расшифровка в памяти → content_read (INDEPENDENT + RAISE) на
+    текущую заявку и на каждую ДРУГУЮ заявку порции с раскрываемым пояснением
+    отказа → ответ. AuditError пробрасывается: route отдаёт 503 без номера и
+    пояснений.
     """
-    row = storage.get_card(request_uuid)
+    row = storage.get_card(request_uuid, history_size=storage.HISTORY_PAGE_SIZE)
     if row is None:
         raise errors.VerificationNotFound()
 
@@ -127,14 +207,15 @@ def get_card_for_review(
     reason = None
     if row["status"] == "rejected" and row.get("rejection_reason_enc"):
         reason = decrypt_text(row["rejection_reason_enc"])
+    history_reasons = _history_reasons(row["history"]["rows"])
 
-    record_event(
-        event="student_verification_content_read",
-        actor=Actor.user(int(reviewer_id), "supervisor"),
-        target=Target(storage.ENTITY_TYPE, row["id"]),
-        outcome=Outcome.SUCCESS,
-        metadata={},
-        context=build_request_context(ip=ip, user_agent=user_agent),
+    # Текущая заявка — одно событие карточки (номер и её пояснение, в т.ч. в
+    # её строке истории); прочие — по событию на раскрытое пояснение.
+    revealed = [row["id"]] + sorted(
+        rid for rid in history_reasons if rid != row["id"]
+    )
+    _record_content_reads(
+        revealed, reviewer_id=reviewer_id, ip=ip, user_agent=user_agent,
     )
 
     card = _list_item_dto(row)
@@ -142,18 +223,37 @@ def get_card_for_review(
         "ticket_number": ticket_number,
         "rejection_reason": reason,
         "can_review": row["status"] == "pending" and row["user_id"] != int(reviewer_id),
-        "history": [
-            {
-                "uuid": h["uuid"],
-                "status": h["status"],
-                "faculty": faculty_dto(h["faculty_code"]),
-                "submitted_at": h["submitted_at"],
-                "reviewed_at": h["reviewed_at"],
-            }
-            for h in row["history"]
-        ],
+        "history": _history_dto(
+            row["history"], current_id=row["id"], reasons=history_reasons,
+        ),
     })
     return card
+
+
+def get_history_for_review(
+    request_uuid,
+    *,
+    before=None,
+    size: int = storage.HISTORY_PAGE_SIZE,
+    reviewer_id: int,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    Следующая порция истории («Показать ещё»). Номеров билетов нет; пояснения
+    отказов отдаются только после content_read на каждую заявку порции, чьё
+    пояснение раскрывается (порция без пояснений — без аудита, как список).
+    Отдельный ответ — отдельное раскрытие, поэтому событие пишется и за
+    исходную заявку, если её пояснение попало в эту порцию.
+    """
+    portion = storage.get_history(request_uuid, before_uuid=before, size=size)
+    if portion is None:
+        raise errors.VerificationNotFound()
+    reasons = _history_reasons(portion["rows"])
+    _record_content_reads(
+        sorted(reasons), reviewer_id=reviewer_id, ip=ip, user_agent=user_agent,
+    )
+    return _history_dto(portion, current_id=portion["current_id"], reasons=reasons)
 
 
 def decide(

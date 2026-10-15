@@ -4,7 +4,6 @@ import Badge from '../../components/UI/Badge/Badge';
 import Button from '../../components/UI/Button/Button';
 import Checkbox from '../../components/UI/Checkbox/Checkbox';
 import Modal from '../../components/Modal/Modal';
-import { ROLE_LABELS } from '../../shared/lib/roles';
 import {
   getMeetingTypes,
   createMeetingType,
@@ -49,15 +48,13 @@ const EMPTY_FORM = {
 
 const COLS = 6;
 
-export default function MeetingTypesPage({ cabinetRole = 'supervisor' }) {
+export default function MeetingTypesPage() {
   const { items, loading, error, refetch } = useMeetingTypes();
   const [modal, setModal]   = useState(null); // null | 'create' | item
   const [form, setForm]     = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState(null);
 
-  // Лейбл — из роли МАРШРУТА (cabinetRole), а не legacy user.role.
-  const roleLabel = ROLE_LABELS[cabinetRole] ?? '';
 
   function openCreate() {
     setForm(EMPTY_FORM);
@@ -125,7 +122,6 @@ export default function MeetingTypesPage({ cabinetRole = 'supervisor' }) {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>{roleLabel}</div>
           <h1 className={styles.pageTitle}>Типы <em>встреч</em></h1>
           <p className={styles.pageSub}>Форматы консультаций и групповых занятий.</p>
         </div>

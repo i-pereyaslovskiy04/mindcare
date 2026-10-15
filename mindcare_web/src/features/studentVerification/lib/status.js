@@ -93,3 +93,27 @@ export function formatVerificationDateTime(value) {
   const date = toDate(value);
   return date ? DATE_TIME_FMT.format(date) : '—';
 }
+
+/**
+ * События истории подтверждения в карточке supervisor'а (доработка
+ * 2026-10-13). Причина есть только у отказа; у подачи и одобрения отдельной
+ * причины нет — она не выдумывается.
+ */
+export const HISTORY_EVENT_LABELS = {
+  submitted:   'Заявка подана',
+  resubmitted: 'Заявка подана повторно',
+  rejected:    'Заявка отклонена',
+  approved:    'Статус подтверждён',
+};
+
+export const HISTORY_EVENT_TONES = {
+  submitted:   'neutral',
+  resubmitted: 'neutral',
+  rejected:    'error',
+  approved:    'success',
+};
+
+export const HISTORY_ACTOR_UNAVAILABLE = 'Сведения о проверявшем недоступны';
+
+/** Конкурентное решение: заявка уже решена другим супервизором или исчезла. */
+export const STALE_VERIFICATION_CODES = ['verification_already_decided', 'verification_not_found'];

@@ -25,7 +25,6 @@ export default function PsychologistStudentsPage() {
       {/* Header */}
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>Кабинет психолога</div>
           <h1 className={styles.pageTitle}>Мои <em>студенты</em></h1>
           <p className={styles.pageSub}>
             Студенты, назначенные вам супервизором для сопровождения.

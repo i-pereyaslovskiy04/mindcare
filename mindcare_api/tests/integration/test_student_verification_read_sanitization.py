@@ -1,7 +1,7 @@
 """
 ADR-029 — gated integration: санитизация SQLAlchemy-ошибок ЧТЕНИЯ модуля
-student_verification (список, собственный статус, карточка, предварительные
-чтения подачи и решения).
+student_verification (список, счётчик pending, собственный статус, карточка,
+порция истории, предварительные чтения подачи и решения).
 
 Сбой — настоящий OperationalError PostgreSQL: listener before_cursor_execute
 (retval=True) переписывает целевой SELECT по student_verification_requests так,
@@ -161,6 +161,36 @@ def test_card_read_error_writes_no_content_read(client, plain_client, quiet):
     assert _audit_since(mark) == []          # ни content_read SUCCESS, ни *_failed
     r = client.get(f"{LIST_URL}/{req_uuid}", headers=_auth(sup))
     assert r.status_code == 200 and r.json()["ticket_number"] == "000123"
+
+
+def test_pending_count_read_error_is_sanitized(client, plain_client, quiet):
+    capsys, caplog = quiet
+    _, sup = _supervisor(client)
+    mark = _audit_mark()
+    with _fail_reads():
+        with pytest.raises(VerificationStorageError) as info:
+            client.get(f"{LIST_URL}/pending-count", headers=_auth(sup))
+        _assert_clean(info.value, capsys, caplog, "count")
+        r = plain_client.get(f"{LIST_URL}/pending-count", headers=_auth(sup))
+    assert r.status_code == 500 and all(leak not in r.text for leak in LEAKS)
+    assert _audit_since(mark) == []
+    assert client.get(f"{LIST_URL}/pending-count", headers=_auth(sup)).status_code == 200
+
+
+def test_history_read_error_writes_no_content_read(client, plain_client, quiet):
+    capsys, caplog = quiet
+    _, _, req_uuid = _pending(client)
+    _, sup = _supervisor(client)
+    mark = _audit_mark()
+    url = f"{LIST_URL}/{req_uuid}/history"
+    with _fail_reads():
+        with pytest.raises(VerificationStorageError) as info:
+            client.get(url, headers=_auth(sup), params={"before": req_uuid})
+        _assert_clean(info.value, capsys, caplog, "history")
+        r = plain_client.get(url, headers=_auth(sup), params={"before": req_uuid})
+    assert r.status_code == 500 and all(leak not in r.text for leak in LEAKS)
+    assert _audit_since(mark) == []
+    assert client.get(url, headers=_auth(sup)).status_code == 200
 
 
 def test_own_status_read_error_is_sanitized(client, quiet):

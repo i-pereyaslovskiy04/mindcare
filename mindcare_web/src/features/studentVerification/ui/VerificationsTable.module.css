@@ -55,10 +55,6 @@
   margin-top: 4px;
 }
 
-.muted {
-  color: var(--text-muted);
-}
-
 .nowrap {
   white-space: nowrap;
 }

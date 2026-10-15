@@ -189,7 +189,8 @@ def test_synthetic_errors_really_carry_the_markers():
     assert SQL_MARKER in raw and CIPHER_MARKER in raw and PLAIN_MARKER in raw
 
 
-# ── Чтения: list_requests / get_latest_for_user / get_card / блокировки ───────
+# ── Чтения: list_requests / count_pending / get_latest_for_user / get_card /
+#    get_history / блокировки ─────────────────────────────────────────────────
 
 class _FailingReadQuery:
     """Любой терминальный вызов запроса → синтетическая OperationalError."""
@@ -219,6 +220,10 @@ class _ReadDb(_FakeDb):
         status="pending", page=1, size=20, search=PLAIN_MARKER)),
     ("status", lambda: sv_storage.get_latest_for_user(7)),
     ("card", lambda: sv_storage.get_card("1b4e28ba-2fa1-11d2-883f-0016d3cca427")),
+    ("count", lambda: sv_storage.count_pending()),
+    ("history", lambda: sv_storage.get_history(
+        "1b4e28ba-2fa1-11d2-883f-0016d3cca427",
+        before_uuid="2c4e28ba-2fa1-11d2-883f-0016d3cca427", size=10)),
     ("decide", lambda: sv_storage.decide_atomic(
         "1b4e28ba-2fa1-11d2-883f-0016d3cca427", decision="approve", reviewer_id=9)),
 ])

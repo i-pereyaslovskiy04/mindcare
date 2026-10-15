@@ -129,7 +129,7 @@ export default function AdminLayout() {
             {/* Дублирует switcher из sidebar .userInfo, но видим только
                 когда sidebar свёрнут в icon-rail (<=980px). */}
             <div className={styles.topbarSwitcher}>
-              <CabinetSwitcher currentRole="admin" />
+              <CabinetSwitcher currentRole="admin" variant="compact" />
             </div>
             <Link
               to="/"

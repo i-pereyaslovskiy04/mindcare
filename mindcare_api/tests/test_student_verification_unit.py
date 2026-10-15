@@ -395,3 +395,174 @@ def test_post_commit_delivery_is_soft_and_logs_no_identifiers(
     text = caplog.text
     assert "phase=post_commit error=RuntimeError" in text
     assert "student_verification_invite" not in text and "secret" not in text
+
+
+# ── История подтверждения: DTO и fail-closed аудит (service, без БД) ──────────
+# Доработка 2026-10-13: история в карточке — все заявки пользователя (включая
+# текущую), события «подана / подана повторно / отклонена / подтверждена»,
+# пояснения прежних отказов — только после content_read на каждую раскрытую
+# заявку.
+
+from datetime import datetime, timezone  # noqa: E402
+
+import app.student_verification.service as sv_service  # noqa: E402
+from app.audit.contracts import AuditStorageError  # noqa: E402
+from app.core.encryption import encrypt_text  # noqa: E402
+from app.student_verification import errors as sv_errors  # noqa: E402
+
+_T = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
+
+
+def _hrow(id_, status, *, first=False, reviewer="Проверяющий П.", reason=None):
+    decided = status != "pending"
+    return {
+        "id": id_,
+        "uuid": f"00000000-0000-0000-0000-{id_:012d}",
+        "status": status,
+        "faculty_code": "law",
+        "submitted_at": _T.replace(day=id_),
+        "reviewed_at": _T.replace(day=id_, hour=12) if decided else None,
+        "rejection_reason_enc": encrypt_text(reason) if reason else None,
+        "is_first": first,
+        "applicant_full_name": "Иван Тестов",
+        "reviewer_full_name": reviewer if decided else None,
+    }
+
+
+def _portion(*rows, has_more=False):
+    return {"rows": list(rows), "has_more": has_more}
+
+
+def test_history_dto_events_actors_and_reasons():
+    rows = [
+        _hrow(4, "pending"),
+        _hrow(3, "rejected", reviewer=None, reason="Вторая причина"),
+        _hrow(2, "rejected", reason="Первая причина"),
+        _hrow(1, "approved", first=True),
+    ]
+    reasons = sv_service._history_reasons(rows)
+    assert reasons == {3: "Вторая причина", 2: "Первая причина"}
+    dto = sv_service._history_dto(_portion(*rows), current_id=4, reasons=reasons)
+    assert dto["has_more"] is False and dto["next_cursor"] is None
+    items = {i["uuid"][-1]: i for i in dto["items"]}
+    assert [i["uuid"][-1] for i in dto["items"]] == ["4", "3", "2", "1"]
+
+    assert items["4"]["is_current"] is True
+    assert [e["type"] for e in items["4"]["events"]] == ["resubmitted"]
+    assert items["4"]["events"][0]["actor"] == {"full_name": "Иван Тестов"}
+
+    # Решённая заявка видна двумя событиями: решение, затем подача.
+    rejected = items["3"]["events"]
+    assert [e["type"] for e in rejected] == ["rejected", "resubmitted"]
+    assert rejected[0]["reason"] == "Вторая причина"
+    assert rejected[0]["actor"] is None                 # проверявший недоступен
+    assert items["2"]["events"][0]["actor"] == {"full_name": "Проверяющий П."}
+    assert items["2"]["events"][0]["reason"] == "Первая причина"
+
+    approved = items["1"]["events"]
+    assert [e["type"] for e in approved] == ["approved", "submitted"]
+    assert approved[0]["reason"] is None and approved[1]["reason"] is None
+    assert all(i["is_current"] is False for k, i in items.items() if k != "4")
+
+
+def test_history_dto_cursor_is_last_uuid_only_when_more():
+    rows = [_hrow(5, "rejected", reason="x"), _hrow(4, "rejected", reason="y")]
+    dto = sv_service._history_dto(_portion(*rows, has_more=True),
+                                  current_id=9, reasons={})
+    assert dto["next_cursor"] == rows[-1]["uuid"]
+    assert all(e["type"] == "resubmitted"
+               for i in dto["items"] for e in i["events"] if e["type"].endswith("submitted"))
+
+
+def _card_row(current, history_rows):
+    return {
+        **current,
+        "user_id": 77,
+        "reviewed_by": None,
+        "ticket_number_enc": encrypt_text("000123"),
+        "student": {"uuid": "u", "full_name": "Иван Тестов",
+                    "email": "ivan@example.com", "is_active": True},
+        "reviewer": None,
+        "history": _portion(*history_rows),
+    }
+
+
+@pytest.fixture
+def audit_calls(monkeypatch):
+    calls = []
+
+    def _record(**kwargs):
+        calls.append(kwargs)
+    monkeypatch.setattr(sv_service, "record_event", _record)
+    return calls
+
+
+def test_card_audits_current_once_and_each_revealed_previous_reason(monkeypatch, audit_calls):
+    current = _hrow(9, "rejected", reason="Текущая причина")
+    rows = [current, _hrow(8, "approved"), _hrow(7, "rejected", reason="Старая"),
+            _hrow(6, "pending"), _hrow(5, "rejected", reason="Самая старая", first=True)]
+    monkeypatch.setattr(sv_service.storage, "get_card",
+                        lambda uuid, history_size: _card_row(current, rows))
+    card = sv_service.get_card_for_review("x", reviewer_id=3)
+    targets = [c["target"].entity_id for c in audit_calls]
+    assert targets == [9, 5, 7]                 # текущая один раз, затем по id
+    assert {c["event"] for c in audit_calls} == {"student_verification_content_read"}
+    assert all(c["metadata"] == {} for c in audit_calls)
+    assert card["ticket_number"] == "000123"
+    assert card["rejection_reason"] == "Текущая причина"
+    reasons = [e["reason"] for i in card["history"]["items"] for e in i["events"] if e["reason"]]
+    assert reasons == ["Текущая причина", "Старая", "Самая старая"]
+
+
+@pytest.mark.parametrize("fail_on", [1, 2, 3])
+def test_card_audit_failure_reveals_neither_ticket_nor_reasons(monkeypatch, fail_on):
+    current = _hrow(9, "pending")
+    rows = [current, _hrow(7, "rejected", reason="Старая"),
+            _hrow(5, "rejected", reason="Самая старая", first=True)]
+    monkeypatch.setattr(sv_service.storage, "get_card",
+                        lambda uuid, history_size: _card_row(current, rows))
+    seen = []
+
+    def _record(**kwargs):
+        seen.append(kwargs["target"].entity_id)
+        if len(seen) == fail_on:
+            raise AuditStorageError("audit storage failure")
+    monkeypatch.setattr(sv_service, "record_event", _record)
+    with pytest.raises(AuditStorageError):
+        sv_service.get_card_for_review("x", reviewer_id=3)
+
+
+def test_history_portion_audits_every_revealed_reason(monkeypatch, audit_calls):
+    portion = _portion(_hrow(4, "rejected", reason="A"), _hrow(3, "approved"),
+                       _hrow(2, "rejected", reason="B", first=True))
+    portion["current_id"] = 4
+    monkeypatch.setattr(sv_service.storage, "get_history",
+                        lambda uuid, before_uuid, size: portion)
+    dto = sv_service.get_history_for_review("x", before="c", size=10, reviewer_id=3)
+    # Отдельный ответ — отдельное раскрытие: событие и за исходную заявку.
+    assert [c["target"].entity_id for c in audit_calls] == [2, 4]
+    assert dto["items"][0]["is_current"] is True
+
+
+def test_history_portion_without_reasons_is_not_audited(monkeypatch, audit_calls):
+    portion = _portion(_hrow(3, "approved"), _hrow(2, "pending", first=True))
+    portion["current_id"] = 9
+    monkeypatch.setattr(sv_service.storage, "get_history",
+                        lambda uuid, before_uuid, size: portion)
+    sv_service.get_history_for_review("x", reviewer_id=3)
+    assert audit_calls == []
+
+
+def test_history_not_found(monkeypatch, audit_calls):
+    monkeypatch.setattr(sv_service.storage, "get_history",
+                        lambda uuid, before_uuid, size: None)
+    with pytest.raises(sv_errors.VerificationNotFound):
+        sv_service.get_history_for_review("x", reviewer_id=3)
+    assert audit_calls == []
+
+
+def test_decision_dto_contract_is_unchanged():
+    from app.student_verification.schemas import DecisionOut
+    assert set(DecisionOut.model_fields) == {
+        "uuid", "status", "faculty", "submitted_at", "reviewed_at",
+    }

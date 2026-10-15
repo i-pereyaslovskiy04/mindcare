@@ -88,13 +88,21 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
                   to={item.to}
                   end={item.end ?? true}
                   onClick={closeMenu}
+                  // badgeLabel — понятное доступное имя («…, ожидают проверки: 3»)
+                  // и в icon-rail, где подпись пункта скрыта.
+                  aria-label={item.badgeLabel ? `${item.label}, ${item.badgeLabel}` : undefined}
+                  title={item.badgeLabel ? `${item.label}, ${item.badgeLabel}` : undefined}
                   className={({ isActive }) =>
                     `${styles.navItem}${isActive ? ` ${styles.active}` : ''}`
                   }
                 >
                   <span className={styles.navIcon}><Icon name={item.icon} size={18} /></span>
                   <span className={styles.navLabel}>{item.label}</span>
-                  {item.badge != null && <span className={styles.badge}>{item.badge}</span>}
+                  {item.badge != null && (
+                    <span className={styles.badge} aria-hidden={item.badgeLabel ? 'true' : undefined}>
+                      {item.badge}
+                    </span>
+                  )}
                 </NavLink>
               )
             )}
@@ -135,7 +143,7 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
                 sidebar свёрнут в icon-rail/скрыт (<=980px) — сами блоки
                 взаимно исключены через CSS, одновременно виден только один. */}
             <div className={styles.topbarSwitcher}>
-              <CabinetSwitcher currentRole={cabinetRole} />
+              <CabinetSwitcher currentRole={cabinetRole} variant="compact" />
             </div>
             <div className={styles.search}>
               <Icon name="search" size={14} />

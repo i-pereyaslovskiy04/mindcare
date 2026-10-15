@@ -6,7 +6,6 @@ import Checkbox from '../../components/UI/Checkbox/Checkbox';
 import ImageUpload from '../../components/UI/ImageUpload/ImageUpload';
 import Select from '../../components/UI/Select/Select';
 import Modal from '../../components/Modal/Modal';
-import { ROLE_LABELS } from '../../shared/lib/roles';
 import {
   getSupervisorBannerSlides,
   createBannerSlide,
@@ -79,7 +78,7 @@ const EMPTY_FORM = {
 
 const COLS = 6;
 
-export default function BannerSlidesPage({ cabinetRole = 'supervisor' }) {
+export default function BannerSlidesPage() {
   const [placementFilter, setPlacementFilter] = useState('');
   const { items: fetchedItems, loading, error, refetch } = useBannerSlides(placementFilter);
   const items = [...fetchedItems].sort(byPlacement);
@@ -91,8 +90,6 @@ export default function BannerSlidesPage({ cabinetRole = 'supervisor' }) {
   const [deleting, setDeleting]         = useState(false);
   const [deleteError, setDeleteError]   = useState('');
 
-  // Лейбл — из роли МАРШРУТА (cabinetRole), а не legacy user.role.
-  const roleLabel = ROLE_LABELS[cabinetRole] ?? '';
 
   function openCreate() {
     setForm(EMPTY_FORM);
@@ -180,7 +177,6 @@ export default function BannerSlidesPage({ cabinetRole = 'supervisor' }) {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>{roleLabel}</div>
           <h1 className={styles.pageTitle}>Баннер <em>сайта</em></h1>
           <p className={styles.pageSub}>Слайды баннера — главная страница и страницы услуг.</p>
         </div>

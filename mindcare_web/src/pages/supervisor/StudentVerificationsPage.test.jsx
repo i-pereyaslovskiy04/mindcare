@@ -1,7 +1,8 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import StudentVerificationsPage from './StudentVerificationsPage';
 import { useAuth } from '../../features/auth/AuthContext';
 import * as api from '../../api/studentVerification.api';
+import { VERIFICATIONS_CHANGED_EVENT } from '../../features/studentVerification/lib/verificationEvents';
 
 jest.mock('../../features/auth/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../api/studentVerification.api');
@@ -16,13 +17,34 @@ const ITEM = {
   student: { uuid: 'u-1', full_name: 'Иван Тестов', email: 'ivan@donnu.ru', is_active: true },
   reviewer: null,
 };
+
+function historyItem(uuid, status, events, extra = {}) {
+  return {
+    uuid, status, is_current: false,
+    faculty: { code: 'law', label: 'Юридический факультет' },
+    events, ...extra,
+  };
+}
+
+const CURRENT_HISTORY = historyItem(UUID, 'pending', [
+  { type: 'resubmitted', at: '2026-10-01T09:00:00Z', actor: { full_name: 'Иван Тестов' }, reason: null },
+], { is_current: true });
+
 const CARD = {
   ...ITEM,
   ticket_number: '000123',
   rejection_reason: null,
   can_review: true,
-  history: [],
+  history: { items: [CURRENT_HISTORY], has_more: false, next_cursor: null },
 };
+
+function many(n, offset = 0) {
+  return Array.from({ length: n }, (_, i) => ({
+    ...ITEM,
+    uuid: `00000000-0000-0000-0000-${String(offset + i).padStart(12, '0')}`,
+    student: { ...ITEM.student, full_name: `Пользователь ${offset + i}` },
+  }));
+}
 
 function error(code, message = 'Ошибка') {
   const err = new Error(message);
@@ -30,13 +52,22 @@ function error(code, message = 'Ошибка') {
   return err;
 }
 
+let changedEvents = 0;
+const onChanged = () => { changedEvents += 1; };
+
 beforeEach(() => {
   jest.clearAllMocks();
+  changedEvents = 0;
+  window.addEventListener(VERIFICATIONS_CHANGED_EVENT, onChanged);
   useAuth.mockReturnValue({ isImpersonating: false });
   api.getStudentVerifications.mockResolvedValue({ items: [ITEM], total: 1, page: 1, size: 20 });
   api.getStudentVerification.mockResolvedValue(CARD);
   api.approveStudentVerification.mockResolvedValue({ ...ITEM, status: 'approved' });
   api.rejectStudentVerification.mockResolvedValue({ ...ITEM, status: 'rejected' });
+});
+
+afterEach(() => {
+  window.removeEventListener(VERIFICATIONS_CHANGED_EVENT, onChanged);
 });
 
 async function openCard() {
@@ -45,34 +76,90 @@ async function openCard() {
   return screen.findByRole('dialog', { name: 'Заявка на подтверждение студента' });
 }
 
-test('список: заявки «На проверке» по умолчанию, номера билета в списке нет', async () => {
+// ── очередь ──────────────────────────────────────────────────────────────────
+
+test('очередь: только pending без поиска, фильтров и строки поиска нет, номера нет', async () => {
   render(<StudentVerificationsPage />);
   expect(await screen.findByText('Иван Тестов')).toBeInTheDocument();
-  expect(api.getStudentVerifications).toHaveBeenCalledWith(
-    expect.objectContaining({ status: 'pending', page: 1 }),
-  );
+  expect(api.getStudentVerifications).toHaveBeenCalledWith({ page: 1, size: 20, status: 'pending' });
+  expect(screen.queryByRole('searchbox')).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Статус заявки' })).toBeNull();
+  for (const name of ['На проверке', 'Подтверждено', 'Отклонено', 'Все']) {
+    expect(screen.queryByRole('button', { name })).toBeNull();
+  }
   expect(screen.queryByText('000123')).toBeNull();
-  expect(screen.getByRole('button', { name: 'На проверке' }))
-    .toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByText(/Ожидают проверки:/)).toHaveTextContent('Ожидают проверки: 1');
+  // Декоративной подписи роли над заголовком нет.
+  expect(screen.queryByText('Супервизия')).toBeNull();
+  expect(screen.getByRole('heading', { level: 1, name: 'Подтверждение студентов' })).toBeInTheDocument();
 });
 
-test('фильтр статуса запрашивает список на сервере', async () => {
-  render(<StudentVerificationsPage />);
-  await screen.findByText('Иван Тестов');
-  fireEvent.click(screen.getByRole('button', { name: 'Подтверждено' }));
-  await waitFor(() => expect(api.getStudentVerifications).toHaveBeenLastCalledWith(
-    expect.objectContaining({ status: 'approved', page: 1 }),
+test('серверная пагинация по 20: диапазон «1–20 из 45» и переход на следующую страницу', async () => {
+  api.getStudentVerifications.mockImplementation(({ page }) => Promise.resolve(
+    page === 1 ? { items: many(20), total: 45 } : { items: many(20, 20), total: 45 },
   ));
+  render(<StudentVerificationsPage />);
+  expect(await screen.findByText('1–20 из 45')).toBeInTheDocument();
+  expect(screen.getByText('Страница 1 из 3')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+  expect(await screen.findByText('21–40 из 45')).toBeInTheDocument();
+  expect(api.getStudentVerifications).toHaveBeenLastCalledWith({ page: 2, size: 20, status: 'pending' });
 });
 
-test('карточка показывает номер; «Подтвердить» шлёт решение и обновляет список', async () => {
+test('пустая очередь — понятное сообщение без диапазона', async () => {
+  api.getStudentVerifications.mockResolvedValue({ items: [], total: 0 });
+  render(<StudentVerificationsPage />);
+  expect(await screen.findByText('Заявок на проверке нет')).toBeInTheDocument();
+  expect(screen.getByText(/Ожидают проверки:/)).toHaveTextContent('Ожидают проверки: 0');
+});
+
+async function goToPage3(total) {
+  api.getStudentVerifications.mockImplementation(({ page }) => Promise.resolve(
+    { items: many(page === 3 ? 1 : 20, (page - 1) * 20), total },
+  ));
+  render(<StudentVerificationsPage />);
+  await screen.findByText(`1–20 из ${total}`);
+  fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+  await screen.findByText(`21–40 из ${total}`);
+  fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+  await screen.findByText(`41–41 из ${total}`);
+}
+
+test('опустевшая последняя страница после решения → последняя существующая', async () => {
+  await goToPage3(41);
+  api.getStudentVerifications.mockImplementation(({ page }) => Promise.resolve(
+    page === 3 ? { items: [], total: 40 } : { items: many(20, 20), total: 40 },
+  ));
+  api.getStudentVerification.mockResolvedValue({ ...CARD, uuid: many(1, 40)[0].uuid });
+  fireEvent.click(screen.getByRole('button', { name: /Открыть заявку: Пользователь 40/ }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(await within(dialog).findByRole('button', { name: 'Подтвердить' }));
+  expect(await screen.findByText('21–40 из 40')).toBeInTheDocument();
+  expect(api.getStudentVerifications).toHaveBeenLastCalledWith({ page: 2, size: 20, status: 'pending' });
+  expect(changedEvents).toBeGreaterThanOrEqual(1);
+});
+
+test('все записи исчезли на странице > 1 (total=0) → страница 1', async () => {
+  await goToPage3(41);
+  api.getStudentVerifications.mockResolvedValue({ items: [], total: 0 });
+  fireEvent.click(screen.getByRole('button', { name: /Открыть заявку: Пользователь 40/ }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(await within(dialog).findByRole('button', { name: 'Подтвердить' }));
+  expect(await screen.findByText('Заявок на проверке нет')).toBeInTheDocument();
+  expect(api.getStudentVerifications).toHaveBeenLastCalledWith({ page: 1, size: 20, status: 'pending' });
+});
+
+// ── решения ──────────────────────────────────────────────────────────────────
+
+test('«Подтвердить»: решение, обновление очереди и сигнал для счётчика меню', async () => {
   const dialog = await openCard();
   expect(await within(dialog).findByText('000123')).toBeInTheDocument();
   expect(api.getStudentVerification).toHaveBeenCalledWith(UUID);
-
   fireEvent.click(within(dialog).getByRole('button', { name: 'Подтвердить' }));
   await waitFor(() => expect(api.approveStudentVerification).toHaveBeenCalledWith(UUID));
   await waitFor(() => expect(api.getStudentVerifications).toHaveBeenCalledTimes(2));
+  expect(changedEvents).toBe(1);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
 test('отказ требует пояснения и отправляет его без пробелов по краям', async () => {
@@ -100,18 +187,35 @@ test('собственная заявка: кнопок решения нет, �
   expect(within(dialog).queryByRole('button', { name: 'Отклонить' })).toBeNull();
 });
 
-test('отказ backend по коду показывает фиксированный текст', async () => {
-  api.approveStudentVerification.mockRejectedValue(
-    error('verification_already_decided', 'raw backend text'),
-  );
+test.each([
+  ['verification_already_decided', 'По заявке уже принято другое решение.'],
+  ['verification_not_found', 'Заявка не найдена.'],
+])('конкурентное решение (%s): текст, кнопки скрыты, очередь и счётчик обновлены', async (code, text) => {
+  api.approveStudentVerification.mockRejectedValue(error(code, 'raw backend text'));
+  const dialog = await openCard();
+  await within(dialog).findByText('000123');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Подтвердить' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(text);
+  expect(within(dialog).queryByRole('button', { name: 'Подтвердить' })).toBeNull();
+  expect(within(dialog).queryByRole('button', { name: 'Отклонить' })).toBeNull();
+  // Остаётся только «Закрыть» (кнопка действия и крестик модалки).
+  expect(within(dialog).getAllByRole('button', { name: 'Закрыть' }).length).toBeGreaterThanOrEqual(1);
+  await waitFor(() => expect(api.getStudentVerifications).toHaveBeenCalledTimes(2));
+  expect(changedEvents).toBe(1);
+});
+
+test('прочая ошибка решения не скрывает кнопки', async () => {
+  api.approveStudentVerification.mockRejectedValue(error('reviewer_not_allowed'));
   const dialog = await openCard();
   await within(dialog).findByText('000123');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Подтвердить' }));
   expect(await within(dialog).findByRole('alert'))
-    .toHaveTextContent('По заявке уже принято другое решение.');
+    .toHaveTextContent('Недостаточно прав для проверки заявок.');
+  expect(within(dialog).getByRole('button', { name: 'Подтвердить' })).toBeInTheDocument();
+  expect(changedEvents).toBe(0);
 });
 
-test('сбой аудита чтения (503): номер не показан, выводится сообщение', async () => {
+test('сбой аудита чтения (503): ни номера, ни истории, выводится сообщение', async () => {
   api.getStudentVerification.mockRejectedValue(
     error(undefined, 'Не удалось зафиксировать обращение к данным заявки. Повторите попытку.'),
   );
@@ -119,6 +223,7 @@ test('сбой аудита чтения (503): номер не показан, 
   expect(await within(dialog).findByRole('alert'))
     .toHaveTextContent('Не удалось зафиксировать обращение');
   expect(within(dialog).queryByText('000123')).toBeNull();
+  expect(within(dialog).queryByText('История подтверждения')).toBeNull();
 });
 
 test('в режиме «под именем» раздел недоступен и запросов нет', async () => {
@@ -126,4 +231,231 @@ test('в режиме «под именем» раздел недоступен 
   render(<StudentVerificationsPage />);
   expect(await screen.findByText(/недоступна при входе под именем/)).toBeInTheDocument();
   expect(api.getStudentVerifications).not.toHaveBeenCalled();
+});
+
+// ── история ──────────────────────────────────────────────────────────────────
+
+const OLD_REJECTED = historyItem('old-2', 'rejected', [
+  { type: 'rejected', at: '2026-09-20T12:00:00Z', actor: null, reason: 'Причина B' },
+  { type: 'resubmitted', at: '2026-09-15T09:00:00Z', actor: { full_name: 'Иван Тестов' }, reason: null },
+]);
+const FIRST_REJECTED = historyItem('old-1', 'rejected', [
+  { type: 'rejected', at: '2026-09-10T12:00:00Z', actor: { full_name: 'Пётр Супервизоров' }, reason: 'Причина A' },
+  { type: 'submitted', at: '2026-09-01T09:00:00Z', actor: { full_name: 'Иван Тестов' }, reason: null },
+]);
+
+test('история: события с датой, исполнителем, причинами; недоступный проверявший; текущая заявка', async () => {
+  api.getStudentVerification.mockResolvedValue({
+    ...CARD,
+    history: { items: [CURRENT_HISTORY, OLD_REJECTED, FIRST_REJECTED], has_more: false, next_cursor: null },
+  });
+  const dialog = await openCard();
+  const history = await within(dialog).findByRole('region', { name: 'История подтверждения' });
+  const events = within(history).getAllByRole('listitem');
+  expect(events.map((li) => within(li).getAllByText(/Заявка|Статус/)[0].textContent)).toEqual([
+    'Заявка подана повторно', 'Заявка отклонена', 'Заявка подана повторно',
+    'Заявка отклонена', 'Заявка подана',
+  ]);
+  expect(within(events[0]).getByText('текущая заявка')).toBeInTheDocument();
+  expect(within(events[1]).getByText('Сведения о проверявшем недоступны')).toBeInTheDocument();
+  expect(within(events[1]).getByText(/Причина B/)).toBeInTheDocument();
+  expect(within(events[3]).getByText('Проверил(а): Пётр Супервизоров')).toBeInTheDocument();
+  expect(within(events[3]).getByText(/Причина A/)).toBeInTheDocument();
+  expect(within(events[4]).getByText('Заявитель: Иван Тестов')).toBeInTheDocument();
+  expect(within(history).queryByRole('button', { name: 'Показать ещё' })).toBeNull();
+});
+
+test('история: одобрение без причины', async () => {
+  api.getStudentVerification.mockResolvedValue({
+    ...CARD,
+    status: 'approved',
+    can_review: false,
+    history: {
+      items: [historyItem(UUID, 'approved', [
+        { type: 'approved', at: '2026-10-02T10:00:00Z', actor: { full_name: 'Пётр Супервизоров' }, reason: null },
+        { type: 'submitted', at: '2026-10-01T09:00:00Z', actor: { full_name: 'Иван Тестов' }, reason: null },
+      ], { is_current: true })],
+      has_more: false,
+      next_cursor: null,
+    },
+  });
+  const dialog = await openCard();
+  const history = await within(dialog).findByRole('region', { name: 'История подтверждения' });
+  expect(within(history).getByText('Статус подтверждён')).toBeInTheDocument();
+  expect(within(history).queryByText(/Причина отказа/)).toBeNull();
+});
+
+test('«Показать ещё»: следующая порция по курсору, без дублей, кнопка исчезает в конце', async () => {
+  api.getStudentVerification.mockResolvedValue({
+    ...CARD,
+    history: { items: [CURRENT_HISTORY, OLD_REJECTED], has_more: true, next_cursor: 'old-2' },
+  });
+  api.getStudentVerificationHistory.mockResolvedValue({
+    // Дубль old-2 (страховка клиента) + более ранняя заявка.
+    items: [OLD_REJECTED, FIRST_REJECTED], has_more: false, next_cursor: null,
+  });
+  const dialog = await openCard();
+  const history = await within(dialog).findByRole('region', { name: 'История подтверждения' });
+  expect(within(history).getAllByRole('listitem')).toHaveLength(3);
+  fireEvent.click(within(history).getByRole('button', { name: 'Показать ещё' }));
+  await waitFor(() => expect(within(history).getAllByRole('listitem')).toHaveLength(5));
+  expect(api.getStudentVerificationHistory).toHaveBeenCalledWith(UUID, { before: 'old-2', size: 10 });
+  expect(within(history).getByText(/Причина A/)).toBeInTheDocument();
+  expect(within(history).queryByRole('button', { name: 'Показать ещё' })).toBeNull();
+});
+
+
+// ── рассогласование страницы и строк (регрессия) ──────────────────────────────
+// page меняется сразу, ответ приходит позже: до ответа нельзя показывать строки
+// и диапазон прежней страницы и открывать её заявки как записи новой.
+
+/** Ответы сервера задерживаются: каждый вызов — отдельный отложенный Promise. */
+function deferredServer() {
+  const calls = [];
+  api.getStudentVerifications.mockImplementation(({ page }) => new Promise((resolve, reject) => {
+    calls.push({
+      page,
+      respond: (items, total) => act(async () => { resolve({ items, total }); }),
+      fail: (err) => act(async () => { reject(err); }),
+    });
+  }));
+  return calls;
+}
+
+const next = () => screen.getByRole('button', { name: 'Далее' });
+const prev = () => screen.getByRole('button', { name: 'Назад' });
+const openButtons = () => screen.queryAllByRole('button', { name: /Открыть заявку/ });
+
+function expectNoStaleView(oldRange, oldRow) {
+  expect(screen.getByRole('status')).toHaveTextContent('Загрузка заявок…');
+  expect(screen.queryByText(oldRange)).toBeNull();
+  expect(screen.queryByText(oldRow)).toBeNull();
+  expect(screen.queryByText(/Ожидают проверки:/)).toBeNull();
+  expect(openButtons()).toHaveLength(0);               // открыть старую заявку нельзя
+  expect(next()).toBeDisabled();
+  expect(prev()).toBeDisabled();
+}
+
+async function loadFirstPage(calls, total = 45) {
+  render(<StudentVerificationsPage />);
+  await waitFor(() => expect(calls).toHaveLength(1));
+  await calls[0].respond(many(20), total);
+  expect(await screen.findByText(`1–20 из ${total}`)).toBeInTheDocument();
+}
+
+test('«Далее»: пока страница 2 грузится, строки и диапазон страницы 1 недоступны', async () => {
+  const calls = deferredServer();
+  await loadFirstPage(calls);
+  expect(screen.getByRole('button', { name: 'Открыть заявку: Пользователь 0' })).toBeInTheDocument();
+
+  fireEvent.click(next());
+  await waitFor(() => expect(calls).toHaveLength(2));
+  expect(calls[1].page).toBe(2);
+  expectNoStaleView('1–20 из 45', 'Пользователь 0');
+  expect(screen.queryByText('21–40 из 45')).toBeNull();     // диапазона новой страницы тоже нет
+
+  await calls[1].respond(many(20, 20), 45);
+  expect(await screen.findByText('21–40 из 45')).toBeInTheDocument();
+  expect(screen.getByText('Страница 2 из 3')).toBeInTheDocument();
+  expect(screen.getByText('Пользователь 20')).toBeInTheDocument();
+  expect(screen.queryByText('Пользователь 0')).toBeNull();
+  expect(openButtons()).toHaveLength(20);
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(next()).toBeEnabled();
+  expect(prev()).toBeEnabled();
+});
+
+test('«Назад»: старые строки скрыты до ответа, затем показана предыдущая страница', async () => {
+  const calls = deferredServer();
+  await loadFirstPage(calls);
+  fireEvent.click(next());
+  await waitFor(() => expect(calls).toHaveLength(2));
+  await calls[1].respond(many(20, 20), 45);
+  await screen.findByText('21–40 из 45');
+
+  fireEvent.click(prev());
+  await waitFor(() => expect(calls).toHaveLength(3));
+  expect(calls[2].page).toBe(1);
+  expectNoStaleView('21–40 из 45', 'Пользователь 20');
+
+  await calls[2].respond(many(20), 45);
+  expect(await screen.findByText('1–20 из 45')).toBeInTheDocument();
+  expect(screen.getByText('Пользователь 0')).toBeInTheDocument();
+  expect(screen.queryByText('Пользователь 20')).toBeNull();
+});
+
+test('ошибка загрузки новой страницы: ошибка вместо старых строк, вернуться «Назад» можно', async () => {
+  const calls = deferredServer();
+  await loadFirstPage(calls);
+  fireEvent.click(next());
+  await waitFor(() => expect(calls).toHaveLength(2));
+  await calls[1].fail(new Error('Сервер недоступен'));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Сервер недоступен');
+  expect(screen.queryByText('Пользователь 0')).toBeNull();
+  expect(openButtons()).toHaveLength(0);
+  expect(prev()).toBeEnabled();
+
+  fireEvent.click(prev());
+  await waitFor(() => expect(calls).toHaveLength(3));
+  expect(screen.queryByRole('alert')).toBeNull();             // ошибка принадлежала странице 2
+  await calls[2].respond(many(20), 45);
+  expect(await screen.findByText('1–20 из 45')).toBeInTheDocument();
+});
+
+async function reachPage3(calls) {
+  await loadFirstPage(calls, 41);
+  fireEvent.click(next());
+  await waitFor(() => expect(calls).toHaveLength(2));
+  await calls[1].respond(many(20, 20), 41);
+  await screen.findByText('21–40 из 41');
+  fireEvent.click(next());
+  await waitFor(() => expect(calls).toHaveLength(3));
+  await calls[2].respond(many(1, 40), 41);
+  await screen.findByText('41–41 из 41');
+}
+
+async function decideRow40() {
+  api.getStudentVerification.mockResolvedValue({ ...CARD, uuid: many(1, 40)[0].uuid });
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть заявку: Пользователь 40' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(await within(dialog).findByRole('button', { name: 'Подтвердить' }));
+  await waitFor(() => expect(api.approveStudentVerification).toHaveBeenCalled());
+}
+
+test('пустая последняя страница: пока грузится существующая, строки страницы 3 недоступны', async () => {
+  const calls = deferredServer();
+  await reachPage3(calls);
+  await decideRow40();
+  await waitFor(() => expect(calls).toHaveLength(4));        // refetch страницы 3
+  expect(calls[3].page).toBe(3);
+
+  await calls[3].respond([], 40);                           // страница 3 опустела
+  await waitFor(() => expect(calls).toHaveLength(5));
+  expect(calls[4].page).toBe(2);                            // коррекция → страница 2
+  expectNoStaleView('41–41 из 41', 'Пользователь 40');
+  expect(screen.queryByText('41–41 из 40')).toBeNull();
+
+  await calls[4].respond(many(20, 20), 40);
+  expect(await screen.findByText('21–40 из 40')).toBeInTheDocument();
+  expect(screen.getByText('Страница 2 из 2')).toBeInTheDocument();
+});
+
+test('все заявки исчезли (total=0) на странице 3: загрузка страницы 1, затем пустая очередь', async () => {
+  const calls = deferredServer();
+  await reachPage3(calls);
+  await decideRow40();
+  await waitFor(() => expect(calls).toHaveLength(4));
+
+  await calls[3].respond([], 0);
+  await waitFor(() => expect(calls).toHaveLength(5));
+  expect(calls[4].page).toBe(1);
+  expect(screen.getByRole('status')).toHaveTextContent('Загрузка заявок…');
+  expect(screen.queryByText('Пользователь 40')).toBeNull();
+  expect(screen.queryByText('Заявок на проверке нет')).toBeNull();
+
+  await calls[4].respond([], 0);
+  expect(await screen.findByText('Заявок на проверке нет')).toBeInTheDocument();
+  expect(screen.getByText(/Ожидают проверки:/)).toHaveTextContent('Ожидают проверки: 0');
+  expect(screen.queryByRole('status')).toBeNull();
 });

@@ -429,7 +429,12 @@ def test_card_reveals_ticket_under_content_read_audit(client):
     assert r.headers["cache-control"] == "no-store, private"
     body = r.json()
     assert body["ticket_number"] == TICKET
-    assert body["can_review"] is True and body["history"] == []
+    assert body["can_review"] is True
+    # История включает саму текущую заявку — ровно одной строкой.
+    (only,) = body["history"]["items"]
+    assert only["uuid"] == req_uuid and only["is_current"] is True
+    assert [e["type"] for e in only["events"]] == ["submitted"]
+    assert body["history"]["has_more"] is False
     audit, auth, dcl = _rows_since(marks)
     assert [a.event_type for a in audit] == ["student_verification_content_read"]
     _assert_success(audit[0], actor_id=sup_id, role="supervisor",
@@ -534,9 +539,15 @@ def test_reject_requires_reason_then_allows_new_submission(client):
 
     card = _card(client, sup, new_uuid).json()
     assert card["ticket_number"] == "555"
-    assert [h["uuid"] for h in card["history"]] == [req_uuid]
-    assert card["history"][0]["status"] == "rejected"
-    assert "rejection_reason" not in card["history"][0]
+    # История: новая заявка (текущая) и прежняя отклонённая — с пояснением,
+    # но без номера билета прежней заявки.
+    items = card["history"]["items"]
+    assert [h["uuid"] for h in items] == [new_uuid, req_uuid]
+    assert items[1]["status"] == "rejected" and items[1]["is_current"] is False
+    assert [e["type"] for e in items[1]["events"]] == ["rejected", "submitted"]
+    assert items[1]["events"][0]["reason"] == REASON
+    assert [e["type"] for e in items[0]["events"]] == ["resubmitted"]
+    assert TICKET not in json.dumps(card["history"], ensure_ascii=False)
 
 
 def test_repeat_of_same_decision_is_noop(client):
