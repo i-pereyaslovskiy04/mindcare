@@ -2,7 +2,21 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff: `docs/HANDOFFS/2026-10-14-a11y-basics.md` — Student /
+Актуальный handoff: `docs/HANDOFFS/2026-10-14-calendar-cleanup.md` — Student
+Calendar Cleanup (frontend-only, этап завершён, commit `3e5ed2f`): каждый день
+месяца — кнопка, выбирает дату формы записи (одно состояние `bookDate`,
+синхронно с `DateInput` в обе стороны; `DateInput` получил `labelledBy`) и
+открывает немодальное окно дня (пустой день — «На этот день записей нет»;
+закрывается сменой месяца, «✕», Escape); `mockEvents` удалён — только сессии
+из API; прошедшая — итоговый статус или наступивший `starts_at` при любом
+статусе (прошедшая `pending_confirmation` — в истории, без отмены); на одной
+колонке форма записи сразу после календаря (grid-areas); карточки «Предстоящие
+сессии» — информация / статус / действия без переполнения; «История сессий»
+свёрнута, показывает итог (`completed`/`cancelled`/`declined`/`no_show`), у
+прошедшей `confirmed` итога нет (backend её в `completed` не переводит — долг
+в BACKLOG).
+
+Предыдущий handoff: `docs/HANDOFFS/2026-10-14-a11y-basics.md` — Student /
 Shared Accessibility Basics (frontend-only, этап завершён, commit `e4f222b`):
 закрытая shared `Modal` изолирована (`inert`, после fade-out `visibility: hidden`
 — вне Tab и дерева доступности); открытый `CabinetDrawer` делает фон (sidebar,
