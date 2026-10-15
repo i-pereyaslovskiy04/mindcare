@@ -63,6 +63,13 @@
   color: var(--text-main);
 }
 
+.empty {
+  margin: 0;
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 .list {
   list-style: none;
   display: flex;

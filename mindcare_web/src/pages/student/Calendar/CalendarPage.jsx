@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { MOCK_EVENTS } from './data/mockEvents';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { dateKey } from './utils/calendarUtils';
 import { useMyAppointments } from '../../../features/appointments/hooks/useMyAppointments';
 import { useAvailableSlots } from '../../../features/appointments/hooks/useAvailableSlots';
@@ -56,9 +55,12 @@ function toSession(appt) {
   const time  = end
     ? `${mskTimeStr(start)}–${mskTimeStr(end)}`
     : mskTimeStr(start);
+  // Прошедшая — итоговый статус или уже наступивший starts_at при ЛЮБОМ
+  // статусе (в т.ч. pending_confirmation): такая запись уходит в историю,
+  // отменить её нельзя (backend отменяет только до дня встречи).
   const isPast =
     ['completed', 'no_show', 'cancelled', 'declined'].includes(appt.status) ||
-    (start < new Date() && appt.status !== 'pending_confirmation');
+    start < new Date();
   return {
     id:          appt.uuid,
     uuid:        appt.uuid,
@@ -81,20 +83,23 @@ const MODALITY_OPTIONS = [
   { label: 'Очно',   value: 'in_person' },
 ];
 
+// Только типы, которые реально попадают в календарь (сессии из API).
+// Задания и записи дневника здесь не показываются: интеграции календаря с
+// ними нет, прежние mock-события убраны.
 const LEGEND_ITEMS = [
   { label: 'Сессия',            color: 'var(--espresso)' },
   { label: 'Прошедшая встреча', color: 'var(--latte)'    },
-  { label: 'Задание',           color: 'var(--coffee)'   },
-  { label: 'Запись в дневнике', color: 'var(--success)'  },
 ];
 
 export default function CalendarPage() {
   const [year, setYear]   = useState(_today.getFullYear());
   const [month, setMonth] = useState(_today.getMonth());
-  const [selectedDayKey, setSelectedDayKey] = useState(null);
-  const [popupPos, setPopupPos]             = useState(null);
+  // Окно «События дня»: { key, pos } | null.
+  const [popup, setPopup] = useState(null);
 
-  // Booking form
+  // Booking form. bookDate ('YYYY-MM-DD' | '') — единственный источник
+  // выбранной даты: его меняют и нажатие дня календаря, и DateInput формы,
+  // а календарь подсвечивает этот день в отображаемом месяце.
   const todayStr = _today.toISOString().substring(0, 10);
   const [meetingTypes, setMeetingTypes] = useState([]);
   const [mtId, setMtId]                 = useState('');
@@ -106,6 +111,8 @@ export default function CalendarPage() {
   const [bookSuccess, setBookSuccess]   = useState(false);
 
   const calendarBoxRef = useRef(null);
+  const popupId = useId();
+  const dateLabelId = useId();
 
   // Real appointments
   const { items: appointments, loading, refetch } = useMyAppointments({ size: 100 });
@@ -159,15 +166,9 @@ export default function CalendarPage() {
     return map;
   }, [sessions]);
 
-  // Events map: date → [{ type, title, time, desc }]
+  // Events map: date → [{ type, title, time, desc }] — только сессии из API.
   const eventsMap = useMemo(() => {
     const map = {};
-    // Tasks & diary stay as mocks
-    MOCK_EVENTS.filter(e => e.type === 'task' || e.type === 'diary').forEach(e => {
-      if (!map[e.date]) map[e.date] = [];
-      map[e.date].push(e);
-    });
-    // Sessions from real API
     sessions.forEach(s => {
       if (!map[s.date]) map[s.date] = [];
       map[s.date].push({ date: s.date, type: s.status === 'past' ? 'past' : 'session', title: s.title, time: s.time, desc: s.desc });
@@ -184,21 +185,47 @@ export default function CalendarPage() {
     [sessions],
   );
 
+  const popupKey = popup?.key ?? null;
+
+  // «✕» и Escape возвращают фокус на кнопку дня (она остаётся в DOM).
+  // Закрытие окна не сбрасывает выбранную дату формы.
+  const closePopup = useCallback(({ restoreFocus = false } = {}) => {
+    if (restoreFocus && popupKey) {
+      calendarBoxRef.current
+        ?.querySelector(`button[data-date="${popupKey}"]`)
+        ?.focus();
+    }
+    setPopup(null);
+  }, [popupKey]);
+
+  // Смена месяца закрывает окно: иначе оно показывало бы события дня из
+  // прежнего месяца на старых координатах.
   function prev() {
+    closePopup();
     if (month === 0) { setYear(y => y - 1); setMonth(11); }
     else setMonth(m => m - 1);
   }
   function next() {
+    closePopup();
     if (month === 11) { setYear(y => y + 1); setMonth(0); }
     else setMonth(m => m + 1);
   }
-  function handleDaySelect(key, pos) {
-    setSelectedDayKey(key);
-    setPopupPos(pos);
+  // Нажатие дня открывает окно (повторное — закрывает) и подставляет дату
+  // в форму записи. Прошедшие дни окно открывают (история встреч), но в форму
+  // не попадают: DateInput не даёт выбрать дату раньше сегодняшней.
+  function handleDayClick(key, pos) {
+    if (popupKey === key) {
+      setPopup(null);
+      return;
+    }
+    setPopup({ key, pos });
+    if (key >= todayKey) setBookDate(key);
   }
-  function closePopup() {
-    setSelectedDayKey(null);
-    setPopupPos(null);
+  // Ручной выбор даты в форме: окно прежнего дня закрывается, подсветка
+  // календаря следует за bookDate.
+  function handleBookDateChange(value) {
+    setBookDate(value);
+    setPopup(null);
   }
 
   async function handleBook() {
@@ -233,41 +260,42 @@ export default function CalendarPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.left}>
-        <section className={styles.calendarBox} ref={calendarBoxRef} onClick={e => e.stopPropagation()}>
-          <CalendarHeader year={year} month={month} onPrev={prev} onNext={next} />
-          <CalendarGrid
-            year={year}
-            month={month}
-            sessionMap={sessionMap}
-            todayKey={todayKey}
-            onDaySelect={handleDaySelect}
-            containerRef={calendarBoxRef}
-            eventsMap={eventsMap}
+      {/* Порядок DOM = порядок на телефоне: календарь → форма записи →
+          списки. На desktop grid-areas ставят форму в правую колонку. */}
+      <section className={styles.calendarBox} ref={calendarBoxRef} onClick={e => e.stopPropagation()}>
+        <CalendarHeader year={year} month={month} onPrev={prev} onNext={next} />
+        <CalendarGrid
+          year={year}
+          month={month}
+          sessionMap={sessionMap}
+          todayKey={todayKey}
+          selectedKey={popupKey ?? (bookDate || null)}
+          openKey={popupKey}
+          onDayClick={handleDayClick}
+          onDismiss={closePopup}
+          containerRef={calendarBoxRef}
+          eventsMap={eventsMap}
+          popupId={popupId}
+        />
+        <div className={styles.legend}>
+          {LEGEND_ITEMS.map(item => (
+            <span key={item.label} className={styles.legendItem}>
+              <span className={styles.legendDot} style={{ background: item.color }} aria-hidden="true" />
+              {item.label}
+            </span>
+          ))}
+        </div>
+        {popup?.pos && (
+          <CalendarDayPopup
+            id={popupId}
+            events={eventsMap[popup.key] || []}
+            onClose={closePopup}
+            top={popup.pos.top}
+            left={popup.pos.left}
+            arrowLeft={popup.pos.arrowLeft}
           />
-          <div className={styles.legend}>
-            {LEGEND_ITEMS.map(item => (
-              <span key={item.label} className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ background: item.color }} aria-hidden="true" />
-                {item.label}
-              </span>
-            ))}
-          </div>
-          {selectedDayKey && popupPos && (
-            <CalendarDayPopup
-              events={eventsMap[selectedDayKey] || []}
-              onClose={closePopup}
-              top={popupPos.top}
-              left={popupPos.left}
-              arrowLeft={popupPos.arrowLeft}
-            />
-          )}
-        </section>
-
-        {loading && <div className={styles.loadingHint}>Загрузка сессий…</div>}
-        {!loading && <UpcomingList sessions={upcoming} onCancel={handleCancel} />}
-        {!loading && <SessionHistory sessions={past} />}
-      </div>
+        )}
+      </section>
 
       <div className={styles.right}>
         <section className={styles.bookingBox}>
@@ -311,10 +339,11 @@ export default function CalendarPage() {
           )}
 
           <div className={styles.field}>
-            <label className={styles.fieldLabel}>Дата</label>
+            <label id={dateLabelId} className={styles.fieldLabel}>Дата</label>
             <DateInput
+              labelledBy={dateLabelId}
               value={bookDate}
-              onChange={setBookDate}
+              onChange={handleBookDateChange}
               placeholder="Выберите дату"
               min={todayStr}
             />
@@ -372,6 +401,12 @@ export default function CalendarPage() {
             {booking ? 'Отправляем…' : 'Записаться'}
           </Button>
         </section>
+      </div>
+
+      <div className={styles.lists}>
+        {loading && <div className={styles.loadingHint}>Загрузка сессий…</div>}
+        {!loading && <UpcomingList sessions={upcoming} onCancel={handleCancel} />}
+        {!loading && <SessionHistory sessions={past} />}
       </div>
     </div>
   );

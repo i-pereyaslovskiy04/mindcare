@@ -10,6 +10,23 @@ export const MONTH_NAMES_GENITIVE = [
 
 export const DOW = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
+// Индекс — JS getDay() (0 = воскресенье).
+const WEEKDAY_NAMES = [
+  'воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота',
+];
+
+/**
+ * Доступное имя кнопки дня: «14 октября, среда», далее при необходимости
+ * «, есть события» и «, выбрано» (выбранная дата формы записи).
+ */
+export function dayLabel(year, month, day, { hasEvents = false, selected = false } = {}) {
+  const weekday = WEEKDAY_NAMES[new Date(year, month, day).getDay()];
+  let label = `${day} ${MONTH_NAMES_GENITIVE[month]}, ${weekday}`;
+  if (hasEvents) label += ', есть события';
+  if (selected) label += ', выбрано';
+  return label;
+}
+
 export function dateKey(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }

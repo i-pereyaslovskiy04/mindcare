@@ -44,3 +44,18 @@ test('навигация по месяцам меняет заголовок', (
   fireEvent.click(screen.getByLabelText('Предыдущий месяц'));
   expect(screen.getByText('Май 2026')).toBeInTheDocument();
 });
+
+test('labelledBy: внешняя подпись + показанная дата — доступное имя поля', () => {
+  render(
+    <>
+      <span id="ext-date-label">Дата</span>
+      <DateInput labelledBy="ext-date-label" value="2026-10-16" onChange={() => {}} />
+    </>,
+  );
+  expect(screen.getByRole('button', { name: 'Дата 16.10.2026' })).toBeInTheDocument();
+});
+
+test('labelledBy не применяется, если задан собственный label', () => {
+  render(<DateInput label="Начало" labelledBy="ext" value="" onChange={() => {}} />);
+  expect(screen.getByRole('button', { name: 'Начало' })).not.toHaveAttribute('aria-labelledby');
+});

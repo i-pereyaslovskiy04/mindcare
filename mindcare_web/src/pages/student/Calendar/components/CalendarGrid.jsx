@@ -1,36 +1,35 @@
-import { useState } from 'react';
 import { DOW, buildGrid, dateKey } from '../utils/calendarUtils';
 import CalendarDayCell from './CalendarDayCell';
 import styles from './CalendarGrid.module.css';
 
 const POPUP_W = 280;
 
+/**
+ * Сетка месяца. Полностью controlled — состояние хранит CalendarPage:
+ * `selectedKey` — выбранный день (кольцо), `openKey` — день открытого окна
+ * «События дня». Нажатие дня отдаёт наверх `onDayClick(key, pos)` с позицией
+ * окна; клик мимо дней — `onDismiss()`.
+ */
 export default function CalendarGrid({
   year,
   month,
   sessionMap,
   todayKey,
-  onDaySelect,
+  selectedKey = null,
+  openKey = null,
+  onDayClick,
+  onDismiss,
   containerRef,
   eventsMap = {},
+  popupId,
 }) {
-  const [selectedKey, setSelectedKey] = useState(null);
-
   const cells = buildGrid(year, month);
 
   function handleCellClick(cell, e) {
     const key = dateKey(cell.year, cell.month, cell.day);
-    const events = eventsMap[key] || [];
-    if (!events.length) {
-      setSelectedKey(null);
-      onDaySelect?.(null, null);
-      return;
-    }
-    const next = selectedKey === key ? null : key;
-    setSelectedKey(next);
 
     let pos = null;
-    if (next && e?.currentTarget && containerRef?.current) {
+    if (e?.currentTarget && containerRef?.current) {
       const cellRect = e.currentTarget.getBoundingClientRect();
       const contRect = containerRef.current.getBoundingClientRect();
       const cellCenterX = cellRect.left + cellRect.width / 2 - contRect.left;
@@ -41,11 +40,18 @@ export default function CalendarGrid({
         arrowLeft: cellCenterX - popupLeft,
       };
     }
-    onDaySelect?.(next, pos);
+    onDayClick?.(key, pos);
+  }
+
+  // Клик мышью мимо дней месяца (день соседнего месяца, заголовки дней
+  // недели) закрывает окно. С клавиатуры окно закрывают «✕» и Escape.
+  function handleGridClick(e) {
+    if (openKey && !e.target.closest('button')) onDismiss?.();
   }
 
   return (
-    <div className={styles.wrapper}>
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div className={styles.wrapper} onClick={handleGridClick}>
       <div className={styles.grid}>
         {DOW.map(d => (
           <div key={d} className={styles.dowCell}>{d}</div>
@@ -58,8 +64,10 @@ export default function CalendarGrid({
               cell={cell}
               isToday={key === todayKey}
               dotStatus={sessionMap[key]?.status || null}
-              isSelected={selectedKey === key}
+              isSelected={cell.current && selectedKey === key}
+              isOpen={cell.current && openKey === key}
               events={(eventsMap[key] || []).map(ev => ev.type)}
+              popupId={popupId}
               onClick={(e) => handleCellClick(cell, e)}
             />
           );
