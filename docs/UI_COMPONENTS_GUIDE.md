@@ -203,6 +203,17 @@ Tag — это display-only `<span>`, не button.
 `Select` работает как раньше (если `value` нет в `options` — показывается
 `placeholder`).
 
+**Optional `id`, `aria-invalid`, `aria-describedby` (2026-10-15).** `id` получает
+кнопка-контрол (цель фокуса при ошибке; без него генерируется). При `error`
+контрол получает `aria-invalid="true"` и `aria-describedby` на id сообщения об
+ошибке (`<id>-error`); без `error` новых атрибутов нет.
+
+**Optional `appearance="field"` (2026-10-15).** Вид TextField: подпись
+(11px uppercase), рамка `--outline`, фон `--surface-container`, фокус-кольцо, текст
+ошибки 12.5px и общая коробка (`min-height` 40px вместо фиксированной высоты —
+контрол растёт, а не обрезает). По умолчанию (`appearance="default"`) вид прежний;
+выпадающий список не меняется.
+
 ---
 
 ## MultiSelect
@@ -289,6 +300,15 @@ Popover сам выбирает направление (вниз/вверх) и 
 | Time part | через shared `TimePicker` |
 
 ---
+
+## Tabs
+
+Путь: `components/UI/Tabs/Tabs.jsx`. Tablist с автоактивацией (стрелки, Home/End, roving tabIndex).
+Props: `tabs [{id,label}]`, `active`, `onChange`, `label` (aria-label списка), `idPrefix`, `fill` (равные колонки на узких экранах), `indicator` (`'underline'` по умолчанию — заливка + подчёркивание; `'fill'` — заливка без подчёркивания, используется в настройках), `className`. Панели рисует потребитель: `role="tabpanel"`, `id={tabPanelId(prefix,id)}`, `aria-labelledby={tabButtonId(prefix,id)}`; неактивные держать смонтированными с `hidden`. Активная вкладка отмечается не только цветом: жирность + подчёркивание (`underline`) либо заливка + жирность (`fill`). Режим ГОСТ принудительно перекрашивает `button` (фон схемы + рамка 2px), поэтому для `fill` выбранная вкладка в этом режиме инвертируется и получает внутреннюю рамку (inset box-shadow — размеры и соседние элементы не сдвигаются). Используется: `/student/settings`, журнал аудита (`AuditTabs` — обёртка).
+
+## TextField
+
+Путь: `components/UI/TextField/TextField.jsx` (`forwardRef`). Подписанное поле: `label` связан с `input` через `htmlFor`/`id`, `hint` и `error` — через `aria-describedby`, ошибка — `role="alert"` и `aria-invalid`. Остальные props (`type`, `value`, `onChange`, `maxLength`, `readOnly`, `inputMode`…) передаются в `<input>`. Prop `appearance="field"` включает коробку, общую со `Select appearance="field"` (border-box, рамка 1px, вертикальный padding 9px, `line-height` 1.4, `min-height` 40px): контролы одинаковой высоты, при увеличенном шрифте/межстрочном интервале растут и не обрезают текст. По умолчанию вид прежний.
 
 ## Shared content utilities
 
