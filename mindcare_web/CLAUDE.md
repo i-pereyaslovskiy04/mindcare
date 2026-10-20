@@ -32,6 +32,9 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
    Self-service раздел (/student/settings#student-verification) — только чистый
    student вне режима «под именем»; supervisor-раздел /supervisor/student-verifications
    в режиме «под именем» запросов не делает
+✅ Контакты пользователя (ADR-032): HTTP только через `api/contacts.api.js`; владелец — `features/contacts/hooks/useMyContacts` + `ui/ContactsEditor` (введённое не теряется при ошибке и конфликте версий, `id` строки — UUID, создаётся один раз), сотрудник — только чтение (`useUserContacts` + `ui/ContactsReadOnly`/`UserContactsDialog`; данные привязаны к uuid). Значения контактов не логировать; `err.body` целиком не выводить. Ссылкой значение становится только через `lib/href.contactHref` (https/http, mailto, tel; `rel="noopener noreferrer nofollow"`)
+✅ Вкладки — только `components/UI/Tabs` (`AuditTabs` — тонкая обёртка); поле формы с подписью — `components/UI/TextField` (label↔input, hint/error через aria-describedby). Неактивные панели вкладок держать смонтированными с атрибутом `hidden` (без `display` на обёртке и без подстрок `grid/cards/columns` в именах классов — режим ГОСТ принудительно делает их `display:block`)
+✅ Настройки аккаунта: страница `pages/student/Settings` — только композиция; логика в `features/accountSettings` (ФИО и телефон сохраняются раздельно, PATCH несёт только свой ключ). После смены/установки пароля: navigate → `clearSession()`, без `logout`
 ✅ LinkifiedText: внутренние ссылки — ТОЛЬКО для system-сообщений
    (MessageBubble → allowInternalLinks) и ТОЛЬКО пути из точного allowlist
    INTERNAL_LINKS → router <Link> с подписью из allowlist; прочие относительные и

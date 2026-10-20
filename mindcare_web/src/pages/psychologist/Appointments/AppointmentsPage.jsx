@@ -165,7 +165,6 @@ export default function PsychologistAppointmentsPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>Кабинет психолога</div>
           <h1 className={styles.pageTitle}><em>Сессии</em></h1>
           <p className={styles.pageSub}>Индивидуальные записи, групповые занятия и моё расписание.</p>
         </div>

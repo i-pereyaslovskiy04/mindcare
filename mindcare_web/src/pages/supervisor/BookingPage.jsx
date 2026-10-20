@@ -273,7 +273,6 @@ export default function BookingPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>Супервизор</div>
           <h1 className={styles.pageTitle}>Запись <em>на консультацию</em></h1>
           <p className={styles.pageSub}>
             Ручная запись студента к психологу. Запись создаётся в статусе

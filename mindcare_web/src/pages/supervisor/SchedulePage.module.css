@@ -10,14 +10,6 @@
 
 .headerActions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.labelTag {
-  font-size: var(--fs-tag);
-  font-weight: 600;
-  color: var(--text-light);
-  text-transform: uppercase;
-  letter-spacing: var(--ls-label);
-  margin-bottom: 4px;
-}
 
 .pageTitle {
   font-family: 'Cormorant Garamond', serif;

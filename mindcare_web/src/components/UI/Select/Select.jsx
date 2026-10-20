@@ -28,6 +28,12 @@ const CheckIcon = () => (
  *   onChange    — (value) => void
  *   disabled    — boolean
  *   error       — error message string
+ *   appearance  — 'default' (as before) or 'field': look of components/UI/TextField
+ *                  (same label, border, background, focus ring, error text, and the
+ *                  same box model: border-box, 1px border, 9px padding, line-height
+ *                  1.4, min-height 40px — grows with font size instead of clipping)
+ *   id          — optional id of the control button (focus target, e.g. the first
+ *                  invalid field); an id is generated when omitted
  *   displayLabel — optional label to show when `value` has no matching option
  *                  (e.g. a current value intentionally excluded from selectable
  *                  options). Display only — it never appears in the dropdown.
@@ -48,7 +54,10 @@ export default function Select({
   panelZIndex = 2100,
   displayLabel,
   labelledBy,
+  id,
+  appearance = 'default',
 }) {
+  const field = appearance === 'field';
   const [isOpen, setIsOpen]       = useState(false);
   const [activeIndex, setActive]  = useState(-1);
   const [panelPos, setPanelPos]   = useState({ top: 0, left: 0, minWidth: 0 });
@@ -58,6 +67,9 @@ export default function Select({
   const panelRef   = useRef(null);
   const listboxId  = useId();
   const labelId    = useId();
+  const autoId     = useId();
+  const controlId  = id ?? `${autoId}-select`;
+  const errorId    = `${controlId}-error`;
 
   const selectedOption = options.find(o => String(o.value) === String(value)) ?? null;
 
@@ -160,13 +172,22 @@ export default function Select({
 
   return (
     <div className={[styles.wrap, className].filter(Boolean).join(' ')} ref={wrapRef} style={style}>
-      {label && <span id={labelId} className={styles.label}>{label}</span>}
+      {label && (
+        <span id={labelId} className={[styles.label, field && styles.labelField].filter(Boolean).join(' ')}>
+          {label}
+        </span>
+      )}
 
+      {/* aria-invalid глобален в ARIA 1.1 и озвучивается скринридерами на кнопке-селекте;
+          правило jsx-a11y следует ARIA 1.2, где он убран из глобальных атрибутов. */}
+      {/* eslint-disable-next-line jsx-a11y/role-supports-aria-props */}
       <button
         ref={controlRef}
+        id={controlId}
         type="button"
         className={[
           styles.control,
+          field   && styles.controlField,
           isOpen  && styles.controlOpen,
           error   && styles.controlError,
         ].filter(Boolean).join(' ')}
@@ -174,6 +195,8 @@ export default function Select({
         aria-expanded={isOpen}
         aria-controls={isOpen ? listboxId : undefined}
         aria-labelledby={label ? labelId : labelledBy}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={error ? errorId : undefined}
         disabled={disabled}
         onClick={() => (isOpen ? closeDropdown() : openDropdown())}
         onKeyDown={handleKeyDown}
@@ -235,7 +258,11 @@ export default function Select({
         document.body
       )}
 
-      {error && <span className={styles.error} role="alert">{error}</span>}
+      {error && (
+        <span id={errorId} className={[styles.error, field && styles.errorField].filter(Boolean).join(' ')} role="alert">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

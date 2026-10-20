@@ -357,7 +357,6 @@ export default function SchedulePage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>Супервизор</div>
           <h1 className={styles.pageTitle}>Расписание <em>психологов</em></h1>
           <p className={styles.pageSub}>
             Рабочие окна сериями, перерывы и разовые изменения.

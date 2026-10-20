@@ -62,6 +62,10 @@ async function _parseError(res) {
   // { detail, code: 'oauth_ticket_invalid' }). Только строка — по нему UI
   // выбирает фиксированное сообщение, сам код пользователю не показывается.
   if (typeof body?.code === 'string' && body.code) err.code = body.code;
+  // Разобранное тело ошибки (только объект): структурированные ответы backend
+  // (например, контакты: errors[] / current_version) нужны вызывающему коду.
+  // Тела таких ответов значений пользователя не содержат; целиком не логировать.
+  if (body && typeof body === 'object' && !Array.isArray(body)) err.body = body;
   return err;
 }
 

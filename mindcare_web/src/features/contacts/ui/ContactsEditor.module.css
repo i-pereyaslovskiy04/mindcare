@@ -1,0 +1,210 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--on-surface-variant);
+}
+
+.counter {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.state,
+.empty {
+  margin: 0;
+  padding: 16px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item {
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface-container);
+  min-width: 0;
+}
+
+.row:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Заголовок строки: номер контакта слева, «Удалить» справа — положение кнопки не
+   зависит от высоты подсказок и ошибок полей ниже. */
+.rowHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--on-surface-variant);
+}
+
+/* Широкий экран: «Способ связи» | значение, «Название» — второй строкой на всю ширину.
+   Колонки гибкие (minmax(0, …)), длинные значения и ошибки переносятся. */
+.rowFields {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 12px 14px;
+  align-items: start;
+  min-width: 0;
+}
+
+.methodField,
+.valueField,
+.nameField {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nameField {
+  grid-column: 1 / -1;
+}
+
+/* Ошибка прежней (скрытой) подписи: поля на экране нет, действие — явное. */
+.rowAlert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 13px;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.rowAlertText {
+  flex: 1 1 240px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.limitHint {
+  font-size: 12.5px;
+  color: var(--on-surface-variant);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dirty {
+  font-size: 12.5px;
+  color: var(--on-surface-variant);
+}
+
+.alert,
+.success,
+.conflict {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.alert {
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+}
+
+.success {
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+}
+
+.conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--on-surface);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+}
+
+.conflictText {
+  margin: 0;
+}
+
+.saved {
+  font-size: 12.5px;
+}
+
+.saved summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.saved ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.conflictActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.loadError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Узкий экран: поля идут друг под другом на всю ширину. */
+@media (max-width: 560px) {
+  .rowFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

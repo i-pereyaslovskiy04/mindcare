@@ -264,7 +264,7 @@ def test_options_reflect_the_live_registry(client, admin):
 
     assert body["operations"] == ["UPDATE"]
     assert body["actor_kinds"]["data_change_log"] == ["user", "unavailable"]
-    assert len(body["audit_events"]) == 114
+    assert len(body["audit_events"]) == 116
     assert len(body["auth_events"]) == 7
     assert body["limits"]["max_range_days"] == 90
 
@@ -716,39 +716,50 @@ def _json_keys_and_leaves(value):
 
 
 def test_data_change_values_are_never_returned(client, admin, unique_day):
-    """Redaction проверяется по СТРУКТУРЕ ответа, а не подстрокой по str(item):
-    значения вроде «30» законно встречаются в occurred_at (например,
-    2026-09-30), entry_id и других безопасных полях — такая проверка зависела
-    от календаря и давала ложные срабатывания."""
-    old_value, new_value = 4517, 9283   # отличимые от id, дат и счётчиков
+    """Значения изменений не отдаются ни под ключами old_values/new_values, ни иначе.
+
+    Redaction проверяется по СТРУКТУРЕ ответа и ТОЧНО по листовым значениям, а не
+    подстрокой по str(item): короткие числа вроде 30/60 законно встречаются в
+    occurred_at (например, 2026-09-30), UUID, entry_id и давали ложные
+    срабатывания, зависящие от календаря. Контрольные значения — уникальные
+    маркеры (строки и числа).
+    """
+    old_marker = "old-value-marker-7f3a91c2"
+    new_marker = "new-value-marker-5be04d68"
+    old_number, new_number = 7_300_145, 9_600_271
     _insert([_change(unique_day, table_name="meeting_types", record_id=7,
                      changed_fields=["duration_minutes"],
-                     old_values={"duration_minutes": old_value},
-                     new_values={"duration_minutes": new_value})])
+                     old_values={"duration_minutes": old_number, "note": old_marker},
+                     new_values={"duration_minutes": new_number, "note": new_marker})])
     token, _ = admin
 
-    body = client.get(CHANGES_URL, headers=_auth(token),
-                      params=_window(unique_day)).json()
+    response = client.get(CHANGES_URL, headers=_auth(token),
+                          params=_window(unique_day))
+    assert response.status_code == 200
+    body = response.json()
     assert body["total"] == 1
     item = body["items"][0]
 
     # 1. Только поля публичного DTO: колонок значений в ответе нет вовсе.
     assert set(item) == set(DataChangeOut.model_fields)
-    keys, leaves = _json_keys_and_leaves(body)
+    keys, _ = _json_keys_and_leaves(body)
     assert not {"old_values", "new_values", "ip_address"} & keys
-    # Имя изменённого поля — только элемент списка, а не ключ карты значений.
-    assert "duration_minutes" not in keys
+    # Имена полей значений — не ключи ответа (changed_fields — только список).
+    assert not {"duration_minutes", "note"} & keys
 
     # 2. Безопасные поля на месте.
     assert item["changed_fields"] == ["duration_minutes"]
     assert item["table_name"] == "meeting_types"
     assert item["record_id"] == 7
 
-    # 3. Ни одно листовое значение на любой глубине не равно старому/новому
-    #    значению — ни числом, ни строкой.
-    for secret in (old_value, new_value):
-        assert secret not in leaves
-        assert str(secret) not in leaves
+    # 3. Ни одно листовое значение на любой глубине не равно контрольному.
+    leaves = _leaf_values(body)
+    for secret in (old_marker, new_marker, old_number, new_number):
+        assert secret not in leaves, f"утечка значения {secret!r}"
+    # 4. Маркеры не встречаются и в сыром тексте ответа (уникальные строки,
+    #    ложных срабатываний на датах/UUID у них нет).
+    for secret in (old_marker, new_marker, str(old_number), str(new_number)):
+        assert secret not in response.text, f"утечка значения {secret!r}"
 
 
 def test_legacy_operation_outside_the_table_contract_is_redacted(

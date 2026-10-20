@@ -1,0 +1,20 @@
+.body {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--espresso);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .body {
+    padding: 16px 16px 20px;
+  }
+}

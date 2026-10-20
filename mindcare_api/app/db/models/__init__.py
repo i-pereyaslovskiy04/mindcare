@@ -120,6 +120,9 @@ from app.db.models.student_verification import (  # noqa: F401
     StudentVerificationRequest,
 )
 
+# ── user contacts (FK → users) — ADR-032 ─────────────────────────────────────
+from app.db.models.user_contacts import UserContacts  # noqa: F401
+
 # ── audit ─────────────────────────────────────────────────────────────────────
 from app.db.models.audit import (  # noqa: F401
     AuditLog,
@@ -172,6 +175,8 @@ __all__ = [
     "NotificationTemplate", "Notification", "SystemMessageIntent",
     # student verification
     "StudentVerificationRequest",
+    # user contacts
+    "UserContacts",
     # audit
     "AuditLog", "AuthLog", "DataChangeLog",
     # diary

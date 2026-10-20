@@ -4,14 +4,20 @@ import styles from './styles/forgot-password.module.css';
 import ForgotPasswordStepper from './ForgotPasswordStepper';
 import { useForgotPassword } from './hooks/useForgotPassword';
 
-export default function ForgotPasswordModal({ open, onClose }) {
-  const state = useForgotPassword();
+/**
+ * Props: open, onClose; необязательные — initialEmail, emailLocked (email нельзя менять,
+ * например при установке пароля из настроек), onCompleted (см. useForgotPassword).
+ */
+export default function ForgotPasswordModal({
+  open, onClose, initialEmail = '', emailLocked = false, onCompleted,
+}) {
+  const state = useForgotPassword({ initialEmail, onCompleted });
   const { step, reset, submitEmail, submitOtp, submitPassword, otp } = state;
   const modalRef = useRef(null);
 
   useEffect(() => {
     if (!open) reset();
-  }, [open, reset]);
+  }, [open, reset, initialEmail]);
 
   // Re-focus first input when step changes
   useEffect(() => {
@@ -44,7 +50,7 @@ export default function ForgotPasswordModal({ open, onClose }) {
       zIndex={2100}
     >
       <div className={styles.body}>
-        <ForgotPasswordStepper state={state} onClose={onClose} />
+        <ForgotPasswordStepper state={state} onClose={onClose} emailLocked={emailLocked} />
       </div>
     </Modal>
   );

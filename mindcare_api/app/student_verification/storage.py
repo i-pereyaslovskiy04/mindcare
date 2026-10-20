@@ -15,18 +15,22 @@ Reviewer блокируется явно: FK reviewed_by и FK actor'а audit_lo
 Минимизация SELECT. ORM-сущности User и StudentVerificationRequest здесь НЕ
 загружаются: каждое чтение — явная проекция нужных колонок (Row без
 lazy-загрузки, обращение к невыбранному полю — AttributeError, а не скрытый
-SELECT). Список и история — только метаданные; собственный статус — без номера,
-пояснение отказа читается отдельным запросом только для rejected; карточка —
-ciphertext номера/пояснения, но не auth-поля users (password_hash,
-deactivation_reason_enc и пр.). Блокировки users выбирают только id и признаки
-lifecycle. Identity map не участвует, поэтому повторное чтение заявки под
+SELECT). Список и счётчик pending — только метаданные; собственный статус — без
+номера, пояснение отказа читается отдельным запросом только для rejected;
+карточка — ciphertext номера/пояснения, но не auth-поля users (password_hash,
+deactivation_reason_enc и пр.). История (в карточке и порции «Показать ещё») —
+метаданные + ciphertext пояснения отказа, БЕЗ ticket_number_enc: исторические
+номера ленте не нужны. Порции истории — keyset по (submitted_at, id) DESC:
+новая подача между порциями не сдвигает границу (нет дублей и пропусков).
+Блокировки users выбирают только id и признаки lifecycle. Identity map не участвует, поэтому повторное чтение заявки под
 блокировкой всегда возвращает свежее состояние БД (в т.ч. после ожидания).
 
 Санитизация. Неожиданная SQLAlchemyError содержит SQL и параметры: при
 записи (flush / UPDATE / outbox / commit) — ciphertext номера или пояснения,
 при чтении — введённый supervisor'ом search (ФИО/email), uuid заявки, id
 пользователя. Она перехватывается на КАЖДОМ обращении к БД модуля — чтениях
-list_requests / get_latest_for_user / get_card и предварительных чтениях
+list_requests / count_pending / get_latest_for_user / get_card / get_history
+и предварительных чтениях
 (блокировках) подачи и решения (phase=read) — и при записи; транзакция
 откатывается, в stderr — только операция, фаза и класс исключения, наружу —
 VerificationStorageError, созданная ВНЕ блока except и поднятая `from None`
@@ -38,7 +42,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, or_, update
+from sqlalchemy import func, or_, select, tuple_, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import aliased
 
@@ -57,6 +61,8 @@ from app.notifications.templates import (
 from app.student_verification import errors
 
 ENTITY_TYPE = "student_verification_request"
+# Порция истории в карточке и по умолчанию для «Показать ещё» (заявок, не событий).
+HISTORY_PAGE_SIZE = 10
 _PENDING_CONSTRAINT = "ux_svr_user_pending"
 _APPROVED_CONSTRAINT = "ux_svr_user_approved"
 
@@ -87,6 +93,15 @@ _APPLICANT = (
     User.deleted_at.label("applicant_deleted_at"),
 )
 _REVIEWER = (_Reviewer.full_name.label("reviewer_full_name"),)
+# История: метаданные + ciphertext пояснения отказа (расшифровка — в service
+# после аудита); номера билета нет. ФИО — только заявителя и проверявшего.
+_HISTORY = (
+    SVR.id, SVR.uuid, SVR.status, SVR.faculty_code, SVR.submitted_at,
+    SVR.reviewed_at, SVR.rejection_reason_enc,
+    User.full_name.label("applicant_full_name"),
+    _Reviewer.full_name.label("reviewer_full_name"),
+)
+_Earliest = aliased(SVR)
 # Блокировка users — только id и признаки lifecycle.
 _LOCK_USER = (User.id, User.is_active, User.deleted_at)
 
@@ -207,6 +222,57 @@ def _with_people(query):
         query.join(User, User.id == SVR.user_id)
         .outerjoin(_Reviewer, _Reviewer.id == SVR.reviewed_by)
     )
+
+
+def _history_dict(row) -> dict:
+    return {
+        "id": row.id,
+        "uuid": str(row.uuid),
+        "status": row.status,
+        "faculty_code": row.faculty_code,
+        "submitted_at": row.submitted_at,
+        "reviewed_at": row.reviewed_at,
+        # CHECK гарантирует пояснение только у rejected; явная проверка —
+        # чтобы service не расшифровывал ничего, кроме пояснения отказа.
+        "rejection_reason_enc": (
+            row.rejection_reason_enc if row.status == "rejected" else None
+        ),
+        "is_first": bool(row.is_first),
+        "applicant_full_name": row.applicant_full_name,
+        # NULL — проверявший недоступен (FK reviewed_by ON DELETE SET NULL).
+        "reviewer_full_name": row.reviewer_full_name,
+    }
+
+
+def _history_portion(db, user_id: int, *, before=None, size: int) -> dict:
+    """
+    Порция истории заявок пользователя: ORDER BY submitted_at DESC, id DESC,
+    keyset-граница `before` = (submitted_at, id) последней загруженной заявки,
+    LIMIT size + 1 (лишняя строка → has_more). Один SELECT без N+1: ФИО
+    заявителя и проверявшего — join'ами, признак первой подачи — scalar-
+    подзапросом «самая ранняя заявка пользователя» (не зависит от порции).
+    """
+    earliest_id = (
+        select(_Earliest.id)
+        .where(_Earliest.user_id == int(user_id))
+        .order_by(_Earliest.submitted_at.asc(), _Earliest.id.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    q = _with_people(
+        db.query(*_HISTORY, (SVR.id == earliest_id).label("is_first")),
+    ).filter(SVR.user_id == int(user_id))
+    if before is not None:
+        q = q.filter(tuple_(SVR.submitted_at, SVR.id) < tuple_(*before))
+    rows = (
+        q.order_by(SVR.submitted_at.desc(), SVR.id.desc())
+        .limit(size + 1)
+        .all()
+    )
+    return {
+        "rows": [_history_dict(r) for r in rows[:size]],
+        "has_more": len(rows) > size,
+    }
 
 
 # ── self-service ──────────────────────────────────────────────────────────────
@@ -337,6 +403,44 @@ def submit_atomic(
 
 # ── проверка supervisor'ом ─────────────────────────────────────────────────────
 
+def _queue_filters(status: Optional[str], search: Optional[str]) -> list:
+    """Условия списка; их же использует счётчик pending (одни критерии)."""
+    filters = []
+    if status is not None:
+        filters.append(SVR.status == status)
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        filters.append(or_(User.email.ilike(pattern), User.full_name.ilike(pattern)))
+    return filters
+
+
+def _count_requests(db, filters) -> int:
+    return (
+        db.query(func.count(SVR.id))
+        .select_from(SVR)
+        .join(User, User.id == SVR.user_id)
+        .filter(*filters)
+        .scalar()
+    ) or 0
+
+
+def count_pending() -> int:
+    """
+    Число заявок в очереди (status='pending') — те же критерии, что
+    list_requests(status='pending'). Только count(id): ни строк заявок, ни
+    ФИО/email, ни ciphertext. Для бейджа меню supervisor'а.
+    """
+    with SessionLocal() as db:
+        error_class = None
+        try:
+            total = _count_requests(db, _queue_filters("pending", None))
+        except SQLAlchemyError as exc:
+            error_class = type(exc).__name__
+        if error_class is not None:
+            raise _storage_failure(db, "count", "read", error_class) from None
+    return total
+
+
 def list_requests(
     *, status: Optional[str], page: int, size: int, search: Optional[str] = None,
 ) -> tuple[list, int]:
@@ -346,23 +450,12 @@ def list_requests(
     (по номеру билета не ищем: он зашифрован и в списке не раскрывается).
     pending — очередь FIFO, прочее — сначала новые.
     """
-    filters = []
-    if status is not None:
-        filters.append(SVR.status == status)
-    if search and search.strip():
-        pattern = f"%{search.strip()}%"
-        filters.append(or_(User.email.ilike(pattern), User.full_name.ilike(pattern)))
+    filters = _queue_filters(status, search)
 
     with SessionLocal() as db:
         error_class = None
         try:
-            total = (
-                db.query(func.count(SVR.id))
-                .select_from(SVR)
-                .join(User, User.id == SVR.user_id)
-                .filter(*filters)
-                .scalar()
-            ) or 0
+            total = _count_requests(db, filters)
             q = _with_people(
                 db.query(*_META, *_APPLICANT, *_REVIEWER),
             ).filter(*filters)
@@ -378,15 +471,16 @@ def list_requests(
     return [_list_dict(row) for row in rows], total
 
 
-def get_card(request_uuid) -> Optional[dict]:
+def get_card(request_uuid, *, history_size: int = HISTORY_PAGE_SIZE) -> Optional[dict]:
     """
     Карточка: метаданные + ciphertext номера и пояснения (расшифровывает
-    service после аудита) + история прочих заявок того же пользователя (только
-    метаданные). Auth-поля users не выбираются.
+    service после аудита) + первая порция истории ВСЕХ заявок того же
+    пользователя, включая текущую (каждая заявка — ровно одна строка; без
+    номеров билетов). Auth-поля users не выбираются. Два SELECT.
     """
     with SessionLocal() as db:
         error_class = None
-        history = []
+        history = None
         try:
             row = (
                 _with_people(db.query(
@@ -397,12 +491,7 @@ def get_card(request_uuid) -> Optional[dict]:
                 .first()
             )
             if row is not None:
-                history = (
-                    db.query(*_META)
-                    .filter(SVR.user_id == row.user_id, SVR.id != row.id)
-                    .order_by(SVR.submitted_at.desc(), SVR.id.desc())
-                    .all()
-                )
+                history = _history_portion(db, row.user_id, size=history_size)
         except SQLAlchemyError as exc:
             error_class = type(exc).__name__
         if error_class is not None:
@@ -412,17 +501,54 @@ def get_card(request_uuid) -> Optional[dict]:
         data = _list_dict(row)
         data["ticket_number_enc"] = row.ticket_number_enc
         data["rejection_reason_enc"] = row.rejection_reason_enc
-        data["history"] = [
-            {
-                "uuid": str(h.uuid),
-                "status": h.status,
-                "faculty_code": h.faculty_code,
-                "submitted_at": h.submitted_at,
-                "reviewed_at": h.reviewed_at,
-            }
-            for h in history
-        ]
+        data["history"] = history
         return data
+
+
+def get_history(
+    request_uuid, *, before_uuid=None, size: int = HISTORY_PAGE_SIZE,
+) -> Optional[dict]:
+    """
+    Следующая порция истории («Показать ещё») для карточки заявки
+    request_uuid. Пользователь определяется ТОЛЬКО по исходной заявке; курсор
+    (uuid последней загруженной заявки) обязан принадлежать тому же
+    пользователю — иначе None (404), чужую историю не получить и не
+    прощупать. Нет исходной заявки → None. SELECT: исходная заявка, курсор
+    (если задан), порция.
+    """
+    with SessionLocal() as db:
+        error_class = None
+        result = None
+        try:
+            anchor = (
+                db.query(SVR.id, SVR.user_id)
+                .filter(SVR.uuid == request_uuid)
+                .first()
+            )
+            cursor = None
+            if anchor is not None and before_uuid is not None:
+                cursor = (
+                    db.query(SVR.id, SVR.user_id, SVR.submitted_at)
+                    .filter(SVR.uuid == before_uuid)
+                    .first()
+                )
+            cursor_ok = before_uuid is None or (
+                cursor is not None and anchor is not None
+                and cursor.user_id == anchor.user_id
+            )
+            if anchor is not None and cursor_ok:
+                before = (
+                    (cursor.submitted_at, cursor.id) if cursor is not None else None
+                )
+                result = _history_portion(
+                    db, anchor.user_id, before=before, size=size,
+                )
+                result["current_id"] = anchor.id
+        except SQLAlchemyError as exc:
+            error_class = type(exc).__name__
+        if error_class is not None:
+            raise _storage_failure(db, "history", "read", error_class) from None
+    return result
 
 
 def _reviewer_allowed(db, reviewer) -> bool:

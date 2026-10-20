@@ -205,7 +205,6 @@ export default function GroupSessionsPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>Супервизор</div>
           <h1 className={styles.pageTitle}>Групповые <em>занятия</em></h1>
           <p className={styles.pageSub}>Управление расписанием групповых сессий.</p>
         </div>

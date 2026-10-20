@@ -1,0 +1,80 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--surface-container);
+  font-size: 13.5px;
+}
+
+.kind {
+  flex: 0 0 auto;
+  min-width: 140px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.value {
+  color: var(--on-surface);
+  overflow-wrap: anywhere;
+}
+
+.link {
+  color: var(--primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.label {
+  font-size: 12.5px;
+  color: var(--on-surface-variant);
+}
+
+.note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--on-surface-variant);
+}
+
+.empty,
+.state {
+  margin: 0;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.errorBox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.alert {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+}

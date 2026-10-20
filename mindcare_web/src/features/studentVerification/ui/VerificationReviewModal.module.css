@@ -71,25 +71,59 @@
   text-transform: uppercase;
   font-weight: 700;
   color: var(--text-muted);
-  margin-bottom: 8px;
+  margin: 0 0 8px;
 }
 
-.historyList {
+/* Лента событий истории: от новых к старым, линия слева. */
+.timeline {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 14px;
+  border-left: 2px solid var(--nav-border);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
 }
 
-.historyItem {
+.event {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 3px;
   font-size: 13px;
   color: var(--text-main);
+}
+
+.eventHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eventTime {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.currentMark {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--coffee);
+}
+
+.eventMeta {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.eventReason {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.historyMore {
+  margin-top: 10px;
 }
 
 .note {

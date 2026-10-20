@@ -26,18 +26,6 @@
   flex-wrap: wrap;
 }
 
-.labelTag {
-  display: inline-block;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--coffee);
-  background: var(--cream);
-  border: 1px solid var(--nav-border);
-  border-radius: 20px;
-  padding: 2px 10px;
-  margin-bottom: 8px;
-}
 
 .pageTitle {
   font-family: 'Cormorant Garamond', Georgia, serif;

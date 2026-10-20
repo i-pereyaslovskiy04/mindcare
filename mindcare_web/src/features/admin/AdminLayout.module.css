@@ -121,7 +121,10 @@
 }
 
 .userRole {
-  display: inline-flex;
+  /* Блок под именем: подпись роли (одна роль) или полноширинная кнопка
+     «Сменить кабинет» (несколько ролей). */
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: 5px;
   font-size: 11px;

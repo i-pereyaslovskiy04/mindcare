@@ -4,9 +4,18 @@ import { passwordResetInit, passwordResetConfirm } from '../../../../api/auth.ap
 const TIMER_SEC = 60;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function useForgotPassword() {
+/**
+ * Сценарий восстановления/установки пароля по email-коду.
+ *
+ * Опции (все необязательны — публичный сценарий «Забыли пароль» работает как прежде):
+ *   initialEmail — email, с которого начинается сценарий (и к которому возвращает reset);
+ *   onCompleted  — вызывается РОВНО ОДИН раз сразу после успешного подтверждения
+ *                  нового пароля, даже если окно закрыли, пока шёл финальный запрос
+ *                  (результат запроса не теряется; запоздавшие обновления UI отбрасываются).
+ */
+export function useForgotPassword({ initialEmail = '', onCompleted } = {}) {
   const [step, setStep]           = useState(1);
-  const [email, setEmail]         = useState('');
+  const [email, setEmail]         = useState(initialEmail);
   const [otp, setOtp]             = useState(Array(6).fill(''));
   const [password, setPassword]   = useState('');
   const [password2, setPassword2] = useState('');
@@ -15,6 +24,15 @@ export function useForgotPassword() {
   const [timerSec, setTimerSec]   = useState(0);
 
   const loadingRef = useRef(false);
+  const onCompletedRef = useRef(onCompleted);
+  const initialEmailRef = useRef(initialEmail);
+  const completedRef = useRef(false);   // onCompleted уже вызван для этого сценария
+  const confirmInFlightRef = useRef(false);
+  const genRef = useRef(0);             // поколение сценария: reset() его меняет
+  useEffect(() => {
+    onCompletedRef.current = onCompleted;
+    initialEmailRef.current = initialEmail;
+  });
   useEffect(() => { loadingRef.current = loading; }, [loading]);
 
   // Countdown tick
@@ -59,7 +77,7 @@ export function useForgotPassword() {
 
   // ── Step 3: confirm OTP + set new password ─────────────────────────────────
   const submitPassword = useCallback(async () => {
-    if (loadingRef.current) return;
+    if (loadingRef.current || confirmInFlightRef.current) return;
     const errs = {};
     if (password.length < 8)                errs.password  = 'Минимум 8 символов';
     if (!password2 || password !== password2) errs.password2 = 'Пароли не совпадают';
@@ -67,20 +85,33 @@ export function useForgotPassword() {
 
     setErrors({});
     setLoading(true);
+    confirmInFlightRef.current = true;
+    const gen = genRef.current;
+    let confirmed = false;
     try {
       await passwordResetConfirm({
         email:        email.trim(),
         code:         otp.join(''),
         new_password: password,
       });
-      setStep('done');
+      confirmed = true;
     } catch (err) {
-      // Wrong/expired OTP → back to OTP step
-      setErrors({ otp: err.message || 'Неверный или истёкший код. Запросите новый.' });
-      setStep(2);
+      // Wrong/expired OTP → back to OTP step (если сценарий не сброшен закрытием окна)
+      if (gen === genRef.current) {
+        setErrors({ otp: err.message || 'Неверный или истёкший код. Запросите новый.' });
+        setStep(2);
+      }
     } finally {
-      setLoading(false);
+      confirmInFlightRef.current = false;
+      if (gen === genRef.current) setLoading(false);
     }
+    if (!confirmed) return;
+    // Пароль изменён на сервере: результат учитываем независимо от того, открыто ли окно.
+    if (!completedRef.current) {
+      completedRef.current = true;
+      onCompletedRef.current?.();
+    }
+    if (gen === genRef.current) setStep('done');
   }, [email, otp, password, password2]);
 
   // ── Resend OTP ─────────────────────────────────────────────────────────────
@@ -105,8 +136,10 @@ export function useForgotPassword() {
   }, []);
 
   const reset = useCallback(() => {
+    genRef.current += 1;
+    completedRef.current = false;
     setStep(1);
-    setEmail('');
+    setEmail(initialEmailRef.current);
     setOtp(Array(6).fill(''));
     setPassword('');
     setPassword2('');

@@ -40,9 +40,31 @@ export function getStudentVerifications({ page = 1, size = 20, status = 'pending
   return apiFetch(`${SUPERVISOR_BASE}?${params}`);
 }
 
-/** GET карточки: содержит полный номер билета. */
+/** GET → { count }: только число заявок в очереди (бейдж меню). */
+export function getPendingVerificationsCount() {
+  return apiFetch(`${SUPERVISOR_BASE}/pending-count`);
+}
+
+/**
+ * GET карточки: полный номер билета + первая порция истории подтверждения
+ * пользователя ({ items, has_more, next_cursor }, от новых к старым).
+ */
 export function getStudentVerification(uuid) {
   return apiFetch(`${SUPERVISOR_BASE}/${encodeURIComponent(uuid)}`);
+}
+
+/**
+ * GET следующей порции истории («Показать ещё»): before — next_cursor
+ * предыдущей порции (uuid последней загруженной заявки).
+ */
+export function getStudentVerificationHistory(uuid, { before, size } = {}) {
+  const params = new URLSearchParams();
+  if (before) params.set('before', before);
+  if (size) params.set('size', size);
+  const query = params.toString();
+  return apiFetch(
+    `${SUPERVISOR_BASE}/${encodeURIComponent(uuid)}/history${query ? `?${query}` : ''}`,
+  );
 }
 
 export function approveStudentVerification(uuid) {

@@ -2,7 +2,9 @@ import styles from '../styles/forgot-password.module.css';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function StepEmail({ email, setEmail, errors, setErrors, loading, onSubmit }) {
+export default function StepEmail({
+  email, setEmail, errors, setErrors, loading, onSubmit, readOnly = false,
+}) {
   const handleChange = (e) => {
     setEmail(e.target.value);
     if (errors.email) setErrors(prev => ({ ...prev, email: null }));
@@ -40,6 +42,7 @@ export default function StepEmail({ email, setEmail, errors, setErrors, loading,
           value={email}
           onChange={handleChange}
           onBlur={handleBlur}
+          readOnly={readOnly}
           aria-invalid={!!errors.email}
           aria-describedby="fp-email-hint"
         />
@@ -48,7 +51,7 @@ export default function StepEmail({ email, setEmail, errors, setErrors, loading,
           className={`${styles.hint} ${errors.email ? styles.hintError : styles.hintHidden}`}
           role="alert"
         >
-          {errors.email || 'Введите почту, привязанную к аккаунту'}
+          {errors.email || (readOnly ? 'Код придёт на почту вашего аккаунта' : 'Введите почту, привязанную к аккаунту')}
         </span>
       </div>
 

@@ -124,7 +124,15 @@ class PaginatedVerificationsOut(BaseModel):
     size: int
 
 
-class HistoryItem(BaseModel):
+class PendingCountOut(BaseModel):
+    """GET …/pending-count: только число заявок в очереди (бейдж меню)."""
+
+    count: int
+
+
+class DecisionOut(BaseModel):
+    """Ответ approve/reject — метаданные заявки без номера и пояснения."""
+
     uuid: str
     status: RequestStatus
     faculty: FacultyOut
@@ -132,8 +140,41 @@ class HistoryItem(BaseModel):
     reviewed_at: Optional[datetime] = None
 
 
+# ── История подтверждения (карточка и «Показать ещё») ─────────────────────────
+# submitted — самая ранняя заявка пользователя, resubmitted — последующие;
+# rejected / approved — решение. Причина есть только у rejected.
+HistoryEventType = Literal["submitted", "resubmitted", "rejected", "approved"]
+
+
+class HistoryActorOut(BaseModel):
+    full_name: str
+
+
+class HistoryEventOut(BaseModel):
+    type: HistoryEventType
+    at: datetime
+    actor: Optional[HistoryActorOut] = None      # None — исполнитель недоступен
+    reason: Optional[str] = None
+
+
+class HistoryRequestOut(BaseModel):
+    uuid: str
+    status: RequestStatus
+    faculty: FacultyOut
+    is_current: bool
+    events: list[HistoryEventOut]                # от новых к старым
+
+
+class VerificationHistoryOut(BaseModel):
+    """Порция заявок от новых к старым; next_cursor → ?before= следующей."""
+
+    items: list[HistoryRequestOut]
+    has_more: bool
+    next_cursor: Optional[str] = None
+
+
 class VerificationCardOut(VerificationListItem):
     ticket_number: str
     rejection_reason: Optional[str] = None
     can_review: bool
-    history: list[HistoryItem]
+    history: VerificationHistoryOut

@@ -100,7 +100,7 @@ export default function CabinetHeader({
         {/* Дублирует switcher из sidebar .userInfo, но видим только когда
             sidebar свёрнут в icon-rail (601–980px); на <=600px он в drawer. */}
         <div className={styles.switcher}>
-          <CabinetSwitcher currentRole={cabinetRole} />
+          <CabinetSwitcher currentRole={cabinetRole} variant="compact" />
         </div>
 
         {/* Заглушка будущего глобального поиска: поле выключено, формы нет. */}

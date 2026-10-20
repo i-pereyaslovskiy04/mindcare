@@ -598,9 +598,18 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 ✅ Проверка — `/api/supervisor/student-verifications` (router-level
    require_role("supervisor") + запрет impersonation-сессии → 403 до handler).
    admin без supervisor и psychologist — 403; прямой admin+supervisor — допущен.
-   Список без номера и без аудита; карточка — номер ПОСЛЕ записи
+   Список без номера и без аудита; `GET …/pending-count` → `{count}` (только
+   число pending, те же критерии, что очередь; без аудита, no-store; объявлен
+   ДО `/{request_uuid}`); карточка — номер ПОСЛЕ записи
    `student_verification_content_read` (INDEPENDENT+RAISE): сбой аудита → 503
-   без номера. Решение — по uuid конкретной заявки: переход + reviewer/время +
+   без номера. Карточка несёт первую порцию ИСТОРИИ (все заявки пользователя,
+   включая текущую, от новых к старым: submitted/resubmitted, rejected с
+   причиной и проверявшим, approved с проверявшим; actor null — проверявший
+   недоступен); следующие — `GET …/{uuid}/history?before=<uuid>&size≤50`
+   (keyset по submitted_at DESC, id DESC; курсор чужого пользователя → 404).
+   content_read — по событию на КАЖДУЮ заявку с раскрытой причиной (текущая
+   карточки — одно событие); сбой любого → 503 без номера и причин; порция
+   без причин не аудируется (доработка 2026-10-13). Решение — по uuid конкретной заявки: переход + reviewer/время +
    success-событие + outbox-намерение — один commit; отказ требует пояснения;
    повтор того же решения — no-op без события/уведомления; противоположное →
    409 verification_already_decided; approve отключённого → 409
@@ -624,16 +633,21 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    IntegrityError с `diag.constraint_name == ux_chat_messages_event_key`;
    прочие IntegrityError пробрасываются (publisher → None, outbox не отмечает)
 ✅ student_verification/storage.py: SELECT — только явные проекции колонок
-   (без загрузки ORM-сущностей User/заявки). Список/история/свой статус — без
-   ticket_number_enc; rejection_reason_enc — только карточка и свой статус при
-   rejected; auth-поля users (password_hash и пр.) не выбираются нигде
+   (без загрузки ORM-сущностей User/заявки). Список/счётчик/история/свой
+   статус — без ticket_number_enc (исторические номера не выбираются никогда);
+   rejection_reason_enc — только карточка, её история / порции history (под
+   content_read) и свой статус при rejected; auth-поля users (password_hash и
+   пр.) не выбираются нигде. История — один SELECT порции (без N+1), признак
+   первой подачи — подзапрос «самая ранняя заявка», а не offset/total
 ✅ Неожиданная SQLAlchemyError ЛЮБОГО обращения к БД модуля — чтения
-   (list/status/card, блокировки подачи и решения: phase=read) и записи
+   (list/count/status/card/history, блокировки подачи и решения: phase=read) и записи
    (flush/UPDATE/outbox/commit) → rollback, stderr `op/phase/error-class`,
    наружу VerificationStorageError (вне except, from None, не
    VerificationError → 500 без *_failed и без content_read). Известные
    конфликты ux_svr_user_pending/ux_svr_user_approved — прежние typed codes.
    Новый запрос в модуле — только внутри такого try/except SQLAlchemyError
+✅ Контакты пользователя (ADR-032, `app/user_contacts/`): слои routes → service → storage; `service.py` НЕ импортирует fastapi/`app.auth.deps` и не вызывает `resolve_role_or_403` (контексты `OwnerContext`/`StaffContext` строит route; AST-тест). Маршруты используют `ContactsRoute` (санитизация 422/500: закрытые allowlist'ы `field`/`code`, `input`/`msg` не копируются — стандартный 422 FastAPI возвращает введённые значения). Сохранение: у КАЖДОГО item обязателен клиентский UUID `id` (сервер не генерирует), CAS по `version`, совпадение содержимого с текущим → no-op без версии и аудита. Каталог типов/сервисов — ТОЛЬКО `catalog.py` и только расширяется. Доступ сотрудника: грант A (психолог + строгое активное сопровождение `status='active' AND ended_at IS NULL`, цель — в т.ч. клиент со staff-ролью) затем грант B (супервизор + чистый студент); иначе единый 404 + `user_contacts_read_failed`; `admin` сам по себе доступа не имеет; impersonation — 403 (`guards.forbid_impersonation`)
+❌ Не отдавать контакты в общих DTO (`/me`, `/auth/profile`, списки/карточки студентов); не писать значения, шифртекст и тексты исключений в audit/логи/ответы об ошибках; не добавлять владельцу content-read событие без отдельного решения
 ❌ Не включать номер билета, факультет, пояснение отказа или email в текст
    уведомления, audit/DCL и логи; не хранить HTML в тексте system-сообщения
 ❌ Не привязывать identity к существующему аккаунту по совпадению email и не
@@ -953,7 +967,8 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `c6e1a4f8b2d7` | social_auth_foundation (Stage Social Auth 2A): `users.password_hash` и `otp_verifications.password_hash` → NULLABLE; таблицы `user_oauth_identities`, `oauth_auth_requests`, `oauth_pending_tickets` (только фундамент, OAuth flow не реализован). Downgrade fail-closed при наличии users без пароля |
 | `b8d2f6a3c9e4` | auth_log_auth_method (Stage Social Auth 3A): `auth_log.auth_method VARCHAR(20) NULL` + CHECK `ck_auth_log_auth_method` (`password`/`yandex`/`vk`), без индекса; DDL на partitioned parent (наследуется всеми партициями). Backfill: `login` → `password`; `failed_login` → `password` только с `user_email` и не-OAuth кодом, иначе NULL. Downgrade fail-closed при строках `yandex`/`vk` |
 | `d7e2a9c4f1b6` | add_user_deactivation_fields (ADR-028): `users.deactivated_at`, `deactivation_source` (`admin`/`self`), `deactivation_reason_enc` (только `enc:v1:`) + 3 CHECK (в т.ч. согласованность трёх полей). Backfill нет. Downgrade fail-closed при наличии текущих отключений |
-| `f5a3c8d1e7b2` | add_student_verification_and_message_intents (ADR-029): `student_verification_requests` (uuid, user_id CASCADE, faculty_code, `ticket_number_enc`/`rejection_reason_enc` только `enc:v1:`, status pending/approved/rejected, reviewed_by SET NULL, CHECK согласованности, partial UNIQUE одна pending/одна approved на пользователя) и `system_message_intents` (outbox: recipient, event_key, message_code, attempts, delivered_at; UNIQUE recipient+event_key). Backfill нет. Downgrade fail-closed при наличии строк — **head** |
+| `f5a3c8d1e7b2` | add_student_verification_and_message_intents (ADR-029): `student_verification_requests` (uuid, user_id CASCADE, faculty_code, `ticket_number_enc`/`rejection_reason_enc` только `enc:v1:`, status pending/approved/rejected, reviewed_by SET NULL, CHECK согласованности, partial UNIQUE одна pending/одна approved на пользователя) и `system_message_intents` (outbox: recipient, event_key, message_code, attempts, delivered_at; UNIQUE recipient+event_key). Backfill нет. Downgrade fail-closed при наличии строк |
+| `a7d3f1c8e5b2` | add_user_contacts (ADR-032): `user_contacts` (user_id PK/FK CASCADE, `contacts_enc` TEXT NOT NULL только `enc:v1:`, `version` ≥ 1, created_at/updated_at). Backfill нет. Downgrade fail-closed при наличии строк — **head** |
 
 **Ключевые таблицы:**
 
@@ -983,6 +998,7 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `auth_log`, `audit_log`, `data_change_log` | Три журнала с разделёнными зонами ответственности (см. «Три журнала аудита» ниже). Партиционированы по месяцам; схема — только через Alembic |
 | `diary_emotions` | Справочник эмоций дневника: 12 активных состояний (after c3a7f8e2d1b9); key, label, sort_order, is_active; angry/light — деактивированы (is_active=false), legacy labels в DiaryEntryItem.jsx |
 | `student_verification_requests` | Заявки на подтверждение статуса студента ДонГУ (ADR-029): статус, не роль; номер билета и пояснение отказа — только `enc:v1:`; одна pending и одна approved на пользователя; решённые строки неизменны (история) |
+| `user_contacts` | Контакты пользователя (ADR-032): основной телефон остаётся в `users.phone`, здесь до 10 дополнительных способов связи одним зашифрованным JSON-конвертом (`enc:v1:`); `version` — CAS оптимистичной конкурентности; пустой список = нет строки либо шифрованный `[]`; в общие DTO пользователя НЕ попадает |
 | `system_message_intents` | Outbox system-сообщений (ADR-029): намерение доставки (только message_code, без текста), пишется в транзакции операции; delivered_at — после успешного publisher; повтор — `scripts/deliver_system_message_intents.py` |
 | `diary_entries` | Дневник студента: одна активная запись в день (partial UNIQUE по student_id + entry_date WHERE NOT deleted); mood_score_enc, entry_text_enc, emotions_enc — Fernet encrypted; только student |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
@@ -1012,7 +1028,7 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 121 событие** (`AUTH_LOG=7`, `AUDIT_LOG=114`; ADR-029 добавил
+**Event REGISTRY: 123 события** (`AUTH_LOG=7`, `AUDIT_LOG=116`; ADR-032 добавил `user_contacts_content_read` ({psychologist,supervisor}, target `user`, INDEPENDENT/RAISE, fail-closed: сбой аудита → 503 без данных) и failure `user_contacts_read_failed` (`access_denied`); сохранение владельцем — существующий `profile_updated` с `metadata.fields=["contacts"]`, отказ PUT — `profile_update_failed` (+ код `contacts_version_conflict`); ADR-029 добавил
 `student_verification_submitted` ({student}), `…_approved`/`…_rejected`
 ({supervisor}) — ATOMIC/RAISE, target `student_verification_request`, metadata
 пустая; `…_content_read` ({supervisor}, INDEPENDENT/RAISE, fail-closed) и

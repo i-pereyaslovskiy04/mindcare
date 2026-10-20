@@ -147,3 +147,71 @@ test('Escape closes the panel and returns focus to the trigger', () => {
   expect(screen.queryByText('Перейти в кабинет')).toBeNull();
   expect(trigger).toHaveFocus();
 });
+
+// ── Заметность и состав кабинетов (доработка 2026-10-13) ─────────────────────
+
+test('multi-role: видимая кнопка «Сменить кабинет» с текущей ролью и понятным доступным именем', () => {
+  mockAuth(['supervisor', 'student']);
+  render(<CabinetSwitcher currentRole="supervisor" />);
+  const trigger = screen.getByRole('button', { name: 'Сменить кабинет (текущий: Супервизор)' });
+  expect(trigger).toHaveTextContent('Сменить кабинет');
+  expect(trigger).toHaveTextContent('Супервизор');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('compact-вариант (topbar) — то же доступное имя', () => {
+  mockAuth(['psychologist', 'student']);
+  render(<CabinetSwitcher currentRole="psychologist" variant="compact" />);
+  expect(screen.getByRole('button', { name: 'Сменить кабинет (текущий: Психолог)' }))
+    .toBeInTheDocument();
+});
+
+test('одна роль — без меню и без надписи «Сменить кабинет»', () => {
+  mockAuth(['psychologist']);
+  render(<CabinetSwitcher currentRole="psychologist" />);
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(screen.queryByText('Сменить кабинет')).toBeNull();
+});
+
+test.each([
+  [['psychologist', 'student'], ['Психолог', 'Пользователь']],
+  [['supervisor', 'psychologist', 'student'], ['Супервизор', 'Психолог', 'Пользователь']],
+  [['admin', 'supervisor', 'psychologist', 'student'],
+    ['Администратор', 'Супервизор', 'Психолог', 'Пользователь']],
+])('roles %j → все назначенные кабинеты, включая «Пользователь» (без selectableRoles)', (roles, labels) => {
+  mockAuth(roles);
+  render(<CabinetSwitcher currentRole={roles[0]} />);
+  fireEvent.click(screen.getByRole('button', { name: /Сменить кабинет/ }));
+  const options = screen.getAllByRole('button').filter((b) => !/Сменить кабинет/.test(b.getAttribute('aria-label') || ''));
+  expect(options.map((b) => b.textContent)).toEqual(labels);
+  expect(options[0]).toHaveAttribute('aria-current', 'true');
+});
+
+test.each([
+  ['student', '/student'],
+  ['psychologist', '/psychologist'],
+  ['supervisor', '/supervisor'],
+  ['admin', '/admin/users'],
+])('переход в кабинет %s → %s без повторного входа', (role, path) => {
+  mockAuth(['admin', 'supervisor', 'psychologist', 'student']);
+  render(<CabinetSwitcher currentRole={role === 'admin' ? 'student' : 'admin'} />);
+  fireEvent.click(screen.getByRole('button', { name: /Сменить кабинет/ }));
+  const labels = { student: 'Пользователь', psychologist: 'Психолог', supervisor: 'Супервизор', admin: 'Администратор' };
+  fireEvent.click(screen.getByRole('button', { name: labels[role] }));
+  expect(setActiveRole).toHaveBeenCalledWith(role);
+  expect(mockNavigate).toHaveBeenCalledWith(path);
+});
+
+test('клавиатура: Escape в панели закрывает её и возвращает фокус на кнопку', () => {
+  mockAuth(['supervisor', 'student']);
+  render(<CabinetSwitcher currentRole="supervisor" />);
+  const trigger = screen.getByRole('button', { name: /Сменить кабинет/ });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  fireEvent.click(trigger);
+  const option = screen.getByRole('button', { name: 'Пользователь' });
+  option.focus();
+  fireEvent.keyDown(option, { key: 'Escape' });
+  expect(screen.queryByText('Перейти в кабинет')).toBeNull();
+  expect(trigger).toHaveFocus();
+});
