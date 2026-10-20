@@ -11,7 +11,7 @@ from sqlalchemy import desc
 
 from app.audit import Actor, Outcome, Target, record_event
 from app.chat import storage as chat_storage
-from app.chat.system_publisher import publish_system_message
+from app.chat.system_publisher import ACCOUNT_CREATED_TEXT, publish_system_message
 from app.db.session import SessionLocal
 from app.db.models import Role, TherapyEngagement, User, UserRole
 from app.supervisor import storage
@@ -280,7 +280,7 @@ def create_student(
     publish_system_message(
         recipient_id=new_id,
         event_key=f"welcome:user:{new_id}",
-        text="Ваша учётная запись MindCare создана.",
+        text=ACCOUNT_CREATED_TEXT,
     )
     engagement = result.get("engagement")
     if engagement:

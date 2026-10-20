@@ -5,6 +5,7 @@ import ChatWindow from '../../../features/chat/components/ChatWindow';
 import { useSystemConversation } from '../../../features/chat/hooks/useSystemConversation';
 import {
   SYSTEM_DIALOG_ID,
+  SYSTEM_EMPTY_TEXT,
   SYSTEM_NOTICE,
   formatLastTime,
   initialsOf,
@@ -120,7 +121,7 @@ export default function ChatPage() {
     );
   } else {
     // Группировка (Stage 31t): архив (закрытые с историей) — сверху и свёрнут;
-    // активный диалог — в основном списке; «Системные уведомления» — последними.
+    // активный диалог — в основном списке; «Системные сообщения» — последними.
     const { archived, active } = splitConversations(conversations);
     const archivedContacts = archived.map(toContact);
     const contacts = [...active.map(toContact), systemContact(sysConv)];
@@ -136,7 +137,7 @@ export default function ChatPage() {
       } else if (sysLoading && sysMessages.length === 0) {
         pane = (
           <div className={styles.paneState}>
-            <p className={styles.stateText}>Загрузка уведомлений…</p>
+            <p className={styles.stateText}>Загрузка системных сообщений…</p>
           </div>
         );
       } else {
@@ -146,7 +147,7 @@ export default function ChatPage() {
             messages={sysMessages}
             readOnly
             readOnlyNotice={SYSTEM_NOTICE}
-            emptyText="Пока нет системных уведомлений."
+            emptyText={SYSTEM_EMPTY_TEXT}
             onBack={handleBack}
           />
         );

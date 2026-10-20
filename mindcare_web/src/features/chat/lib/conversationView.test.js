@@ -1,4 +1,39 @@
-import { hasPresence, splitConversations } from './conversationView';
+import {
+  SYSTEM_DIALOG_ID,
+  SYSTEM_EMPTY_TEXT,
+  SYSTEM_MESSAGE_MARKER,
+  SYSTEM_MONOGRAM,
+  SYSTEM_NOTICE,
+  SYSTEM_SECTION_TITLE,
+  SYSTEM_SENDER_NAME,
+  hasPresence,
+  splitConversations,
+  systemContact,
+} from './conversationView';
+
+describe('контракт системной беседы (SYSTEM MESSAGE, не NOTIFICATION)', () => {
+  test('единые подписи', () => {
+    expect(SYSTEM_SENDER_NAME).toBe('Психология ДонГУ');
+    expect(SYSTEM_MESSAGE_MARKER).toBe('Системное сообщение');
+    expect(SYSTEM_SECTION_TITLE).toBe('Системные сообщения');
+    expect(SYSTEM_MONOGRAM).toBe('ПД');
+    expect(SYSTEM_NOTICE).toBe('Это системные сообщения Психологии ДонГУ. Ответить на них нельзя.');
+    expect(SYSTEM_EMPTY_TEXT).toBe('Системных сообщений пока нет.');
+  });
+
+  test('systemContact: имя «Психология ДонГУ», маркер и статичное превью', () => {
+    const c = systemContact({ last_message_at: null, unread_count: 2 });
+    expect(c).toMatchObject({
+      id: SYSTEM_DIALOG_ID,
+      system: true,
+      name: 'Психология ДонГУ',
+      role: 'Системное сообщение',
+      lastMsg: 'Системное сообщение',
+      unread: 2,
+    });
+    expect(JSON.stringify(c)).not.toMatch(/MindCare|уведомлен/i);
+  });
+});
 
 describe('hasPresence', () => {
   test('shows presence for non-system contacts with boolean online state', () => {

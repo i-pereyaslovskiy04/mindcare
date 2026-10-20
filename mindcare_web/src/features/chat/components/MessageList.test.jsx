@@ -62,17 +62,21 @@ test('author header reappears after sender switch', () => {
   expect(screen.getByText('Вы')).toBeInTheDocument();
 });
 
-// F. System conversation: сообщение рендерится как обычный bubble с подписью «MindCare».
-test('F. system messages render as a normal bubble with "MindCare" author header', () => {
+// F. System conversation: обычный bubble с подписью «Психология ДонГУ · Системное сообщение»
+// и монограммой «ПД» вместо колокольчика.
+test('F. system messages render with "Психология ДонГУ · Системное сообщение" header', () => {
   const messages = [
     { id: 1, text: 'Чат с психологом создан.', system: true, time: '10:00', createdAt: A },
   ];
-  render(<MessageList messages={messages} contact={{ name: 'Системные уведомления', initials: '' }} />);
+  render(<MessageList messages={messages} contact={{ name: 'Название диалога', initials: '' }} />);
   expect(screen.getByText('Чат с психологом создан.')).toBeInTheDocument();
-  expect(screen.getByText('MindCare')).toBeInTheDocument();
+  expect(screen.getByText('Психология ДонГУ')).toBeInTheDocument();
+  expect(screen.getByText(/Системное сообщение/)).toBeInTheDocument();
+  expect(screen.getByText('ПД')).toBeInTheDocument();
+  expect(screen.queryByText('MindCare')).not.toBeInTheDocument();
   expect(screen.queryByText('Вы')).not.toBeInTheDocument();
   // подпись из contact (название диалога в сайдбаре) не используется как author header
-  expect(screen.queryByText('Системные уведомления')).not.toBeInTheDocument();
+  expect(screen.queryByText('Название диалога')).not.toBeInTheDocument();
 });
 
 // F2. У system-сообщения нет role-подписи (не «пациент/психолог») и нет read receipts.
@@ -82,19 +86,21 @@ test('F2. system messages have no human role label and no read receipts', () => 
   ];
   render(<MessageList messages={messages} contact={contact} />);
   // contact.authorRole = 'психолог' нигде не должен появиться рядом с system-сообщением
-  expect(screen.queryByText('психолог', { exact: false })).not.toBeInTheDocument();
+  // (подпись роли «· психолог»; «Психология ДонГУ» — имя системы, не роль)
+  expect(screen.queryByText(/·\s*психолог\s*$/i)).not.toBeInTheDocument();
+  expect(screen.getByText(/·\s*Системное сообщение/)).toBeInTheDocument();
   expect(screen.queryByTitle('Прочитано')).not.toBeInTheDocument();
   expect(screen.queryByTitle('Отправлено')).not.toBeInTheDocument();
 });
 
-// F3. Несколько system-сообщений подряд показывают «MindCare» один раз (VK-style группировка).
-test('F3. consecutive system messages show "MindCare" header only once', () => {
+// F3. Несколько system-сообщений подряд показывают подпись один раз (VK-style группировка).
+test('F3. consecutive system messages show "Психология ДонГУ" header only once', () => {
   const messages = [
     { id: 1, text: 'Первое уведомление', system: true, time: '10:00', createdAt: A },
     { id: 2, text: 'Второе уведомление', system: true, time: '10:00', createdAt: B },
   ];
   render(<MessageList messages={messages} contact={contact} />);
-  expect(screen.getAllByText('MindCare')).toHaveLength(1);
+  expect(screen.getAllByText('Психология ДонГУ')).toHaveLength(1);
 });
 
 // F4 (Stage 31z). System bubble использует bubble-like фундамент (тот же .bubble,

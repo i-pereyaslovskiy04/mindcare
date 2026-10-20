@@ -231,11 +231,14 @@ def run_post_registration_actions(
     # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
     # не должен ломать регистрацию.
     try:
-        from app.chat.system_publisher import publish_system_message
+        from app.chat.system_publisher import (
+            WELCOME_SELF_REGISTERED_TEXT,
+            publish_system_message,
+        )
         publish_system_message(
             recipient_id=int(user["id"]),
             event_key=f"welcome:user:{user['id']}",
-            text="Добро пожаловать в MindCare.",
+            text=WELCOME_SELF_REGISTERED_TEXT,
         )
     except Exception as exc:
         log.warning("[register_confirm] phase=welcome error=%s",

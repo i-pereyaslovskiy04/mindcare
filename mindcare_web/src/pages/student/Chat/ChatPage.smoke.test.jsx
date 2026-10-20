@@ -58,7 +58,7 @@ test('student ChatPage renders dialog list (list mode)', async () => {
   render(<ChatPage />);
   expect(await screen.findByText('Иван Петров')).toBeInTheDocument();
   expect(
-    screen.getByRole('heading', { level: 2, name: 'Системные уведомления' }),
+    screen.getByRole('heading', { level: 2, name: 'Системные сообщения' }),
   ).toBeInTheDocument();
 });
 

@@ -98,10 +98,10 @@ test('psychologist ChatPage renders conversation list + placeholder (no auto-ope
   renderPage();
   // заголовок раздела
   expect(await screen.findByText('Сообщения')).toBeInTheDocument();
-  // клиентский диалог и секция системных уведомлений в списке
+  // клиентский диалог и секция системных сообщений в списке
   expect(await screen.findByText('Анна Смирнова')).toBeInTheDocument();
   expect(
-    screen.getByRole('heading', { level: 2, name: 'Системные уведомления' }),
+    screen.getByRole('heading', { level: 2, name: 'Системные сообщения' }),
   ).toBeInTheDocument();
   // VK-like: ничего не открыто — показан placeholder
   expect(

@@ -157,11 +157,11 @@ def create_user(
         )
 
     # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
-    from app.chat.system_publisher import publish_system_message
+    from app.chat.system_publisher import ACCOUNT_CREATED_TEXT, publish_system_message
     publish_system_message(
         recipient_id=int(user["id"]),
         event_key=f"welcome:user:{user['id']}",
-        text="Ваша учётная запись MindCare создана.",
+        text=ACCOUNT_CREATED_TEXT,
     )
 
     user["temporary_password"] = password

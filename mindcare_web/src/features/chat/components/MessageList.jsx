@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef } from 'react';
 import MessageItem from './MessageItem';
 import { shouldShowAuthorHeader } from '../lib/messageShape';
+import { SYSTEM_MESSAGE_MARKER, SYSTEM_SENDER_NAME } from '../lib/conversationView';
 import styles from './ChatWindow.module.css';
 
 function dayLabel(iso) {
@@ -44,10 +45,12 @@ export default function MessageList({
         const showSep = label && label !== prevLabel;
         if (label) prevLabel = label;
         const showAuthorHeader = shouldShowAuthorHeader(visible, idx);
-        // Подпись автора: «MindCare» для системных, «Вы» для своих,
-        // «ФИО · роль» для собеседника.
-        const authorName = msg.system ? 'MindCare' : msg.mine ? 'Вы' : contact.name;
-        const authorRole = msg.system ? null : msg.mine ? null : contact.authorRole || null;
+        // Подпись автора: «Психология ДонГУ · Системное сообщение» для
+        // системных, «Вы» для своих, «ФИО · роль» для собеседника.
+        const authorName = msg.system ? SYSTEM_SENDER_NAME : msg.mine ? 'Вы' : contact.name;
+        const authorRole = msg.system
+          ? SYSTEM_MESSAGE_MARKER
+          : msg.mine ? null : contact.authorRole || null;
         return (
           <Fragment key={msg.id}>
             {showSep && <div className={styles.dateSep}>{label}</div>}

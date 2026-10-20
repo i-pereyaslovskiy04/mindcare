@@ -3,8 +3,17 @@
  */
 
 export const SYSTEM_DIALOG_ID = '__system__';
+
+// Единый контракт отображения системной беседы. Это SYSTEM MESSAGE —
+// постоянные записи в беседе «Психология ДонГУ», а не NOTIFICATION: слово
+// «уведомления» и колокольчик зарезервированы за будущими уведомлениями шапки.
+export const SYSTEM_SENDER_NAME = 'Психология ДонГУ';
+export const SYSTEM_MESSAGE_MARKER = 'Системное сообщение';
+export const SYSTEM_SECTION_TITLE = 'Системные сообщения';
+export const SYSTEM_MONOGRAM = 'ПД';
 export const SYSTEM_NOTICE =
-  'Это системные уведомления. Ответить в этот диалог нельзя.';
+  'Это системные сообщения Психологии ДонГУ. Ответить на них нельзя.';
+export const SYSTEM_EMPTY_TEXT = 'Системных сообщений пока нет.';
 
 export function initialsOf(name) {
   return (name || '')
@@ -59,10 +68,11 @@ export function systemContact(sysConv) {
   return {
     id: SYSTEM_DIALOG_ID,
     system: true,
-    name: 'Системные уведомления',
+    name: SYSTEM_SENDER_NAME,
     initials: '',
-    role: 'Системные уведомления',
-    lastMsg: 'Уведомления MindCare',
+    role: SYSTEM_MESSAGE_MARKER,
+    // Статичное превью: реальный текст последнего сообщения — отдельный этап.
+    lastMsg: SYSTEM_MESSAGE_MARKER,
     time: formatLastTime(sysConv?.last_message_at),
     unread: sysConv?.unread_count || 0,
   };

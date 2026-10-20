@@ -21,6 +21,12 @@ from typing import Optional
 from app.audit import Actor, AuditError, Outcome, Target, record_event
 from app.chat import storage
 
+# Тексты приветственных system-сообщений (одна точка для всех мест создания).
+# Применяются только к новым сообщениям: уже доставленные хранятся
+# зашифрованными и не мигрируются.
+WELCOME_SELF_REGISTERED_TEXT = "Добро пожаловать в Психологию ДонГУ."
+ACCOUNT_CREATED_TEXT = "Ваша учётная запись создана."
+
 
 def publish_system_message(
     recipient_id: int,

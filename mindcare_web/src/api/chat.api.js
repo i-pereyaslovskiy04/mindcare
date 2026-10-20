@@ -135,7 +135,7 @@ export const deletePsychologistMessage = (conversationUuid, messageUuid) =>
   });
 
 /**
- * System conversation (Stage 29b/29c): read-only feed системных уведомлений
+ * System conversation (Stage 29b/29c): read-only feed системных сообщений
  * текущего пользователя. Отправка сообщений не поддерживается (write-эндпоинта нет).
  */
 

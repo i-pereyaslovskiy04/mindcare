@@ -4,7 +4,8 @@
  * Backend ChatMessageRead → { id, text, mine, system, time, createdAt, readAt }.
  *   mine   — рисуем справа («моё»), показываем read receipts;
  *   system — message_kind='system' (sender_role='system'): обычный incoming
- *            bubble с подписью «MindCare» вместо ФИО, без меню действий,
+ *            bubble с подписью «Психология ДонГУ · Системное сообщение»
+ *            вместо ФИО, без меню действий,
  *            без read receipts, не «моё».
  */
 
@@ -72,7 +73,8 @@ function authorKey(m) {
  *   - большой перерыв во времени (≥ AUTHOR_HEADER_GAP_MS) у того же автора.
  *
  * System-сообщения получают header по той же логике, что и обычные —
- * подпись «MindCare» вместо ФИО собеседника (см. MessageList).
+ * подпись «Психология ДонГУ · Системное сообщение» вместо ФИО собеседника
+ * (см. MessageList).
  */
 export function shouldShowAuthorHeader(messages, index) {
   const msg = messages[index];

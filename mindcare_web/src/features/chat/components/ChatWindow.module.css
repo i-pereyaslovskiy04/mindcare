@@ -6,7 +6,8 @@
 /* ---- window layout ---- */
 .window {
   --chat-system-avatar-bg: var(--sand);
-  --chat-system-avatar-color: var(--coffee);
+  /* Монограмма «ПД» — текст: пара text-main / sand проверяется test:contrast. */
+  --chat-system-avatar-color: var(--text-main);
   --chat-system-avatar-border: var(--nav-border);
   --chat-presence-online: var(--success);
   --chat-presence-offline: var(--text-light);
@@ -165,7 +166,7 @@
   margin-top: 2px;
 }
 
-/* аватар system-сообщений (MindCare): нейтральный, как headerAvatarSystem */
+/* аватар system-сообщений (монограмма «ПД»): нейтральный, как headerAvatarSystem */
 .msgContent {
   display: flex;
   flex-direction: column;

@@ -1,7 +1,8 @@
 /* ---- sidebar panel ---- */
 .sidebar {
   --chat-system-avatar-bg: var(--sand);
-  --chat-system-avatar-color: var(--coffee);
+  /* Монограмма «ПД» — текст: пара text-main / sand проверяется test:contrast. */
+  --chat-system-avatar-color: var(--text-main);
   --chat-system-avatar-border: var(--nav-border);
   --chat-presence-online: var(--success);
   --chat-presence-offline: var(--text-light);
@@ -47,7 +48,7 @@
   overflow-y: auto;
 }
 
-/* ---- sections (Stage 31v): Архив / Сообщения / Системные уведомления ---- */
+/* ---- sections (Stage 31v): Архив / Сообщения / Системные сообщения ---- */
 .section {
   display: flex;
   flex-direction: column;
@@ -227,8 +228,8 @@
 }
 
 /* system conversation использует ТОТ ЖЕ базовый стиль карточки и selected,
-   что обычный диалог. Единственное мягкое отличие — иконка-колокольчик
-   вместо аватара (см. .avatarSystem) и текст «Уведомления MindCare».
+   что обычный диалог. Единственное мягкое отличие — монограмма «ПД»
+   вместо аватара (см. .avatarSystem; колокольчик — за уведомлениями шапки).
    Отдельного фона/подложки/selected у system-беседы нет (Stage 31u). */
 
 .avatarSystem {

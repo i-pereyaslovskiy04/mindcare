@@ -1,5 +1,4 @@
-import Icon from '../../../components/Icon/Icon';
-import { hasPresence } from '../lib/conversationView';
+import { SYSTEM_MONOGRAM, hasPresence } from '../lib/conversationView';
 import styles from './ChatSidebar.module.css';
 
 export default function ChatListItem({ contact, isActive, onClick }) {
@@ -20,7 +19,7 @@ export default function ChatListItem({ contact, isActive, onClick }) {
       onClick={onClick}
     >
       <div className={`${styles.avatar} ${contact.system ? styles.avatarSystem : ''}`}>
-        {contact.system ? <Icon name="bell" size={18} /> : contact.initials}
+        {contact.system ? <span aria-hidden="true">{SYSTEM_MONOGRAM}</span> : contact.initials}
         {hasUnread && <span className={styles.unreadDot} aria-hidden="true" />}
         {showPresence && (
           <span
