@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { createRef } from 'react';
 import { render, screen } from '@testing-library/react';
 import TextField from './TextField';
@@ -53,4 +55,35 @@ describe('TextField appearance', () => {
     expect(input).toHaveAttribute('aria-invalid', 'true');
     expect(input).toHaveAccessibleDescription('Подсказка Ошибка');
   });
+});
+
+// Поверхность поля — правило CSS (jsdom не применяет CSS Modules).
+describe('TextField.module.css: поверхность', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'TextField.module.css'), 'utf8');
+  const block = (selector) => {
+    const start = css.indexOf(`${selector} {`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    return css.slice(start, css.indexOf('}', start));
+  };
+
+  test('редактируемое поле — светлая поверхность и рамка --outline', () => {
+    expect(block('.input')).toMatch(/background:\s*var\(--surface\);/);
+    expect(block('.input')).toMatch(/border:\s*1px solid var\(--outline\)/);
+  });
+
+  test('поле только для чтения — контейнерный фон', () => {
+    expect(block('.input[readonly]')).toMatch(/background:\s*var\(--surface-container\)/);
+  });
+
+  test('focus state прежний: focus ring и рамка --primary', () => {
+    expect(block('.input:focus-visible')).toMatch(/outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring-color\)/);
+    expect(block('.input:focus-visible')).toMatch(/border-color:\s*var\(--primary\)/);
+  });
+});
+
+test('readOnly поле остаётся readonly (вид — контейнерный фон)', () => {
+  render(<TextField label="Email аккаунта" value="a@b.ru" readOnly onChange={() => {}} />);
+  const input = screen.getByLabelText('Email аккаунта');
+  expect(input).toHaveAttribute('readonly');
+  expect(input).toHaveClass('input');
 });

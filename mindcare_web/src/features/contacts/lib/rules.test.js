@@ -45,6 +45,9 @@ describe('validateRows', () => {
     [{ type: 'phone', value: '12345' }, 'invalid_phone'],
     [{ type: 'phone', value: 'abc' }, 'invalid_phone'],
     [{ type: 'email', value: 'not-an-email' }, 'invalid_email'],
+    [{ type: 'email', value: '84454545454541212184485448' }, 'invalid_email'],
+    [{ type: 'phone', value: '+7 (900) 123' }, 'invalid_phone'],
+    [{ type: 'phone', value: '+7900123' }, 'invalid_phone'],
     [{ type: 'website', value: 'javascript:alert(1)' }, 'unsafe_url'],
     [{ type: 'website', value: 'https://u:p@example.org' }, 'unsafe_url'],
     [{ type: 'website', value: 'localhost' }, 'invalid_url'],
@@ -202,5 +205,18 @@ describe('согласование с сервером', () => {
     });
     const res = validateRows([row({ type: 'messenger', service: '', value: '@name' })], CATALOG);
     expect(res.errors.r1.service).toBe('Выберите способ связи');
+  });
+});
+
+describe('телефон: номер +7 — ровно 11 цифр, другие страны — как на сервере', () => {
+  it.each([
+    '+7 (900) 123-45-67', '+79001234567', '89001234567', '9001234567', '+380711234567', '+44 20 7946 0958',
+  ])('%p — корректный номер', (value) => {
+    expect(validateRows([row({ type: 'phone', value })], CATALOG).hasErrors).toBe(false);
+  });
+
+  it('мессенджер с номером проверяется как на сервере (без требования 11 цифр)', () => {
+    const res = validateRows([row({ type: 'messenger', service: 'telegram', value: '+7900123' })], CATALOG);
+    expect(res.hasErrors).toBe(false);
   });
 });

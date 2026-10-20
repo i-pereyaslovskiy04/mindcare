@@ -7,6 +7,7 @@ import { buildMethods } from '../lib/methods';
 import { errorsFromServer, messageFor, validateRows } from '../lib/rules';
 
 const SAVE_UNAVAILABLE = 'Не удалось сохранить контакты. Повторите попытку.';
+const NO_ITEMS = Object.freeze([]);
 
 /**
  * Дополнительные контакты владельца (ADR-032): загрузка, черновик, сохранение.
@@ -229,6 +230,9 @@ export default function useMyContacts({ enabled }) {
     rows,
     limits,
     catalog,
+    // Последнее сохранённое состояние (только чтение): редактор оставляет
+    // сохранённый способ связи строки выбираемым, даже вне короткого списка.
+    savedItems: server?.items ?? NO_ITEMS,
     version: server?.version ?? 0,
     dirty,
     canAdd: rows.length < limits.max_items,

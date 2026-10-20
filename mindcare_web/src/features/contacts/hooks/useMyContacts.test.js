@@ -216,7 +216,8 @@ describe('useMyContacts: способ связи', () => {
     expect(result.current.fieldErrors['id-1']).toBeTruthy();
 
     act(() => { result.current.changeMethod('id-1', 'messenger:telegram'); });
-    expect(result.current.rows[0]).toMatchObject({ type: 'messenger', service: 'telegram', value: 'abc' });
+    // Значение прежнего способа очищается вместе с его ошибками.
+    expect(result.current.rows[0]).toMatchObject({ type: 'messenger', service: 'telegram', value: '' });
     expect(result.current.fieldErrors['id-1']).toBeUndefined();
 
     act(() => { result.current.changeMethod('id-1', 'email'); });
@@ -267,4 +268,14 @@ describe('useMyContacts: способ связи', () => {
     });
     expect(result.current.saveState).toBe('saved');
   });
+});
+
+test('savedItems — последнее сохранённое состояние (только чтение)', async () => {
+  const { result } = await ready();
+  expect(result.current.savedItems).toEqual([ITEM]);
+});
+
+test('до загрузки savedItems — пустой список', () => {
+  const { result } = renderHook(() => useMyContacts({ enabled: false }));
+  expect(result.current.savedItems).toEqual([]);
 });

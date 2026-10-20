@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Tabs, { tabButtonId, tabPanelId } from './Tabs';
 
@@ -82,5 +84,36 @@ describe('indicator', () => {
     expect(onChange).toHaveBeenCalledWith('c');
     fireEvent.keyDown(screen.getByRole('tablist'), { key: 'Home' });
     expect(onChange).toHaveBeenCalledWith('a');
+  });
+});
+
+describe('Tabs.module.css: вид выбранной вкладки', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'Tabs.module.css'), 'utf8');
+  const block = (selector) => {
+    const start = css.indexOf(`${selector} {`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    return css.slice(start, css.indexOf('}', start));
+  };
+
+  test('fill: выбранная — поверхность, рамка --outline и тень, без акцентной заливки', () => {
+    const active = block('.indicatorFill .tabActive,\n.indicatorFill .tabActive:hover');
+    expect(active).toMatch(/background:\s*var\(--surface\);/);
+    expect(active).toMatch(/color:\s*var\(--on-surface\);/);
+    expect(active).toMatch(/border-color:\s*var\(--outline\)/);
+    expect(active).toMatch(/box-shadow:/);
+    expect(active).not.toMatch(/--primary/);
+    // Рамка есть у всех вкладок варианта — размеры не скачут.
+    expect(block('.indicatorFill .tab')).toMatch(/border:\s*1px solid transparent/);
+    expect(block('.indicatorFill .tab:hover')).toMatch(/var\(--surface-container-high\)/);
+  });
+
+  test('underline (по умолчанию) не изменился: акцентная заливка и подчёркивание', () => {
+    expect(block('.tabActive,\n.tabActive:hover')).toMatch(/background:\s*var\(--primary\)/);
+    expect(block('.tabActive::after')).toMatch(/content: ''/);
+  });
+
+  test('focus ring и режим для слабовидящих сохранены', () => {
+    expect(block('.tab:focus-visible')).toMatch(/outline:\s*var\(--focus-ring-width\)/);
+    expect(block(":root[data-a11y='on'] .indicatorFill .tabActive")).toMatch(/background:\s*var\(--a11y-fg\)/);
   });
 });

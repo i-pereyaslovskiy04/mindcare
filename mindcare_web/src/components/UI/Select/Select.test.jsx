@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { render, screen, fireEvent } from '@testing-library/react';
 import Select from './Select';
 
@@ -79,5 +81,23 @@ describe('Select appearance', () => {
     expect(onChange).toHaveBeenCalledWith('a');
     rerender(<Select appearance="field" id="m" label="Тип" options={OPTIONS} onChange={onChange} disabled />);
     expect(screen.getByRole('button', { name: /Тип/ })).toBeDisabled();
+  });
+});
+
+describe('Select.module.css: поверхность appearance="field"', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'Select.module.css'), 'utf8');
+  const block = (selector) => {
+    const start = css.indexOf(`${selector} {`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    return css.slice(start, css.indexOf('}', start));
+  };
+
+  test('field — светлая поверхность, рамка --outline', () => {
+    expect(block('.control.controlField')).toMatch(/background:\s*var\(--surface\);/);
+    expect(block('.control.controlField')).toMatch(/border:\s*1px solid var\(--outline\)/);
+  });
+
+  test('обычный Select не изменился', () => {
+    expect(block('.control')).toMatch(/background:\s*var\(--warm-white\)/);
   });
 });

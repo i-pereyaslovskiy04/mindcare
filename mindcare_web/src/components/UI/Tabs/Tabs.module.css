@@ -56,12 +56,30 @@
   background: currentColor;
 }
 
-/* indicator="fill": без подчёркивания. Выбранная вкладка отличается заливкой и
-   жирным начертанием, а в режиме для слабовидящих (там все button получают фон
-   схемы + рамку 2px, и заливка сбрасывается) — инверсией и внутренней рамкой.
-   Внутренняя рамка — inset box-shadow, а не border: размеры вкладки и соседних
-   элементов не меняются. Префикс :root[data-a11y='on'] поднимает специфичность
-   выше глобального правила «все кнопки — фон схемы» (как в A11yPanel). */
+/* indicator="fill" (сегменты): без подчёркивания и без акцентной заливки —
+   выбранная вкладка не похожа на primary-кнопку действия. Она «приподнята»:
+   фон поверхности, рамка 1px --outline, лёгкая тень и жирное начертание.
+   Рамка 1px есть у всех вкладок варианта (у невыбранных — прозрачная), поэтому
+   размеры при переключении не меняются. В режиме для слабовидящих (там все
+   button получают фон схемы + рамку 2px) выбранная — инверсия и внутренняя
+   рамка; префикс :root[data-a11y='on'] поднимает специфичность выше глобального
+   правила «все кнопки — фон схемы» (как в A11yPanel). */
+.indicatorFill .tab {
+  border: 1px solid transparent;
+}
+
+.indicatorFill .tab:hover {
+  background: var(--surface-container-high);
+}
+
+.indicatorFill .tabActive,
+.indicatorFill .tabActive:hover {
+  background: var(--surface);
+  color: var(--on-surface);
+  border-color: var(--outline);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.12);
+}
+
 .indicatorFill .tabActive::after {
   content: none;
 }

@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ContactsEditor from './ContactsEditor';
@@ -83,12 +85,38 @@ describe('ContactsEditor', () => {
     expect(contacts.retryLoad).toHaveBeenCalled();
   });
 
-  it('показывает подпись аудитории, счётчик и пустое состояние', () => {
+  it('показывает подпись аудитории и пустое состояние; общего абзаца про email нет', () => {
     renderEditor(make());
     expect(screen.getByText('Доступно психологу.')).toBeInTheDocument();
-    expect(screen.getByText(/Добавлено 0 из 2/)).toBeInTheDocument();
     expect(screen.getByText(/Дополнительных контактов пока нет/)).toBeInTheDocument();
-    expect(screen.getByText(/не меняет адрес аккаунта/)).toBeInTheDocument();
+    expect(screen.queryByText(/не меняет адрес аккаунта/)).toBeNull();
+  });
+
+  it.each([
+    [0, false],
+    [7, false],
+    [8, true],
+    [10, true],
+  ])('счётчик при %i из 10: видим — %s; live-сообщение есть всегда', (count, visible) => {
+    const rows = Array.from({ length: count }, (_, i) => row({ id: `r${i}` }));
+    renderEditor(make({ rows, limits: { ...LIMITS, max_items: 10 }, canAdd: count < 10 }));
+    const counter = screen.getByText(`Добавлено ${count} из 10`);
+    expect(counter).toHaveAttribute('aria-live', 'polite');
+    expect(counter.classList.contains('visually-hidden')).toBe(!visible);
+  });
+
+  it('пояснение про дополнительный email — только у строки с Email', () => {
+    renderEditor(make({
+      rows: [row({ id: 'a' }), row({ id: 'b', type: 'email', value: 'me@example.org' })],
+    }));
+    const [phone, email] = screen.getAllByRole('group');
+    expect(within(email).getByLabelText('Email'))
+      .toHaveAccessibleDescription('Только для связи, не используется для входа.');
+    expect(within(phone).getByLabelText('Номер телефона'))
+      .not.toHaveAccessibleDescription(/для входа/);
+    expect(screen.getAllByText('Только для связи, не используется для входа.')).toHaveLength(1);
+    // Длинного пояснения про адрес аккаунта и восстановление пароля в строке нет.
+    expect(screen.queryByText(/адрес аккаунта|восстановления пароля/)).toBeNull();
   });
 
   it('обычный контакт — два поля: «Способ связи» и значение; «Подписи» нет', () => {
@@ -119,12 +147,42 @@ describe('ContactsEditor', () => {
     expect(methodControl(screen.getByRole('group', { name: 'Контакт 1' }))).toHaveTextContent(label);
   });
 
-  it('варианты строятся из каталога: ни одного лишнего и в порядке каталога', () => {
+  it('новому контакту предлагается короткий список (только из каталога)', () => {
     renderEditor(make({ rows: [row()] }));
     fireEvent.click(methodControl(screen.getByRole('group', { name: 'Контакт 1' })));
+    // MAX в тестовом каталоге нет — вариант не выдумывается.
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Телефон', 'Email', 'Telegram', 'WhatsApp', 'Другой мессенджер', 'VK', 'Другая соцсеть', 'Сайт', 'Другое',
+      'Телефон', 'Telegram', 'VK', 'Email', 'WhatsApp', 'Другое',
     ]);
+  });
+
+  it.each([
+    [{ type: 'website', service: '' }, 'Сайт'],
+    [{ type: 'social', service: 'other', label: 'Сеть' }, 'Другая соцсеть'],
+    [{ type: 'messenger', service: 'other', label: 'Сервис' }, 'Другой мессенджер'],
+  ])('скрытый сохранённый способ %j отображается и остаётся выбираемым в своей строке', (pair, label) => {
+    renderEditor(make({ rows: [row({ id: 'a' }), row({ id: 'b', ...pair, value: 'x' })] }));
+    const [plain, legacy] = screen.getAllByRole('group');
+    expect(methodControl(legacy)).toHaveTextContent(label);
+
+    fireEvent.click(methodControl(legacy));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Телефон', 'Telegram', 'VK', 'Email', 'WhatsApp', 'Другое', label,
+    ]);
+    fireEvent.click(methodControl(legacy));
+
+    // В соседней строке скрытого способа нет.
+    fireEvent.click(methodControl(plain));
+    expect(screen.queryByRole('option', { name: label })).toBeNull();
+  });
+
+  it('сохранённый скрытый способ остаётся в списке строки и после смены способа', () => {
+    renderEditor(make({
+      rows: [row({ id: 'a', type: 'messenger', service: 'telegram', value: '@me' })],
+      savedItems: [{ id: 'a', type: 'website', service: null, value: 'example.org', label: null }],
+    }));
+    fireEvent.click(methodControl(screen.getByRole('group', { name: 'Контакт 1' })));
+    expect(screen.getByRole('option', { name: 'Сайт' })).toBeInTheDocument();
   });
 
   it('подпись, placeholder и режим ввода значения соответствуют способу связи', () => {
@@ -171,7 +229,8 @@ describe('ContactsEditor', () => {
     renderEditor(contacts);
     const group = screen.getByRole('group', { name: 'Контакт 1' });
     await userEvent.type(within(group).getByLabelText('Номер телефона'), '7');
-    expect(contacts.updateRow).toHaveBeenCalledWith('r1', { value: '7' });
+    // Способ «Телефон» — маска основного телефона.
+    expect(contacts.updateRow).toHaveBeenCalledWith('r1', { value: '+7' });
     chooseMethod(group, 'Telegram');
     expect(contacts.changeMethod).toHaveBeenCalledWith('r1', 'messenger:telegram');
     await userEvent.click(screen.getByRole('button', { name: 'Удалить контакт 1' }));
@@ -184,11 +243,16 @@ describe('ContactsEditor', () => {
     expect(screen.getByText(/не более 2/)).toBeInTheDocument();
   });
 
-  it('кнопки удаления имеют доступные имена и расположены в заголовке строки', () => {
+  it('кнопки удаления имеют доступные имена; видимого «Контакт N» нет, имя группы осталось', () => {
     renderEditor(make({ rows: [row(), row({ id: 'r2' })] }));
     const [first, second] = screen.getAllByRole('group');
-    expect(within(first).getByRole('button', { name: 'Удалить контакт 1' })).toBeInTheDocument();
+    expect(first).toHaveAccessibleName('Контакт 1');
+    expect(second).toHaveAccessibleName('Контакт 2');
+    const remove = within(first).getByRole('button', { name: 'Удалить контакт 1' });
+    expect(remove).toHaveAttribute('title', 'Удалить контакт');
+    expect(remove).toHaveClass('deleteButton');
     expect(within(second).getByRole('button', { name: 'Удалить контакт 2' })).toBeInTheDocument();
+    expect(screen.queryByText(/^Контакт \d$/)).toBeNull();
   });
 
   it('ошибка значения привязана к полю', () => {
@@ -340,11 +404,10 @@ describe('ContactsEditor с реальным хуком', () => {
   });
 
   it.each([
-    ['Телефон', 'Номер телефона', '+79001234567', { type: 'phone', service: null }],
+    ['Телефон', 'Номер телефона', '+7 (900) 123-45-67', { type: 'phone', service: null }],
     ['Email', 'Email', 'me@example.org', { type: 'email', service: null }],
-    ['Сайт', 'Адрес сайта', 'example.org', { type: 'website', service: null }],
     ['Telegram', 'Имя пользователя, номер или ссылка', '@my_name', { type: 'messenger', service: 'telegram' }],
-    ['WhatsApp', 'Имя пользователя, номер или ссылка', '+79001234567', { type: 'messenger', service: 'whatsapp' }],
+    ['WhatsApp', 'Номер телефона или ссылка', '+79001234567', { type: 'messenger', service: 'whatsapp' }],
     ['VK', 'Имя пользователя или ссылка', 'https://vk.com/id1', { type: 'social', service: 'vk' }],
   ])('способ «%s» отправляет type/service и label:null', async (option, valueLabel, value, expected) => {
     await openConnected();
@@ -367,14 +430,16 @@ describe('ContactsEditor с реальным хуком', () => {
     fireEvent.change(within(group).getByLabelText('Номер телефона'), { target: { value: '+79001234567' } });
     fireEvent.click(saveButton());
     await waitFor(() => expect(saveMyContacts).toHaveBeenCalled());
-    expect(lastPayload().items[0]).toMatchObject({ type: 'phone', service: null, label: null });
+    expect(lastPayload().items[0]).toMatchObject({
+      type: 'phone', service: null, label: null, value: '+7 (900) 123-45-67',
+    });
   });
 
-  it('«Другой мессенджер» без названия: ошибка у «Название», фокус на нём; с названием — сохраняется', async () => {
+  it('«Другое» без названия: ошибка у «Название», фокус на нём; с названием — сохраняется', async () => {
     await openConnected();
     const group = addContact();
-    chooseMethod(group, 'Другой мессенджер');
-    fireEvent.change(within(group).getByLabelText('Контакт или ссылка'), { target: { value: 'my-id' } });
+    chooseMethod(group, 'Другое');
+    fireEvent.change(within(group).getByLabelText('Контакт'), { target: { value: 'в кабинете 5' } });
     fireEvent.click(saveButton());
 
     const name = await within(group).findByLabelText('Название');
@@ -382,26 +447,54 @@ describe('ContactsEditor с реальным хуком', () => {
     expect(name).toHaveAttribute('aria-invalid', 'true');
     expect(saveMyContacts).not.toHaveBeenCalled();
 
-    fireEvent.change(name, { target: { value: 'Мой сервис' } });
+    fireEvent.change(name, { target: { value: 'Кабинет' } });
     fireEvent.click(saveButton());
     await waitFor(() => expect(saveMyContacts).toHaveBeenCalledTimes(1));
     expect(lastPayload().items[0]).toMatchObject({
-      type: 'messenger', service: 'other', value: 'my-id', label: 'Мой сервис',
+      type: 'other', service: null, value: 'в кабинете 5', label: 'Кабинет',
     });
   });
 
-  it('тип «Другое» требует «Название»; «Другая соцсеть» — тоже', async () => {
-    await openConnected();
-    const first = addContact();
-    chooseMethod(first, 'Другое');
-    fireEvent.change(within(first).getByLabelText('Контакт'), { target: { value: 'в кабинете 5' } });
+  it('сохранённая «Другая соцсеть» требует «Название» и сохраняется без потери данных', async () => {
+    const id = '22222222-2222-4222-8222-222222222222';
+    await openConnected([{ id, type: 'social', service: 'other', value: 'my-id', label: 'Сеть' }], 2);
+    const group = screen.getByRole('group', { name: 'Контакт 1' });
+    expect(methodControl(group)).toHaveTextContent('Другая соцсеть');
+    const name = within(group).getByLabelText('Название');
+    expect(name).toHaveValue('Сеть');
+
+    fireEvent.change(name, { target: { value: '' } });
     fireEvent.click(saveButton());
-    expect(await within(first).findByLabelText('Название')).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(name).toHaveAttribute('aria-invalid', 'true'));
     expect(saveMyContacts).not.toHaveBeenCalled();
 
-    const second = addContact();
-    chooseMethod(second, 'Другая соцсеть');
-    expect(within(second).getByLabelText('Название')).toBeInTheDocument();
+    fireEvent.change(name, { target: { value: 'Моя сеть' } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(saveMyContacts).toHaveBeenCalledTimes(1));
+    expect(lastPayload()).toEqual({
+      version: 2,
+      items: [{ id, type: 'social', service: 'other', value: 'my-id', label: 'Моя сеть' }],
+    });
+  });
+
+  it('сохранённый сайт: редактируется и сохраняется своим типом; к нему можно вернуться после смены', async () => {
+    const id = '33333333-3333-4333-8333-333333333333';
+    await openConnected([{ id, type: 'website', service: null, value: 'example.org', label: null }], 5);
+    const group = screen.getByRole('group', { name: 'Контакт 1' });
+    expect(methodControl(group)).toHaveTextContent('Сайт');
+
+    chooseMethod(group, 'Telegram');
+    expect(methodControl(group)).toHaveTextContent('Telegram');
+    chooseMethod(group, 'Сайт');
+    expect(methodControl(group)).toHaveTextContent('Сайт');
+
+    fireEvent.change(within(group).getByLabelText('Адрес сайта'), { target: { value: 'https://example.org/me' } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(saveMyContacts).toHaveBeenCalledTimes(1));
+    expect(lastPayload()).toEqual({
+      version: 5,
+      items: [{ id, type: 'website', service: null, value: 'https://example.org/me', label: null }],
+    });
   });
 
   it('прежняя подпись обычного контакта сохраняется при редактировании и сохранении', async () => {
@@ -417,7 +510,7 @@ describe('ContactsEditor с реальным хуком', () => {
       version: 3,
       items: [{
         id: '11111111-1111-4111-8111-111111111111',
-        type: 'phone', service: null, value: '+79001112233', label: 'рабочий',
+        type: 'phone', service: null, value: '+7 (900) 111-22-33', label: 'рабочий',
       }],
     });
   });
@@ -472,7 +565,7 @@ describe('ContactsEditor с реальным хуком', () => {
     await waitFor(() => expect(saveMyContacts).toHaveBeenCalledTimes(2));
     expect(lastPayload()).toEqual({
       version: 2,
-      items: [{ id, type: 'phone', service: null, value: '+79001112233', label: null }],
+      items: [{ id, type: 'phone', service: null, value: '+7 (900) 111-22-33', label: null }],
     });
     expect(await screen.findByText('Контакты сохранены.')).toBeInTheDocument();
   });
@@ -492,7 +585,7 @@ describe('ContactsEditor с реальным хуком', () => {
 
     expect(await screen.findByText(/изменены в другом окне/)).toBeInTheDocument();
     // Черновик пользователя на месте.
-    expect(within(group).getByLabelText('Номер телефона')).toHaveValue('+79001112233');
+    expect(within(group).getByLabelText('Номер телефона')).toHaveValue('+7 (900) 111-22-33');
     fireEvent.click(await screen.findByText(/Что сейчас сохранено \(1\)/));
     expect(screen.getByText('Telegram · @remote')).toBeInTheDocument();
 
@@ -520,6 +613,242 @@ describe('ContactsEditor с реальным хуком', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Перезаписать моими правками' }));
     await waitFor(() => expect(saveMyContacts).toHaveBeenCalledTimes(2));
     expect(lastPayload().version).toBe(4);
-    expect(lastPayload().items[0].value).toBe('+79001112233');
+    expect(lastPayload().items[0].value).toBe('+7 (900) 111-22-33');
+  });
+});
+
+// Ширины jsdom не моделирует — проверяем сами правила раскладки (визуально —
+// ручной smoke).
+describe('ContactsEditor.module.css: компактная строка', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'ContactsEditor.module.css'), 'utf8');
+  const rule = (selector, source = css) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`(^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(source);
+    return match ? match[2] : '';
+  };
+  const mediaBlock = (query) => {
+    const start = css.indexOf(`@media ${query} {`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const next = css.indexOf('@media', start + 1);
+    return css.slice(start, next === -1 ? undefined : next);
+  };
+
+  it('desktop: одна строка «способ | значение | удалить», без карточки вокруг', () => {
+    expect(rule('.row')).toMatch(/grid-template-columns:\s*minmax\(180px, 220px\) minmax\(0, 1fr\) 40px/);
+    // «Удалить» — той же высоты, что поле, без лишнего разрыва.
+    expect(rule('.deleteCell .deleteButton')).toMatch(/width:\s*40px;[^}]*height:\s*40px/);
+    expect(rule('.row')).not.toMatch(/background/);
+    expect(rule('.row')).not.toMatch(/border:/);
+    expect(rule('.item + .item')).toMatch(/border-top:\s*1px solid var\(--nav-border\)/);
+    expect(rule('.deleteCell')).toMatch(/grid-column:\s*3/);
+    expect(css).not.toMatch(/rowHead|rowTitle/);
+  });
+
+  it('<=560px: поля друг под другом, «Удалить» справа в верхней строке', () => {
+    const block = mediaBlock('(max-width: 560px)');
+    expect(rule('.row', block)).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+    expect(block).toMatch(/\.deleteCell\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*1/);
+    expect(block).toMatch(/\.valueField,\s*\.nameField\s*\{[^}]*grid-column:\s*1 \/ -1/);
+  });
+
+  it('сенсорный ввод: «Удалить» не меньше 44×44', () => {
+    const block = mediaBlock('(hover: none)');
+    expect(block).toMatch(/\.deleteButton\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/);
+    expect(block).toMatch(/grid-template-columns:\s*minmax\(180px, 220px\) minmax\(0, 1fr\) 44px/);
+  });
+
+  it('зона сохранения отделена тонкой линией и отступом, без фона', () => {
+    expect(rule('.saveZone')).toMatch(/border-top:\s*1px solid var\(--nav-border\)/);
+    expect(rule('.saveZone')).toMatch(/padding-top:/);
+    expect(rule('.saveZone')).not.toMatch(/background/);
+    expect(rule('.dirty')).toMatch(/color:\s*var\(--on-surface-variant\)/);
+    expect(rule('.actions')).toMatch(/flex-wrap:\s*wrap/);
+  });
+});
+
+// ── Поле значения по способу связи ──────────────────────────────────────────
+
+describe('ContactsEditor: поле значения по способу связи', () => {
+  beforeEach(() => {
+    saveMyContacts.mockImplementation(async ({ version, items }) => ({
+      ...snapshot(items, version + 1), changed: true,
+    }));
+  });
+
+  const valueInput = (group, label) => within(group).getByLabelText(label);
+
+  it('«Телефон»: маска основного телефона, десятки цифр не вводятся', async () => {
+    await openConnected();
+    const group = addContact();
+    const input = valueInput(group, 'Номер телефона');
+    expect(input).toHaveAttribute('type', 'tel');
+    expect(input).toHaveAttribute('placeholder', '+7 (949) 000-00-00');
+
+    fireEvent.change(input, { target: { value: '89001234567' } });
+    expect(input).toHaveValue('+7 (900) 123-45-67');
+
+    fireEvent.change(input, { target: { value: '8445454545454121218448544812345678' } });
+    expect(input).toHaveValue('+7 (445) 454-54-54');
+    expect(input.value.replace(/\D/g, '')).toHaveLength(11);
+  });
+
+  it('недописанный номер не проходит проверку', async () => {
+    await openConnected();
+    const group = addContact();
+    fireEvent.change(valueInput(group, 'Номер телефона'), { target: { value: '900123' } });
+    expect(valueInput(group, 'Номер телефона')).toHaveValue('+7 (900) 123');
+    fireEvent.click(saveButton());
+    await waitFor(() => {
+      expect(valueInput(group, 'Номер телефона')).toHaveAttribute('aria-invalid', 'true');
+    });
+    expect(saveMyContacts).not.toHaveBeenCalled();
+  });
+
+  it('сохранённый номер другой страны не переписывается в +7 и не принимает буквы', async () => {
+    const id = '44444444-4444-4444-8444-444444444444';
+    await openConnected([{ id, type: 'phone', service: null, value: '+380711234567', label: null }], 1);
+    const input = valueInput(screen.getByRole('group', { name: 'Контакт 1' }), 'Номер телефона');
+    fireEvent.change(input, { target: { value: '+3807112345678' } });
+    expect(input).toHaveValue('+3807112345678');
+    fireEvent.change(input, { target: { value: '+3807112345678abc' } });
+    expect(input).toHaveValue('+3807112345678');
+    fireEvent.change(input, { target: { value: '+38071123456789999999' } });
+    expect(input).toHaveValue('+380711234567899');
+  });
+
+  it('вставка «+7 (234) 234-2выа34234234234234»: без букв и не длиннее маски', async () => {
+    await openConnected();
+    const group = addContact();
+    const input = valueInput(group, 'Номер телефона');
+    fireEvent.change(input, { target: { value: '+7 (234) 234-2выа34234234234234' } });
+    expect(input).toHaveValue('+7 (234) 234-23-42');
+    expect(input.value).not.toMatch(/\p{L}/u);
+    expect(input.value.length).toBeLessThanOrEqual('+7 (949) 000-00-00'.length);
+  });
+
+  it('буквы в пустое телефонное поле не вводятся', async () => {
+    await openConnected();
+    const group = addContact();
+    const input = valueInput(group, 'Номер телефона');
+    fireEvent.change(input, { target: { value: 'abc' } });
+    expect(input).toHaveValue('');
+    fireEvent.change(input, { target: { value: 'тест' } });
+    expect(input).toHaveValue('');
+  });
+
+  it.each([
+    ['Email', 'Email'],
+    ['Telegram', 'Имя пользователя, номер или ссылка'],
+    ['VK', 'Имя пользователя или ссылка'],
+    ['Другое', 'Контакт'],
+    ['WhatsApp', 'Номер телефона или ссылка'],
+  ])('«%s»: без телефонной маски — значение как введено', async (option, label) => {
+    await openConnected();
+    const group = addContact();
+    chooseMethod(group, option);
+    const input = valueInput(group, label);
+    fireEvent.change(input, { target: { value: '89001234567' } });
+    expect(input).toHaveValue('89001234567');
+    expect(input).not.toHaveAttribute('type', 'tel');
+  });
+
+  it('Email: type=email, placeholder name@example.ru; строка цифр не проходит проверку', async () => {
+    await openConnected();
+    const group = addContact();
+    chooseMethod(group, 'Email');
+    const input = valueInput(group, 'Email');
+    expect(input).toHaveAttribute('type', 'email');
+    expect(input).toHaveAttribute('inputmode', 'email');
+    expect(input).toHaveAttribute('placeholder', 'name@example.ru');
+
+    fireEvent.change(input, { target: { value: '84454545454541212184485448' } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+    expect(input).toHaveAccessibleDescription(/Введите корректный email/);
+    expect(saveMyContacts).not.toHaveBeenCalled();
+  });
+
+  it('WhatsApp: номер телефона без маски (контракт допускает и ссылку) — сохраняется как введён', async () => {
+    await openConnected();
+    const group = addContact();
+    chooseMethod(group, 'WhatsApp');
+    const input = valueInput(group, 'Номер телефона или ссылка');
+    expect(input).toHaveAttribute('placeholder', '+7 (949) 000-00-00');
+    fireEvent.change(input, { target: { value: 'https://wa.me/79001234567' } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(saveMyContacts).toHaveBeenCalledTimes(1));
+    expect(lastPayload().items[0]).toMatchObject({
+      type: 'messenger', service: 'whatsapp', value: 'https://wa.me/79001234567',
+    });
+  });
+
+  it('смена способа очищает значение и ошибки, применяет подпись и проверку нового', async () => {
+    await openConnected();
+    const group = addContact();
+    fireEvent.change(valueInput(group, 'Номер телефона'), { target: { value: '900123' } });
+    fireEvent.click(saveButton());
+    await waitFor(() => {
+      expect(valueInput(group, 'Номер телефона')).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    // Телефон → Telegram: номер очищен, ошибка снята, подпись и placeholder новые.
+    chooseMethod(group, 'Telegram');
+    const tg = valueInput(group, 'Имя пользователя, номер или ссылка');
+    expect(tg).toHaveValue('');
+    expect(tg).not.toHaveAttribute('aria-invalid');
+    expect(tg).toHaveAttribute('placeholder', '@username');
+    expect(within(group).queryByRole('alert')).toBeNull();
+
+    // Telegram → Email: @username очищается.
+    fireEvent.change(tg, { target: { value: '@ivan' } });
+    chooseMethod(group, 'Email');
+    const email = valueInput(group, 'Email');
+    expect(email).toHaveValue('');
+    expect(email).toHaveAttribute('type', 'email');
+
+    // Проверка — по новому способу.
+    fireEvent.change(email, { target: { value: '@ivan' } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(email).toHaveAttribute('aria-invalid', 'true'));
+    expect(email).toHaveAccessibleDescription(/Введите корректный email/);
+    expect(saveMyContacts).not.toHaveBeenCalled();
+  });
+
+  it('выбор уже выбранного способа и rerender значение не очищают', async () => {
+    await openConnected();
+    const group = addContact();
+    fireEvent.change(valueInput(group, 'Номер телефона'), { target: { value: '9001234567' } });
+    chooseMethod(group, 'Телефон');
+    expect(valueInput(group, 'Номер телефона')).toHaveValue('+7 (900) 123-45-67');
+    // Любое другое действие формы (rerender) значение не трогает.
+    addContact();
+    expect(valueInput(group, 'Номер телефона')).toHaveValue('+7 (900) 123-45-67');
+  });
+
+  it('загрузка сохранённого контакта не очищает значение', async () => {
+    const id = '55555555-5555-4555-8555-555555555555';
+    await openConnected([{ id, type: 'messenger', service: 'telegram', value: '@saved', label: null }], 3);
+    const group = screen.getByRole('group', { name: 'Контакт 1' });
+    expect(valueInput(group, 'Имя пользователя, номер или ссылка')).toHaveValue('@saved');
+    expect(saveButton()).toBeDisabled();
+  });
+
+  it('«Отменить изменения» возвращает значение, очищенное сменой способа', async () => {
+    const id = '66666666-6666-4666-8666-666666666666';
+    await openConnected([{ id, type: 'phone', service: null, value: '+79001234567', label: null }], 1);
+    const group = screen.getByRole('group', { name: 'Контакт 1' });
+    chooseMethod(group, 'Telegram');
+    expect(valueInput(group, 'Имя пользователя, номер или ссылка')).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить изменения' }));
+    const restored = screen.getByRole('group', { name: 'Контакт 1' });
+    expect(methodControl(restored)).toHaveTextContent('Телефон');
+    expect(valueInput(restored, 'Номер телефона')).toHaveValue('+79001234567');
+  });
+
+  it('у поля значения есть предел длины из limits', async () => {
+    await openConnected();
+    const group = addContact();
+    chooseMethod(group, 'Другое');
+    expect(valueInput(group, 'Контакт')).toHaveAttribute('maxlength', '500');
   });
 });

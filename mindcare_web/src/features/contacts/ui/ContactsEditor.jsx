@@ -3,12 +3,16 @@ import Button from '../../../components/UI/Button/Button';
 import Icon from '../../../components/Icon/Icon';
 import Select from '../../../components/UI/Select/Select';
 import TextField from '../../../components/UI/TextField/TextField';
-import { buildMethods, methodOf, valueSpec } from '../lib/methods';
+import {
+  buildMethods, methodKey, methodOf, offeredMethods, valueSpec,
+} from '../lib/methods';
 import styles from './ContactsEditor.module.css';
 
-const EMAIL_NOTE =
-  'Дополнительный email — только способ связи: он не меняет адрес аккаунта '
-  + 'и не используется для входа и восстановления пароля.';
+const NO_ITEMS = [];
+
+// Видимый счётчик «Добавлено N из M» — только когда до предела осталось не
+// больше двух контактов; иначе тот же текст остаётся скрытым live-сообщением.
+const COUNTER_VISIBLE_MARGIN = 2;
 
 export const rowDomId = (prefix, id) => `${prefix}-row-${id}`;
 export const fieldDomId = (prefix, id, field) => `${prefix}-${id}-${field}`;
@@ -27,25 +31,35 @@ function Skeleton({ children, role = 'status' }) {
 
 /**
  * Редактор дополнительных контактов владельца (ADR-032). Данные и действия
- * приходят из useMyContacts. Обычный контакт — два поля: «Способ связи» (единый
- * выбор из backend-каталога вместо пары тип+сервис) и значение; у вариантов
- * «Другой …» добавляется обязательное «Название». Прежняя необязательная подпись
+ * приходят из useMyContacts. Обычный контакт — компактная строка: «Способ связи»
+ * (единый выбор вместо пары тип+сервис) | значение | «Удалить»; у вариантов
+ * «Другой …» добавляется обязательное «Название». Для нового контакта
+ * предлагается короткий список способов (offeredMethods); текущий и сохранённый
+ * способ строки остаются выбираемыми, даже если их нет в списке. Прежняя необязательная подпись
  * в интерфейсе скрыта, но в данных сохраняется. Введённое не теряется ни при
  * ошибке, ни при конфликте версий; ошибки привязаны к полю (aria-invalid/
  * describedby), после неудачной проверки фокус уходит на первое ошибочное поле.
  */
 export default function ContactsEditor({ contacts, audienceNote, idPrefix = 'contacts' }) {
   const {
-    status, loadError, retryLoad, rows, limits, catalog, dirty, canAdd, fieldErrors,
+    status, loadError, retryLoad, rows, limits, catalog, savedItems = NO_ITEMS, dirty, canAdd, fieldErrors,
     saveState, saveMessage, conflict, focusTarget,
     addRow, updateRow, changeMethod, clearLabel, removeRow, revert, save, overwrite, loadSaved,
   } = contacts;
   const saving = saveState === 'saving';
   const methods = useMemo(() => buildMethods(catalog), [catalog]);
-  const methodOptions = useMemo(
-    () => methods.map((method) => ({ value: method.key, label: method.label })),
-    [methods],
+  const savedById = useMemo(
+    () => new Map(savedItems.map((item) => [item.id, item])),
+    [savedItems],
   );
+
+  /** Варианты селектора строки: короткий список + её текущий и сохранённый способ. */
+  const optionsFor = (row) => {
+    const saved = savedById.get(row.id);
+    const keep = [methodKey(row.type, row.service || null)];
+    if (saved) keep.push(methodKey(saved.type, saved.service || null));
+    return offeredMethods(methods, keep).map((method) => ({ value: method.key, label: method.label }));
+  };
 
   useEffect(() => {
     if (!focusTarget) return;
@@ -74,8 +88,10 @@ export default function ContactsEditor({ contacts, audienceNote, idPrefix = 'con
       onSubmit={(e) => { e.preventDefault(); save(); }}
     >
       <p className={styles.note}>{audienceNote}</p>
-      <p className={styles.note}>{EMAIL_NOTE}</p>
-      <p className={styles.counter} aria-live="polite">
+      <p
+        className={rows.length >= limits.max_items - COUNTER_VISIBLE_MARGIN ? styles.counter : 'visually-hidden'}
+        aria-live="polite"
+      >
         Добавлено {rows.length} из {limits.max_items}
       </p>
 
@@ -99,67 +115,69 @@ export default function ContactsEditor({ contacts, audienceNote, idPrefix = 'con
                 tabIndex={-1}
                 className={styles.row}
               >
-                <div className={styles.rowHead}>
-                  <span className={styles.rowTitle} aria-hidden="true">Контакт {number}</span>
+                <Select
+                  id={fieldDomId(idPrefix, row.id, 'method')}
+                  appearance="field"
+                  label="Способ связи"
+                  placeholder="Выберите способ связи"
+                  value={method?.key ?? ''}
+                  displayLabel={method ? undefined : [row.type, row.service].filter(Boolean).join(' / ')}
+                  options={optionsFor(row)}
+                  onChange={(key) => changeMethod(row.id, key)}
+                  disabled={saving}
+                  error={errors.service || errors.type}
+                  className={styles.methodField}
+                />
+                <TextField
+                  id={fieldDomId(idPrefix, row.id, 'value')}
+                  appearance="field"
+                  label={spec.label}
+                  hint={spec.hint}
+                  placeholder={spec.placeholder}
+                  type={spec.inputType}
+                  inputMode={spec.inputMode}
+                  autoComplete="off"
+                  value={row.value}
+                  maxLength={limits.value_max}
+                  onChange={(e) => updateRow(row.id, {
+                    value: spec.format ? spec.format(e.target.value) : e.target.value,
+                  })}
+                  disabled={saving}
+                  error={errors.value}
+                  className={styles.valueField}
+                />
+                {/* «Удалить» выровнена по контролам строки: распорка повторяет
+                    высоту подписи поля и растёт вместе со шрифтом. */}
+                <div className={styles.deleteCell}>
+                  <span className={styles.deleteSpacer} aria-hidden="true">{'\u00a0'}</span>
                   <Button
                     type="button"
                     variant="icon"
-                    size="sm"
                     tone="danger"
                     onClick={() => removeRow(row.id)}
                     disabled={saving}
                     aria-label={`Удалить контакт ${number}`}
                     title="Удалить контакт"
+                    className={styles.deleteButton}
                   >
                     <Icon name="trash" size={15} />
                   </Button>
                 </div>
-
-                <div className={styles.rowFields}>
-                  <Select
-                    id={fieldDomId(idPrefix, row.id, 'method')}
-                    appearance="field"
-                    label="Способ связи"
-                    placeholder="Выберите способ связи"
-                    value={method?.key ?? ''}
-                    displayLabel={method ? undefined : [row.type, row.service].filter(Boolean).join(' / ')}
-                    options={methodOptions}
-                    onChange={(key) => changeMethod(row.id, key)}
-                    disabled={saving}
-                    error={errors.service || errors.type}
-                    className={styles.methodField}
-                  />
+                {needsName && (
                   <TextField
-                    id={fieldDomId(idPrefix, row.id, 'value')}
+                    id={fieldDomId(idPrefix, row.id, 'label')}
                     appearance="field"
-                    label={spec.label}
-                    hint={spec.hint}
-                    placeholder={spec.placeholder}
-                    type={spec.inputType}
-                    inputMode={spec.inputMode}
+                    label="Название"
+                    placeholder="Например: Discord"
                     autoComplete="off"
-                    value={row.value}
-                    onChange={(e) => updateRow(row.id, { value: e.target.value })}
+                    value={row.label}
+                    maxLength={limits.label_max}
+                    onChange={(e) => updateRow(row.id, { label: e.target.value })}
                     disabled={saving}
-                    error={errors.value}
-                    className={styles.valueField}
+                    error={errors.label}
+                    className={styles.nameField}
                   />
-                  {needsName && (
-                    <TextField
-                      id={fieldDomId(idPrefix, row.id, 'label')}
-                      appearance="field"
-                      label="Название"
-                      hint="Как называется сервис или способ связи"
-                      autoComplete="off"
-                      value={row.label}
-                      maxLength={limits.label_max}
-                      onChange={(e) => updateRow(row.id, { label: e.target.value })}
-                      disabled={saving}
-                      error={errors.label}
-                      className={styles.nameField}
-                    />
-                  )}
-                </div>
+                )}
 
                 {errors.hiddenLabel && (
                   <div className={styles.rowAlert} role="alert">
@@ -196,54 +214,58 @@ export default function ContactsEditor({ contacts, audienceNote, idPrefix = 'con
         )}
       </div>
 
-      {saveState === 'saved' && (
-        <p className={styles.success} role="status">Контакты сохранены.</p>
-      )}
-      {saveState === 'error' && saveMessage && (
-        <p className={styles.alert} role="alert">{saveMessage}</p>
-      )}
-
-      {saveState === 'conflict' && conflict && (
-        <div className={styles.conflict} role="alert">
-          <p className={styles.conflictText}>
-            Контакты были изменены в другом окне или на другом устройстве.
-            Ваши правки сохранены в форме — выберите, что сделать.
-          </p>
-          {conflict.saved && (
-            <details className={styles.saved}>
-              <summary>Что сейчас сохранено ({conflict.saved.items.length})</summary>
-              {conflict.saved.items.length === 0 ? (
-                <p>Список пуст.</p>
-              ) : (
-                <ul>
-                  {conflict.saved.items.map((item) => (
-                    <li key={item.id}>{describeItem(item, methods)}</li>
-                  ))}
-                </ul>
-              )}
-            </details>
-          )}
-          <div className={styles.conflictActions}>
-            <Button type="button" variant="primary" onClick={overwrite} loading={saving}>
-              Перезаписать моими правками
-            </Button>
-            <Button type="button" variant="secondary" onClick={loadSaved} disabled={saving}>
-              Загрузить сохранённые
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div className={styles.actions}>
-        <Button type="submit" variant="primary" loading={saving} disabled={!dirty || saveState === 'conflict'}>
-          Сохранить контакты
-        </Button>
-        <Button type="button" variant="secondary" onClick={revert} disabled={!dirty || saving}>
-          Отменить изменения
-        </Button>
-        {dirty && saveState !== 'saving' && (
-          <span className={styles.dirty}>Есть несохранённые изменения</span>
+      {/* Зона сохранения отделена от списка и «Добавить контакт»: результат
+          сохранения, конфликт версий и кнопки — вместе, под тонкой линией. */}
+      <div className={styles.saveZone}>
+        {saveState === 'saved' && (
+          <p className={styles.success} role="status">Контакты сохранены.</p>
         )}
+        {saveState === 'error' && saveMessage && (
+          <p className={styles.alert} role="alert">{saveMessage}</p>
+        )}
+
+        {saveState === 'conflict' && conflict && (
+          <div className={styles.conflict} role="alert">
+            <p className={styles.conflictText}>
+              Контакты были изменены в другом окне или на другом устройстве.
+              Ваши правки сохранены в форме — выберите, что сделать.
+            </p>
+            {conflict.saved && (
+              <details className={styles.saved}>
+                <summary>Что сейчас сохранено ({conflict.saved.items.length})</summary>
+                {conflict.saved.items.length === 0 ? (
+                  <p>Список пуст.</p>
+                ) : (
+                  <ul>
+                    {conflict.saved.items.map((item) => (
+                      <li key={item.id}>{describeItem(item, methods)}</li>
+                    ))}
+                  </ul>
+                )}
+              </details>
+            )}
+            <div className={styles.conflictActions}>
+              <Button type="button" variant="primary" onClick={overwrite} loading={saving}>
+                Перезаписать моими правками
+              </Button>
+              <Button type="button" variant="secondary" onClick={loadSaved} disabled={saving}>
+                Загрузить сохранённые
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className={styles.actions}>
+          <Button type="submit" variant="primary" loading={saving} disabled={!dirty || saveState === 'conflict'}>
+            Сохранить контакты
+          </Button>
+          <Button type="button" variant="secondary" onClick={revert} disabled={!dirty || saving}>
+            Отменить изменения
+          </Button>
+          {dirty && saveState !== 'saving' && (
+            <span className={styles.dirty}>Есть несохранённые изменения</span>
+          )}
+        </div>
       </div>
     </form>
   );

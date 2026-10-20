@@ -438,9 +438,28 @@ describe('раздел «Контакты»', () => {
     const [{ version, items }] = contactsApi.saveMyContacts.mock.calls[0];
     expect(version).toBe(0);
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ type: 'phone', value: '+79001234567', service: null, label: null });
+    // Маска основного телефона; сервер нормализует значение к «+цифрам».
+    expect(items[0]).toMatchObject({ type: 'phone', value: '+7 (900) 123-45-67', service: null, label: null });
     expect(items[0].id).toMatch(/^[0-9a-f-]{36}$/);
     expect(await screen.findByText('Контакты сохранены.')).toBeInTheDocument();
+  });
+
+  it('основной и дополнительный телефон вводятся одинаково (одна маска)', async () => {
+    useAuth.mockReturnValue(authState());
+    render(<SettingsPage />);
+    await screen.findByText('Профиль');
+    openTab('Контакты');
+    fireEvent.click(await screen.findByRole('button', { name: /Добавить контакт/ }));
+    const main = screen.getByLabelText('Номер телефона', { selector: '#settings-phone' });
+    const extra = within(screen.getByRole('group', { name: 'Контакт 1' })).getByLabelText('Номер телефона');
+
+    ['89491234567', '9491234567', '+7 949 123 45 67', '8949123456712345678'].forEach((typed) => {
+      fireEvent.change(main, { target: { value: typed } });
+      fireEvent.change(extra, { target: { value: typed } });
+      expect(extra).toHaveValue(main.value);
+    });
+    expect(main).toHaveValue('+7 (949) 123-45-67');
+    expect(extra).toHaveAttribute('placeholder', main.getAttribute('placeholder'));
   });
 });
 

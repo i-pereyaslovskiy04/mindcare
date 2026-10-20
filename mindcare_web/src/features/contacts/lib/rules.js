@@ -47,6 +47,18 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f\u2028\u2029\u202a-\u202e\u2066-\u2069\u200e\u200f\u061c]/;
 
+/**
+ * Номер с кодом +7 — ровно 11 цифр. Маска способа «Телефон» всегда даёт +7…,
+ * поэтому недописанный номер («+7 (900) 12») не уходит на сервер, который
+ * принял бы любые 7–15 цифр после «+». Только для type=phone: мессенджеры
+ * проверяются как на сервере.
+ */
+function ruPhoneComplete(text) {
+  const digits = text.replace(/\D/g, '');
+  if (text.startsWith('+') && digits[0] === '7') return digits.length === 11;
+  return true;
+}
+
 function phoneOk(text) {
   if (!PHONE_CHARS.test(text)) return false;
   const digits = text.replace(/\D/g, '');
@@ -85,7 +97,7 @@ function valueCode(type, service, raw) {
   const text = (raw || '').trim();
   if (!text) return 'required';
   if (CONTROL.test(text)) return 'invalid_characters';
-  if (type === 'phone') return phoneOk(text) ? null : 'invalid_phone';
+  if (type === 'phone') return phoneOk(text) && ruPhoneComplete(text) ? null : 'invalid_phone';
   if (type === 'email') return text.length <= 254 && EMAIL.test(text) ? null : 'invalid_email';
   if (type === 'website') return urlCode(text);
   if (type === 'messenger' || type === 'social') {

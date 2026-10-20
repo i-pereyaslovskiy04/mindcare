@@ -19,7 +19,9 @@
   padding: 10px 14px;
   border: 1px solid var(--outline);
   border-radius: 10px;
-  background: var(--surface-container);
+  /* Редактируемое поле — светлая поверхность: контейнерный фон остаётся за
+     карточками и полями только для чтения. */
+  background: var(--surface);
   color: var(--on-surface);
   font: inherit;
   font-size: 13.5px;
@@ -34,6 +36,7 @@
 }
 
 .input[readonly] {
+  background: var(--surface-container);
   color: var(--on-surface-variant);
 }
 

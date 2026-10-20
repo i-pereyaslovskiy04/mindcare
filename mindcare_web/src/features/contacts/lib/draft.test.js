@@ -94,7 +94,7 @@ describe('applyMethod', () => {
   it('type и service меняются вместе: прежний service не остаётся у несовместимого типа', () => {
     const row = { id: 'a', type: 'messenger', service: 'telegram', value: '@a', label: '' };
     const next = applyMethod(row, PHONE, null);
-    expect(next).toMatchObject({ type: 'phone', service: '', value: '@a' });
+    expect(next).toMatchObject({ type: 'phone', service: '', value: '' });
     expect(toPayloadItems([next], CATALOG)[0]).toMatchObject({ type: 'phone', service: null });
   });
 
@@ -103,9 +103,17 @@ describe('applyMethod', () => {
     expect(applyMethod(row, TG, null)).toBe(row);
   });
 
-  it('значение и id при смене способа сохраняются', () => {
-    const row = { id: 'a', type: 'phone', service: '', value: '+7900', label: '' };
-    expect(applyMethod(row, TG, null)).toMatchObject({ id: 'a', value: '+7900', service: 'telegram' });
+  it('при смене способа значение очищается, id сохраняется', () => {
+    const row = { id: 'a', type: 'phone', service: '', value: '+7 (900) 123-45-67', label: '' };
+    expect(applyMethod(row, TG, null)).toMatchObject({ id: 'a', value: '', service: 'telegram' });
+    const tg = { id: 'b', type: 'messenger', service: 'telegram', value: '@name', label: '' };
+    expect(applyMethod(tg, { type: 'email', service: null }, null)).toMatchObject({ type: 'email', value: '' });
+  });
+
+  it('выбор уже выбранного способа значение не трогает', () => {
+    const row = { id: 'a', type: 'phone', service: '', value: '+7 (900) 123-45-67', label: '' };
+    expect(applyMethod(row, PHONE, null)).toBe(row);
+    expect(applyMethod(row, PHONE, null).value).toBe('+7 (900) 123-45-67');
   });
 
   it('название, введённое в этой сессии, на обычный способ не переносится', () => {
