@@ -77,3 +77,26 @@ export function systemContact(sysConv) {
     unread: sysConv?.unread_count || 0,
   };
 }
+
+/**
+ * Deep-link на системную беседу: `/student/chat?system=1`,
+ * `/psychologist/chat?system=1`. Страница Messenger открывает беседу тем же
+ * путём, что и клик по ней в списке, и затем убирает параметр (replace).
+ * Другие значения параметра ничего не открывают.
+ */
+export const SYSTEM_QUERY_PARAM = 'system';
+
+export function isSystemDeepLink(searchParams) {
+  return searchParams.get(SYSTEM_QUERY_PARAM) === '1';
+}
+
+/**
+ * Параметры запроса без перечисленных ключей — plain-объект для
+ * setSearchParams. Остальные параметры сохраняются: каждый deep-link убирает
+ * только свои ключи, не затирая чужие до их обработки.
+ */
+export function omitSearchParams(searchParams, keys) {
+  return Object.fromEntries(
+    [...searchParams.entries()].filter(([key]) => !keys.includes(key)),
+  );
+}

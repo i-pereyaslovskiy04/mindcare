@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Button from '../../../components/UI/Button/Button';
 import ChatSidebar from '../../../features/chat/components/ChatSidebar';
 import ChatWindow from '../../../features/chat/components/ChatWindow';
@@ -7,8 +8,11 @@ import {
   SYSTEM_DIALOG_ID,
   SYSTEM_EMPTY_TEXT,
   SYSTEM_NOTICE,
+  SYSTEM_QUERY_PARAM,
   formatLastTime,
   initialsOf,
+  isSystemDeepLink,
+  omitSearchParams,
   splitConversations,
   systemContact,
 } from '../../../features/chat/lib/conversationView';
@@ -34,6 +38,7 @@ function toContact(conv) {
 }
 
 export default function ChatPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     conversations,
     listLoading,
@@ -60,6 +65,7 @@ export default function ChatPage() {
     messages: sysMessages,
     loading: sysLoading,
     error: sysError,
+    metaLoaded: sysMetaLoaded,
     refreshMeta: sysRefreshMeta,
     open: sysOpen,
     close: sysClose,
@@ -86,6 +92,16 @@ export default function ChatPage() {
       sysClose();
     };
   }, [systemSelected, sysOpen, sysPollNew, sysClose]);
+
+  // Deep-link ?system=1: после первой загрузки метаданных системной беседы
+  // выбираем её так же, как кликом в списке (open + mark-read делает эффект
+  // выше), затем убираем параметр без новой записи в history.
+  const systemDeepLink = isSystemDeepLink(searchParams);
+  useEffect(() => {
+    if (!systemDeepLink || !sysMetaLoaded) return;
+    setSystemSelected(true);
+    setSearchParams(omitSearchParams(searchParams, [SYSTEM_QUERY_PARAM]), { replace: true });
+  }, [systemDeepLink, sysMetaLoaded, searchParams, setSearchParams]);
 
   const handleSelect = (id) => {
     if (id === SYSTEM_DIALOG_ID) {

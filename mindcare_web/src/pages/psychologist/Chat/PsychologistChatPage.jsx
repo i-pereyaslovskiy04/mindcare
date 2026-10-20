@@ -8,8 +8,11 @@ import {
   SYSTEM_DIALOG_ID,
   SYSTEM_EMPTY_TEXT,
   SYSTEM_NOTICE,
+  SYSTEM_QUERY_PARAM,
   formatLastTime,
   initialsOf,
+  isSystemDeepLink,
+  omitSearchParams,
   splitConversations,
   systemContact,
 } from '../../../features/chat/lib/conversationView';
@@ -120,6 +123,7 @@ export default function PsychologistChatPage() {
     messages: sysMessages,
     loading: sysLoading,
     error: sysError,
+    metaLoaded: sysMetaLoaded,
     refreshMeta: sysRefreshMeta,
     open: sysOpen,
     close: sysClose,
@@ -134,6 +138,9 @@ export default function PsychologistChatPage() {
   const queryConversation = searchParams.get('conversation');
   const queryStudent = searchParams.get('student');
   const hasQuickOpenQuery = Boolean(queryConversation || queryStudent);
+  // ?system=1 (deep-link на системную беседу) приоритетнее quick-open: пока он
+  // не обработан, диалог по ?conversation= / ?student= не открывается.
+  const systemDeepLink = isSystemDeepLink(searchParams);
 
   // Лёгкий poll метаданных системной беседы (unread в списке).
   useEffect(() => {
@@ -153,8 +160,23 @@ export default function PsychologistChatPage() {
     };
   }, [systemSelected, sysOpen, sysPollNew, sysClose]);
 
+  // Deep-link ?system=1: после первой загрузки метаданных системной беседы
+  // выбираем её так же, как кликом в списке (open + mark-read делает эффект
+  // выше), затем без новой записи в history убираем system и параметры
+  // quick-open: открывать в той же навигации второй диалог не нужно.
   useEffect(() => {
-    if (!hasQuickOpenQuery) return;
+    if (!systemDeepLink || !sysMetaLoaded) return;
+    setQuickOpenError('');
+    setQuickOpenTargetUuid(null);
+    setSystemSelected(true);
+    setSearchParams(
+      omitSearchParams(searchParams, [SYSTEM_QUERY_PARAM, 'conversation', 'student']),
+      { replace: true },
+    );
+  }, [systemDeepLink, sysMetaLoaded, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!hasQuickOpenQuery || systemDeepLink) return;
 
     if (listLoading) return;
 
@@ -176,6 +198,7 @@ export default function PsychologistChatPage() {
   }, [
     conversations,
     hasQuickOpenQuery,
+    systemDeepLink,
     listLoading,
     queryConversation,
     queryStudent,

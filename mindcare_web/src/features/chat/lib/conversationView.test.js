@@ -7,9 +7,29 @@ import {
   SYSTEM_SECTION_TITLE,
   SYSTEM_SENDER_NAME,
   hasPresence,
+  isSystemDeepLink,
+  omitSearchParams,
   splitConversations,
   systemContact,
 } from './conversationView';
+
+describe('deep-link на системную беседу', () => {
+  test('isSystemDeepLink: только system=1', () => {
+    expect(isSystemDeepLink(new URLSearchParams('system=1'))).toBe(true);
+    expect(isSystemDeepLink(new URLSearchParams('system=1&student=7'))).toBe(true);
+    expect(isSystemDeepLink(new URLSearchParams(''))).toBe(false);
+    expect(isSystemDeepLink(new URLSearchParams('system=0'))).toBe(false);
+    expect(isSystemDeepLink(new URLSearchParams('system='))).toBe(false);
+    expect(isSystemDeepLink(new URLSearchParams('conversation=conv-1'))).toBe(false);
+  });
+
+  test('omitSearchParams убирает только перечисленные ключи', () => {
+    const params = new URLSearchParams('system=1&conversation=conv-1&tab=x');
+    expect(omitSearchParams(params, ['system'])).toEqual({ conversation: 'conv-1', tab: 'x' });
+    expect(omitSearchParams(params, ['conversation', 'student'])).toEqual({ system: '1', tab: 'x' });
+    expect(omitSearchParams(new URLSearchParams('system=1'), ['system'])).toEqual({});
+  });
+});
 
 describe('контракт системной беседы (SYSTEM MESSAGE, не NOTIFICATION)', () => {
   test('единые подписи', () => {
