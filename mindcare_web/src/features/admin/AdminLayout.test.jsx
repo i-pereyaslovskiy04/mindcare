@@ -137,7 +137,7 @@ test('brand «Панель управления» ведёт на /admin; ссы
   expect(screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === '/')).toHaveLength(0);
 });
 
-test('admin использует общий CabinetHeader: крошки, поиск, уведомления, оформление, выход', () => {
+test('admin использует общий CabinetHeader: крошки, поиск, оформление, выход; без колокольчика', () => {
   mockAuth({ roles: ['admin', 'supervisor'], activeRole: 'admin' });
   render(
     <ThemeProvider>
@@ -152,7 +152,8 @@ test('admin использует общий CabinetHeader: крошки, пои�
   expect(within(nav).getByText('Пользователи')).toHaveAttribute('aria-current', 'page');
 
   expect(screen.getByRole('searchbox', { name: 'Поиск — будет доступен позже' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Уведомления — скоро' })).toBeInTheDocument();
+  // Колокольчик — только student/psychologist; заглушки «скоро» больше нет.
+  expect(screen.queryByRole('button', { name: /Уведомления/ })).toBeNull();
   expect(screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' })).toBeInTheDocument();
   // Отдельных кнопок «глаз» и почты в шапке нет.
   expect(screen.queryByRole('button', { name: 'Версия для слабовидящих' })).toBeNull();

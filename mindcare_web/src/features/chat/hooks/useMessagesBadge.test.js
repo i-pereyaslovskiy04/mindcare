@@ -44,3 +44,23 @@ test('other roles (supervisor/admin) produce 0 and hit no chat endpoints', async
   expect(chatApi.getStudentConversations).not.toHaveBeenCalled();
   expect(chatApi.getPsychologistConversations).not.toHaveBeenCalled();
 });
+
+test.each(['student', 'psychologist'])(
+  "role='%s': системная беседа в badge «Сообщения» не входит, личные unread остаются",
+  async (role) => {
+    // У системной беседы есть непрочитанные — их показывает колокольчик шапки.
+    chatApi.getSystemConversation.mockResolvedValue({ conversation: { unread_count: 5 } });
+    const { result } = renderHook(() => useMessagesBadge(role));
+    await waitFor(() => expect(result.current).toBe(1)); // только личный диалог
+    expect(chatApi.getSystemConversation).not.toHaveBeenCalled();
+  },
+);
+
+test('без личных непрочитанных badge 0, даже если в системной беседе есть новые', async () => {
+  chatApi.getSystemConversation.mockResolvedValue({ conversation: { unread_count: 3 } });
+  chatApi.getStudentConversations.mockResolvedValue({ items: [{ unread_count: 0 }] });
+  const { result } = renderHook(() => useMessagesBadge('student'));
+  await waitFor(() => expect(chatApi.getStudentConversations).toHaveBeenCalled());
+  await waitFor(() => expect(result.current).toBe(0));
+  expect(chatApi.getSystemConversation).not.toHaveBeenCalled();
+});

@@ -4,7 +4,8 @@
  *
  * Слева — hamburger мобильного drawer'а (только <=600px, если layout передал
  * onMenuOpen) и хлебные крошки. Справа строгий порядок:
- *   [CabinetSwitcher, только 601–980px] → Поиск → Уведомления → Оформление → Выход.
+ *   [CabinetSwitcher, только 601–980px] → Поиск → [Уведомления] → Оформление → Выход.
+ * Уведомления (колокольчик) — только в кабинетах student и psychologist.
  * На <=600px CabinetSwitcher в шапке скрыт: тот же переключатель есть в блоке
  * пользователя внутри drawer'а, а место в шапке нужно колокольчику,
  * «Оформлению» и выходу.
@@ -13,8 +14,10 @@
  * собственными отступами шапки, общая высота — var(--cabinet-header-height)
  * из layout'а (общая линия под brand и topbar рисуется в .app::after layout'а).
  *
- * Поиск и уведомления — честные заглушки: поиск disabled и ничего не ищет,
- * у колокольчика нет индикатора непрочитанного. «Оформление» — одна точка
+ * Поиск — честная заглушка: disabled и ничего не ищет. Колокольчик — слой над
+ * системной беседой «Психология ДонГУ» (features/bell/SystemBell): badge —
+ * реальное число непрочитанных, панель — до 5 новых сообщений; у supervisor и
+ * admin его нет (там рабочие события — счётчики очередей в меню). «Оформление» — одна точка
  * входа: ThemeToggle compact + существующий A11yToggle отдельной секцией панели
  * (контексты темы и режима для слабовидящих не смешиваются — шапка только
  * компонует два готовых компонента).
@@ -25,6 +28,8 @@ import { useLogout } from '../../features/auth/AuthContext';
 import CabinetSwitcher from '../../features/auth/CabinetSwitcher';
 import ThemeToggle from '../../features/theme/ThemeToggle';
 import A11yToggle from '../../features/a11y/A11yToggle';
+import SystemBell from '../../features/bell/ui/SystemBell';
+import { hasBell } from '../../features/bell/lib/bellView';
 import Icon from '../Icon/Icon';
 import styles from './CabinetHeader.module.css';
 
@@ -114,17 +119,11 @@ export default function CabinetHeader({
           />
         </div>
 
-        {/* Заглушка уведомлений: без счётчика и индикатора непрочитанного.
-            Будущая рабочая функция — на мобильной ширине не скрывается. */}
-        <button
-          type="button"
-          className={`${styles.iconBtn} ${styles.iconBtnPlaceholder}`}
-          aria-label="Уведомления — скоро"
-          title="Уведомления — скоро"
-          aria-disabled="true"
-        >
-          <Icon name="bell" size={16} />
-        </button>
+        {/* Колокольчик — только student/psychologist; на мобильной ширине
+            не скрывается. */}
+        {hasBell(cabinetRole) && (
+          <SystemBell cabinetRole={cabinetRole} triggerClassName={styles.iconBtn} />
+        )}
 
         <ThemeToggle
           compact

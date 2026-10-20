@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { createRef } from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CabinetHeader from './CabinetHeader';
 import { resolveBreadcrumbs } from './breadcrumbs';
 import { ThemeProvider } from '../../features/theme/ThemeContext';
 import { A11yProvider } from '../../features/a11y/A11yContext';
 import * as AuthContext from '../../features/auth/AuthContext';
+import * as chatApi from '../../api/chat.api';
 
 // react-router-dom (v7) не резолвится jest-резолвером — мокаем виртуально.
 jest.mock('react-router-dom', () => ({
@@ -17,6 +18,8 @@ jest.mock('react-router-dom', () => ({
     </a>
   ),
 }), { virtual: true });
+
+jest.mock('../../api/chat.api');
 
 const mockLogout = jest.fn();
 jest.mock('../../features/auth/AuthContext', () => ({
@@ -39,6 +42,13 @@ function renderHeader(props = {}) {
   );
 }
 
+/** Рендер + ожидание первого ответа колокольчика (unread_count). */
+async function renderHeaderReady(props = {}) {
+  const utils = renderHeader(props);
+  await waitFor(() => expect(chatApi.getSystemConversation).toHaveBeenCalled());
+  return utils;
+}
+
 const root = () => document.documentElement;
 
 /** a стоит в DOM раньше b. */
@@ -49,6 +59,11 @@ const expectBefore = (a, b) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // По умолчанию ответ unread_count не приходит: тестам, не связанным с
+  // колокольчиком, не нужны его асинхронные обновления. Тесты колокольчика
+  // задают ответ явно.
+  chatApi.getSystemConversation.mockReturnValue(new Promise(() => {}));
+  chatApi.getSystemMessages.mockResolvedValue({ items: [] });
   AuthContext.useAuth.mockReturnValue({
     user: { name: 'Тест', roles: ['psychologist', 'student'] },
     setActiveRole: jest.fn(),
@@ -83,10 +98,10 @@ describe('CabinetHeader', () => {
     expect(within(nav).getByText('Главная')).toHaveAttribute('aria-current', 'page');
   });
 
-  test('строгий порядок справа: поиск → уведомления → оформление → выход', () => {
-    renderHeader();
+  test('строгий порядок справа: поиск → уведомления → оформление → выход', async () => {
+    await renderHeaderReady();
     const search = screen.getByRole('searchbox', { name: 'Поиск — будет доступен позже' });
-    const bell = screen.getByRole('button', { name: 'Уведомления — скоро' });
+    const bell = screen.getByRole('button', { name: 'Уведомления' });
     const appearance = screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' });
     const logout = screen.getByRole('button', { name: 'Выйти' });
 
@@ -113,14 +128,39 @@ describe('CabinetHeader', () => {
     expect(screen.getByTitle('Поиск будет доступен позже')).toContainElement(search);
   });
 
-  test('колокольчик — заглушка без индикатора непрочитанного', () => {
-    renderHeader();
-    const bell = screen.getByRole('button', { name: 'Уведомления — скоро' });
-    expect(bell).toHaveAttribute('aria-disabled', 'true');
-    expect(bell).toHaveAttribute('title', 'Уведомления — скоро');
-    // Прежняя «красная точка» была <span> внутри кнопки — её нет.
+  test.each(['student', 'psychologist'])(
+    '%s: рабочий колокольчик — badge из unread_count системной беседы',
+    async (cabinetRole) => {
+      chatApi.getSystemConversation.mockResolvedValue({
+        conversation: { uuid: 'sys-1', type: 'system', last_message_at: null, unread_count: 4 },
+      });
+      await renderHeaderReady({ cabinetRole });
+      const bell = await screen.findByRole('button', { name: 'Уведомления, новых: 4' });
+      expect(bell).not.toHaveAttribute('aria-disabled');
+      expect(bell).toHaveAttribute('aria-expanded', 'false');
+      expect(within(bell).getByText('4')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Уведомления — скоро' })).toBeNull();
+    },
+  );
+
+  test('без непрочитанных — колокольчик без badge и «точки»', async () => {
+    chatApi.getSystemConversation.mockResolvedValue({ conversation: null });
+    await renderHeaderReady();
+    const bell = screen.getByRole('button', { name: 'Уведомления' });
     expect(bell.innerHTML).not.toMatch(/<span/);
   });
+
+  test.each(['supervisor', 'admin'])(
+    '%s: колокольчика и заглушки «Уведомления — скоро» нет, API не запрашивается',
+    (cabinetRole) => {
+      renderHeader({ cabinetRole });
+      expect(screen.queryByRole('button', { name: /Уведомления/ })).toBeNull();
+      expect(chatApi.getSystemConversation).not.toHaveBeenCalled();
+      // Остальные кнопки на месте.
+      expect(screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Выйти' })).toBeInTheDocument();
+    },
+  );
 
   test('«Оформление» открывает одну панель: тема, палитра и существующий A11yToggle', () => {
     renderHeader();
@@ -214,12 +254,12 @@ describe('CabinetHeader', () => {
     expect(burger).toHaveAttribute('aria-controls', 'drawer-1');
   });
 
-  test('мобильный порядок: hamburger → крошки → уведомления → оформление → выход', () => {
-    renderHeader({ onMenuOpen: jest.fn() });
+  test('мобильный порядок: hamburger → крошки → уведомления → оформление → выход', async () => {
+    await renderHeaderReady({ onMenuOpen: jest.fn() });
     const order = [
       screen.getByRole('button', { name: 'Открыть меню' }),
       screen.getByRole('navigation', { name: 'Навигационная цепочка' }),
-      screen.getByRole('button', { name: 'Уведомления — скоро' }),
+      screen.getByRole('button', { name: 'Уведомления' }),
       screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' }),
       screen.getByRole('button', { name: 'Выйти' }),
     ];
@@ -251,8 +291,9 @@ describe('CabinetHeader.module.css: responsive-правила', () => {
     expect(block).toMatch(/\.menuBtn\s*\{[^}]*display:\s*inline-flex/);
     expect(hides(block, 'switcher')).toBe(true);
     expect(hides(block, 'iconBtn')).toBe(false);
-    expect(hides(block, 'iconBtnPlaceholder')).toBe(false);
     expect(css).not.toMatch(/iconBtnOptional/);
+    // Заглушки колокольчика больше нет.
+    expect(css).not.toMatch(/iconBtnPlaceholder/);
   });
 
   test('шире 600px hamburger скрыт', () => {

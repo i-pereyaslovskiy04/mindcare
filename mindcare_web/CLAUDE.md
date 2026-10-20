@@ -56,9 +56,14 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 
 **Шапка кабинетов (ADR-031):** одна — `components/CabinetHeader/` для
 CabinetLayout (student/psychologist/supervisor) и AdminLayout. Порядок справа:
-[CabinetSwitcher 601–980px] → Поиск → Уведомления → Оформление → Выход; на <=600px
-слева hamburger, switcher — в drawer (CabinetDrawer, общий для admin). Поиск и
-колокольчик — честные заглушки (disabled / `aria-disabled`, без fake unread);
+[CabinetSwitcher 601–980px] → Поиск → [Уведомления] → Оформление → Выход; на <=600px
+слева hamburger, switcher — в drawer (CabinetDrawer, общий для admin). Поиск —
+честная заглушка (disabled). Колокольчик — только student/psychologist
+(`features/bell`, ADR-031 «Дополнение 2026-10-20»): слой над системной беседой
+«Психология ДонГУ», badge — её реальный `unread_count`, панель — до 5
+непрочитанных, открытие ничего не отмечает прочитанным, переход —
+`/<кабинет>/chat?system=1`; своего read/unread и notification API нет. Badge
+«Сообщения» — только личные диалоги (системная беседа — в колокольчике);
 кнопки почты и home-иконки нет; brand — ссылка на корень кабинета. Крошки — только
 из явных `crumbLabels`/`dynamicCrumbs` (`parent` — промежуточный уровень), не из
 URL. Тема и версия для слабовидящих — одна кнопка «Оформление»: ThemeToggle

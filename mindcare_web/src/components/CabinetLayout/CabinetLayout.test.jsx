@@ -3,6 +3,7 @@ import CabinetLayout from './CabinetLayout';
 import { ThemeProvider } from '../../features/theme/ThemeContext';
 import { A11yProvider } from '../../features/a11y/A11yContext';
 import * as AuthContext from '../../features/auth/AuthContext';
+import * as chatApi from '../../api/chat.api';
 
 let mockPathname = '/psychologist';
 
@@ -28,6 +29,9 @@ jest.mock('react-router-dom', () => ({
     </a>
   ),
 }), { virtual: true });
+
+// Колокольчик шапки (student/psychologist) читает системную беседу.
+jest.mock('../../api/chat.api');
 
 const mockLogout = jest.fn();
 jest.mock('../../features/auth/AuthContext', () => ({
@@ -56,6 +60,8 @@ const PSY_DYNAMIC = [
 beforeEach(() => {
   jest.clearAllMocks();
   mockPathname = '/psychologist';
+  // Ответ unread_count не приходит: тестам layout'а он не нужен.
+  chatApi.getSystemConversation.mockReturnValue(new Promise(() => {}));
 });
 
 test('direct entry (reload/URL) into a membership cabinet syncs activeRole', () => {
@@ -116,7 +122,8 @@ test('шапка — общий CabinetHeader: крошки, «Оформлен�
   expect(within(nav).getByText('Мои студенты')).toHaveAttribute('aria-current', 'page');
 
   expect(screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Уведомления — скоро' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Уведомления' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Уведомления — скоро' })).toBeNull();
   expect(screen.queryByRole('link', { name: 'На главную' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Почта' })).toBeNull();
 
@@ -250,4 +257,23 @@ test('переключатель кабинета есть в sidebar, topbar и
   expect(within(drawer).getByRole('link', { name: /ожидают проверки: 3/ })).toBeInTheDocument();
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(screen.queryByRole('dialog', { name: 'Меню кабинета' })).toBeNull();
+});
+
+test.each([
+  ['student', true],
+  ['psychologist', true],
+  ['supervisor', false],
+])('колокольчик в шапке кабинета %s: %s', (cabinetRole, visible) => {
+  mockPathname = `/${cabinetRole}`;
+  mockAuth({ roles: [cabinetRole], activeRole: cabinetRole });
+  render(
+    <ThemeProvider>
+      <A11yProvider>
+        <CabinetLayout cabinetRole={cabinetRole} navSections={[]} crumbLabels={{}} />
+      </A11yProvider>
+    </ThemeProvider>,
+  );
+  expect(Boolean(screen.queryByRole('button', { name: /^Уведомления/ }))).toBe(visible);
+  expect(screen.queryByRole('button', { name: 'Уведомления — скоро' })).toBeNull();
+  expect(chatApi.getSystemConversation).toHaveBeenCalledTimes(visible ? 1 : 0);
 });

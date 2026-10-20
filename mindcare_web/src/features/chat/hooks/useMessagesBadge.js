@@ -3,22 +3,23 @@ import { useAuth } from '../../auth/AuthContext';
 import {
   getStudentConversations,
   getPsychologistConversations,
-  getSystemConversation,
 } from '../../../api/chat.api';
 import { subscribeMessagesUpdated } from '../lib/messagesEvents';
 
 const POLL_MS = 30000;
 
 /**
- * Badge раздела «Сообщения» = ЧИСЛО ДИАЛОГОВ с unread_count > 0
- * (system-беседа и engagement-беседа считаются раздельно), НЕ сумма сообщений.
+ * Badge раздела «Сообщения» = ЧИСЛО ЛИЧНЫХ ДИАЛОГОВ с unread_count > 0,
+ * НЕ сумма сообщений. Системная беседа «Психология ДонГУ» сюда не входит:
+ * её непрочитанные показывает колокольчик шапки (features/bell), одно событие
+ * не считается дважды. Внутри Messenger у строки системной беседы её
+ * собственный unread остаётся.
  *
  * Лёгкий self-poll (30s) на уровне layout. Возвращает число или 0.
  *
  * `role` — роль КАБИНЕТА (student/psychologist), в котором рендерится layout,
  * а не legacy `user.role`. Для multi-role пользователя это важно: студент-
  * психолог в /student видит student-диалоги, в /psychologist — psychologist.
- * system-беседа считается у обеих участвующих ролей.
  */
 export function useMessagesBadge(role) {
   const { user } = useAuth();
@@ -44,12 +45,6 @@ export function useMessagesBadge(role) {
         }
       } catch {
         /* сетевой сбой — оставляем прежнее значение */
-      }
-      try {
-        const { conversation: sys } = await getSystemConversation();
-        if (sys && sys.unread_count > 0) dialogs += 1;
-      } catch {
-        /* ignore */
       }
       if (alive) setCount(dialogs);
     }

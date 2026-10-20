@@ -172,14 +172,6 @@
   outline-offset: 2px;
 }
 
-/* Заглушка (уведомления): кнопка не выглядит «нажимаемой». */
-.iconBtnPlaceholder,
-.iconBtnPlaceholder:hover {
-  cursor: default;
-  background: var(--warm-white);
-  border-color: var(--nav-border);
-}
-
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 980px) {
   .switcher {
@@ -203,7 +195,8 @@
   }
 
   /* Sidebar скрыт, переключатель кабинета — в блоке пользователя drawer'а.
-     Остаются колокольчик, «Оформление» и выход (см. ADR-031, дополнение). */
+     Остаются колокольчик (student/psychologist), «Оформление» и выход
+     (см. ADR-031, дополнения). */
   .switcher {
     display: none;
   }

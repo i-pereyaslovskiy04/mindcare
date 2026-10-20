@@ -16,8 +16,9 @@
  * Вне ThemeProvider рендерится null (безопасно для изолированных тестов).
  */
 
-import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import useAnchoredPanel from '../../hooks/useAnchoredPanel';
 import { ThemeContext } from './ThemeContext';
 import styles from './ThemeToggle.module.css';
 
@@ -106,57 +107,6 @@ const paletteOptionsFor = (palette) =>
   PALETTE_OPTIONS.filter((o) => !HIDDEN_UNLESS_ACTIVE.has(o.value) || o.value === palette);
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-/**
- * Панель, привязанная к кнопке-триггеру: позиция считается от неё и
- * пересчитывается на scroll/resize. Панель рендерится в портал, поэтому
- * закрытие по клику снаружи проверяет и триггер, и саму панель по id.
- */
-function useAnchoredPanel(panelId, minPanelWidth) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, minWidth: 0 });
-
-  const wrapRef = useRef(null);
-  const triggerRef = useRef(null);
-
-  const calcPos = useCallback(() => {
-    const el = triggerRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    // Панель может быть шире минимума (содержимое) — после монтирования
-    // учитываем её реальную ширину, иначе она уезжает за правый край экрана.
-    const rendered = document.getElementById(panelId)?.offsetWidth ?? 0;
-    const width = Math.max(r.width, minPanelWidth);
-    const outer = Math.max(width, rendered);
-    const left = Math.max(12, Math.min(r.right - outer, window.innerWidth - outer - 12));
-    setPos({ top: r.bottom + 6, left, minWidth: width });
-  }, [panelId, minPanelWidth]);
-
-  const close = useCallback(() => setIsOpen(false), []);
-
-  useLayoutEffect(() => {
-    if (isOpen) calcPos();
-  }, [isOpen, calcPos]);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const onOutside = (e) => {
-      const panel = document.getElementById(panelId);
-      if (!wrapRef.current?.contains(e.target) && !panel?.contains(e.target)) close();
-    };
-    const reposition = () => calcPos();
-    document.addEventListener('mousedown', onOutside, true);
-    window.addEventListener('scroll', reposition, true);
-    window.addEventListener('resize', reposition);
-    return () => {
-      document.removeEventListener('mousedown', onOutside, true);
-      window.removeEventListener('scroll', reposition, true);
-      window.removeEventListener('resize', reposition);
-    };
-  }, [isOpen, panelId, close, calcPos]);
-
-  return { isOpen, setIsOpen, close, calcPos, pos, wrapRef, triggerRef };
-}
 
 /** Выпадающее меню выбора цветовой палитры. */
 function PaletteMenu({ palette, setPalette }) {
