@@ -1,0 +1,38 @@
+/* ── CTA section ──────────────────────────────────────────── */
+
+.ctaSection {
+  text-align: center;
+}
+
+.ctaTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(26px, 3vw, 40px);
+  font-weight: 400;
+  color: var(--espresso);
+  margin-bottom: 14px;
+}
+
+.ctaSub {
+  font-size: var(--fs-body);
+  color: var(--text-light);
+  margin-bottom: clamp(28px, 2.8vw, 40px);
+}
+
+.ctaBtn {
+  display: inline-block;
+  background: var(--espresso);
+  color: var(--text-on-dark);
+  font-family: 'Nunito', sans-serif;
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 14px 36px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background 0.18s, transform 0.15s;
+}
+
+.ctaBtn:hover {
+  background: var(--mocha);
+  transform: translateY(-1px);
+}

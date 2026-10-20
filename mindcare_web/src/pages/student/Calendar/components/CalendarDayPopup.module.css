@@ -1,0 +1,130 @@
+.popup {
+  position: absolute;
+  z-index: 51;
+  width: 280px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(var(--shadow-rgb), 0.16), 0 2px 8px rgba(var(--shadow-rgb), 0.08);
+  padding: 16px 20px;
+  animation: popIn 0.18s ease;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.popup::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: var(--arrow-left, 140px);
+  margin-left: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--surface-elevated);
+  border-top: 1px solid var(--nav-border);
+  border-left: 1px solid var(--nav-border);
+  transform: rotate(45deg);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  font-weight: 400;
+  color: var(--text-main);
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--sand);
+  color: var(--text-main);
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.typeLabel {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+}
+
+.time {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+}
+
+.title {
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.desc {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  line-height: 1.5;
+}

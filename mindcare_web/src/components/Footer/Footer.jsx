@@ -1,7 +1,7 @@
 import styles from './Footer.module.css';
 import { TelegramIcon, VKIcon, YandexIcon } from '../icons';
 
-const SOCIAL_COLOR = 'rgba(139,111,71,0.7)';
+const SOCIAL_COLOR = 'currentColor'; // цвет задаёт .socIcon (токен темы)
 
 const SOCIALS = [
   { name: 'ВКонтакте', href: '#', Icon: VKIcon },

@@ -1,0 +1,17 @@
+[Unit]
+Description=MindCare: run audit-log IP anonymization daily
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_7_DEPLOYMENT.md
+
+[Timer]
+# Ежедневно ночью, ПОСЛЕ mindcare-extend-schedules.timer (03:20), чтобы два
+# maintenance-job'а не пересекались. Граница ретенции — 90 дней, поэтому
+# суточный сдвиг прогона несущественен, а несколько пропущенных суток лишь
+# увеличивают объём следующего прогона.
+OnCalendar=*-*-* 03:40:00
+AccuracySec=5min
+RandomizedDelaySec=15min
+Persistent=true
+Unit=mindcare-anonymize-ips.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,69 @@
+.tag {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* ── public ─────────────────────────────────────────────────
+   Public item pages: MaterialsItemPage, NewsItemPage
+   11px / 700 / uppercase / sand bg / coffee text / latte border
+*/
+.public {
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--coffee);
+  background: var(--sand);
+  border: 1px solid var(--latte);
+  border-radius: 8px;
+  padding: 4px 12px;
+  line-height: 1;
+}
+
+/* ── admin ──────────────────────────────────────────────────
+   Admin table tag lists: ArticlesTable, NewsTable, TagsTable
+   12px / 500 / milk bg / espresso text / pill shape
+*/
+.admin {
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--milk);
+  color: var(--espresso);
+}
+
+/* ── category ───────────────────────────────────────────────
+   Admin table category labels: ArticlesTable categories column
+   12px / 500 / sand bg / mocha text / pill shape
+*/
+.category {
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--sand);
+  color: var(--mocha);
+}
+
+/* ── card ───────────────────────────────────────────────────
+   Material cards: MaterialCard topic chip
+   var(--fs-tag) / 600 / uppercase / sand bg / coffee text / latte border
+   align-self: flex-start — card body is flex-column
+*/
+.card {
+  justify-content: center;
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--ls-tag);
+  color: var(--coffee);
+  background: var(--sand);
+  border: 1px solid var(--latte);
+  border-radius: 8px;
+  padding: 4px 10px;
+  line-height: 1;
+  align-self: flex-start;
+}

@@ -1,0 +1,31 @@
+[Unit]
+Description=MindCare maintenance: deliver pending system message intents (ADR-029)
+Documentation=file:///media/data2/psycho/mindcare/deploy/README.md
+After=network-online.target postgresql.service
+Requires=postgresql.service
+# Падение (exit != 0) поднимает шаблонный обработчик мониторинга.
+OnFailure=mindcare-maintenance-failure@mindcare-deliver-system-messages.service
+
+[Service]
+# Разовый прогон по таймеру. Job доставляет УЖЕ зафиксированные намерения
+# system-сообщений (outbox system_message_intents): приглашение подтвердить
+# статус студента ДонГУ и результат решения по заявке. Дубль исключён
+# event_key, поэтому повтор безопасен. Exit 1 — ошибка чтения outbox либо
+# хотя бы одна неудачная публикация/отметка delivered (не «пустая очередь»).
+Type=oneshot
+User=vitbo
+Group=vitbo
+WorkingDirectory=/media/data2/psycho/mindcare/mindcare_api
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/media/data2/psycho/mindcare/mindcare_api/.venv/bin/python scripts/deliver_system_message_intents.py
+
+TimeoutStartSec=300
+
+# Диагностика минимизирована на стороне скрипта: только агрегаты
+# found/delivered/failed и phase + класс исключения (без id, event_key, текста).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mindcare-deliver-system-messages
+
+[Install]
+WantedBy=multi-user.target

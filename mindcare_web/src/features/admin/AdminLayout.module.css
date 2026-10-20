@@ -1,0 +1,402 @@
+.app {
+  --cabinet-header-height: 73px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 264px 1fr;
+  height: 100vh;
+  background: var(--warm-white);
+  overflow: hidden;
+}
+
+.app::after {
+  content: "";
+  position: absolute;
+  top: var(--cabinet-header-height);
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--nav-border);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── sidebar ── */
+.sidebar {
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── brand ── */
+.brand {
+  box-sizing: border-box;
+  min-height: var(--cabinet-header-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 24px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--espresso);
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  flex-shrink: 0;
+  /* brand — ссылка на главную панели управления: без подчёркивания, фокус
+     внутри (sidebar с overflow: hidden обрезал бы внешний outline). */
+  text-decoration: none;
+}
+
+.brand:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+.brand em {
+  font-style: italic;
+  color: var(--coffee);
+}
+
+.brandShort {
+  display: none;
+}
+
+.brandFull {
+  display: block;
+}
+
+.brandSub {
+  display: block;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-light);
+  text-transform: uppercase;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+/* ── user block ── */
+.user {
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--nav-border);
+  flex-shrink: 0;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--coffee), var(--mocha));
+  color: var(--milk);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 17px;
+  font-weight: 500;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.18);
+}
+
+.userInfo {
+  min-width: 0;
+  flex: 1;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--espresso);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userRole {
+  /* Блок под именем: подпись роли (одна роль) или полноширинная кнопка
+     «Сменить кабинет» (несколько ролей). */
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-light);
+  font-weight: 500;
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+
+.roleDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+
+/* ── nav ── */
+.nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navGroup + .navGroup {
+  margin-top: 14px;
+}
+
+.navSectionLabel {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-light);
+  text-transform: uppercase;
+  padding: 8px 12px 6px;
+  font-weight: 700;
+  margin-top: 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+  text-decoration: none;
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+}
+
+.navItem:hover {
+  background: rgba(var(--coffee-rgb), 0.08);
+  color: var(--espresso);
+}
+
+.navItem:hover .navIcon {
+  color: var(--espresso);
+}
+
+.navItem.active {
+  background: var(--espresso);
+  color: var(--milk);
+}
+
+.navItem.active .navIcon {
+  color: var(--latte);
+}
+
+.navIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--coffee);
+  transition: color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navItemDisabled {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-light);
+  opacity: 0.55;
+  cursor: not-allowed;
+  user-select: none;
+  margin-bottom: 2px;
+}
+
+.navItemSoon {
+  font-size: 10px;
+  background: var(--fog);
+  color: var(--text-light);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: auto;
+  letter-spacing: 0.05em;
+}
+
+/* ── sidebar footer ── */
+.foot {
+  padding: 14px 16px;
+  border-top: 1px solid var(--nav-border);
+  font-size: 11px;
+  color: var(--text-light);
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+.foot a {
+  color: var(--coffee);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.foot a:hover {
+  color: var(--espresso);
+}
+
+/* ── main column ── */
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ── topbar ── */
+/* Шапка — CabinetHeader (components/CabinetHeader): высота, крошки, поиск,
+   уведомления, «Оформление», выход и topbar-копия CabinetSwitcher (<=980px).
+   Здесь только отступы ряда этого layout'а. */
+.topbar {
+  padding: 16px 36px;
+  gap: 16px;
+}
+
+/* ── content area ── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 36px 48px;
+}
+
+.contentInner {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* ── mobile drawer (<=600px) ── */
+/* Hamburger — в CabinetHeader, drawer/backdrop/«Закрыть» — CabinetDrawer.
+   Drawer — отдельный fixed-элемент вне .app::after, поэтому brand'у
+   возвращаем собственный нижний разделитель. */
+.mobileDrawer .brand {
+  border-bottom: 1px solid var(--nav-border);
+}
+
+/* ── responsive ──
+   Та же модель, что у CabinetLayout: >980px полный sidebar, 601–980px
+   icon-rail 72px, <=600px sidebar скрыт, навигация — в drawer. */
+@media (max-width: 980px) {
+  .app {
+    grid-template-columns: 72px 1fr;
+  }
+
+  /* Сворачивание ТОЛЬКО desktop-сайдбара. Drawer использует те же классы,
+     но сворачиваться не должен → правила скоупятся под .sidebar. */
+  .sidebar .brand {
+    padding: 18px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sidebar .brandShort {
+    display: block;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--espresso);
+    font-style: italic;
+  }
+
+  .sidebar .brandFull,
+  .sidebar .brandSub {
+    display: none;
+  }
+
+  .sidebar .user {
+    padding: 14px 0;
+    justify-content: center;
+  }
+
+  .sidebar .userInfo {
+    display: none;
+  }
+
+  /* Sidebar switcher скрыт вместе с userInfo — topbar-копию показывает
+     CabinetHeader. */
+
+  /* Sidebar сжат до 72px icon-rail — topbar должен ужаться вместе с ним,
+     иначе исходный padding 16px 36px съедает большую часть узкого main-column
+     и провоцирует горизонтальный overflow страницы. */
+  .topbar {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .sidebar .nav {
+    padding: 10px 8px;
+  }
+
+  .sidebar .navSectionLabel {
+    display: none;
+  }
+
+  .sidebar .navItem {
+    justify-content: center;
+    padding: 10px 0;
+    gap: 0;
+  }
+
+  .sidebar .navLabel {
+    display: none;
+  }
+
+  .sidebar .navItemDisabled {
+    justify-content: center;
+    padding: 10px 0;
+    gap: 0;
+  }
+
+  .sidebar .navItemSoon {
+    display: none;
+  }
+
+  .sidebar .foot {
+    display: none;
+  }
+
+  .content {
+    padding: 20px 16px 40px;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Sidebar/rail скрыт → в сетке один in-flow элемент (.main), колонка 1fr
+     (при "0 1fr" .main попал бы в нулевой трек и схлопнулся). */
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+}

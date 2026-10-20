@@ -1,0 +1,8 @@
+/* AttachmentList — вертикальный список AttachmentCard внутри bubble (Stage 32d). */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}

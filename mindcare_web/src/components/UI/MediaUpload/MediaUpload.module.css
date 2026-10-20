@@ -1,0 +1,104 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 16px;
+  border: 2px dashed var(--nav-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--warm-white);
+  text-align: center;
+}
+
+.dropzone:hover,
+.dropzone:focus {
+  border-color: var(--coffee);
+  background: var(--cream);
+  outline: none;
+}
+
+.uploading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.icon {
+  font-size: 28px;
+}
+
+.hint {
+  font-size: 14px;
+  color: var(--espresso);
+  font-weight: 500;
+}
+
+.sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.preview {
+  position: relative;
+  display: block;
+  border-radius: 8px;
+  max-width: 100%;
+}
+
+.player {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 8px;
+  background: #000;
+}
+
+.audio {
+  display: block;
+  width: 100%;
+}
+
+.removeBtn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.removeBtn:hover {
+  background: rgba(220, 38, 38, 0.85);
+}
+
+.error {
+  font-size: 12px;
+  color: var(--error);
+}
+
+.hiddenInput {
+  display: none;
+}

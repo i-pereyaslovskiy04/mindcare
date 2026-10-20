@@ -1,0 +1,194 @@
+/* Основа — полная копия общих блоков из UserCreateModal.module.css.
+   Добавлены: скелетон, нередактируемые поля, чекбокс. */
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50%       { opacity: 0.75; }
+}
+
+.body {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Заголовок ── */
+
+.title {
+  margin: 0 0 20px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+/* ── Поля формы ── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.input {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  font-size: 13.5px;
+  color: var(--text-main);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  border-color: var(--coffee);
+}
+
+.input::placeholder {
+  color: var(--text-light);
+}
+
+.inputError {
+  border-color: var(--error);
+}
+
+.inputError:focus {
+  border-color: var(--error);
+}
+
+/* ── Ошибки ── */
+
+.hint {
+  font-size: 12px;
+  color: var(--error);
+  line-height: 1.3;
+}
+
+.formError {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ── Кнопки ── */
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* ── Нередактируемые поля ── */
+
+.roGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--cream);
+  margin-bottom: 20px;
+}
+
+.roField {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Строка с Badge роли: выравниваем по центру, а не по baseline. */
+.roFieldBadge {
+  align-items: center;
+}
+
+.roLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  white-space: nowrap;
+  min-width: 130px;
+  flex-shrink: 0;
+}
+
+.roValue {
+  font-size: 13.5px;
+  color: var(--text-main);
+  min-width: 0;
+  word-break: break-word;
+}
+
+.inputReadonly {
+  background: var(--fog);
+  color: var(--text-muted);
+  cursor: default;
+  border-color: transparent;
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+}
+
+.inputReadonly:focus {
+  border-color: transparent;
+}
+
+/* ── Чекбокс ── */
+
+.checkboxField {
+  margin-bottom: 20px;
+}
+
+/* ── Блок документированного основания (показывается при смене роли на staff) ── */
+
+.legalBasisGroup {
+  padding: 14px 16px 2px;
+  margin-bottom: 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--cream);
+}
+
+.legalBasisNote {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* ── Скелетон ── */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.skeletonLine {
+  height: 13px;
+  border-radius: 4px;
+  background: var(--fog);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.skeletonInput {
+  height: 40px;
+  border-radius: 10px;
+  background: var(--fog);
+  animation: pulse 1.6s ease-in-out infinite;
+}

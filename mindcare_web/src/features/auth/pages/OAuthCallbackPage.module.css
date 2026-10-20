@@ -1,0 +1,18 @@
+/* Технический маршрут: только нейтральный статус входа. Карточки, шапки и
+   форм здесь нет — шаги регистрации показывает AuthModal на главной. */
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--warm-white);
+  padding: 24px 16px;
+}
+
+.status {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-muted);
+  text-align: center;
+}

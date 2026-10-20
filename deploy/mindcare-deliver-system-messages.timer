@@ -1,0 +1,17 @@
+[Unit]
+Description=MindCare: retry delivery of system message intents every 5 minutes
+Documentation=file:///media/data2/psycho/mindcare/deploy/README.md
+
+[Timer]
+# Обычно намерение доставляет сама операция сразу после commit; таймер
+# добирает только сбойные случаи (publisher вернул ошибку, процесс упал между
+# commit и публикацией, не удалась отметка delivered). 5 минут — верхняя
+# граница задержки уведомления после сбоя.
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=1min
+Persistent=true
+Unit=mindcare-deliver-system-messages.service
+
+[Install]
+WantedBy=timers.target

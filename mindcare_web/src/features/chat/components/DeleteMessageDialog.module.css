@@ -1,0 +1,25 @@
+.body {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.text {
+  margin: 0 0 22px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

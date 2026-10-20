@@ -1,0 +1,280 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--nav-border);
+  border-radius: 999px;
+  background: transparent;
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.option:hover {
+  background: var(--cream);
+  color: var(--text-main);
+}
+
+.option:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.optionActive,
+.optionActive:hover {
+  background: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+/* ---- выпадающее меню выбора цветовой палитры ---- */
+
+.menuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--nav-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.trigger:hover,
+.triggerOpen {
+  background: var(--cream);
+  color: var(--text-main);
+  border-color: var(--latte);
+}
+
+.trigger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.triggerIcon {
+  display: inline-flex;
+}
+
+.triggerLabel {
+  line-height: 1;
+}
+
+.chevron {
+  display: inline-flex;
+  transition: transform 0.15s;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.panel {
+  position: fixed;
+  z-index: 2100;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-width: calc(100vw - 24px);
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.14);
+}
+
+/* ---- compact: одна иконка-кнопка в шапке кабинета ---- */
+
+/* Размер и форма совпадают с .iconBtn кабинета (36×36, radius 10) —
+   шапка остаётся одной ровной линией иконок. */
+.iconTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.iconTrigger:hover,
+.iconTriggerOpen {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.iconTrigger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.sheet {
+  position: fixed;
+  z-index: 2100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  max-width: calc(100vw - 24px);
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.14);
+}
+
+.sheetSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Заголовок секции панели («Оформление», «Версия для слабовидящих»). */
+.sheetHeading {
+  padding: 2px 4px 4px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-main);
+}
+
+/* Подпись группы внутри секции («Режим», «Цветовая тема»). */
+.sheetTitle {
+  padding: 2px 4px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sheetDivider {
+  width: 100%;
+  height: 0;
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--nav-border);
+}
+
+.sheetModes {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.sheetMode {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 6px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sheetMode:hover {
+  background: var(--cream);
+  color: var(--text-main);
+}
+
+.sheetMode:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.sheetModeActive,
+.sheetModeActive:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+.sheetList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menuOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+/* Пункт палитры в compact-панели — настоящая button (выбор с клавиатуры). */
+.sheetOption {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.sheetOption:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.menuOptionActive,
+.menuOption:hover {
+  background: var(--milk);
+}
+
+.menuOptionSelected {
+  font-weight: 700;
+}
+
+.menuCheck {
+  display: inline-flex;
+  justify-content: center;
+  width: 10px;
+  color: var(--coffee);
+}
+
+.menuLabel {
+  line-height: 1.2;
+}

@@ -1,0 +1,110 @@
+.body {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.55;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.textarea {
+  min-height: 96px;
+  padding: 10px 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.textarea:focus {
+  border-color: var(--coffee);
+}
+
+.textareaError,
+.textareaError:focus {
+  border-color: var(--error);
+}
+
+.hintRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-light);
+  line-height: 1.4;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: var(--error);
+  line-height: 1.4;
+}
+
+.counter {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--error);
+  background: var(--error-bg);
+  border-radius: 8px;
+  padding: 10px 14px;
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .body {
+    padding: 20px 18px 24px;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+}

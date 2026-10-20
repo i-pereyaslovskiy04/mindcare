@@ -1,0 +1,16 @@
+[Unit]
+Description=MindCare: ensure future audit-log partitions monthly
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_7_DEPLOYMENT.md
+
+[Timer]
+# Ежемесячно 1-го числа. Запас --months-ahead 24 означает, что даже год
+# простоя таймера не исчерпает партиции: запись в audit-журналы упала бы
+# только после того, как кончится последняя созданная партиция.
+OnCalendar=*-*-01 04:00:00
+AccuracySec=1h
+RandomizedDelaySec=30min
+Persistent=true
+Unit=mindcare-ensure-audit-partitions.service
+
+[Install]
+WantedBy=timers.target

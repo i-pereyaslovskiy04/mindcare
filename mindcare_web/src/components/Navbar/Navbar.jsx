@@ -1,19 +1,24 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../features/auth/AuthContext';
+import ThemeToggle from '../../features/theme/ThemeToggle';
+import A11yToggle from '../../features/a11y/A11yToggle';
+import A11yPanel from '../../features/a11y/A11yPanel';
 import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
-  { label: 'Главная', href: '#' },
-  { label: 'О нас', href: '#' },
-  { label: 'Услуги', href: '#' },
-  { label: 'Материалы', href: '#' },
+  { label: 'Главная', to: '/' },
+  { label: 'О нас', to: '/about' },
+  { label: 'Услуги', to: '/services' },
+  { label: 'Материалы', to: '/materials' },
 ];
 
 const UserIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-    <circle cx="9" cy="6.5" r="3.5" stroke="rgba(139,111,71,0.65)" strokeWidth="1.4" fill="none" />
+    <circle cx="9" cy="6.5" r="3.5" stroke="currentColor" strokeWidth="1.4" fill="none" />
     <path
       d="M2 17c0-3.866 3.134-7 7-7s7 3.134 7 7"
-      stroke="rgba(139,111,71,0.65)"
+      stroke="currentColor"
       strokeWidth="1.4"
       fill="none"
     />
@@ -34,6 +39,9 @@ const CloseIcon = () => (
 
 export default function Navbar({ onOpenAuth }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated, loading } = useAuth();
+  // Кабинет выбирает DashboardRedirect (multi-role: chooser/activeRole).
+  const cabinetTo = '/dashboard';
 
   // Close menu when resizing back to desktop
   useEffect(() => {
@@ -62,21 +70,37 @@ export default function Navbar({ onOpenAuth }) {
         <ul className={styles.navLinks}>
           {NAV_LINKS.map((link) => (
             <li key={link.label}>
-              <a href={link.href}>{link.label}</a>
+              {link.to
+                ? <Link to={link.to}>{link.label}</Link>
+                : <a href={link.href}>{link.label}</a>}
             </li>
           ))}
         </ul>
 
-        {/* Right side: user icon (always) + burger (mobile only) */}
+        {/* Right side: user icon (auth-aware) + burger (mobile only) */}
         <div className={styles.navRight}>
-          <button
-            className={styles.navUserIcon}
-            onClick={onOpenAuth}
-            aria-label="Войти в аккаунт"
-            type="button"
-          >
-            <UserIcon />
-          </button>
+          <A11yToggle />
+          <ThemeToggle compact className={styles.navThemeToggle} />
+          {!loading && (
+            isAuthenticated ? (
+              <Link
+                to={cabinetTo}
+                className={styles.navUserIcon}
+                aria-label="Личный кабинет"
+              >
+                <UserIcon />
+              </Link>
+            ) : (
+              <button
+                className={styles.navUserIcon}
+                onClick={onOpenAuth}
+                aria-label="Войти в аккаунт"
+                type="button"
+              >
+                <UserIcon />
+              </button>
+            )
+          )}
           <button
             className={styles.navBurger}
             onClick={() => setIsMenuOpen((prev) => !prev)}
@@ -99,16 +123,31 @@ export default function Navbar({ onOpenAuth }) {
         <ul className={styles.mobileNavLinks}>
           {NAV_LINKS.map((link) => (
             <li key={link.label}>
-              <a href={link.href} onClick={closeMenu}>
-                {link.label}
-              </a>
+              {link.to
+                ? <Link to={link.to} onClick={closeMenu}>{link.label}</Link>
+                : <a href={link.href} onClick={closeMenu}>{link.label}</a>}
             </li>
           ))}
         </ul>
-        <button className={styles.mobileAuthBtn} onClick={handleAuthClick} type="button">
-          Войти в аккаунт
-        </button>
+        {!loading && (
+          isAuthenticated ? (
+            <Link
+              to={cabinetTo}
+              className={styles.mobileAuthBtn}
+              onClick={closeMenu}
+            >
+              Личный кабинет
+            </Link>
+          ) : (
+            <button className={styles.mobileAuthBtn} onClick={handleAuthClick} type="button">
+              Войти в аккаунт
+            </button>
+          )
+        )}
       </div>
+
+      {/* Панель настроек ГОСТ — закреплена под шапкой, видна только в режиме */}
+      <A11yPanel />
     </nav>
   );
 }

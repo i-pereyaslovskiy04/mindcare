@@ -1,0 +1,612 @@
+"""
+Business logic layer — no FastAPI, no HTTP concepts.
+Depends only on storage and bcrypt. Safe to unit-test in isolation.
+"""
+
+import logging
+import secrets
+from datetime import datetime
+from functools import lru_cache
+from typing import Optional
+
+import bcrypt
+from app.auth import storage
+from app.auth.roles import ROLE_PRIORITY
+from app.core.normalization import mask_email
+
+log = logging.getLogger(__name__)
+
+# Стабильное сообщение клиенту при сбое доставки письма: не раскрывает
+# SMTP host/user/stack/internal exception. Детали — только в server-side логах.
+_EMAIL_SEND_FAILED_MESSAGE = "Не удалось отправить письмо. Попробуйте позже."
+
+# Единое сообщение всех отказов по credentials (нет аккаунта / нет пароля /
+# неверный пароль) — не раскрывает, существует ли аккаунт и есть ли у него пароль.
+_INVALID_CREDENTIALS_MESSAGE = "Неверный email или пароль"
+
+# Единое сообщение доменных отказов после верных credentials (нет активных
+# ролей / аккаунт заблокирован): причину наружу не раскрываем.
+_ACCESS_NOT_ACTIVE_MESSAGE = (
+    "Доступ к системе не активирован. Обратитесь к администратору."
+)
+
+# Регистрация на занятый email (любая строка users — ADR-028).
+_EMAIL_TAKEN_MESSAGE = "Email уже зарегистрирован"
+
+# Самоотключение доступно только студенческому аккаунту (ADR-028).
+_SELF_DEACTIVATION_FORBIDDEN_MESSAGE = (
+    "Самостоятельное отключение доступно только студенческому аккаунту. "
+    "Для служебной учётной записи обратитесь к администратору."
+)
+
+
+def _hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+@lru_cache(maxsize=1)
+def _dummy_password_hash() -> str:
+    """Хеш случайного пароля — только для выравнивания времени ответа.
+
+    Когда аккаунта нет или у него нет пароля (social-only), bcrypt всё равно
+    выполняется: иначе быстрый отказ отличал бы такие email от существующих
+    аккаунтов с паролем. Совпасть с ним нельзя: исходная строка нигде не
+    сохраняется. Вычисляется лениво, один раз на процесс.
+    """
+    return _hash(secrets.token_urlsafe(32))
+
+
+class AuthError(Exception):
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 400,
+        audit_code: Optional[str] = None,
+    ):
+        self.message = message          # клиентское сообщение (может быть на русском)
+        self.status_code = status_code  # HTTP status
+        # Стабильный машинный код для audit (facade failure_reason_code). Обязателен
+        # для loggable failure-путей (register_confirm/login/password_reset_confirm);
+        # для прочих AuthError допустим None (их routes не пишут failure-audit в 4B-1).
+        self.audit_code = audit_code
+
+
+# ---------------------------------------------------------------------------
+# Регистрация
+# ---------------------------------------------------------------------------
+
+REQUIRED_CONSENTS = ["privacy_policy", "data_processing"]
+
+
+def _domain_not_allowed_error(
+    exc, *, audit_code: Optional[str] = None,
+) -> AuthError:
+    """
+    Единая ошибка отказа по домену для register_init и register_confirm: один
+    статус (422) и ОДИН текст со списком активных доменов на момент отказа
+    (`exc.allowed_domains`: домены берутся из БД, в коде их нет). У confirm
+    audit_code — `domain_not_allowed`; ранний отказ init не аудируется.
+    Введённый пользователем email в текст и логи не попадает.
+    """
+    from app.email_domains.service import registration_domain_message
+    return AuthError(
+        registration_domain_message(exc.allowed_domains),
+        422,
+        audit_code=audit_code,
+    )
+
+
+def register_init(name: str, email: str, password: str) -> None:
+    """Валидация данных -> OTP в БД -> отправка письма."""
+    if not name or len(name.strip()) < 2:
+        raise AuthError("Имя должно содержать не менее 2 символов", 422)
+    if len(password) < 8:
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
+    # Ранняя проверка домена (до создания OTP/письма). Authoritative повторная
+    # проверка — внутри транзакции confirm (register_confirm_atomic).
+    from app.email_domains.errors import EmailDomainNotAllowedError
+    from app.email_domains.service import assert_email_domain_allowed
+    try:
+        assert_email_domain_allowed(email)
+    except EmailDomainNotAllowedError as e:
+        raise _domain_not_allowed_error(e)
+    # ADR-028: email любой строки users — включая отключённую и исторически
+    # soft-deleted — недоступен для регистрации (восстанавливает только
+    # администратор). То же сообщение, что для активного аккаунта.
+    if storage.email_exists_any(email):
+        raise AuthError(_EMAIL_TAKEN_MESSAGE, 409)
+
+    from app.auth import otp_service
+    from app.services.email_service import send_registration_otp
+
+    password_hash = _hash(password)
+    try:
+        code = otp_service.create_or_update_otp(
+            email, name.strip(), password_hash
+        )
+    except ValueError as e:
+        raise AuthError(str(e), 429)
+
+    log.info("[register_init] sending OTP to %s", mask_email(email))
+    try:
+        send_registration_otp(email, code)
+    except Exception:
+        log.exception(
+            "[register_init] failed to send email to %s", mask_email(email)
+        )
+        raise AuthError(_EMAIL_SEND_FAILED_MESSAGE, 500)
+
+
+def register_confirm(
+    email: str,
+    code: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    Подтверждает регистрацию атомарно (Stage 31m-fix-b2).
+
+    OTP-валидация, создание/реактивация пользователя, роль student, обязательные
+    consent_records и потребление OTP выполняются как одна core DB-транзакция
+    в storage.register_confirm_atomic — без частичных состояний. SMTP здесь не
+    участвует (письмо ушло на init-шаге). Welcome-уведомление — soft-fail и
+    выполняется уже ПОСЛЕ успешного commit (его сбой не откатывает регистрацию).
+    """
+    from app.email_domains.errors import EmailDomainNotAllowedError
+    from app.auth.errors import OtpExpiredError, OtpInvalidError
+    try:
+        user = storage.register_confirm_atomic(
+            email=email,
+            code=code,
+            required_consent_types=REQUIRED_CONSENTS,
+            ip=ip,
+            user_agent=user_agent,
+        )
+    except EmailDomainNotAllowedError as e:
+        # Домен отключили между init и confirm — новое регистрационное действие
+        # отклоняется; OTP не потреблён (rollback внутри register_confirm_atomic).
+        # Текст тот же, что у init (общий хелпер): список — активные на сейчас.
+        raise _domain_not_allowed_error(e, audit_code="domain_not_allowed")
+    except storage.AccountUnavailableError:
+        # ADR-028: email принадлежит существующей (в т.ч. отключённой/удалённой)
+        # учётной записи — регистрация её не восстанавливает. OTP не потреблён.
+        raise AuthError(
+            _EMAIL_TAKEN_MESSAGE, 409, audit_code="email_already_exists",
+        )
+    except storage.RegistrationDataError:
+        # Отсутствует роль/consent-политика — проблема seed/reference data.
+        # Клиенту — фиксированное безопасное сообщение (str(e) называет
+        # роль/таблицу/consent-политику и в HTTP-ответ попадать не должен);
+        # деталь остаётся только в server-side логах (см. storage-уровень).
+        raise AuthError(
+            "Не удалось завершить регистрацию. Обратитесь в поддержку.",
+            500,
+            audit_code="internal_error",
+        )
+    except OtpExpiredError as e:
+        raise AuthError(str(e), 400, audit_code="otp_expired")
+    except OtpInvalidError as e:
+        # Явно только типизированный OTP-сбой (not-found/attempts/wrong).
+        raise AuthError(str(e), 400, audit_code="otp_invalid")
+    # Прочий (неожиданный) ValueError НЕ маскируется под otp_invalid: он
+    # распространяется как внутренняя ошибка (route не ловит → 500), а не даёт
+    # клиенту ложный «неверный код». Durable-обработка неожиданного — Stage 5A.
+
+    run_post_registration_actions(user, ip=ip, user_agent=user_agent)
+    return user
+
+
+def run_post_registration_actions(
+    user: dict, *, ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> None:
+    """
+    Действия ПОСЛЕ успешного commit регистрации — общие для регистрации по
+    паролю и через внешний провайдер (Stage Social Auth 4). Оба soft-fail:
+    аккаунт уже зафиксирован, их сбой регистрацию не откатывает и наружу не
+    выходит.
+    """
+    # Привязка карточек незарегистрированного студента к новому аккаунту (этап 2).
+    # Только ПОСЛЕ подтверждения владения email (этот шаг и есть подтверждение).
+    # Вне core-транзакции и soft-fail: регистрация уже зафиксирована, сбой
+    # привязки её не откатывает. ПДн (email) не логируем — только user_id.
+    try:
+        from app.appointments.service import link_unregistered_cards_to_user
+        # Stage 5B-1: actor = сам подтвердивший email student (self-service).
+        link_unregistered_cards_to_user(
+            user["id"], user["email"],
+            actor_id=int(user["id"]), actor_role="student",
+            ip=ip, user_agent=user_agent,
+        )
+    except Exception as exc:
+        # Минимизация: без exc_info/str(exc)/email/UUID/id/SQL — только фаза и
+        # класс исключения. Postcommit soft-fail: регистрация не откатывается.
+        log.warning("[register_confirm] phase=card_link error=%s",
+                    type(exc).__name__)
+
+    # Welcome-уведомление в раздел «Сообщения» (soft-fail, content не логируется).
+    # Вне core-транзакции: пользователь уже зафиксирован, сбой уведомления
+    # не должен ломать регистрацию.
+    try:
+        from app.chat.system_publisher import (
+            WELCOME_SELF_REGISTERED_TEXT,
+            publish_system_message,
+        )
+        publish_system_message(
+            recipient_id=int(user["id"]),
+            event_key=f"welcome:user:{user['id']}",
+            text=WELCOME_SELF_REGISTERED_TEXT,
+        )
+    except Exception as exc:
+        log.warning("[register_confirm] phase=welcome error=%s",
+                    type(exc).__name__)
+
+    # ADR-029: приглашение подтвердить статус студента ДонГУ. Намерение уже
+    # зафиксировано в core UoW регистрации (оба способа); здесь — попытка
+    # доставки после commit. Soft-fail: недоставленное добирает retry-job
+    # scripts/deliver_system_message_intents.py, delivered отмечается только
+    # после успешного результата publisher.
+    try:
+        from app.notifications.service import deliver_by_key_soft
+        from app.notifications.templates import invite_event_key
+        deliver_by_key_soft(int(user["id"]), invite_event_key(int(user["id"])))
+    except Exception as exc:
+        log.warning("[register_confirm] phase=verification_invite error=%s",
+                    type(exc).__name__)
+
+
+# ---------------------------------------------------------------------------
+# Аутентификация
+# ---------------------------------------------------------------------------
+
+def ensure_user_can_start_session(user: Optional[dict]) -> None:
+    """
+    Единый инвариант «можно ли выдать этому пользователю НОВУЮ сессию».
+
+    Вызывается после того, как личность уже подтверждена (password сейчас,
+    social login в будущем) и ДО update_last_login/create_session — чтобы оба
+    способа входа не расходились в правилах доступа.
+
+      * нет пользователя (не найден или soft-deleted — storage такие не
+        возвращает) → 401 `invalid_credentials`;
+      * `is_active is False` (заблокирован администратором) → 403
+        `account_disabled`. NULL трактуется как активный: колонка не имеет
+        DB-default, исторические строки без значения не блокируются молча;
+      * нет валидной активной роли (ADR-018) → 403 `no_active_roles`.
+
+    Оба 403 используют одно обобщённое сообщение: причину (блокировка или
+    состав ролей) наружу не раскрываем, различие — только в audit-коде.
+    """
+    if not user:
+        raise AuthError(
+            _INVALID_CREDENTIALS_MESSAGE, 401, audit_code="invalid_credentials"
+        )
+    if user.get("is_active") is False:
+        raise AuthError(
+            _ACCESS_NOT_ACTIVE_MESSAGE, 403, audit_code="account_disabled"
+        )
+    # Fail-closed role invariant: не создаём сессию для аккаунта без валидной
+    # активной роли. role — backend-computed primary из реальных roles.
+    #
+    # ADR-018: это ШТАТНЫЙ доменный отказ (403 / `no_active_roles`), а не
+    # внутренняя авария. Прежний 500/`internal_error` был неотличим от реального
+    # сбоя, шумел в мониторинге и вводил оператора в заблуждение.
+    # `internal_error` остаётся только за настоящими внутренними сбоями.
+    roles = user.get("roles") or []
+    role = user.get("role")
+    if (
+        not roles                       # есть хотя бы одна активная роль
+        or not isinstance(role, str)    # primary role — строка (не None/не мусор)
+        or role not in roles            # primary role принадлежит активному набору
+        or role not in ROLE_PRIORITY    # и это каноническая известная роль
+    ):
+        raise AuthError(
+            _ACCESS_NOT_ACTIVE_MESSAGE, 403, audit_code="no_active_roles"
+        )
+
+
+def authenticate_user(email: str, password: str) -> dict:
+    """
+    Проверка credentials (bcrypt — вне какой-либо блокировки) и ранняя
+    проверка допуска. Сессию НЕ создаёт и last_login НЕ трогает: авторитетная
+    повторная проверка под блокировкой строки users и выдача сессии — в
+    start_password_session (ADR-028). Возвращаемый dict содержит
+    hashed_password — внутреннее значение для сверки, наружу не отдаётся.
+    """
+    user = storage.find_user_by_email(email)
+    hashed = user.get("hashed_password") if user else None
+    # bcrypt выполняется всегда (с dummy-хешем, если аккаунта или пароля нет):
+    # время ответа не отличает «нет аккаунта» / «social-only без пароля» от
+    # «неверный пароль». Все три случая — один и тот же 401.
+    password_ok = _verify(password, hashed or _dummy_password_hash())
+    if not user or not hashed or not password_ok:
+        raise AuthError(
+            _INVALID_CREDENTIALS_MESSAGE, 401, audit_code="invalid_credentials"
+        )
+    # Блокировка/роли проверяются только ПОСЛЕ верного пароля — без него
+    # статус аккаунта не раскрывается.
+    ensure_user_can_start_session(user)
+    return user
+
+
+def start_password_session(
+    user: dict,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> tuple[str, datetime, dict]:
+    """
+    ADR-028: атомарная выдача сессии после успешного authenticate_user.
+    Под FOR UPDATE строки users: текущий password_hash сверяется с тем, для
+    которого прошёл bcrypt (сменили/сбросили → 401 invalid_credentials), затем
+    ensure_user_can_start_session на заблокированной строке (отключили →
+    403 account_disabled; роли сняли → 403 no_active_roles), last_login и
+    сессия — одним commit. Технический сбой БД/commit не превращается в
+    доменный отказ (всплывает как есть → 500 без failed_login).
+
+    Возвращает (session_token, expires_at, user_dict заблокированной строки).
+    """
+    # Проверенный хеш — отдельное значение, зафиксированное ДО повторного
+    # чтения строки под блокировкой.
+    verified_hash = user.get("hashed_password")
+    try:
+        return storage.start_session_atomic(
+            int(user["id"]),
+            check=ensure_user_can_start_session,
+            ip=ip,
+            user_agent=user_agent,
+            expected_password_hash=verified_hash,
+        )
+    except storage.StaleCredentialsError:
+        raise AuthError(
+            _INVALID_CREDENTIALS_MESSAGE, 401, audit_code="invalid_credentials"
+        )
+
+
+def deactivate_own_account(
+    user: dict,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> None:
+    """
+    ADR-028: самоотключение. Target — только authenticated user. Ранняя
+    проверка «чистого student» (staff, в т.ч. admin+student, — 403);
+    авторитетная повторная — в storage под FOR UPDATE вместе с отключением,
+    отзывом всех сессий и user_self_deactivated (один commit).
+    """
+    from app.auth.roles import is_pure_student
+    from app.users.errors import AccountAlreadyDisabledError
+
+    if not is_pure_student(user.get("roles") or []):
+        raise AuthError(
+            _SELF_DEACTIVATION_FORBIDDEN_MESSAGE, 403,
+            audit_code="self_deactivation_not_allowed",
+        )
+    try:
+        storage.self_deactivate_atomic(
+            int(user["id"]), ip=ip, user_agent=user_agent,
+        )
+    except storage.SelfDeactivationNotAllowedError:
+        raise AuthError(
+            _SELF_DEACTIVATION_FORBIDDEN_MESSAGE, 403,
+            audit_code="self_deactivation_not_allowed",
+        )
+    except AccountAlreadyDisabledError:
+        raise AuthError(
+            "Аккаунт уже отключён", 409, audit_code="account_already_disabled",
+        )
+    except storage.UserNotFoundError:
+        # Аккаунт исчез между dependency и блокировкой — тот же отказ, что у
+        # недействительной сессии; failure-код из allowlist события.
+        raise AuthError(
+            "Аккаунт уже отключён", 409, audit_code="account_already_disabled",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Сброс пароля
+# ---------------------------------------------------------------------------
+
+def password_reset_init(email: str) -> None:
+    """Отправляет OTP для сброса пароля. Молчит если email не найден."""
+    from app.auth import otp_service
+    from app.services.email_service import send_password_reset_otp
+
+    user = storage.find_user_by_email(email)
+    if not user:
+        return  # не раскрываем, есть ли такой email
+
+    # password_hash=None: reset-OTP не хранит копию текущего хеша (лишнее
+    # хранение credential-derived значения; confirm его не использует). Так же
+    # reset работает для social-only аккаунта без пароля — это штатный способ
+    # установить первый пароль через подтверждение email.
+    try:
+        code = otp_service.create_or_update_otp(
+            email=email,
+            name=user["name"],
+            password_hash=None,
+        )
+    except ValueError as e:
+        raise AuthError(str(e), 429)
+
+    try:
+        send_password_reset_otp(email, code)
+    except Exception:
+        log.exception(
+            "[password_reset_init] failed to send email to %s", mask_email(email)
+        )
+        raise AuthError(_EMAIL_SEND_FAILED_MESSAGE, 500)
+
+
+def password_reset_confirm(
+    email: str, code: str, new_password: str
+) -> None:
+    """
+    Подтверждает сброс пароля атомарно (Stage 31m-fix-b3).
+
+    Валидация OTP, обновление password_hash, отзыв всех сессий пользователя и
+    потребление OTP выполняются как одна core DB-транзакция в
+    storage.password_reset_confirm_atomic — без частичных состояний. Хеш нового
+    пароля считается ДО открытия транзакции (bcrypt медленный). Если OTP верный,
+    но любой следующий шаг падает, всё откатывается и OTP не теряется.
+    """
+    if len(new_password) < 8:
+        raise AuthError(
+            "Пароль должен быть не короче 8 символов", 422,
+            audit_code="password_policy",
+        )
+
+    from app.auth.errors import OtpExpiredError, OtpInvalidError
+    new_password_hash = _hash(new_password)
+    try:
+        storage.password_reset_confirm_atomic(
+            email=email,
+            code=code,
+            new_password_hash=new_password_hash,
+        )
+    except storage.UserNotFoundError:
+        raise AuthError("Пользователь не найден", 404, audit_code="user_not_found")
+    except OtpExpiredError as e:
+        raise AuthError(str(e), 400, audit_code="otp_expired")
+    except OtpInvalidError as e:
+        # Только типизированный OTP-сбой; неожиданный ValueError не маскируется
+        # (распространяется как внутренняя ошибка → 500).
+        raise AuthError(str(e), 400, audit_code="otp_invalid")
+
+
+# ---------------------------------------------------------------------------
+# Сессии
+# ---------------------------------------------------------------------------
+
+def create_session(
+    user_id: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    impersonator_user_id: Optional[int] = None,
+) -> tuple[str, datetime]:
+    """Создаёт сессию, возвращает (session_token, expires_at).
+
+    impersonator_user_id (ADR-025) — id администратора при входе «под именем».
+    """
+    return storage.create_session(
+        user_id,
+        ip=ip,
+        user_agent=user_agent,
+        impersonator_user_id=impersonator_user_id,
+    )
+
+
+def change_password(
+    user_id: str,
+    current_password: str,
+    new_password: str,
+    new_password_confirm: str,
+) -> None:
+    """
+    Меняет пароль авторизованного пользователя атомарно (Stage 31m-fix-b3).
+
+    Поиск пользователя, проверка текущего пароля, обновление password_hash и
+    отзыв ВСЕХ сессий выполняются как одна core DB-транзакция в
+    storage.change_password_atomic — без частичных состояний (сбой на отзыве
+    сессий откатывает и смену пароля). Хеш нового пароля считается ДО открытия
+    транзакции (bcrypt медленный); проверка текущего пароля — внутри транзакции
+    через callback. System-уведомление — soft-fail ПОСЛЕ успешного commit.
+    """
+    if new_password != new_password_confirm:
+        raise AuthError("Новый пароль и подтверждение не совпадают", 422)
+    if len(new_password) < 8:
+        raise AuthError("Пароль должен быть не короче 8 символов", 422)
+
+    new_password_hash = _hash(new_password)
+    try:
+        user = storage.change_password_atomic(
+            user_id=user_id,
+            verify_current=lambda stored_hash: _verify(current_password, stored_hash),
+            new_password_hash=new_password_hash,
+        )
+    except storage.UserNotFoundError:
+        raise AuthError("Пользователь не найден", 404)
+    except storage.PasswordNotSetError:
+        # Social-only аккаунт: «текущего пароля» нет, сравнивать не с чем.
+        # Первый пароль задаётся через восстановление по email (OTP) — это
+        # доказывает владение адресом. Endpoint требует сессию, поэтому факт
+        # «пароль не задан» сообщается только самому владельцу аккаунта.
+        raise AuthError(
+            "Пароль ещё не установлен. Чтобы задать его, воспользуйтесь "
+            "восстановлением пароля с подтверждением по email.",
+            409,
+        )
+    except storage.InvalidCurrentPasswordError:
+        raise AuthError("Неверный текущий пароль", 400)
+
+    # System-уведомление (soft-fail, content не логируется). Вне core-транзакции:
+    # пароль уже изменён и сессии отозваны, сбой уведомления это не откатывает.
+    # Timestamp в event_key — чтобы каждая смена пароля давала отдельное сообщение.
+    from datetime import datetime, timezone
+    from app.chat.system_publisher import publish_system_message
+    _ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    publish_system_message(
+        recipient_id=int(user["id"]),
+        event_key=f"password_changed:user:{user['id']}:{_ts}",
+        text="Пароль вашей учётной записи был изменён.",
+    )
+
+
+def get_profile(user_id: str) -> dict:
+    """Self-profile текущего пользователя."""
+    profile = storage.get_profile(user_id)
+    if not profile:
+        raise AuthError("Пользователь не найден", 404)
+    return profile
+
+
+def update_profile(
+    user_id: str,
+    fields: dict,
+    *,
+    actor_role: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """Обновляет разрешённые self-поля (PATCH-семантика: только переданные).
+    ПДн (ФИО/телефон) не логируются. Значения полей темы уже провалидированы
+    Literal-схемой (иначе 422).
+    """
+    updates = dict(fields)
+
+    if "full_name" in updates:
+        name = (updates["full_name"] or "").strip()
+        if len(name) < 2:
+            raise AuthError(
+                "ФИО должно содержать минимум 2 символа", 422,
+                audit_code="invalid_request",
+            )
+        updates["full_name"] = name
+
+    if "phone" in updates:
+        updates["phone"] = (updates["phone"] or "").strip() or None  # пустой → NULL
+
+    from app.auth.errors import ProfileActorContextError
+    try:
+        return storage.update_profile_atomic(
+            user_id, updates,
+            actor_role=actor_role, ip=ip, user_agent=user_agent,
+        )
+    except storage.UserNotFoundError:
+        raise AuthError(
+            "Пользователь не найден", 404, audit_code="user_not_found",
+        )
+    except ProfileActorContextError:
+        raise AuthError(
+            "Не удалось обновить профиль.", 500, audit_code="internal_error",
+        )
+    # commit-time/postcommit/unknown НЕ ловятся здесь → 500 без *_failed.
+
+
+def terminate_session(token: str) -> None:
+    """Отзывает сессию (logout)."""
+    storage.revoke_session(token)

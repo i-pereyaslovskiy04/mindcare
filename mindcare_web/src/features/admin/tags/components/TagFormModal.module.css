@@ -1,0 +1,69 @@
+.body {
+  padding: 28px 28px 24px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--espresso);
+  margin: 0 0 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+.input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-main);
+  background: var(--warm-white);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus { border-color: var(--coffee); }
+
+.hint {
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.formError {
+  font-size: 13px;
+  color: var(--error);
+  margin: 8px 0 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+@media (max-width: 480px) {
+  .body {
+    padding: 22px 18px 22px;
+  }
+
+  .footer {
+    flex-direction: column-reverse;
+  }
+}

@@ -1,0 +1,452 @@
+/**
+ * AuthContext — session state and auth actions.
+ *
+ * Token lifecycle:
+ *   - Stored in memory (React ref) for synchronous access.
+ *   - Also persisted to localStorage so the session survives page reloads
+ *     and is shared across tabs (MVP convenience).
+ *   - Production-grade alternative: HttpOnly Secure SameSite cookie + CSRF
+ *     (eliminates XSS token theft risk) — kept as a future stage.
+ *   - Backend sessions are server-side and can be revoked on logout /
+ *     change-password regardless of storage mechanism.
+ *
+ * Social registration continuation (`socialRegistration`):
+ *   - Незавершённая регистрация через внешний провайдер: одноразовый ticket
+ *     регистрации, который `/auth/callback` передаёт главной с AuthModal.
+ *   - ТОЛЬКО в памяти (React state): не в URL, router state, localStorage и
+ *     sessionStorage. Перезагрузка страницы его теряет — пользователь начинает
+ *     вход через провайдера заново.
+ *
+ * All HTTP calls go through api/auth.api.js → api/client.js.
+ * No raw fetch() in this file.
+ */
+
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
+import { flushSync } from 'react-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { configureClient } from '../../api/client';
+import * as authApi from '../../api/auth.api';
+import { impersonateUser as apiImpersonate } from '../../api/users.api';
+import { normalizeRoles } from '../../shared/lib/roles';
+
+const SESSION_KEY = 'mindcare_session';
+const ACTIVE_ROLE_KEY = 'mindcare_active_role';
+// Impersonation (ADR-025): токен администратора, вошедшего «под именем».
+// Только клиент держит raw-токен админа, поэтому возврат — client-side.
+const IMPERSONATOR_KEY = 'mindcare_impersonator';
+// Где может жить незавершённая регистрация через провайдера: технический
+// маршрут callback (передаёт её) и главная (AuthModal её продолжает).
+const SOCIAL_REGISTRATION_PATHS = Object.freeze(['/', '/auth/callback']);
+
+function getStoredToken() {
+  return localStorage.getItem(SESSION_KEY);
+}
+function setStoredToken(token) {
+  localStorage.setItem(SESSION_KEY, token);
+}
+function clearStoredToken() {
+  localStorage.removeItem(SESSION_KEY);
+}
+function getStoredImpersonator() {
+  try {
+    const raw = localStorage.getItem(IMPERSONATOR_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function setStoredImpersonator(obj) {
+  localStorage.setItem(IMPERSONATOR_KEY, JSON.stringify(obj));
+}
+function clearStoredImpersonator() {
+  localStorage.removeItem(IMPERSONATOR_KEY);
+}
+function getStoredActiveRole() {
+  return localStorage.getItem(ACTIVE_ROLE_KEY);
+}
+function setStoredActiveRole(role) {
+  localStorage.setItem(ACTIVE_ROLE_KEY, role);
+}
+function clearStoredActiveRole() {
+  localStorage.removeItem(ACTIVE_ROLE_KEY);
+}
+
+/**
+ * Единая нормализация auth-user (ADR-018): гарантирует `roles: Role[]` как
+ * источник истины. Явный backend `roles` (даже []) сохраняется; legacy `role`
+ * даёт fallback `[role]` только при полном отсутствии поля `roles`.
+ */
+function normalizeUser(raw) {
+  if (!raw) return null;
+  return { ...raw, roles: normalizeRoles(raw) };
+}
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [user, setUser]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  // activeRole — UI-hint выбранного кабинета (не право доступа). Ленивая
+  // инициализация из localStorage, чтобы валидный сохранённый кабинет был
+  // доступен на первом рендере после loading=false (без вспышки RoleChooser).
+  const [activeRole, setActiveRoleState] = useState(() => getStoredActiveRole());
+  const tokenRef              = useRef(null);
+  const navigate              = useNavigate();
+  const { pathname }          = useLocation();
+  // Незавершённая регистрация через провайдера: { ticket, provider, emailStep }
+  // либо null. Только память — см. комментарий в начале файла.
+  const [socialRegistration, setSocialRegistration] = useState(null);
+
+  /** Expose token to the HTTP client. */
+  const getToken = useCallback(() => tokenRef.current, []);
+
+  useEffect(() => {
+    configureClient({ getToken });
+  }, [getToken]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const _saveToken = (token) => {
+    tokenRef.current = token;
+    setStoredToken(token);
+  };
+
+  const _clearToken = () => {
+    tokenRef.current = null;
+    clearStoredToken();
+  };
+
+  const _clearActiveRole = () => {
+    setActiveRoleState(null);
+    clearStoredActiveRole();
+  };
+
+  // ── Session-expired event (fired by apiFetch on 401) ─────────────────────
+
+  const _clearSession = useCallback(() => {
+    _clearToken();
+    _clearActiveRole();
+    // Impersonation-токен админа тоже сбрасываем: иначе после разлогина
+    // остался бы «висящий» админский токен на устройстве.
+    clearStoredImpersonator();
+    setSocialRegistration(null);
+    setUser(null);
+  }, []);
+
+  useEffect(() => {
+    const currentUser = user;
+    const handler = () => {
+      // Impersonation (ADR-025): если 401 пришёл на impersonation-сессии, а
+      // админский токен ещё сохранён — откатываемся к администратору, а не
+      // разлогиниваем полностью (иначе валидная админская сессия теряется).
+      const imp = getStoredImpersonator();
+      if (imp && imp.token) {
+        _saveToken(imp.token);
+        clearStoredImpersonator();
+        _clearActiveRole();
+        (async () => {
+          try {
+            const userData = await authApi.me();
+            setUser(normalizeUser(userData));
+            navigate('/admin/users', { replace: true });
+          } catch {
+            _clearSession();
+            navigate('/', {
+              replace: true,
+              state: { openAuth: 'login', message: 'Сессия истекла. Войдите снова.' },
+            });
+          }
+        })();
+        return;
+      }
+      if (currentUser) {
+        // User was logged in — navigate to home with login modal + message
+        navigate('/', {
+          replace: true,
+          state: { openAuth: 'login', message: 'Сессия истекла. Войдите снова.' },
+        });
+      }
+      _clearSession();
+    };
+    window.addEventListener('auth:session-expired', handler);
+    return () => window.removeEventListener('auth:session-expired', handler);
+  }, [_clearSession, user, navigate]);
+
+  // ── Restore session on page load ──────────────────────────────────────────
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restore() {
+      const stored = getStoredToken();
+      if (!stored) {
+        // Нет сессии — сбрасываем и activeRole, иначе выбор кабинета «протекает»
+        // между разными пользователями на одном устройстве.
+        if (!cancelled) {
+          _clearActiveRole();
+          setLoading(false);
+        }
+        return;
+      }
+
+      tokenRef.current = stored; // must be set BEFORE calling me()
+      try {
+        const userData = await authApi.me();
+        if (!cancelled) setUser(normalizeUser(userData));
+      } catch {
+        // Session invalid or expired — clear it (token + activeRole).
+        if (!cancelled) {
+          _clearToken();
+          _clearActiveRole();
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    restore();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Reconcile activeRole against membership ───────────────────────────────
+  // Сохранённый/выбранный activeRole действителен только пока роль в user.roles.
+  useEffect(() => {
+    if (!user) return;
+    if (activeRole && !normalizeRoles(user).includes(activeRole)) {
+      _clearActiveRole();
+    }
+  }, [user, activeRole]);
+
+  // ── Social registration continuation (только память) ──────────────────────
+
+  /**
+   * `/auth/callback` передаёт сюда ticket регистрации и уходит на главную, где
+   * AuthModal продолжает регистрацию. provider — имя провайдера для текстов,
+   * emailStep — нужен ли шаг выбора email (VK ID).
+   */
+  const beginSocialRegistration = useCallback((continuation) => {
+    const ticket = continuation?.ticket;
+    if (typeof ticket !== 'string' || !ticket) return;
+    setSocialRegistration(Object.freeze({
+      ticket,
+      provider: continuation.provider,
+      emailStep: continuation.emailStep === true,
+    }));
+  }, []);
+
+  /** «Начать заново», закрытие модалки, терминальная ошибка: ticket забыт. */
+  const clearSocialRegistration = useCallback(() => setSocialRegistration(null), []);
+
+  // Ticket не переживает ни появления сессии (регистрация завершена либо
+  // пользователь уже вошёл), ни ухода с главной.
+  useEffect(() => {
+    if (!socialRegistration) return;
+    if (user || !SOCIAL_REGISTRATION_PATHS.includes(pathname)) {
+      setSocialRegistration(null);
+    }
+  }, [socialRegistration, user, pathname]);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  /**
+   * Общий шаг входа: SessionResponse → токен → /me → user. Один путь для пароля
+   * и для входа через внешний провайдер, чтобы хранение токена не дублировалось.
+   */
+  const _establishSession = useCallback(async (session) => {
+    _saveToken(session.session_token);
+
+    const userData = await authApi.me();
+    // flushSync: user state must be committed before the caller's navigate()
+    // fires, otherwise ProtectedRoute sees user=null and redirects to /.
+    flushSync(() => { setUser(normalizeUser(userData)); });
+
+    // Кабинет выбирает DashboardRedirect — caller навигирует на /dashboard,
+    // а не по одной legacy-роли.
+    return normalizeUser(userData);
+  }, []);
+
+  const login = useCallback(async ({ email, password }) => {
+    const data = await authApi.login({ email, password });
+    return _establishSession(data);
+  }, [_establishSession]);
+
+  /**
+   * Вход через внешний провайдер (Stage Social Auth 3B): одноразовый ticket из
+   * fragment `/auth/callback` → POST /oauth/complete → та же обычная сессия
+   * MindCare, что и при входе по паролю. Ticket нигде не сохраняется.
+   */
+  const completeOAuthLogin = useCallback(async (ticket) => {
+    const data = await authApi.oauthComplete(ticket);
+    return _establishSession(data);
+  }, [_establishSession]);
+
+  /**
+   * Завершение регистрации через внешний провайдер (Stage Social Auth 4):
+   * ticket регистрации + код из письма + согласие MindCare → backend создаёт
+   * аккаунт и сразу возвращает SessionResponse. Тот же путь установки сессии;
+   * отдельного входа по паролю нет (пароля у такого аккаунта нет вовсе).
+   */
+  const completeOAuthRegistration = useCallback(async (ticket, code, consentAccepted) => {
+    const data = await authApi.oauthRegistrationConfirm({ ticket, code, consentAccepted });
+    return _establishSession(data);
+  }, [_establishSession]);
+
+  const logout = useCallback(async () => {
+    try { await authApi.logout(); } catch { /* fire-and-forget */ }
+    _clearSession();
+  }, [_clearSession]);
+
+  /**
+   * Самоотключение аккаунта (ADR-028). Backend отзывает ВСЕ сессии, поэтому
+   * logout() не вызывается: запрос с уже отозванным токеном дал бы 401 и
+   * сценарий «сессия истекла». Навигацию выполняет вызывающий (как useLogout:
+   * сначала navigate, затем очистка), чтобы RoleRoute не открыл модалку входа
+   * с чужим сообщением.
+   */
+  const deactivateOwnAccount = useCallback(async () => {
+    await authApi.deactivateOwnAccount();
+  }, []);
+
+  /** Очистить клиентскую авторизацию без запроса к API (сессия уже отозвана). */
+  const clearSession = useCallback(() => {
+    _clearSession();
+  }, [_clearSession]);
+
+  /** Re-fetch /me и обновить user (например, после смены профиля). */
+  const refreshUser = useCallback(async () => {
+    const userData = await authApi.me();
+    const normalized = normalizeUser(userData);
+    setUser(normalized);
+    // Если текущий activeRole больше не назначен — сбросить (reconcile-эффект
+    // тоже сработает, но делаем явно и синхронно к обновлению user).
+    if (activeRole && !normalized.roles.includes(activeRole)) {
+      _clearActiveRole();
+    }
+    return normalized;
+  }, [activeRole]);
+
+  /** UI-hint выбора кабинета. Принимает роль только из текущего user.roles. */
+  const setActiveRole = useCallback((role) => {
+    if (!normalizeRoles(user).includes(role)) return; // reject non-member
+    setActiveRoleState(role);
+    setStoredActiveRole(role);
+  }, [user]);
+
+  // ── Impersonation (ADR-025) ────────────────────────────────────────────────
+
+  /**
+   * Вход администратора «под именем» пользователя uuid. Токен админа
+   * сохраняется в localStorage ДО подмены (для возврата), затем активной
+   * становится сессия целевого пользователя. Кабинет выберет DashboardRedirect.
+   */
+  const impersonate = useCallback(async (uuid) => {
+    const adminToken = tokenRef.current;
+    const adminName = user?.name ?? null;
+
+    const data = await apiImpersonate(uuid); // { session_token, ... }
+
+    setStoredImpersonator({ token: adminToken, name: adminName });
+    _saveToken(data.session_token);
+    _clearActiveRole(); // целевой кабинет ≠ админский
+
+    const userData = await authApi.me();
+    flushSync(() => { setUser(normalizeUser(userData)); });
+    return normalizeUser(userData);
+  }, [user]);
+
+  /**
+   * Возврат в профиль администратора. Отзывает impersonation-сессию, возвращает
+   * сохранённый токен админа и перезагружает /me. Если админская сессия успела
+   * истечь — полный сброс с приглашением войти заново.
+   */
+  const stopImpersonation = useCallback(async () => {
+    const imp = getStoredImpersonator();
+    if (!imp || !imp.token) {
+      // Нечего восстанавливать — безопасный полный выход.
+      try { await authApi.logout(); } catch { /* fire-and-forget */ }
+      _clearSession();
+      navigate('/', { replace: true });
+      return;
+    }
+
+    // Токен цели ещё активен — отзываем impersonation-сессию на сервере.
+    try { await authApi.logout(); } catch { /* fire-and-forget */ }
+
+    _saveToken(imp.token);
+    clearStoredImpersonator();
+    _clearActiveRole();
+
+    try {
+      const userData = await authApi.me();
+      flushSync(() => { setUser(normalizeUser(userData)); });
+      navigate('/admin/users', { replace: true });
+    } catch {
+      // Админская сессия истекла — возвращаться некуда.
+      _clearSession();
+      navigate('/', {
+        replace: true,
+        state: {
+          openAuth: 'login',
+          message: 'Сессия администратора истекла. Войдите снова.',
+        },
+      });
+    }
+  }, [_clearSession, navigate]);
+
+  const value = {
+    user,
+    loading,
+    isAuthenticated: !!user,
+    activeRole,
+    setActiveRole,
+    login,
+    completeOAuthLogin,
+    completeOAuthRegistration,
+    socialRegistration,
+    beginSocialRegistration,
+    clearSocialRegistration,
+    logout,
+    deactivateOwnAccount,
+    clearSession,
+    refreshUser,
+    getToken,
+    // Impersonation: серверная правда из /me (user.impersonating), возврат —
+    // client-side через сохранённый админский токен.
+    isImpersonating: !!user?.impersonating,
+    impersonatorName: user?.impersonator_name ?? null,
+    impersonate,
+    stopImpersonation,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
+  return ctx;
+}
+
+/**
+ * useLogout — единая logout-функция для всех кабинетов.
+ *
+ * Сначала навигирует на `/`, потом очищает сессию.
+ * Порядок важен: если сначала очистить сессию, RoleRoute успевает
+ * отредиректить на `/` с открытой AuthModal «Вход» (state.openAuth) до того,
+ * как сработает наш navigate('/') — после явного выхода модалка не нужна.
+ */
+export function useLogout() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  return useCallback(async () => {
+    navigate('/', { replace: true });
+    await logout();
+  }, [logout, navigate]);
+}

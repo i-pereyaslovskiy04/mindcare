@@ -1,0 +1,11 @@
+.error {
+  color: var(--error);
+  margin-bottom: 16px;
+  font-size: var(--fs-ui);
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding-top: clamp(32px, 4vw, 52px);
+}

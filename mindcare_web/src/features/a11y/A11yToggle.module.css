@@ -1,0 +1,120 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn:hover {
+  background: var(--cream);
+  color: var(--text-main);
+}
+
+.btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* compact: только иконка. Размер и форма совпадают с .iconBtn кабинета
+   (36×36, radius 10) — шапка остаётся одной ровной линией иконок. */
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.iconBtn:hover {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.iconBtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* Включённый режим — залитая кнопка (состояние видно, а не только по aria). */
+.iconBtn.on,
+.iconBtn.on:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+/* block: строка во всю ширину внутри панели «Оформление» шапки кабинета.
+   Подпись видна всегда (медиа-правило ниже касается только .label). */
+.blockBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--nav-border);
+  background: transparent;
+  color: var(--text-main);
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.blockBtn:hover {
+  background: var(--cream);
+}
+
+.blockBtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.blockBtn.on,
+.blockBtn.on:hover {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+}
+
+.blockLabel {
+  line-height: 1.2;
+}
+
+/* На узких экранах остаётся только иконка — текст скрыт визуально,
+   доступное имя даёт aria-label. */
+@media (max-width: 900px) {
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .btn {
+    padding: 0 8px;
+  }
+}

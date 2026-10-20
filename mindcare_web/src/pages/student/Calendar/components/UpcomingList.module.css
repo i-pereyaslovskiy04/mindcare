@@ -1,0 +1,118 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+}
+
+/* Карточка: иконка + тело. Тело — информация о встрече (название, дата ·
+   время · психолог) и нижняя строка: статус слева, действия справа отдельной
+   группой. Badge и кнопки — nowrap, поэтому строка переносится (действия
+   уходят под статус, прижатые вправо), а не выталкивает кнопки за край. */
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  cursor: default;
+}
+
+/* Сдвиг только при настоящем hover: на touch «залипший» hover сдвигал
+   карточку во всю ширину на 3px за край. */
+@media (hover: hover) {
+  .item:hover {
+    background: var(--cream);
+    border-color: var(--latte);
+    transform: translateX(3px);
+  }
+}
+
+.iconBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--sand);
+  color: var(--coffee);
+  flex-shrink: 0;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* Полный текст с переносом вместо многоточия (длинное имя психолога). */
+.title {
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  color: var(--espresso);
+  overflow-wrap: break-word;
+}
+
+.sub {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  overflow-wrap: break-word;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Телефон: всегда три уровня — информация, строка статуса (слева), строка
+   действий (справа), независимо от длины статуса. Не полагаемся на flex-wrap,
+   иначе одинаковые карточки складывались бы по-разному. */
+@media (max-width: 600px) {
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .actions {
+    align-self: stretch;
+    margin-left: 0;
+  }
+}

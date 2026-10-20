@@ -1,0 +1,188 @@
+.card {
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
+}
+
+.field {
+  margin-bottom: 18px;
+}
+
+.fieldLabelRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--text-light);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.textarea {
+  width: 100%;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--text-main);
+  font-family: inherit;
+  background: var(--cream);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  box-sizing: border-box;
+  line-height: 1.6;
+}
+
+.textarea:focus {
+  border-color: var(--coffee);
+  background: var(--warm-white);
+}
+
+.textarea::placeholder {
+  color: var(--text-light);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.chip:hover {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.chipActive {
+  composes: chip;
+  background: var(--espresso);
+  color: var(--milk);
+  border-color: var(--espresso);
+}
+
+.chipActive:hover {
+  background: var(--mocha);
+  border-color: var(--mocha);
+}
+
+/* ---- collapsible details section ---- */
+.detailsSection {
+  margin-bottom: 18px;
+}
+
+.detailsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--coffee);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+}
+
+.detailsToggle:hover {
+  color: var(--espresso);
+}
+
+.detailsToggle:disabled {
+  color: var(--text-light);
+  cursor: default;
+}
+
+.detailsContent {
+  margin-top: 10px;
+}
+
+/* ---- save button ---- */
+.btnSave {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: none;
+  background: var(--espresso);
+  color: var(--milk);
+  transition: background 0.15s, transform 0.1s;
+  margin-top: 4px;
+}
+
+.btnSave:hover {
+  background: var(--mocha);
+  transform: translateY(-1px);
+}
+
+.btnSaved {
+  composes: btnSave;
+  background: var(--success);
+  cursor: default;
+  transform: none;
+}
+
+.btnSaved:hover {
+  background: var(--success);
+  transform: none;
+}
+
+.moodHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+}
+
+.saveError {
+  font-size: 13px;
+  color: var(--error);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--error);
+}

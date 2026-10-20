@@ -1,0 +1,47 @@
+import { SYSTEM_MONOGRAM, hasPresence } from '../lib/conversationView';
+import styles from './ChatSidebar.module.css';
+
+export default function ChatListItem({ contact, isActive, onClick }) {
+  const hasUnread = contact.unread > 0;
+  const showPresence = hasPresence(contact);
+
+  return (
+    <button
+      type="button"
+      className={[
+        styles.item,
+        // selected — единый стиль для всех типов (обычный/архивный/system).
+        isActive ? styles.itemActive : '',
+        // мягкое приглушение только для архивных (read-only), без своего selected.
+        contact.muted ? styles.itemMuted : '',
+        hasUnread ? styles.itemUnread : '',
+      ].filter(Boolean).join(' ')}
+      onClick={onClick}
+    >
+      <div className={`${styles.avatar} ${contact.system ? styles.avatarSystem : ''}`}>
+        {contact.system ? <span aria-hidden="true">{SYSTEM_MONOGRAM}</span> : contact.initials}
+        {hasUnread && <span className={styles.unreadDot} aria-hidden="true" />}
+        {showPresence && (
+          <span
+            className={`${styles.presenceDot} ${
+              contact.online ? styles.presenceOnline : styles.presenceOffline
+            }`}
+            aria-hidden="true"
+          />
+        )}
+      </div>
+
+      <div className={styles.info}>
+        <div className={`${styles.name} ${hasUnread ? styles.nameUnread : ''}`}>
+          {contact.name}
+        </div>
+        <div className={styles.lastMsg}>{contact.lastMsg}</div>
+      </div>
+
+      <div className={styles.meta}>
+        <div className={styles.time}>{contact.time}</div>
+        {hasUnread && <span className={styles.unread}>{contact.unread}</span>}
+      </div>
+    </button>
+  );
+}

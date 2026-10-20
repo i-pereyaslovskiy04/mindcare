@@ -1,0 +1,18 @@
+/*
+ * base.css — theme-independent design tokens.
+ *
+ * Color tokens live in per-theme files (coffee-light.css, coffee-dark.css, …)
+ * keyed by [data-theme] on <html>. This file holds tokens shared by all themes.
+ * Typography / layout / animation variables stay in src/styles/variables.css.
+ */
+
+:root {
+  /* Focus indicator — visible in every theme (used by new components;
+     existing components migrate on the hardcode-cleanup stage) */
+  --focus-ring-width: 2px;
+  --focus-ring-color: var(--primary);
+  --focus-ring-offset: 2px;
+}
+
+/* Theme switch is instant by design (no color transitions on <html>),
+   so prefers-reduced-motion needs no extra suppression here. */

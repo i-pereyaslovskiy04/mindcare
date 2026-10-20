@@ -1,0 +1,358 @@
+# UI Components Guide
+
+Правила использования shared UI-компонентов в проекте MindCare Web.
+
+Все компоненты находятся в `mindcare_web/src/components/UI/`.
+Перед созданием нового контрола — всегда сверяться с этим списком.
+
+---
+
+## Быстрый выбор
+
+| Нужно сделать | Компонент |
+|---|---|
+| Action-кнопка (сохранить, удалить, применить) | `Button` |
+| Навигационная ссылка в виде кнопки (router) | `ButtonLink` |
+| Чекбокс в форме | `Checkbox` |
+| On/off переключатель | `Toggle` |
+| Интерактивный фильтр-чип | `FilterChip` |
+| Статус / роль / состояние сущности | `Badge` |
+| Display-only тег контента | `Tag` |
+| Выпадающий список | `Select` |
+| Множественный выбор | `MultiSelect` |
+| Выбор даты (только дата) | `DateInput` |
+| Выбор времени | `TimePicker` |
+| Выбор даты и времени | `DateTimeInput` |
+
+---
+
+## Button
+
+**Путь:** `src/components/UI/Button/Button.jsx`
+
+**Использовать для:**
+- сохранить, отменить, создать, обновить
+- удалить (с подтверждением)
+- загрузить ещё, назначить, переназначить
+- повторить, открыть, применить, сбросить
+- icon-кнопки в таблицах (edit, trash, open)
+
+**Варианты:** `primary`, `secondary`, `ghost`, `danger`, `icon`
+**Размеры:** `sm`, `md` (default)
+
+**Не создавать** локальные `.btn`, `.btnPrimary`, `.btnSecondary`, `.btnGhost`, `.btnDanger` в feature-модулях, если задача решается через `Button`.
+
+**Feature-specific кнопки допустимы только с явной причиной:**
+- кнопка на тёмной карточке, если у `Button` нет нужного варианта (пример: `MaterialCard .btn` с `background: var(--espresso)`)
+- chat send button с уникальным layout
+- calendar navigation (prev/next месяц)
+- close `×` внутри popover/modal, если контекстный
+- специальные card controls
+
+---
+
+## ButtonLink
+
+**Путь:** `src/components/UI/Button/ButtonLink.jsx`
+
+**Использовать для:**
+- React Router навигационных ссылок, которые визуально выглядят как кнопка
+  (router `<Link>` со стилями `Button`: те же `variant`/`size`/`tone`)
+- переходов «Открыть карточку», «Перейти в раздел» из таблиц и списков
+
+**Не делать** `Button` + `navigate()` для обычной навигации — семантически
+это ссылка (`<a>`), а не кнопка: ломает open-in-new-tab и доступность.
+
+---
+
+## Checkbox
+
+**Путь:** `src/components/UI/Checkbox/Checkbox.jsx`
+
+**Использовать для:**
+- согласие с политикой конфиденциальности при регистрации
+- `is_active` / `is_published` / `include_deleted` в admin-формах
+- любые `<input type="checkbox">` в формах
+
+**Не создавать** кастомные браузерные checkbox без причины.
+
+**Не использовать Checkbox для:**
+- Toggle / Switch (это другой компонент)
+- task done/undone с feature-specific визуалом
+- filter chips
+- calendar slots
+
+---
+
+## Toggle
+
+**Путь:** `src/components/UI/Toggle/Toggle.jsx`
+
+**Использовать для:**
+- on/off уведомлений
+- email / push настройки
+- включить / выключить настройку пользователя
+
+Toggle — это `<button type="button" aria-pressed>`, не checkbox.
+Семантика: бинарное состояние без submit.
+
+---
+
+## FilterChip
+
+**Путь:** `src/components/UI/FilterChip/FilterChip.jsx`
+
+**Использовать для:**
+- фильтр по типу материала, теме, категории
+- multi-select фильтры в списках
+- active / inactive filter state
+
+FilterChip должен быть `<button type="button" aria-pressed>`.
+
+**Не использовать FilterChip для:**
+- display-only тегов контента → используй `Tag`
+- status badges → используй `Badge`
+- emotion chips (DiaryEntryForm) — feature-specific
+- calendar time slots — feature-specific
+- removable tags в MultiSelect
+
+---
+
+## Badge
+
+**Путь:** `src/components/UI/Badge/Badge.jsx`
+
+**Тоны:**
+
+| Tone | Использование |
+|---|---|
+| `success` | опубликовано, активен, психолог |
+| `warning` | черновик, ожидает |
+| `error` | заблокирован |
+| `neutral` | удалён, неизвестный статус |
+| `role-student` | роль студент |
+| `role-psychologist` | роль психолог |
+| `role-admin` | роль администратор |
+| `role-supervisor` | роль супервизор |
+
+**Использовать для:**
+- статус записи в таблице (опубликовано / черновик)
+- активен / скрыт / удалён
+- роли пользователей в UsersTable
+- статус любой сущности в admin-таблицах
+
+Badge — это display-only `<span>`, не button.
+
+**Мигрировано:** ArticlesTable, NewsTable, CategoriesTable, UsersTable.
+
+**Не использовать Badge для:**
+- счётчик над иконкой (count overlay)
+- nav badges в CabinetLayout sidebar (feature-specific layout)
+- task-card badges с уникальным визуалом (TaskItem)
+- декоративный dot-индикатор
+
+---
+
+## Tag
+
+**Путь:** `src/components/UI/Tag/Tag.jsx`
+
+**Варианты:**
+
+| Variant | Использование |
+|---|---|
+| `public` | тег на публичной странице материала / новости (11px, uppercase) |
+| `admin` | тег в admin-таблице (12px, pill shape) |
+| `category` | категория в admin-таблице (12px, pill, sand bg) |
+| `card` | тег на карточке MaterialCard (clamp 12–13px, uppercase) |
+
+**Использовать для:**
+- тема материала (MaterialCard, MaterialsItemPage)
+- тег новости (NewsItemPage, NewsTable)
+- категория статьи (ArticlesTable)
+- словарный тег в TagsTable
+
+Tag — это display-only `<span>`, не button.
+
+**Мигрировано:** MaterialsItemPage, NewsItemPage, ArticlesTable, NewsTable, TagsTable, MaterialCard.
+
+**Не использовать Tag для:**
+- фильтр → используй `FilterChip`
+- статус / роль → используй `Badge`
+- removable chip → feature-specific
+- overlay тег внутри кликабельной hero-карточки (FeaturedNews.newsTagOverlay)
+
+---
+
+## Select
+
+**Путь:** `src/components/UI/Select/Select.jsx`
+
+**Использовать для:**
+- выпадающие списки в формах admin
+- select с поиском, если поддерживается
+
+Не создавать локальные `<select>` без проверки этого компонента.
+
+**Optional `displayLabel` (Stage 31n-hotfix).** Показывает текущее значение,
+которого намеренно нет в `options` (значение отображается как выбранное, но в
+выпадающем списке не предлагается). Use-case: текущая роль `student` у
+редактируемого пользователя — она отображается, но `options` admin edit содержат
+только staff/admin (`psychologist`/`supervisor`/`admin`), поэтому вернуться к
+`student` через dropdown нельзя. **Backward compatible:** без `displayLabel`
+`Select` работает как раньше (если `value` нет в `options` — показывается
+`placeholder`).
+
+**Optional `id`, `aria-invalid`, `aria-describedby` (2026-10-15).** `id` получает
+кнопка-контрол (цель фокуса при ошибке; без него генерируется). При `error`
+контрол получает `aria-invalid="true"` и `aria-describedby` на id сообщения об
+ошибке (`<id>-error`); без `error` новых атрибутов нет.
+
+**Optional `appearance="field"` (2026-10-15).** Вид TextField: подпись
+(11px uppercase), рамка `--outline`, фон `--surface-container`, фокус-кольцо, текст
+ошибки 12.5px и общая коробка (`min-height` 40px вместо фиксированной высоты —
+контрол растёт, а не обрезает). По умолчанию (`appearance="default"`) вид прежний;
+выпадающий список не меняется.
+
+---
+
+## MultiSelect
+
+**Путь:** `src/components/UI/MultiSelect/MultiSelect.jsx`
+
+**Использовать для:**
+- множественный выбор тегов при создании/редактировании новостей и статей
+- любой multi-select в admin-формах
+
+Выбранные теги внутри MultiSelect — feature-specific removable chips,
+не мигрировать в `Tag` (разная семантика: интерактивные, не display-only).
+
+---
+
+## DateInput
+
+**Путь:** `src/components/UI/DateInput/DateInput.jsx`
+
+**Использовать для:**
+- выбор **только даты** в admin-формах (сейчас: «Дата публикации» в news/articles)
+- любые date-only поля в новых формах
+
+Кастомный popover-календарь через portal — **не** нативный `<input type="datetime-local">`
+или `type="date"` (нативный popup выбивается из дизайна). В новых формах нативные
+date/datetime инпуты не использовать без явной причины.
+
+**Контракт (date-only):**
+
+| Аспект | Значение |
+|---|---|
+| UI `value` | `YYYY-MM-DD` или `''` (controlled) |
+| Отображение в поле | `дд.мм.гггг` |
+| Хелперы | `isoToDateOnly(iso)` → `YYYY-MM-DD`; `dateOnlyToPublishedAtIso(date)` → ISO datetime |
+| API (news/articles) | `published_at` остаётся ISO datetime string / `null`; дата конвертируется в полдень UTC (`T12:00:00.000Z`), чтобы не было сдвига дня по таймзоне |
+| Время | в UI не выбирается |
+| Scheduling | **нет** — будущая дата не откладывает публикацию |
+
+Popover сам выбирает направление (вниз/вверх) и зажимается в пределах viewport
+(`popoverPosition.js` → `computePopoverPosition`); закрывается по Escape и клику вне.
+
+**Не использовать DateInput для:**
+- выбора времени / даты-времени → используй `TimePicker` / `DateTimeInput`
+- записи на приём / выбора свободного слота → нужен feature-specific slot picker;
+  DateInput не является заменой слотам расписания
+
+---
+
+## TimePicker
+
+**Путь:** `src/components/UI/TimePicker/TimePicker.jsx`
+
+**Использовать для:**
+- выбора времени в формах расписания, перерывов, разовых изменений;
+- любых новых `HH:MM` полей, где нужен единый дизайн.
+
+Контракт:
+
+| Аспект | Значение |
+|---|---|
+| UI `value` | `HH:MM` или `''` |
+| Минуты | по умолчанию поминутно `00..59` |
+| Native input | не используется (`type="text"` + popover) |
+
+**Не использовать TimePicker для:**
+- выбора доступного appointment-слота студентом или supervisor'ом — это отдельная
+  feature-specific сетка слотов, потому что слоты приходят из backend-расчёта доступности.
+
+---
+
+## DateTimeInput
+
+**Путь:** `src/components/UI/DateTimeInput/DateTimeInput.jsx`
+
+Композиция `DateInput + TimePicker` для выбора даты и времени без native
+`datetime-local`. Используется, например, при создании групповых занятий.
+
+Контракт:
+
+| Аспект | Значение |
+|---|---|
+| UI `value` | `YYYY-MM-DDTHH:MM` или `''` |
+| Date part | через shared `DateInput` |
+| Time part | через shared `TimePicker` |
+
+---
+
+## Tabs
+
+Путь: `components/UI/Tabs/Tabs.jsx`. Tablist с автоактивацией (стрелки, Home/End, roving tabIndex).
+Props: `tabs [{id,label}]`, `active`, `onChange`, `label` (aria-label списка), `idPrefix`, `fill` (равные колонки на узких экранах), `indicator` (`'underline'` по умолчанию — заливка + подчёркивание; `'fill'` — заливка без подчёркивания, используется в настройках), `className`. Панели рисует потребитель: `role="tabpanel"`, `id={tabPanelId(prefix,id)}`, `aria-labelledby={tabButtonId(prefix,id)}`; неактивные держать смонтированными с `hidden`. Активная вкладка отмечается не только цветом: жирность + подчёркивание (`underline`) либо заливка + жирность (`fill`). Режим ГОСТ принудительно перекрашивает `button` (фон схемы + рамка 2px), поэтому для `fill` выбранная вкладка в этом режиме инвертируется и получает внутреннюю рамку (inset box-shadow — размеры и соседние элементы не сдвигаются). Используется: `/student/settings`, журнал аудита (`AuditTabs` — обёртка).
+
+## TextField
+
+Путь: `components/UI/TextField/TextField.jsx` (`forwardRef`). Подписанное поле: `label` связан с `input` через `htmlFor`/`id`, `hint` и `error` — через `aria-describedby`, ошибка — `role="alert"` и `aria-invalid`. Остальные props (`type`, `value`, `onChange`, `maxLength`, `readOnly`, `inputMode`…) передаются в `<input>`. Prop `appearance="field"` включает коробку, общую со `Select appearance="field"` (border-box, рамка 1px, вертикальный padding 9px, `line-height` 1.4, `min-height` 40px): контролы одинаковой высоты, при увеличенном шрифте/межстрочном интервале растут и не обрезают текст. По умолчанию вид прежний.
+
+## Shared content utilities
+
+В `src/components/UI` есть компоненты, которые не являются governance controls, но переиспользуются в нескольких местах:
+
+| Компонент | Путь | Назначение |
+|---|---|---|
+| `ContentPreview` | `src/components/UI/ContentPreview/` | Предпросмотр HTML-контента новости или материала. Использует DOMPurify. |
+| `ImageUpload` | `src/components/UI/ImageUpload/` | Drag-drop загрузка изображения обложки. |
+| `TiptapEditor` | `src/components/UI/TiptapEditor/` | Rich-text редактор (StarterKit, Image, TextAlign). |
+
+Эти компоненты **не являются** заменой Button / Checkbox / Toggle / FilterChip / Badge / Tag.
+
+Правила при работе с ними:
+- Не заменять их на Button/Tag/Badge.
+- Не считать их нарушением governance.
+- Перед созданием своей логики preview/upload/editor — проверить эти компоненты на переиспользование.
+- Изменять только после отдельного анализа задачи.
+- Не создавать дубль без явного обоснования.
+
+---
+
+## Chat / Messenger UI (feature-specific)
+
+| Компонент | Путь | Назначение |
+|---|---|---|
+| `MessageBubble` | `src/features/chat/components/MessageBubble.jsx` | Визуальное облачко сообщения (текст + meta: время/«изменено»/✓✓). Variants: `incoming`/`outgoing`/`system`. |
+| `MessageActionsMenu` | `src/features/chat/components/` | Кебаб-меню «…» для своего сообщения — «Редактировать»/«Удалить». |
+| `DeleteMessageDialog` | `src/features/chat/components/` | Confirm-диалог перед удалением сообщения, построен на shared `Modal`/`Button`. |
+
+**Governance:** эти компоненты — feature-specific Messenger-логика, **не** глобальные
+shared UI controls из таблицы выше. Не переносить `MessageBubble` в `src/components/UI`,
+пока не появится второй независимый потребитель за пределами чата. `MessageActionsMenu`
+переиспользует существующие shared-примитивы (не дублирует Button/Modal). Перед
+добавлением нового chat-контрола — проверить `src/features/chat/components/` и
+`src/components/UI`.
+
+---
+
+## Общее правило
+
+Перед созданием нового контрола:
+
+1. Проверить `src/components/UI/` — есть ли подходящий компонент.
+2. Если подходит — использовать его.
+3. Если не подходит — зафиксировать причину в PR-описании или в `docs/UI_TECH_DEBT.md`.
+4. Feature-specific элемент без причины — это tech debt.

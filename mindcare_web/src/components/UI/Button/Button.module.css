@@ -1,0 +1,154 @@
+/* ── Base ── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s, border-color 0.15s;
+  line-height: 1;
+  white-space: nowrap;
+  border: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Sizes ── */
+
+.md {
+  height: 40px;
+  padding: 0 22px;
+}
+
+.sm {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* ── primary ── */
+
+.primary {
+  background: var(--espresso);
+  color: var(--milk);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--coffee);
+}
+
+/* ── secondary ── */
+
+.secondary {
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--nav-border);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--cream);
+  border-color: var(--latte);
+}
+
+/* ── danger ── */
+
+.danger {
+  background: var(--danger);
+  color: var(--warm-white);
+  border: 1px solid rgba(var(--danger-rgb), 0.34);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--danger-hover);
+  border-color: rgba(var(--danger-rgb), 0.42);
+}
+
+.danger:active:not(:disabled) {
+  background: var(--danger-active);
+  border-color: rgba(var(--danger-rgb), 0.5);
+}
+
+.danger:focus-visible {
+  outline-color: var(--danger-hover);
+}
+
+/* ── ghost ── */
+
+.ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--nav-border);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--cream);
+  border-color: var(--latte);
+}
+
+/* ── icon ── */
+
+.icon {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--nav-border);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.icon:hover:not(:disabled) {
+  background: var(--cream);
+}
+
+.iconSm {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+/* ── icon danger tone ── */
+
+.iconDanger {
+  color: var(--error);
+  border-color: var(--error-bg);
+}
+
+.iconDanger:hover:not(:disabled) {
+  background: var(--error-bg);
+  border-color: var(--error);
+}
+
+.iconDanger:focus-visible {
+  outline-color: var(--error);
+}
+
+/* ── icon success tone ── */
+
+.iconSuccess {
+  color: var(--success);
+  border-color: var(--success-bg);
+}
+
+.iconSuccess:hover:not(:disabled) {
+  background: var(--success-bg);
+  border-color: var(--success);
+}
+
+.iconSuccess:focus-visible {
+  outline-color: var(--success);
+}

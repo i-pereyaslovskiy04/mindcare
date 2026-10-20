@@ -1,0 +1,262 @@
+"""
+Модели: аутентификация, роли, пользователи, сессии.
+"""
+
+import uuid as _uuid
+
+from sqlalchemy import (
+    BigInteger, Boolean, CheckConstraint, Column, DateTime, ForeignKey,
+    Index, Integer, String, Text, UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import INET, UUID
+from sqlalchemy.orm import relationship, validates
+from sqlalchemy.sql import func, text as sa_text
+
+from app.core.normalization import normalize_email
+from app.db.base import Base
+
+
+# ─── Roles & Permissions ──────────────────────────────────────────────────────
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id           = Column(Integer, primary_key=True)
+    name         = Column(String(50), nullable=False, unique=True)
+    display_name = Column(String(100), nullable=False)
+    description  = Column(Text)
+    is_system    = Column(Boolean, default=False)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+
+    user_roles       = relationship("UserRole", back_populates="role")
+    role_permissions = relationship(
+        "RolePermission", back_populates="role", cascade="all, delete-orphan"
+    )
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+
+    id          = Column(Integer, primary_key=True)
+    code        = Column(String(100), nullable=False, unique=True)
+    description = Column(Text)
+    module      = Column(String(50))
+
+    role_permissions = relationship(
+        "RolePermission", back_populates="permission", cascade="all, delete-orphan"
+    )
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+    __table_args__ = (UniqueConstraint("role_id", "permission_id"),)
+
+    id            = Column(Integer, primary_key=True)
+    role_id       = Column(
+        Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    )
+    permission_id = Column(
+        Integer, ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False
+    )
+
+    role       = relationship("Role", back_populates="role_permissions")
+    permission = relationship("Permission", back_populates="role_permissions")
+
+
+# ─── Users ────────────────────────────────────────────────────────────────────
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        # Уникальность нормализованного email (migration e5a8f3c1d2b6): не даёт
+        # завести Ivan@x и ivan@x. Описан здесь, чтобы autogenerate не предлагал
+        # его удалить; users/storage.py маппит нарушение в 409.
+        # Выражение = lower(trim(email)) в канонической форме PostgreSQL
+        # (так его отдаёт pg_indexes), иначе alembic check видит расхождение.
+        Index(
+            "ux_users_email_normalized", sa_text("lower(TRIM(BOTH FROM email))"),
+            unique=True,
+        ),
+        # email хранится только нормализованным (migration f3b8d1e6a4c2).
+        # Поиск по email — точное сравнение с normalize_email(), поэтому
+        # ненормализованная строка сделала бы аккаунт «ненаходимым» при логине.
+        # Путь через ORM нормализует сам (_normalize_email ниже); CHECK ловит
+        # запись в обход ORM (raw SQL, bulk update, psql).
+        CheckConstraint(
+            "email = lower(trim(email))", name="ck_users_email_normalized",
+        ),
+        # Lifecycle отключения (ADR-028, migration d7e2a9c4f1b6): источник и
+        # защищённая причина ТЕКУЩЕГО отключения. Все три поля задаются вместе
+        # и вместе очищаются при восстановлении; исторические отключения
+        # (до ADR-028) остаются с NULL. Причина — только Fernet enc:v1.
+        CheckConstraint(
+            "deactivation_source IS NULL "
+            "OR deactivation_source IN ('admin', 'self')",
+            name="ck_users_deactivation_source",
+        ),
+        CheckConstraint(
+            "deactivation_reason_enc IS NULL "
+            "OR deactivation_reason_enc LIKE 'enc:v1:%'",
+            name="ck_users_deactivation_reason_enc",
+        ),
+        CheckConstraint(
+            "(deactivated_at IS NULL AND deactivation_source IS NULL "
+            "AND deactivation_reason_enc IS NULL) "
+            "OR (deactivated_at IS NOT NULL AND deactivation_source IS NOT NULL "
+            "AND deactivation_reason_enc IS NOT NULL)",
+            name="ck_users_deactivation_fields_consistent",
+        ),
+    )
+
+    id            = Column(Integer, primary_key=True)
+    uuid          = Column(
+        UUID(as_uuid=True), unique=True, nullable=False, default=_uuid.uuid4
+    )
+    full_name     = Column(String(255), nullable=False)
+    email         = Column(String(255), nullable=False, unique=True, index=True)
+    phone         = Column(String(50))
+    # NULL — social-only аккаунт без пароля (migration c6e1a4f8b2d7). Плейсхолдер/
+    # случайный пароль НЕ пишется: вход по паролю для такого аккаунта даёт тот
+    # же 401, что и неверный пароль; первый пароль ставится через reset по OTP.
+    password_hash = Column(String(255), nullable=True)
+    avatar_url    = Column(String(500))
+    # Оформление UI. NULL = «не задано»: действует выбор устройства (localStorage).
+    ui_theme_palette = Column(String(20))
+    ui_theme_mode    = Column(String(10))
+    is_active     = Column(Boolean, default=True)
+    last_login    = Column(DateTime(timezone=True))
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at    = Column(DateTime(timezone=True), server_default=func.now())
+    deleted_at    = Column(DateTime(timezone=True))
+    # ADR-028: текущее отключение. 'admin' | 'self'; причина — enc:v1 (Fernet).
+    deactivated_at          = Column(DateTime(timezone=True))
+    deactivation_source     = Column(String(10))
+    deactivation_reason_enc = Column(Text)
+
+    @validates("email")
+    def _normalize_email(self, key, value):
+        # Любая запись email через ORM (User(email=...), user.email = ...)
+        # сохраняет нормализованную форму, даже если вызывающий код забыл.
+        # None не трогаем — пусть сработает NOT NULL.
+        return normalize_email(value) if value is not None else value
+
+    # ── relationships (строковые ссылки → нет циклических импортов) ──
+    user_roles = relationship(
+        "UserRole",
+        foreign_keys="UserRole.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    sessions = relationship(
+        "UserSession", back_populates="user", cascade="all, delete-orphan",
+        foreign_keys="UserSession.user_id",
+    )
+    student_profile = relationship(
+        "StudentProfile", back_populates="user", uselist=False,
+        cascade="all, delete-orphan",
+    )
+    psychologist_profile = relationship(
+        "PsychologistProfile", back_populates="user", uselist=False,
+        cascade="all, delete-orphan",
+    )
+    mfa_methods = relationship(
+        "UserMfaMethod", back_populates="user", cascade="all, delete-orphan"
+    )
+    emergency_contacts = relationship(
+        "EmergencyContact", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    __table_args__ = (UniqueConstraint("user_id", "role_id"),)
+
+    id         = Column(Integer, primary_key=True)
+    user_id    = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role_id    = Column(
+        Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    )
+    granted_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    granted_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True))
+
+    user = relationship("User", foreign_keys=[user_id], back_populates="user_roles")
+    role = relationship("Role", back_populates="user_roles")
+
+
+class UserSession(Base):
+    """Сессии пользователей (заменяют JWT refresh-токены)."""
+    __tablename__ = "user_sessions"
+
+    id          = Column(String(255), primary_key=True)   # токен сессии
+    user_id     = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    ip_address  = Column(INET)
+    user_agent  = Column(Text)
+    started_at  = Column(DateTime(timezone=True), server_default=func.now())
+    last_active = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at  = Column(DateTime(timezone=True), nullable=False)
+    is_revoked  = Column(Boolean, default=False)
+    # Impersonation (ADR-025): id администратора, вошедшего «под именем» этого
+    # user_id. NULL — обычная сессия. ON DELETE SET NULL: удаление админа не
+    # рвёт сессию, лишь снимает отметку.
+    impersonator_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    user = relationship(
+        "User", back_populates="sessions", foreign_keys=[user_id]
+    )
+
+
+class RefreshToken(Base):
+    """
+    NOT IMPLEMENTED.
+
+    Таблица создана в baseline migration, но refresh-token flow не реализован.
+    Аутентификация использует UserSession (session_token), не RefreshToken.
+
+    Зарезервировано для будущей реализации JWT refresh flow.
+    До реализации: не использовать в бизнес-логике.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id         = Column(Integer, primary_key=True)
+    user_id    = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token      = Column(String(512), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    revoked_at = Column(DateTime(timezone=True))
+    ip_address = Column(INET)
+    user_agent = Column(Text)
+
+    user = relationship("User")
+
+
+class UserMfaMethod(Base):
+    """
+    NOT IMPLEMENTED.
+
+    Таблица создана в baseline migration, но MFA flow не реализован.
+    Зарезервировано для будущей реализации TOTP/SMS/email MFA.
+    До реализации: не использовать в бизнес-логике.
+    """
+    __tablename__ = "user_mfa_methods"
+
+    id               = Column(Integer, primary_key=True)
+    user_id          = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    method_type      = Column(String(20), nullable=False)  # totp / sms / email
+    secret_encrypted = Column(Text)
+    recovery_codes   = Column(Text)
+    is_active        = Column(Boolean, default=True)
+    verified_at      = Column(DateTime(timezone=True))
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="mfa_methods")

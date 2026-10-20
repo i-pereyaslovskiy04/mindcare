@@ -1,32 +1,10 @@
+/*
+ * Цветовые токены живут в src/styles/tokens/ (per-theme файлы, ключ —
+ * data-theme на <html>). Здесь — только независимые от темы переменные:
+ * типографика, layout, анимация.
+ */
+
 :root {
-  /* Colors */
-  --cream: #F5F0E8;
-  --warm-white: #FAF7F2;
-  --latte: #C9B99A;
-  --coffee: #8B6F47;
-  --espresso: #4A3728;
-  --mocha: #6B4F35;
-  --milk: #EDE4D3;
-  --fog: #D9CFC0;
-  --sand: #E8DFD0;
-
-  /* Background colors */
-  --nav-bg: #EDE4D6;
-  --nav-border: #D8CDBF;
-  --footer-bg: #E4D9CA;
-  --footer-border: #D0C4B2;
-
-  /* Text colors */
-  --text-main: #2E2318;
-  --text-muted: #5C4D3C;
-  --text-light: #8A7260;
-  --text-on-dark: #EDE4D3;
-
-  /* Status colors */
-  --error: #B94040;
-  --error-bg: #FDF0EE;
-  --success: #5D8A5E;
-
   /* Font sizes - responsive */
   --fs-h1: clamp(40px, 3.2vw, 64px);
   --lh-h1: 1.12;

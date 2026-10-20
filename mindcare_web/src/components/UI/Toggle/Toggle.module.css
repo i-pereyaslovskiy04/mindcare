@@ -1,0 +1,65 @@
+.track {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  border-radius: 12px;
+  background: var(--nav-border);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.track:hover:not(:disabled) {
+  background: var(--latte);
+}
+
+.track.checked {
+  background: var(--espresso);
+}
+
+.track.checked:hover:not(:disabled) {
+  background: var(--coffee);
+}
+
+.track.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.track:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.15);
+  pointer-events: none;
+}
+
+.checked .thumb {
+  transform: translateX(16px);
+}
+
+/* Touch: визуально переключатель прежний (38×22), но область нажатия —
+   ~44×44 (прозрачный ::before вокруг трека). Используется в строках настроек
+   (~60px высотой) и одиночной строке расписания — соседних контролов в этой
+   зоне нет. */
+@media (hover: none) {
+  .track::before {
+    content: '';
+    position: absolute;
+    inset: -11px -3px;
+  }
+}

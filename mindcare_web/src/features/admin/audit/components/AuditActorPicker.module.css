@@ -1,0 +1,102 @@
+.wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 240px;
+}
+
+.label {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.listbox {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 260px;
+  margin: 4px 0 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-md);
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.optionActive {
+  background: var(--surface-container-high);
+}
+
+.optionName {
+  color: var(--on-surface);
+  font-size: 14px;
+}
+
+.optionEmail {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+}
+
+.status,
+.statusError {
+  padding: 10px;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.statusError {
+  color: var(--error);
+}
+
+.selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--outline);
+  border-radius: 9px;
+  background: var(--surface-container);
+}
+
+.selectedName {
+  color: var(--on-surface);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.selectedEmail {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+}

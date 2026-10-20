@@ -1,0 +1,68 @@
+.page {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  /* Theme-aware токены: прежние --surface/--border/--text/--surface-2/--accent
+     в проекте не определены и откатывались на хардкод #1c1c1c → тёмный текст
+     на тёмной карточке в dark-темах. */
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  padding: 28px 24px;
+  box-shadow: 0 8px 30px rgba(var(--shadow-rgb), 0.10);
+  text-align: center;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.subtitle {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+}
+
+.option {
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  background: rgba(var(--espresso-rgb), 0.06);
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+
+.option:hover {
+  background: rgba(var(--espresso-rgb), 0.12);
+  border-color: var(--coffee);
+}
+
+.option:active {
+  transform: translateY(1px);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}

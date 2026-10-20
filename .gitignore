@@ -11,9 +11,13 @@ __pycache__/
 venv/
 env/
 instance/
+
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
+.coverage
 coverage/
+htmlcov/
 
 # --- Node / React ---
 node_modules/
@@ -40,5 +44,35 @@ tmp/
 local_*/
 *.bat
 
-# --- Claude Code local session data ---
+# --- Uploaded media files ---
+mindcare_api/media/uploads/
+
+# --- Private chat attachment storage (runtime, не коммитить) ---
+/mindcare_api/storage/
+
+# --- Dev launcher logs (start.sh, runtime) ---
+/logs/
+
+# --- Runtime log files (maintenance scripts) ---
+mindcare_api/logs/
+
+# --- AI tools local settings (не синхронизировать) ---
 .claude/
+.gemini/
+.cursor/
+.copilot/
+.aider/
+.aider.conf.yml
+.aider.model.settings.yml
+.continue/
+.codeium/
+
+# Версионные бэкапы изменяемых файлов (hook scripts/backup_hook.py).
+# Сам скрипт трекается в scripts/; gitignored только содержимое бэкапов.
+.backups/files/
+
+# Логи dev-режима (scripts/mindcare-mode.sh dev)
+.logs/
+
+# --- Приватная папка проекта ---
+private/

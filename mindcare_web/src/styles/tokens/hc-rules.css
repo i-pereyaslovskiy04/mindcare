@@ -1,0 +1,43 @@
+/*
+ * hc-rules.css — глобальные правила высококонтрастных тем.
+ *
+ * Действуют только при data-theme="hc-light" / "hc-dark". Компоненты
+ * ради них НЕ меняются: рамки, подчёркивание ссылок и усиленный фокус
+ * добавляются здесь поверх существующих CSS Modules.
+ *
+ * Импортируется ПОСЛЕ токенов hc-* (см. src/app/App.jsx).
+ */
+
+/* Видимая рамка у интерактивных элементов и полей — не только заливка. */
+:root[data-theme^='hc-'] button,
+:root[data-theme^='hc-'] input,
+:root[data-theme^='hc-'] select,
+:root[data-theme^='hc-'] textarea {
+  border: 2px solid var(--outline);
+}
+
+/* Ссылки в hc всегда подчёркнуты (смысл не кодируется только цветом). */
+:root[data-theme^='hc-'] a {
+  text-decoration: underline;
+}
+
+/* Усиленный фокус во всех темах hc. */
+:root[data-theme^='hc-'] :focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Декоративные градиенты героя в hc убираются: белый текст на светло-зелёном
+   градиенте не даёт AAA. Под градиентом лежит сплошная подложка --hero-bg
+   (см. Hero.module.css / PageHero.module.css), поэтому герой остаётся
+   читаемым: --hero-fg / --hero-muted / --hero-accent заданы под неё в
+   hc-light.css и hc-dark.css.
+   Селектор — по маркер-атрибуту data-hero-banner на корне баннера, НЕ по
+   подстроке класса: [class*='hero'] ловил и несвязанные локальные классы
+   вида .heroAvatar/.heroCard (карточка студента и т.п.), где под градиентом
+   нет запасного фона — текст/иконка становились невидимы. */
+:root[data-theme^='hc-'] [data-hero-banner],
+:root[data-theme^='hc-'] [data-hero-banner]::before,
+:root[data-theme^='hc-'] [data-hero-slide-bg] {
+  background-image: none;
+}

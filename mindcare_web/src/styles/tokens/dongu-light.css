@@ -1,0 +1,98 @@
+/*
+ * dongu-light.css — «ДонГУ», светлый вариант. Палитра по умолчанию.
+ *
+ * Фирменная бело-синяя гамма Донецкого государственного университета
+ * (источник — private/color_mode_kit.md, тема local/templates/dongu/):
+ * белый фон, графитовый текст, синий акцент доверия #2454A6, красный #B3212F.
+ * Структура и модель наследования — как в classic-light.css: легаси-алиасы
+ * замаплены по роли (warm-white/cream/milk/sand — уровни поверхностей,
+ * coffee/mocha/espresso — акцентная/текстовая шкала, latte/fog — серо-голубые
+ * границы), ролевые var()-цепочки (--surface/--primary/--on-surface…)
+ * наследуются от базового :root (coffee-light).
+ * Значения выверены под AA 4.5:1 (npm run test:contrast).
+ */
+
+:root[data-theme='dongu-light'] {
+  color-scheme: light;
+
+  /* ── Легаси-палитра (по роли) — фирменная бело-синяя гамма ДонГУ ── */
+  --cream: #F6F8FA;
+  --warm-white: #FFFFFF;
+  --latte: #C3D2E6;
+  --coffee: #2454A6; /* фирменный синий ДонГУ (primary) */
+  --espresso: #16233D; /* тёмно-синий ink: hero-bg, code, on-secondary */
+  --mocha: #1F4A8C;
+  --milk: #EEF2F7;
+  --fog: #D3DAE6;
+  --sand: #E4EAF3;
+
+  /* ── Background colors ── */
+  --nav-bg: #EEF2F7;
+  --nav-border: #DCE3EC;
+  --footer-bg: #E4EAF3;
+  --footer-border: #CDD7E4;
+
+  /* ── Text colors ── */
+  --text-main: #2E2E2E;
+  --text-muted: #5A616B;
+  /* text-light затемнён против исходного #6B7A91 ради AA 4.5:1 */
+  --text-light: #656C77;
+  --text-on-dark: #EAF1FB;
+
+  /* ── Status colors ── */
+  --error: #B3261E;
+  --error-bg: #FBEEEC;
+  --on-error: #FFFFFF;
+  --success: #2F7A46;
+
+  /* ── Ролевые токены (отличия от var()-цепочек) ── */
+  --secondary: #8AA6CC;
+  --on-secondary: #14233C;
+  --outline: #7C8AA1;
+
+  /* ── Софт-статусы и вспомогательные роли ── */
+  --success-bg: #E7F3EA;
+  --success-border: #B7DFC4;
+  --error-border: #FECACA;
+  --warning: #B5751C;
+  --warning-bg: #FEF6DE;
+  --warning-text: #7A4E0B;
+  --info-bg: #E6EDF7;
+  --info-text: #2454A6;
+  --tag-bg: #E9E6FA;
+  --tag-text: #4C33A8;
+  --code-bg: #16233D;
+  --code-text: #DDE5F0;
+  --danger: #B3212F; /* фирменный красный ДонГУ */
+  --danger-hover: #9E1D29;
+  --danger-active: #8A1924;
+  --danger-rgb: 179, 33, 47;
+
+  /* ── Поверхности-помощники ── */
+  --surface-elevated: #FFFFFF;
+  --surface-glass: rgba(255, 255, 255, 0.35);
+  --surface-glass-hover: rgba(255, 255, 255, 0.6);
+  --scrim: rgba(16, 35, 61, 0.45);
+  --overlay-surface: rgba(255, 255, 255, 0.93);
+
+  /* ── RGB-триплеты ── */
+  --coffee-rgb: 36, 84, 166;
+  --latte-rgb: 195, 210, 230;
+  --espresso-rgb: 22, 35, 61;
+  --milk-rgb: 238, 242, 247;
+  --text-light-rgb: 101, 108, 119;
+  --text-muted-rgb: 90, 97, 107;
+  --success-rgb: 47, 122, 70;
+  --error-rgb: 179, 38, 30;
+  --shadow-rgb: 16, 35, 61;
+
+  /* ── Индикатор сложности пароля ── */
+  --strength-weak: #C0392B;
+  --strength-medium: #B5751C;
+  --strength-strong: #2F7A46;
+
+  /* ── Тени ── */
+  --shadow-sm: 0 1px 3px rgba(16, 35, 61, 0.08);
+  --shadow-md: 0 4px 14px rgba(16, 35, 61, 0.10);
+  --shadow-lg: 0 14px 34px rgba(16, 35, 61, 0.16);
+}

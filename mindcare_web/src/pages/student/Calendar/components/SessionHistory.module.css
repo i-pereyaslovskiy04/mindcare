@@ -1,0 +1,115 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h3-sm);
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+/* Заголовок-переключатель: шрифт и цвет — заголовка, браузерный вид кнопки
+   сброшен. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.count {
+  color: var(--text-muted);
+}
+
+.chevron {
+  display: inline-flex;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.toggle:hover .chevron,
+.toggle:hover .count {
+  color: var(--text-main);
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.list[hidden] {
+  display: none;
+}
+
+/* Строка журнала: дата → название → психолог (→ тема) → итог.
+   Одна колонка на всех ширинах: без отдельной колонки даты, итог — часть
+   записи, не отдельная плашка. */
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--nav-border);
+  min-width: 0;
+}
+
+.item:first-child {
+  border-top: 1px solid var(--nav-border);
+}
+
+.date {
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+}
+
+.title {
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--text-main);
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.psych {
+  font-size: var(--fs-sub);
+  color: var(--text-light);
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.desc {
+  font-size: var(--fs-sub);
+  color: var(--text-muted);
+  line-height: 1.55;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.outcome {
+  margin-top: 4px;
+}
+
+/* Отменённая/отклонённая/неявка: запись остаётся, но без акцента. */
+.notHeld .title {
+  color: var(--text-muted);
+  font-weight: 400;
+}

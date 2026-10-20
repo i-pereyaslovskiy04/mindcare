@@ -1,0 +1,96 @@
+.modalTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--espresso);
+  margin: 0 0 8px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 28px 28px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.input {
+  padding: 9px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--warm-white);
+  color: var(--text-main);
+}
+
+.input:focus { border-color: var(--coffee); }
+.inputError  { border-color: var(--error); }
+
+.hint {
+  font-size: 12px;
+  color: var(--error);
+}
+
+/* Чекбокс центрируется по высоте control'а DateInput (40px), а не липнет
+   к нижней границе поля (у DateInput есть label над control'ом). */
+.fieldCheck {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .fieldCheck {
+    min-height: 0;
+  }
+}
+
+
+.formError {
+  padding: 10px 14px;
+  background: var(--error-bg);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--error);
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.editorSkeleton {
+  height: 200px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: var(--fog);
+}

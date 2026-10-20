@@ -1,0 +1,275 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--on-surface-variant);
+}
+
+.counter {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.state,
+.empty {
+  margin: 0;
+  padding: 16px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+/* Строки контактов разделены тонкой линией — без карточки вокруг каждой. */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  margin: 0;
+  padding: 12px 0;
+}
+
+.item:first-child {
+  padding-top: 4px;
+}
+
+.item + .item {
+  border-top: 1px solid var(--nav-border);
+}
+
+/* Широкий экран — одна строка: «Способ связи» | значение | «Удалить»;
+   «Название» и ошибка прежней подписи — следующими строками. Колонка «Удалить»
+   узкая (по размеру кнопки), общий column-gap небольшой — три элемента читаются
+   как одна строка. Колонки гибкие (minmax(0, …)), длинные значения и ошибки
+   переносятся. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) 40px;
+  gap: 10px 10px;
+  align-items: start;
+  min-width: 0;
+  border-radius: 8px;
+}
+
+.row:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.methodField,
+.valueField,
+.nameField {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.methodField {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.valueField {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.deleteCell {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Распорка той же высоты, что подпись поля (TextField/Select appearance="field"):
+   кнопка стоит на одной линии с контролами и при увеличенном шрифте. */
+.deleteSpacer {
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Кнопка — той же высоты, что поле (min-height 40px у appearance="field"),
+   и стоит вплотную к нему по вертикали. */
+.deleteCell .deleteButton {
+  width: 40px;
+  height: 40px;
+}
+
+.nameField {
+  grid-column: 1 / 3;
+}
+
+/* Сенсорный ввод: зона нажатия «Удалить» не меньше 44×44. */
+@media (hover: none) {
+  .row {
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) 44px;
+  }
+
+  .deleteCell .deleteButton {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Ошибка прежней (скрытой) подписи: поля на экране нет, действие — явное. */
+.rowAlert {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 13px;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.rowAlertText {
+  flex: 1 1 240px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: -4px;
+}
+
+/* Зона сохранения: отделена от списка тонкой линией и отступом; без фона. */
+.saveZone {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+  padding-top: 18px;
+  border-top: 1px solid var(--nav-border);
+  min-width: 0;
+}
+
+.limitHint {
+  font-size: 12.5px;
+  color: var(--on-surface-variant);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Статус черновика — вторичный текст рядом с кнопками. */
+.dirty {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--on-surface-variant);
+  min-width: 0;
+}
+
+.alert,
+.success,
+.conflict {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.alert {
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+}
+
+.success {
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+}
+
+.conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--on-surface);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+}
+
+.conflictText {
+  margin: 0;
+}
+
+.saved {
+  font-size: 12.5px;
+}
+
+.saved summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.saved ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.conflictActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.loadError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Узкий экран: поля друг под другом на всю ширину, «Удалить» — справа в
+   верхней строке блока (рядом со «Способом связи»). */
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .valueField,
+  .nameField {
+    grid-column: 1 / -1;
+  }
+
+  .valueField {
+    grid-row: 2;
+  }
+
+  .deleteCell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

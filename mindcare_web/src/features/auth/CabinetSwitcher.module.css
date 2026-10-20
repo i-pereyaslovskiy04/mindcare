@@ -1,0 +1,180 @@
+.root {
+  position: relative;
+}
+
+.rootSidebar {
+  display: block;
+  width: 100%;
+}
+
+.rootCompact {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.staticRole,
+.triggerLabel {
+  font-size: 12px;
+  font-weight: 600;
+  /* Наследуем цвет окружения: в сайдбаре — цвет подписи роли. */
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.staticRole {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.85;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  flex: 0 0 auto;
+}
+
+/* Trigger при нескольких ролях — видимая кнопка-действие (рамка, фон,
+   надпись «Сменить кабинет»), а не подпись роли. Только токены темы: hover и
+   фокус видны и на светлом, и на тёмном фоне навигации. */
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 5px 10px;
+  background: rgba(var(--coffee-rgb), 0.06);
+  border: 1px solid var(--nav-border);
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--espresso);
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar {
+  width: 100%;
+}
+
+.trigger:hover {
+  background: rgba(var(--coffee-rgb), 0.12);
+  border-color: var(--coffee);
+}
+
+.trigger:focus-visible {
+  /* Внутрь: блок пользователя в sidebar обрезает выступающее кольцо. */
+  outline: 2px solid var(--coffee);
+  outline-offset: -2px;
+}
+
+.trigger[aria-expanded='true'] {
+  border-color: var(--coffee);
+}
+
+.triggerText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.triggerAction {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--coffee);
+  white-space: nowrap;
+}
+
+.triggerCurrent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--espresso);
+}
+
+.chevron {
+  font-size: 11px;
+  line-height: 1;
+  color: var(--coffee);
+  flex: 0 0 auto;
+}
+
+.compact {
+  min-height: 32px;
+  padding: 3px 8px;
+}
+
+/* Узкий topbar: подпись действия остаётся в доступном имени и в mobile
+   drawer (полный вариант); в topbar — только текущая роль и шеврон. */
+@media (max-width: 600px) {
+  .compact .triggerAction {
+    display: none;
+  }
+}
+
+.panel {
+  /* fixed (не absolute) — координаты считает JS (getBoundingClientRect),
+     чтобы панель не обрезалась overflow:hidden сайдбара и не уходила за
+     край viewport на узких ширинах; z-index выше mobile drawer (100). */
+  position: fixed;
+  z-index: 150;
+  min-width: 180px;
+  max-width: 240px;
+  padding: 6px;
+  /* Theme-aware токены (как в Select-дропдауне): в тёмных темах панель и текст
+     переопределяются по ролям, поэтому текст остаётся читаемым. Прежние
+     --surface/--text/--border в проекте не определены и откатывались на
+     хардкод #1c1c1c → тёмное на тёмном в dark-темах. */
+  background: var(--warm-white);
+  color: var(--text-main);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), 0.18);
+}
+
+.panelTitle {
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-light);
+}
+
+.option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: rgba(var(--espresso-rgb), 0.08);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: -2px;
+}
+
+.current {
+  font-weight: 700;
+  color: var(--coffee);
+}

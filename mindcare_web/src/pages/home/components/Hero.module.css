@@ -1,0 +1,238 @@
+.hero {
+  /* Сплошная подложка + декоративный градиент поверх неё: если тема отключает
+     background-image (hc), герой остаётся читаемым, а не прозрачным. */
+  background-color: var(--hero-bg);
+  background-image: linear-gradient(135deg, var(--hero-grad-1) 0%, var(--hero-grad-2) 50%, var(--hero-grad-3) 100%);
+  min-height: clamp(420px, 50vh, 700px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(ellipse at 20% 50%, rgba(var(--latte-rgb), 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(var(--milk-rgb), 0.06) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Опциональный фон-картинка слайда (заполняется через CMS) — полноширинный
+   слой поверх декоративного градиента .hero, а не внутри .heroInner: иначе
+   картинка была бы ограничена 700px текстовой колонки. Кросс-фейд по
+   opacity — та же логика и то же время, что у .heroSlide (0.6s).
+   Затемнение — rgba(var(--hero-bg-rgb), a), НЕ var(--scrim): --hero-bg-rgb
+   переворачивается вместе с --hero-fg в тёмных/hc/a11y-темах (оба выводятся
+   из одной и той же --espresso/--a11y-bg), поэтому текст поверх гарантированно
+   контрастен. --scrim в тёмных темах всегда чёрный независимо от того, что
+   --hero-fg в этой теме тоже мог стать тёмным — на нём текст слился бы. */
+.heroSlideBg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to bottom, transparent 40%, rgba(var(--hero-bg-rgb), 0.85)),
+    var(--slide-image);
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+.heroSlideBg.slideActive {
+  opacity: 1;
+}
+
+.heroInner {
+  position: relative;
+  text-align: center;
+  padding: clamp(60px, 7vw, 100px) var(--container-px);
+  max-width: min(700px, 90vw);
+  width: 100%;
+}
+
+.heroLabel {
+  font-size: var(--fs-tag);
+  letter-spacing: var(--ls-label);
+  color: var(--hero-accent);
+  text-transform: uppercase;
+  margin-bottom: 18px;
+  font-weight: 600;
+}
+
+.heroTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h1);
+  font-weight: 300;
+  color: var(--hero-fg);
+  line-height: var(--lh-h1);
+  margin-bottom: 20px;
+}
+
+.heroTitleHighlight {
+  font-style: italic;
+  color: var(--hero-accent);
+}
+
+.heroSub {
+  font-size: var(--fs-body);
+  color: var(--hero-muted);
+  line-height: var(--lh-body);
+  font-weight: 300;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.heroCta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 32px;
+  padding: 12px 28px;
+  border: 1.5px solid var(--hero-accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hero-accent);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.18s, color 0.18s;
+}
+
+.heroCta:hover {
+  background: var(--hero-accent);
+  color: var(--hero-on-accent);
+}
+
+.heroCta:focus-visible {
+  outline: 2.5px solid var(--hero-accent);
+  outline-offset: 3px;
+}
+
+.heroArrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(var(--hero-accent-rgb), 0.10);
+  border: 1px solid rgba(var(--hero-accent-rgb), 0.4);
+  color: var(--hero-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s ease, transform 0.2s ease;
+  z-index: 2;
+}
+
+.heroArrow:hover {
+  background: rgba(var(--hero-accent-rgb), 0.2);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.heroArrow:focus-visible {
+  outline: 2px solid var(--hero-accent);
+  outline-offset: 3px;
+}
+
+.heroArrowLeft  { left: 20px; }
+.heroArrowRight { right: 20px; }
+
+@media (max-width: 600px) {
+  .heroArrow { display: none; }
+}
+
+.heroSlider {
+  display: grid;
+  width: 100%;
+}
+
+.heroSlide {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+.heroSlide.slideActive {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Полупрозрачная подложка под текстом — только когда у слайда задана
+   фоновая картинка (см. .heroSlideBg): без неё читаемость текста зависит от
+   случайного содержимого фото. rgba(var(--hero-bg-rgb), a) — тот же токен,
+   что у затемняющего градиента heroSlideBg, и та же причина не брать
+   var(--scrim) напрямую (см. комментарий там: --scrim не связан с --hero-fg
+   и в тёмных/hc/a11y-темах остаётся чёрным, даже если --hero-fg там сам стал
+   тёмным — текст слился бы с подложкой). Без картинки класс .hasImage не
+   добавляется — текущий вид не меняется. */
+.heroSlide.hasImage {
+  background: rgba(var(--hero-bg-rgb), 0.82);
+  border-radius: 20px;
+  padding: 28px 36px;
+}
+
+@media (max-width: 480px) {
+  .heroSlide.hasImage {
+    padding: 20px 20px;
+  }
+}
+
+.heroDots {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 7px;
+}
+
+.heroDot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(var(--hero-accent-rgb), 0.4);
+  display: block;
+  cursor: pointer;
+  transition: width 0.3s ease, background 0.3s ease, border-radius 0.3s ease;
+}
+
+.heroDot:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.heroDot.active {
+  background: var(--hero-accent);
+  width: 20px;
+  border-radius: 4px;
+}
+
+@media (max-width: 480px) {
+  /* clamp() vertical padding is 60px min — reduce for tight screens */
+  .heroInner {
+    padding-top: 44px;
+    padding-bottom: 44px;
+  }
+
+  .heroLabel {
+    margin-bottom: 12px;
+  }
+
+  .heroSub {
+    font-size: 15px;
+  }
+}

@@ -1,0 +1,38 @@
+[Unit]
+Description=MindCare maintenance: anonymize old IP addresses in audit logs (Stage 7)
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_7_DEPLOYMENT.md
+After=network-online.target postgresql.service
+Requires=postgresql.service
+# Падение (exit != 0) поднимает шаблонный обработчик мониторинга.
+OnFailure=mindcare-maintenance-failure@mindcare-anonymize-ips.service
+
+[Service]
+# Разовый прогон по таймеру: успех = exit 0 (включая «нечего делать»), любой
+# сбой (конфигурация / соединение / привилегии / выполнение) = exit 1.
+# Мониторинг строится на exit code, а не на разборе логов.
+Type=oneshot
+User=vitbo
+Group=vitbo
+WorkingDirectory=/media/data2/psycho/mindcare/mindcare_api
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/media/data2/psycho/mindcare/mindcare_api/.venv/bin/python scripts/anonymize_old_ips.py --days 90
+
+# В установившемся режиме прогон затрагивает примерно однодневный срез строк,
+# пересёкших границу, — это секунды. Патологический объём существует ровно один
+# раз, при первом прогоне на накопленных данных, и он по дизайну выполняется
+# ВРУЧНУЮ, вне systemd и без таймаута (см. STAGE_7_DEPLOYMENT.md).
+#
+# ⚠ Если тик таймера когда-либо упрётся в этот таймаут — НЕ поднимать значение
+# вслепую. SIGTERM рвёт соединение, PostgreSQL откатывает транзакцию целиком, и
+# работа теряется на каждом тике. Это сигнал аномалии (простой таймера, скачок
+# объёма): остановить таймер, разобрать backlog ручным прогоном, вернуть таймер.
+TimeoutStartSec=1800
+
+# Диагностика минимизирована на стороне скрипта (только phase + класс
+# исключения); в journal не должно попадать str(exc)/SQL/DATABASE_URL/IP.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mindcare-anonymize-ips
+
+[Install]
+WantedBy=multi-user.target

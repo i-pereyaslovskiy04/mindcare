@@ -1,0 +1,53 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--warm-white);
+}
+
+.bounds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.boundsLabel {
+  color: var(--text-muted);
+}
+
+.bound {
+  font-weight: 600;
+}
+
+.issues {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.issues li::marker {
+  color: var(--error);
+}
+
+.ok {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}

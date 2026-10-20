@@ -1,0 +1,28 @@
+[Unit]
+Description=MindCare maintenance: auto-extend schedule series (Stage 5C-3)
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_5C_DEPLOYMENT.md
+After=network-online.target postgresql.service
+Requires=postgresql.service
+# Падение (exit != 0) поднимает шаблонный обработчик мониторинга.
+OnFailure=mindcare-maintenance-failure@mindcare-extend-schedules.service
+
+[Service]
+# Разовый прогон по таймеру: успех = exit 0, любой сбой = exit 1.
+# Продление идёт per-series транзакциями с FOR UPDATE SKIP LOCKED, поэтому
+# параллельный запуск безопасен: второй worker пропускает занятые серии.
+Type=oneshot
+User=vitbo
+Group=vitbo
+WorkingDirectory=/media/data2/psycho/mindcare/mindcare_api
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/media/data2/psycho/mindcare/mindcare_api/.venv/bin/python scripts/extend_schedules.py --within-days 14 --months 1
+
+TimeoutStartSec=900
+
+# Диагностика минимизирована на стороне скрипта (phase + класс исключения).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mindcare-extend-schedules
+
+[Install]
+WantedBy=multi-user.target

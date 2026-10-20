@@ -1,400 +1,1329 @@
-# MindCare Frontend — React Architecture
-
-> Production-ready React application с чистой архитектурой и компонентным подходом
-
-## 📋 Структура проекта
-
-```
-src/
-├── components/                 # Переиспользуемые компоненты UI
-│   ├── Navbar/                # Навигация
-│   │   ├── Navbar.jsx
-│   │   └── Navbar.module.css
-│   ├── Hero/                  # Герой секция
-│   │   ├── Hero.jsx
-│   │   └── Hero.module.css
-│   ├── QuickActions/          # Быстрые действия (3 карточки)
-│   │   ├── QuickActions.jsx
-│   │   └── QuickActions.module.css
-│   ├── News/                  # Новости (многоуровневая структура)
-│   │   ├── NewsSection.jsx    # Основной контейнер
-│   │   ├── FeaturedNews.jsx   # Крупная новость
-│   │   ├── NewsCardSmall.jsx  # Маленькие карточки
-│   │   ├── NewsListItem.jsx   # Элемент списка
-│   │   └── NewsSection.module.css
-│   ├── Footer/                # Подвал с соцсетями
-│   │   ├── Footer.jsx
-│   │   └── Footer.module.css
-│   ├── AuthModal/             # Модальное окно авторизации
-│   │   ├── AuthModal.jsx      # Основной компонент
-│   │   ├── LoginForm.jsx      # Форма входа с валидацией
-│   │   ├── RegisterForm.jsx   # Форма регистрации с проверкой пароля
-│   │   └── AuthModal.module.css
-│   └── CookieBanner/          # Баннер cookies
-│       ├── CookieBanner.jsx
-│       └── CookieBanner.module.css
-├── pages/                     # Page-level компоненты
-│   └── Home.jsx              # Главная страница (сборка всех компонентов)
-├── hooks/                     # Custom React hooks
-│   └── useIntersectionObserver.js  # (подготовлено для будущих нужд)
-├── services/                  # API и внешние сервисы
-│   └── api.js                # Централизованный API клиент для FastAPI
-├── styles/                    # Глобальные стили
-│   ├── variables.css         # CSS переменные (цвета, типография, layout)
-│   └── global.css            # Глобальные стили, reset, utilities
-├── App.js                     # Главный компонент приложения
-├── App.css                    # (устарело, используй компонентные стили)
-├── index.js                   # Entry point
-└── index.css                  # (устарело, используй global.css)
-```
-
-## 🎨 Архитектура стилей
-
-### CSS Modules per Component
-Каждый компонент имеет собственный `.module.css` файл:
-
-```jsx
-import styles from './MyComponent.module.css';
-
-export default function MyComponent() {
-  return <div className={styles.container}>...</div>;
-}
-```
-
-### CSS Variables (Design Tokens)
-Все цвета, размеры и типография определены в `src/styles/variables.css`:
-
-```css
-:root {
-  --cream: #F5F0E8;
-  --coffee: #8B6F47;
-  --fs-h1: clamp(40px, 3.2vw, 64px);
-  --ease-card: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-```
-
-### Global Styles
-`src/styles/global.css` содержит:
-- Типографию (шрифты, базовые стили)
-- Reset и normalize
-- Utilities (`.container`, `.section-wrap`, и т.д.)
-
-## 🔧 Компоненты
-
-### Navbar
-- Логотип с выделением
-- Навигационные ссылки
-- Кнопка входа с иконкой
-- **Props**: `onOpenAuth` — callback для открытия модального окна
-
-### Hero
-- Героический фон с градиентом
-- Адаптивный текст
-- Декоративные точки (dots)
-- **Статик компонент** (не требует props)
-
-### QuickActions
-- 3 интерактивные карточки
-- Иконки (календарь, звезда, юзер)
-- **Props**: `onOpenAuth` — для карточки "Личный кабинет"
-
-### NewsSection (Сложная структура)
-Содержит:
-- **FeaturedNews** — Крупная новость с hover эффектами
-- **NewsCardSmall** × 2 — Маленькие карточки в колонке
-- **NewsListItem** × 3 — Список новостей
-- **Pagination** — Пагинация
-
-**Особенности**:
-- IntersectionObserver для анимации появления
-- Разные иконки для разных типов новостей
-- Полная поддержка keyboard navigation (Enter, Space)
-
-### Footer
-- Логотип и описание
-- Навигационные ссылки
-- 3 социальные сети (VK, Telegram, Yandex)
-- Легальные ссылки и копирайт
-
-### AuthModal (Самый сложный)
-
-#### Структура:
-```
-AuthModal (родитель)
-├── LoginForm (активна если tab === 'login')
-│   ├── Social buttons (Telegram, VK, Yandex)
-│   ├── Email field (с валидацией)
-│   ├── Password field
-│   ├── "Забыли пароль?" ссылка
-│   └── Submit button
-└── RegisterForm (активна если tab === 'register')
-    ├── Social buttons
-    ├── Name field (мин. 2 символа)
-    ├── Email field
-    ├── Password field (с индикатором силы)
-    │   ├── Strength bars (слабый/средний/надёжный)
-    │   └── Strength label
-    ├── Confirm password field
-    ├── Consent checkbox (политика)
-    └── Submit button
-```
-
-#### Валидация:
-- **Email**: Regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
-- **Password**: Минимум 8 символов
-- **Strength**: Учитывает длину, заглавные буквы, цифры, спец. символы
-- **Все поля обязательны**
-
-#### Поведение:
-- Клавиша Escape закрывает модаль
-- Клик вне карточки закрывает
-- Анимация появления/исчезновения
-- После успешной отправки: симуляция (1.2-1.4 сек) → успех → закрытие
-
-### CookieBanner
-- Появляется через 900мс после загрузки
-- Сохраняет выбор в localStorage
-- Не показывается повторно
-- Гладкая анимация появления/исчезновения
-
-## 🚀 Использование компонентов
-
-### Базовая страница (Home.jsx)
-
-```jsx
-import { useState } from 'react';
-import Navbar from '../components/Navbar/Navbar';
-import AuthModal from '../components/AuthModal/AuthModal';
-import Footer from '../components/Footer/Footer';
-
-export default function Home() {
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-
-  return (
-    <>
-      <Navbar onOpenAuth={() => setIsAuthModalOpen(true)} />
-      {/* ... остальные компоненты */}
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-    </>
-  );
-}
-```
-
-## 🔌 API Integration
-
-Все API вызовы централизованы в `src/services/api.js`:
-
-```javascript
-// Примеры
-await login(email, password);           // POST /api/login
-await register(name, email, password);  // POST /api/register
-await getProfile();                     // GET /api/profile
-await logout();                         // POST /api/logout
-await getNews(page, limit);            // GET /api/news?page=X&limit=Y
-await bookAppointment(data);           // POST /api/appointments
-await getPsychologists();              // GET /api/psychologists
-```
-
-**Базовый URL** берется из переменной окружения:
-```
-REACT_APP_API_URL=http://localhost:8000/api
-```
-
-Или использует прокси из `package.json`:
-```json
-"proxy": "http://localhost:8000"
-```
-
-## 🎨 Стили и Кастомизация
-
-### Добавление нового компонента
-
-1. **Создайте папку**:
-   ```
-   src/components/MyComponent/
-   ```
-
-2. **Создайте JSX файл**:
-   ```jsx
-   import styles from './MyComponent.module.css';
-
-   export default function MyComponent({ prop1, prop2 }) {
-     return <div className={styles.container}>...</div>;
-   }
-   ```
-
-3. **Создайте CSS module**:
-   ```css
-   .container {
-     background: var(--cream);
-     padding: var(--container-px);
-     border-radius: 12px;
-     transition: background 0.15s ease;
-   }
-
-   .container:hover {
-     background: var(--sand);
-   }
-   ```
-
-4. **Используйте в других компонентах**:
-   ```jsx
-   import MyComponent from '../components/MyComponent/MyComponent';
-
-   export default function Page() {
-     return <MyComponent prop1="value" />;
-   }
-   ```
-
-### CSS Переменные (Design System)
-
-**Цвета** (в `variables.css`):
-```css
---cream: #F5F0E8;        /* Фон */
---warm-white: #FAF7F2;   /* Теплый белый */
---latte: #C9B99A;        /* Светло-коричневый */
---coffee: #8B6F47;       /* Коричневый */
---espresso: #4A3728;     /* Темный коричневый */
-```
-
-**Типография**:
-```css
---fs-h1: clamp(40px, 3.2vw, 64px);  /* Адаптивный размер */
---lh-h1: 1.12;                      /* Line height */
---ls-nav: 0.03em;                   /* Letter spacing */
-```
-
-**Layout**:
-```css
---container-max: 1320px;        /* Макс ширина */
---container-px: clamp(16px, 4vw, 80px);  /* Адаптивные отступы */
---grid-gap: clamp(12px, 1.2vw, 18px);    /* Зазор сетки */
-```
-
-## 📱 Responsive Design
-
-Все компоненты адаптивны с использованием:
-- **CSS Grid** для макетов
-- **Clamp()** для адаптивных размеров
-- **Media queries** для больших изменений
-
-```css
-@media (max-width: 1024px) {
-  .newsGrid {
-    grid-template-columns: 1fr;  /* От 2 колонок к 1 */
-  }
-}
-
-@media (max-width: 768px) {
-  .socialBtns {
-    justify-content: center;
-    gap: 10px;
-  }
-}
-```
-
-## ♿ Accessibility
-
-Все компоненты соблюдают WCAG 2.1:
-- Семантические HTML теги (`<button>`, `<nav>`, `<section>`, `<footer>`)
-- `aria-*` атрибуты для модалей, лейблов, иконок
-- Keyboard navigation (Tab, Enter, Space, Escape)
-- Контраст цветов соответствует стандартам
-- Фокусные стили (`:focus-visible`)
-
-Пример:
-```jsx
-<button
-  className={styles.authClose}
-  onClick={onClose}
-  aria-label="Закрыть"
-  type="button"
->
-  <CloseIcon />
-</button>
-```
-
-## 🧪 Тестирование
-
-### Для компонентов используйте Jest + React Testing Library:
-
-```javascript
-import { render, screen } from '@testing-library/react';
-import Navbar from './Navbar';
-
-test('renders navbar with navigation links', () => {
-  render(<Navbar onOpenAuth={() => {}} />);
-  expect(screen.getByText('Главная')).toBeInTheDocument();
-});
-```
-
-## 🚀 Развертывание
-
-### Production build:
-```bash
-npm run build
-```
-
-Будет создана папка `build/` с оптимизированным кодом.
-
-### С Docker:
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --production
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-## 📝 Лучшие практики
-
-### ✅ Делайте так:
-- Используйте CSS Modules для изоляции стилей
-- Разделяйте логику и представление
-- Пишите компоненты как функции
-- Используйте мемоизацию где нужно (`React.memo`, `useMemo`)
-- Документируйте пропсы в JSDoc
-
-### ❌ Не делайте так:
-- Не используйте inline стили
-- Не миксуйте CSS и CSS-in-JS
-- Не создавайте огромные компоненты (>300 строк)
-- Не забывайте про accessibility
-- Не коммитьте console.log и дебаг-код
-
-## 🔗 Интеграция с Backend (FastAPI)
-
-Приложение готово к интеграции с FastAPI через `src/services/api.js`.
-
-### Требуемые endpoint'ы:
-
-```
-POST   /api/login              — Вход
-POST   /api/register           — Регистрация
-POST   /api/logout             — Выход
-GET    /api/profile            — Профиль юзера
-POST   /api/forgot-password    — Забыл пароль
-POST   /api/reset-password     — Восстановить пароль
-GET    /api/news               — Список новостей
-GET    /api/news/:id           — Одна новость
-GET    /api/psychologists      — Список психологов
-POST   /api/appointments       — Забронировать прием
-GET    /api/psychologists/:id/available-slots — Доступные времена
-```
-
-Все endpoint'ы должны возвращать JSON.
-
-## 📚 Дополнительные ресурсы
-
-- [React Documentation](https://react.dev)
-- [CSS Modules](https://github.com/css-modules/css-modules)
-- [WCAG Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
-- [Clamp() функция](https://developer.mozilla.org/en-US/docs/Web/CSS/clamp)
+# MindCare Web — Architecture Document
+
+> Updated: 2026-07-16
+> Stack: React 19 · React Router 7 · CSS Modules · CRA (Create React App)
+> Purpose: University psychology center — public informational site with role-based dashboards and a full authentication flow.
 
 ---
 
-**Автор**: Senior Frontend Developer | Дата: 2025  
-**Версия**: 1.0.0 (Production Ready)
+## 1. Project Tree
+
+```
+mindcare_web/
+├── package.json               proxy → http://localhost:8000
+└── src/
+    ├── index.js               DOM entry point
+    ├── reportWebVitals.js
+    ├── setupTests.js          ← jest-dom matchers (CRA stale App.test.js removed)
+    │
+    ├── app/                   ← shell: providers + routing
+    │   ├── App.jsx
+    │   ├── providers.jsx
+    │   └── router.jsx
+    │
+    ├── api/                   ← ALL HTTP calls live here
+    │   ├── client.js          ← transport: token injection + 401 retry
+    │   ├── auth.api.js
+    │   ├── users.api.js       ← /api/admin/users/* (CRUD пользователей)
+    │   ├── domains.api.js     ← /api/admin/email-domains (allowlist регистрации)
+    │   ├── audit.api.js       ← /api/admin/audit/* (read-only журналы аудита)
+    │   ├── tags.api.js        ← /api/admin/tags/* + /api/tags (UI: «Темы»)
+    │   ├── categories.api.js  ← /api/admin/categories/* (UI: «Типы материалов»)
+    │   ├── news.api.js
+    │   ├── articles.api.js
+    │   ├── materials.api.js
+    │   ├── diary.api.js       ← /api/diary/* (today, history, edit/delete, summary)
+    │   ├── supervisor.api.js  ← /api/supervisor/* (students, psychologists, engagements)
+    │   ├── appointments.api.js
+    │   ├── media.api.js       ← /api/media/upload
+    │   └── health.api.js      ← /health
+    │
+    ├── shared/
+    │   └── lib/
+    │       ├── roles.js       ← multi-role normalize/priority/labels
+    │       └── utils.js       ← getInitials() и другие общие утилиты
+    │
+    ├── data/                  ← dev/mock data only
+    │   ├── news.mock.js
+    │   └── materials.mock.js
+    │
+    ├── hooks/                 ← app-wide reusable hooks
+    │   ├── useDebounce.js
+    │   ├── useNews.js
+    │   └── useMaterials.js
+    │
+    ├── features/
+    │   ├── auth/
+    │   │   ├── AuthContext.jsx
+    │   │   ├── ui/
+    │   │   │   ├── AuthModal.jsx + .module.css
+    │   │   │   ├── LoginForm.jsx
+    │   │   │   ├── RegisterForm.jsx
+    │   │   │   ├── RegistrationOtpStep.jsx      # общий шаг кода (пароль, Яндекс, VK)
+    │   │   │   ├── SocialEmailStep.jsx          # шаг «Почта для регистрации» (VK)
+    │   │   │   └── SocialRegistrationFlow.jsx   # регистрация через провайдера внутри AuthModal
+    │   │   ├── pages/
+    │   │   │   └── OAuthCallbackPage.jsx   # /auth/callback — технический маршрут (Яндекс ID, VK ID)
+    │   │   └── forgot-password/
+    │   │       ├── ForgotPasswordModal.jsx
+    │   │       ├── ForgotPasswordStepper.jsx
+    │   │       ├── hooks/
+    │   │       │   └── useForgotPassword.js
+    │   │       ├── components/
+    │   │       │   ├── OTPInput.jsx
+    │   │       │   └── PasswordStrength.jsx
+    │   │       └── steps/
+    │   │           ├── StepEmail.jsx
+    │   │           ├── StepOTP.jsx
+    │   │           ├── StepNewPassword.jsx
+    │   │           └── StepSuccess.jsx
+    │   ├── news/
+    │   │   └── components/
+    │   │       ├── NewsSection.jsx + .module.css
+    │   │       ├── FeaturedNews.jsx
+    │   │       ├── NewsCardSmall.jsx
+    │   │       └── NewsListItem.jsx
+    │   ├── profile/
+    │   │   └── pages/
+    │   │       └── ProfilePage.jsx
+    │   ├── supervisor/          ← модуль назначения психологов (роль: supervisor)
+    │   │   ├── hooks/
+    │   │   │   └── useStudents.js
+    │   │   └── components/
+    │   │       └── AssignModal.jsx + .module.css
+    │   └── admin/             ← панель управления (role: admin)
+    │       ├── AdminLayout.jsx + .module.css
+    │       ├── users/
+    │       │   ├── hooks/
+    │       │   │   ├── useAdminUsers.js
+    │       │   │   └── useUserForm.js
+    │       │   ├── components/
+    │       │   │   ├── UsersTable.jsx + .module.css
+    │       │   │   ├── UsersFilters.jsx + .module.css
+    │       │   │   ├── UserCreateModal.jsx
+    │       │   │   ├── UserEditModal.jsx
+    │       │   │   └── DeleteConfirmDialog.jsx
+    │       │   └── pages/
+    │       │       └── UsersPage.jsx
+    │       ├── categories/      ← UI: «Типы материалов»
+    │       │   ├── hooks/
+    │       │   │   └── useAdminCategories.js
+    │       │   ├── components/
+    │       │   │   ├── CategoriesTable.jsx + .module.css
+    │       │   │   └── CategoryFormModal.jsx + .module.css
+    │       │   └── pages/
+    │       │       └── CategoriesPage.jsx + .module.css
+    │       ├── tags/            ← UI: «Темы»
+    │       │   ├── hooks/
+    │       │   │   └── useAdminTags.js
+    │       │   ├── components/
+    │       │   │   ├── TagsTable.jsx + .module.css
+    │       │   │   └── TagFormModal.jsx + .module.css
+    │       │   └── pages/
+    │       │       └── TagsPage.jsx + .module.css
+    │       ├── news/
+    │       │   ├── hooks/useAdminNews.js
+    │       │   ├── components/NewsFormModal.jsx + NewsTable.jsx
+    │       │   └── pages/NewsPage.jsx
+    │       ├── articles/
+    │       │   ├── hooks/useAdminArticles.js
+    │       │   ├── components/ArticleFormModal.jsx + ArticlesTable.jsx
+    │       │   └── pages/ArticlesPage.jsx
+    │       ├── email-domains/
+    │       │   ├── hooks/useAllowedDomains.js
+    │       │   ├── components/EmailDomainsSection.jsx + .module.css
+    │       │   └── pages/EmailDomainsPage.jsx + .module.css
+    │       ├── audit/                    ← read-only просмотр журналов аудита
+    │       │   ├── lib/auditLabels.js + auditFormatters.js + auditFilters.js
+    │       │   ├── hooks/useAdminAuditLogs.js + useAuditOptions.js
+    │       │   │        + useAuditActorSearch.js
+    │       │   ├── components/AuditTabs.jsx + AuditFilters.jsx
+    │       │   │        + AuditActorPicker.jsx + AuditTableShell.jsx
+    │       │   │        + AuditEventsTable.jsx + AuthEventsTable.jsx
+    │       │   │        + DataChangesTable.jsx + AuditDetailsModal.jsx
+    │       │   │        + AuditPagination.jsx
+    │       │   └── pages/AuditLogsPage.jsx + .module.css
+    │       └── settings/
+    │           └── pages/AdminSettingsPage.jsx + .module.css
+    │
+    ├── components/            ← domain-agnostic UI primitives
+    │   ├── Icon/
+    │   │   └── Icon.jsx       ← общий SVG-компонент (name, size, stroke)
+    │   ├── CabinetLayout/     ← общий layout кабинетов student, psychologist и supervisor
+    │   │   ├── CabinetLayout.jsx + .module.css
+    │   │   └── CabinetSettingsPage.jsx + .module.css
+    │   ├── CabinetHeader/     ← общая шапка всех кабинетов и админки (ADR-031)
+    │   │   ├── CabinetHeader.jsx + .module.css
+    │   │   └── breadcrumbs.js ← resolveBreadcrumbs (только явные подписи)
+    │   ├── Modal/             ← общая модалка: смонтирована всегда, закрытая —
+    │   │   ├── Modal.jsx         inert + visibility:hidden после fade-out
+    │   │   └── Modal.module.css  (вне Tab и дерева доступности)
+    │   ├── CodeInput/
+    │   │   └── CodeInput.jsx + .module.css
+    │   ├── Navbar/
+    │   │   ├── Navbar.jsx
+    │   │   └── Navbar.module.css
+    │   ├── Footer/
+    │   │   ├── Footer.jsx
+    │   │   └── Footer.module.css
+    │   ├── Hero/
+    │   │   ├── PageHero.jsx
+    │   │   └── PageHero.module.css
+    │   ├── CookieBanner/
+    │   │   ├── CookieBanner.jsx
+    │   │   └── CookieBanner.module.css
+    │   ├── UI/                    ← shared UI primitives (see docs/UI_COMPONENTS_GUIDE.md)
+    │   │   ├── Button/
+    │   │   │   ├── Button.jsx + .module.css
+    │   │   │   └── ButtonLink.jsx     ← router <Link> styled as Button
+    │   │   ├── Badge/
+    │   │   ├── Checkbox/
+    │   │   ├── FilterChip/
+    │   │   ├── Select/
+    │   │   ├── MultiSelect/
+    │   │   │   ├── MultiSelect.jsx
+    │   │   │   └── multiSelect.module.css
+    │   │   ├── DateInput/             ← date-only picker (custom popover, no native datetime-local)
+    │   │   │   ├── DateInput.jsx + .module.css
+    │   │   │   ├── dateHelpers.js     ← isoToDateOnly / dateOnlyToPublishedAtIso
+    │   │   │   └── popoverPosition.js ← computePopoverPosition (flip up/down + viewport clamp)
+    │   │   ├── Tag/
+    │   │   ├── Toggle/
+    │   │   ├── TiptapEditor/
+    │   │   │   └── TiptapEditor.jsx + .module.css
+    │   │   ├── ImageUpload/
+    │   │   │   └── ImageUpload.jsx + .module.css
+    │   │   └── ContentPreview/
+    │   │       └── ContentPreview.jsx + .module.css
+    │   └── icons/
+    │       └── index.jsx      ← старый набор иконок (публичная часть сайта)
+    │
+    ├── pages/                 ← composition only, no business logic
+    │   ├── home/
+    │   │   ├── Home.jsx
+    │   │   └── components/
+    │   │       ├── Hero.jsx + .module.css
+    │   │       └── QuickActions.jsx + .module.css
+    │   ├── about/
+    │   │   ├── About.jsx
+    │   │   └── components/
+    │   │       └── (AboutIntro, AboutMission, AboutApproach, AboutServicesPreview, AboutTrust, AboutMedia)
+    │   ├── services/
+    │   │   ├── Services.jsx + .module.css
+    │   │   └── components/
+    │   │       └── (ServicesSlider, ServiceCard, ProcessBlock, PrinciplesBlock)
+    │   ├── news/
+    │   │   ├── NewsPage.jsx
+    │   │   ├── NewsItemPage.jsx + .module.css
+    │   │   └── components/
+    │   │       ├── NewsGrid.jsx
+    │   │       └── Pagination.jsx
+    │   ├── materials/
+    │   │   ├── MaterialsPage.jsx + .module.css
+    │   │   ├── MaterialsItemPage.jsx + .module.css
+    │   │   └── components/
+    │   │       └── (SearchBar, FiltersDropdown, FilterSheet, MaterialsGrid, MaterialCard)
+    │   ├── health/
+    │   │   └── HealthPage.jsx
+    │   ├── not-found/
+    │   │   ├── NotFound.jsx
+    │   │   └── NotFound.module.css
+    │   ├── client/
+    │   │   └── ClientDashboard.jsx  ← Router Outlet-обёртка для /student/*
+    │   ├── student/             ← кабинет студента (собственный layout с Sidebar)
+    │   │   ├── StudentLayout.jsx
+    │   │   ├── StudentHome.jsx
+    │   │   ├── DiaryPage.jsx
+    │   │   ├── components/
+    │   │   │   ├── Sidebar/Sidebar.jsx + .module.css
+    │   │   │   ├── StatCard/StatCard.jsx
+    │   │   │   └── Diary/ (MoodSelector, DiaryEntryForm, DiaryHistoryList, DiaryEntryItem)
+    │   │   ├── Tests/TestsPage.jsx
+    │   │   ├── Materials/MaterialsPage.jsx + useStudentMaterials.js
+    │   │   ├── Tasks/TasksPage.jsx + components/TaskItem.jsx
+    │   │   ├── Chat/ChatPage.jsx + components/
+    │   │   ├── Calendar/CalendarPage.jsx + components/ + utils/ (real appointments API)
+    │   │   ├── GroupSessions/GroupSessionsPage.jsx
+    │   │   └── Settings/SettingsPage.jsx
+    │   ├── psychologist/        ← кабинет психолога (использует CabinetLayout)
+    │   │   ├── PsychologistLayout.jsx
+    │   │   └── PsychologistHome.jsx
+    │   │   ├── PsychologistStudentsPage.jsx
+    │   │   ├── PsychologistStudentCardPage.jsx
+    │   │   ├── Appointments/ (AppointmentsPage, PsychologistCalendar, ScheduleTab)
+    │   │   └── Chat/
+    │   └── supervisor/          ← кабинет супервизора (использует CabinetLayout)
+    │       ├── SupervisorLayout.jsx
+    │       ├── SupervisorHome.jsx
+    │       ├── EngagementsPage.jsx  ← назначения психологов
+    │       ├── MeetingTypesPage.jsx
+    │       ├── SchedulePage.jsx
+    │       ├── BookingPage.jsx
+    │       └── GroupSessionsPage.jsx
+    │
+    └── styles/
+        ├── variables.css      ← CSS custom properties (colors, spacing)
+        └── global.css         ← reset, typography, utility classes
+```
+
+---
+
+## 2. Layer Rules (strict)
+
+### Pages — только композиция
+
+```
+✅ компонуют UI секции
+✅ вызывают hooks для получения данных
+✅ открывают модальные окна
+❌ не делают fetch напрямую
+❌ не содержат фильтрацию/сортировку
+❌ не импортируют из data/ напрямую
+```
+
+### Features — бизнес-логика
+
+Каждый домен (`auth`, `news`, `admin`, `supervisor`) содержит компоненты, которые:
+- знают о доменных концепциях (user, engagement, psychologist)
+- могут вызывать hooks и Context
+- не переиспользуются за пределами своего feature
+
+### API слой — единственная точка HTTP
+
+```
+src/api/
+  client.js           ← transport (token injection + 401 retry)
+  auth.api.js
+  users.api.js        ← getUsers, getUser, createUser, updateUser, deleteUser
+  tags.api.js         ← getTags, createTag, updateTag, deleteTag, getTagsPublic
+  categories.api.js   ← getAdminCategories, createCategory, updateCategory, deleteCategory
+  news.api.js         ← getNews, getNewsById + admin CRUD
+  articles.api.js     ← getArticles, getArticleById + admin CRUD
+  materials.api.js    ← реэкспорт getArticles/getArticleById из articles.api.js
+  supervisor.api.js   ← getSupervisorStudents, getSupervisorPsychologists,
+                         getSupervisorEngagements, createEngagement,
+                         transferEngagement, closeEngagement
+  appointments.api.js
+  media.api.js        ← uploadMedia
+  health.api.js
+```
+
+До реализации соответствующего бэкенд-эндпоинта `*.api.js` может импортировать mock из `data/`. После подключения к API импорт удаляется. См. раздел 6 для полных правил работы с моками.
+
+**Запрещено:** API в `services/`, API внутри `pages/`, API внутри `components/`
+
+**Исключение — `features/auth/AuthContext.jsx`:** использует нативный `fetch()` напрямую (не через `apiFetch`). Это намеренно: `AuthContext` сам настраивает `client.js` через `configureClient()` и обрабатывает событие `auth:session-expired`. Использование `apiFetch` внутри `AuthContext` создало бы циклическую зависимость при 401-обработке. Все остальные модули используют только `apiFetch`.
+
+### Components — domain-agnostic примитивы
+
+```
+✅ принимают всё через props
+✅ без fetch, без Context (кроме AuthContext в Navbar)
+✅ переиспользуются в любом feature или page
+❌ без доменных концепций ("user", "news", "engagement")
+```
+
+**Icon** (`components/Icon/Icon.jsx`) — единственный общий SVG-компонент для иконок в кабинетах и adminпанели. Props: `name`, `size=18`, `stroke=1.5`. Не имеет CSS-модуля (чистый SVG).
+
+**CabinetLayout** (`components/CabinetLayout/`) — общий layout для кабинетов student, psychologist и supervisor. Принимает `navSections`, `crumbLabels` и `dynamicCrumbs` как конфигурацию; шапка — `CabinetHeader`.
+
+**CabinetHeader** (`components/CabinetHeader/`) — общая шапка CabinetLayout и AdminLayout (ADR-031): крошки + [CabinetSwitcher] → Поиск → Уведомления → Оформление → Выход.
+
+### Shared — общие утилиты
+
+```
+src/shared/lib/utils.js
+  getInitials(name)  ← единственная каноническая версия.
+                        Используется в CabinetLayout, AdminLayout, CabinetSettingsPage.
+```
+
+Не размещать утилиты в `components/` или `hooks/` если они не связаны с React.
+
+### Hooks — переиспользуемая логика
+
+```
+src/hooks/
+  useDebounce.js     ← generic utility
+  useNews.js         ← data fetching + pagination state
+  useMaterials.js    ← filter/sort/pagination state (подключён к API)
+```
+
+Pages используют **только hooks**, никогда не делают fetch самостоятельно.
+
+### Data — только для dev/mock
+
+```
+src/data/
+  news.mock.js
+  materials.mock.js
+```
+
+Импортируются исключительно из `api/*.api.js`. Все остальные слои работают через API.
+
+---
+
+## 3. Routing
+
+**Файл:** `src/app/router.jsx`
+
+| Route | Component | Guard |
+|---|---|---|
+| `/` | `Home` | Public |
+| `/about` | `About` | Public |
+| `/services` | `Services` | Public |
+| `/news` | `NewsPage` | Public |
+| `/news/:id` | `NewsItemPage` | Public |
+| `/materials` | `MaterialsPage` | Public |
+| `/materials/:id` | `MaterialsItemPage` | Public |
+| `/health` | `HealthPage` | Public |
+| `/login` | `LegacyAuthRedirect tab="login"` | Совместимость: replace → `/` + AuthModal «Вход» |
+| `/register` | `LegacyAuthRedirect tab="register"` | Совместимость: replace → `/` + AuthModal «Регистрация» |
+| `/auth/callback` | `OAuthCallbackPage` | Public, технический маршрут возврата от Яндекс ID / VK ID: вход → `/dashboard`; регистрация и ошибки → replace на `/` + AuthModal. Своих форм и карточки нет |
+| `/dashboard` | `DashboardRedirect` | Auth (active/default role redirect) |
+| `/profile` | `ProfilePage` | Auth |
+| `/student` | `ClientDashboard` (Outlet) | Auth + role membership: student |
+| `/student/diary` | `DiaryPage` | — (наследует от `/student`) |
+| `/student/tests` | `TestsPage` | — |
+| `/student/materials` | `StudentMaterialsPage` | — |
+| `/student/tasks` | `TasksPage` | — |
+| `/student/chat` | `ChatPage` | — |
+| `/student/calendar` | `CalendarPage` | — |
+| `/student/group-sessions` | `StudentGroupSessionsPage` | — |
+| `/student/settings` | `SettingsPage` | — |
+| `/psychologist` | `PsychologistLayout` (Outlet) | Auth + role membership: psychologist |
+| `/psychologist/students` | `PsychologistStudentsPage` | — |
+| `/psychologist/students/:studentId` | `PsychologistStudentCardPage` | — |
+| `/psychologist/appointments` | `PsychologistAppointmentsPage` | — |
+| `/psychologist/chat` | `PsychologistChatPage` | — |
+| `/psychologist/settings` | `CabinetSettingsPage` | — |
+| `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role membership: supervisor |
+| `/supervisor/engagements` | `EngagementsPage` | — |
+| `/supervisor/meeting-types` | `MeetingTypesPage` | — |
+| `/supervisor/schedule` | `SchedulePage` | — |
+| `/supervisor/booking` | `BookingPage` | — |
+| `/supervisor/group-sessions` | `GroupSessionsPage` | — |
+| `/supervisor/settings` | `CabinetSettingsPage` | — |
+| `/admin` | `AdminLayout` (Outlet) | Auth + role membership: admin |
+| `/admin/users` | `UsersPage` | — (наследует от `/admin`) |
+| `/admin/categories` | `CategoriesPage` | — (UI: «Типы материалов») |
+| `/admin/tags` | `TagsPage` | — (UI: «Темы») |
+| `/admin/news` | `AdminNewsPage` | — |
+| `/admin/articles` | `AdminArticlesPage` | — |
+| `/admin/email-domains` | `EmailDomainsPage` | Admin-only; список и управление allowlist регистрации |
+| `/admin/audit` | `AuditLogsPage` | Admin-only; read-only просмотр трёх журналов аудита |
+| `/admin/settings` | `AdminSettingsPage` | Admin-only; безопасность / смена пароля |
+| `*` | `NotFound` | Public |
+
+**DashboardRedirect** — редирект по активному/default кабинету:
+
+| Роль | Редирект |
+|------|----------|
+| `student` | `/student` |
+| `psychologist` | `/psychologist` |
+| `supervisor` | `/supervisor` |
+| `admin` | `/admin/users` |
+
+Multi-role users (ADR-018):
+- auth user shape содержит `roles: Role[]`; legacy `role` допустим только как
+  deterministic primary для совместимости и не используется для runtime-решений;
+- `normalizeRoles(user)` считает явно переданный `roles`, включая `roles: []`,
+  источником истины; fallback `[role]` применяется только при отсутствии поля;
+- если сохранённый `activeRole` валиден для `user.roles`, `/dashboard` ведёт в его
+  кабинет;
+- если у пользователя одна роль, `/dashboard` сразу открывает её кабинет;
+- если ролей несколько, а валидный active role не выбран, показывается
+  `RoleChooser`; выбор сохраняется и ведёт в соответствующий кабинет;
+- если активных ролей нет, `/dashboard` ведёт в `/profile`;
+- пользователь с `admin` + `supervisor` попадает в `/admin/*` по роли `admin`, а не
+  потому что `supervisor` наследует admin-доступ;
+- admin users API в list/read/create responses возвращает активные
+  `roles: Role[]` в детерминированном порядке и legacy primary `role`;
+  просроченные роли не включаются;
+- admin create API принимает ровно одно из legacy `role` или staff-only
+  `roles[]`. Frontend отправляет `roles[]`; `role` остаётся
+  только для backward compatibility;
+- `UsersTable`, create/edit forms и role badges используют `roles[]`;
+- `activeRole` очищается при logout, session-expired, failed/no-session restore;
+  прямой URL кабинета синхронизирует active role после membership-check.
+
+**Guards:**
+- `PrivateRoute` — требует аутентификации; без пользователя — replace на `/`
+  с `state: { openAuth: 'login' }` (главная открывает AuthModal)
+- `LegacyAuthRedirect` — `/login` и `/register`: отдельных страниц входа нет,
+  канонический UI — `/` + AuthModal (`openAuth: 'login' | 'register'`,
+  строковое `message` пробрасывается; вошедший пользователь → `/dashboard`)
+- `RoleRoute` — требует membership в `user.roles`, редирект на `/profile` при несоответствии
+- Пока auth восстанавливается — рендерит `null` (без белого экрана — в бэклоге)
+
+---
+
+## 4. Authentication
+
+### Token Lifecycle
+
+```
+LoginForm → POST /api/auth/login
+               │
+               ▼
+         AuthContext.login(token, user)
+               │
+               ├─▶ localStorage: access_token
+               └─▶ setState({ user }) → App re-renders
+```
+
+### Вход через внешний провайдер (Stage Social Auth 3B)
+
+```
+SocialButtons ─GET /api/public/config─▶ social_providers (кнопка «Яндекс» активна только
+    │                                  если backend реально зарегистрировал адаптер)
+    ▼
+oauthStart('yandex')  POST /api/auth/oauth/yandex/start  (credentials: 'include')
+    │  → { authorize_url } → top-level переход (не popup); state — в HttpOnly-cookie
+    ▼
+Яндекс → backend callback → 302 /auth/callback#result=login&ticket=… | #error=<код>
+    ▼
+OAuthCallbackPage
+    1. читает fragment и СРАЗУ убирает его (history.replaceState) — до сети;
+    2. ждёт AuthContext.loading === false;
+    3. ровно один AuthContext.completeOAuthLogin(ticket)
+         → POST /api/auth/oauth/complete → тот же путь, что login:
+           токен → /me → user (flushSync)
+    4. navigate('/dashboard', { replace: true })
+```
+
+- Один ticket — один `complete`, в том числе в React StrictMode (захват в ref +
+  уже вычищенный адрес). Ticket не попадает в DOM, логи, storage и navigation state.
+- Принимается только контракт fragment (`result`/`ticket`/`error`); `next`,
+  `redirect` и любые адреса игнорируются. Ошибки — фиксированные русские тексты
+  по коду (`features/auth/lib/oauthCallback.js`), неизвестный код не показывается.
+- **Stage Social Auth 4 — «Продолжить через Яндекс».** Блок кнопок общий:
+  `features/auth/ui/SocialButtons.jsx` в LoginForm и RegisterForm. Яндекс на
+  обеих вкладках вызывает один и тот же `oauthStart('yandex')` — вкладка не
+  передаёт «намерение». Telegram убран.
+- **Stage VK-1A — кнопка VK.** Обе кнопки рендерятся из одного списка и
+  вызывают общий `start(provider)` → `oauthStart(provider)`. Кнопка активна
+  только если backend вернул провайдера в `social_providers`, иначе видна, но
+  `disabled`. Пока идёт старт одного провайдера, «Переход…» показывает только
+  его кнопка, а вторая заблокирована (общий state-cookie — один старт за раз).
+  Перед переходом кнопка запоминает ИМЯ провайдера в `sessionStorage`
+  (`rememberOAuthProvider`; ни адрес, ни state не пишутся), страница callback
+  читает его (`recallOAuthProvider`) только для текстов: «Выполняем вход через
+  VK…», «Вход через VK отменён.» и т.п. Новая VK identity — терминальный
+  результат `social_registration_not_available` остаётся безопасным fallback
+  (провайдер без регистрации).
+- **Канонический контейнер авторизации — главная `/` + `AuthModal`.**
+  `/auth/callback` — только технический маршрут: разбирает fragment, вычищает
+  его и уходит. Экранов регистрации, своей карточки и своих стилей форм у него
+  нет (в `OAuthCallbackPage.module.css` — только `.page` и `.status` для
+  нейтрального статуса «Выполняем вход через …»). Отдельной страницы или
+  отдельной модалки для регистрации через провайдера нет.
+- **Передача регистрации в AuthModal (in-memory continuation).**
+  `#result=registration&ticket=…[&step=email]` → `OAuthCallbackPage` вызывает
+  `AuthContext.beginSocialRegistration({ ticket, provider, emailStep })` и
+  делает `navigate('/', { replace: true })` БЕЗ router state. Ticket живёт
+  только в React state `AuthProvider` (`socialRegistration`): не в URL, router
+  state, `localStorage` и `sessionStorage`. `Home` читает его из `useAuth()` и
+  держит `AuthModal` открытой (`isOpen = auth.open || social`), передавая
+  `social` и `onSocialExit`. Обновление страницы память теряет — продолжение не
+  восстанавливается, пользователь начинает вход через провайдера заново.
+  `AuthProvider` забывает ticket сам: при появлении сессии (регистрация
+  завершена либо пользователь уже вошёл), при выходе и при уходе с `/`
+  (допустимы только `/` и `/auth/callback`). `Home` забывает его по «Начать
+  заново», по терминальной ошибке и при закрытии модалки
+  (`clearSocialRegistration`).
+- **Режимы `AuthModal`** (`AUTH_MODAL_MODE`, виден в `data-mode` контейнера
+  `authBody`): `entry` — вкладки «Вход | Регистрация» и их формы;
+  `socialLoading` → `socialEmail` → `socialOtp` — регистрация через провайдера.
+  В social-режимах вкладок нет, `LoginForm` и `RegisterForm` не монтируются;
+  режим не связан с состоянием вкладки «Регистрация». Режим следует за шагом
+  `SocialRegistrationFlow` (`onStepChange` в layout effect — без кадра
+  рассинхронизации). Восстановление пароля — отдельная `ForgotPasswordModal`,
+  как и раньше.
+- **`features/auth/ui/SocialRegistrationFlow.jsx`** — машина шагов внутри
+  AuthModal (`SOCIAL_STEP`): `loading` → (VK, `emailStep`) один
+  `oauthRegistrationPreview` → `email` → `oauthRegistrationInit({ticket,
+  email})` → `otp`; (Яндекс) один автоматический `oauthRegistrationInit({
+  ticket })` → `otp`. Один preview и один автоматический init на ticket, в том
+  числе в StrictMode (ref-флаги), один init на действие пользователя. Шаг кода
+  монтируется только после успешного init, шаг email — только после успешного
+  preview либо по «Изменить email». Ответ, пришедший после выхода из потока
+  (закрыли модалку, «Начать заново»), игнорируется. Успех →
+  `AuthContext.completeOAuthRegistration(ticket, code, true)` →
+  `navigate('/dashboard')`.
+- **Stage VK-1B — шаг email.** `features/auth/ui/SocialEmailStep.jsx`: адрес VK
+  есть и разрешён — маска только для чтения, «Продолжить» и «Нет доступа к этой
+  почте? Указать другую»; адреса нет или его домен не разрешён — поле ввода и
+  «Получить код». Затем общий `RegistrationOtpStep` (согласие MindCare,
+  `backLabel` «Изменить email» возвращает на шаг email). Исправимые ошибки
+  (домен, занятый адрес, формат, лимит) остаются внутри шага email;
+  терминальные (ticket истёк, identity уже привязана) возвращают обычную
+  AuthModal «Вход» с сообщением. Raw email провайдера на клиент не приходит
+  (только маска); адрес, введённый пользователем, живёт в поле ввода и теле
+  запроса init. Тексты шага — без длинных тире, стрелок-символов и названия
+  провайдера; подпись поля — «Электронная почта» обычным регистром
+  (`.authField.plainLabel`).
+- **Оформление шагов — только общие классы `AuthModal.module.css`**
+  (`authPanel`, `stepTitle`, `stepDesc`, `authField`, `authBtn`, `apiError`,
+  `ghost`). Своих шрифтов шаги не задают; `.stepTitle` объявляет
+  `font-family: inherit`, чтобы заголовок `h2` брал шрифт модалки, а не
+  глобальный serif для заголовков.
+- **Яндекс.** Продуктовое поведение прежнее: fragment без `step`, код уходит
+  автоматически, шага email нет, адрес изменить нельзя («Начать заново»),
+  занятый email при confirm блокирует шаг кода. Изменился только контейнер:
+  шаг кода показывает та же AuthModal на главной, а не карточка на
+  `/auth/callback`.
+- **Машина состояний `/auth/callback`** (`PHASE` в `OAuthCallbackPage.jsx`):
+  `resolving` → `loginCompleting` («Выполняем вход через …») → `completed` |
+  `registrationHandoff` (передача ticket в память и replace на `/`) | `error`.
+  Известная identity (`result=login`) не видит ни шага email, ни шага кода ни
+  на один кадр и не создаёт продолжения в модалке (регрессия —
+  MutationObserver в `OAuthCallbackPage.test.jsx` и сквозной
+  `socialRegistration.integration.test.jsx`: настоящий `AuthProvider`,
+  StrictMode, подсчёт физических вызовов `fetch`).
+- **Терминальные ошибки callback** (ошибка во fragment, недействительная
+  ссылка, отказ `complete`) своей карточки не имеют:
+  фаза `error` ничего не рисует и один раз делает replace на `/` со state
+  `{ openAuth: 'login', message, messageTone }`. Текст — только фиксированные
+  сообщения из `lib/oauthCallback.js` (без текста провайдера, query, ticket,
+  email); тон — `fragmentTone`: отмена на Яндексе — `info`, всё остальное
+  (аккаунт недоступен, сбой провайдера, устаревшая ссылка, лимит) — `error`.
+  Терминальные ошибки регистрации (сбой preview/автоматического init, истёкший
+  ticket) приходят не через router state, а через `onSocialExit` — тот же
+  результат: AuthModal «Вход» с сообщением. Ошибки на шаге кода (неверный код,
+  email занят при confirm) остаются внутри шага кода в AuthModal.
+- **Router state канонического входа** — `features/auth/lib/authEntry.js`:
+  `{ openAuth: 'login' | 'register', message?: string, messageTone?: 'info' |
+  'error' }`; `authRequestFrom` валидирует (неизвестная вкладка — модалка не
+  открывается, не-строка — без сообщения, неизвестный тон — `info`),
+  `authEntryState` собирает. Home применяет его при каждой навигации и очищает
+  через `navigate(..., { replace: true, state: null })`; закрытие модалки и
+  открытие через Navbar сбрасывают сообщение. `AuthModal` выводит сообщение над
+  формой входа: `info` — `.infoMessage` + `role="status"`, `error` —
+  `.errorMessage` + `role="alert"`.
+- **Общий шаг кода.** `RegistrationOtpStep` используют и регистрация по паролю
+  (`RegisterForm`), и регистрация через Яндекс и VK
+  (`SocialRegistrationFlow`) — разметка не дублируется. На шаге кода вкладок
+  «Вход | Регистрация» нет: `RegisterForm` сообщает шаг через `onStepChange`,
+  `AuthModal` прячет tablist; в social-режимах вкладок нет вовсе.
+  «← Изменить данные» (пароль) возвращает к форме и вкладкам; «Начать заново»
+  (Яндекс, шаг email VK) — только локальный выход: `Home` забывает ticket и
+  показывает обычную AuthModal на вкладке «Регистрация», backend не вызывается,
+  ticket истечёт сам; «Изменить email» (VK) возвращает на шаг email.
+- Ticket регистрации живёт только в памяти приложения
+  (`AuthContext.socialRegistration` → prop): не в DOM, storage, URL и router
+  state; перезагрузка страницы его теряет.
+- **Юридические ссылки внутри auth-потока** (согласие с политикой
+  персональных данных в `RegisterForm` и на шаге кода `RegistrationOtpStep`)
+  открываются только в новой вкладке: `target="_blank"` +
+  `rel="noopener noreferrer"`. Переход в той же вкладке выгружает страницу —
+  пропадает заполненная форма, а при регистрации через Яндекс/VK и ticket из
+  памяти. Новые ссылки в `features/auth` добавлять так же (регрессия —
+  `AuthModal.test.jsx`).
+- Legacy-код `social_registration_not_available` в карте сообщений оставлен как
+  безопасный fallback, backend его больше штатно не выдаёт.
+- Привязки к существующему аккаунту нет: занятый email — отказ с текстом
+  «Войдите по email и паролю» (Stage 5 — привязка из настроек).
+- Яндекс без пригодного email для новой identity — fragment
+  `#error=oauth_email_required` с объяснением (регистрации нет).
+- `apiFetch` переносит строковый `code` тела ошибки в `err.code` — OAuth-ошибки
+  различаются по нему (400/403/404/429, не 401).
+
+### 401 Retry (api/client.js)
+
+```
+apiFetch() → 401
+               │
+               ▼
+         logout() + dispatch auth:session-expired
+               │
+               ▼
+         redirect → / + AuthModal «Вход» (state.openAuth + message)
+```
+
+### Session Restore
+
+```
+AuthProvider mount → read localStorage
+  → token present: GET /api/auth/me → normalizeUser() → reconcile activeRole
+  → token absent/restore failed: user = null + clear activeRole
+```
+
+### ProtectedRoute
+
+```jsx
+if (!user) return <Navigate to="/" state={{ openAuth: 'login' }} replace />;
+if (roles && !roles.some((role) => user.roles?.includes(role))) {
+  return <Navigate to="/profile" />;
+}
+```
+
+Auth payload:
+
+```js
+user = {
+  uuid,
+  email,
+  name,
+  role,   // legacy deterministic primary, может быть null; не источник прав
+  roles,  // source of truth для frontend guards
+}
+```
+
+Для layout-лейблов, breadcrumbs и audit-related UI использовать active/effective role
+текущего кабинета, а не слепо `user.role`.
+
+---
+
+## 5. Key Modules
+
+### CabinetLayout
+
+Общий layout, используемый кабинетами **psychologist** и **supervisor**.
+
+```
+CabinetLayout (components/CabinetLayout/)
+├── Sidebar с navSections (конфигурируется каждым Layout)
+├── Brand — ссылка на корень кабинета (/student, /psychologist, /supervisor)
+├── Avatar с getInitials() из shared/lib/utils.js
+├── CabinetSwitcher: sidebar на desktop, в CabinetHeader на узких viewport
+├── CabinetHeader (крошки из crumbLabels/dynamicCrumbs, hamburger <=600px)
+├── CabinetDrawer — mobile drawer (<=600px) с той же разметкой sidebar
+└── <Outlet /> для вложенных маршрутов
+
+StudentLayout      → CabinetLayout (navSections = самопомощь/терапия/аккаунт)
+PsychologistLayout → CabinetLayout (navSections = рабочие секции психолога)
+SupervisorLayout   → CabinetLayout (navSections = секции супервизии)
+
+CabinetSettingsPage — общая страница настроек, подключается в обоих кабинетах
+  через /psychologist/settings и /supervisor/settings
+```
+
+AdminLayout (`features/admin/`) — отдельный layout (свой sidebar и навигация
+`ADMIN_NAV_GROUPS`), но та же модель ширин и те же общие части: >980px полный
+sidebar, 601–980px icon-rail 72px, <=600px sidebar скрыт → hamburger в
+`CabinetHeader` + `CabinetDrawer` с той же разметкой sidebar; brand ведёт на `/admin`.
+
+`CabinetDrawer` (`components/CabinetDrawer/`) — общий mobile drawer обоих layout'ов:
+фокус при открытии на «Закрыть меню», Tab по кругу внутри, Escape / backdrop /
+переход по пункту закрывают, фокус возвращается на hamburger. Пока открыт —
+соседи drawer'а в оболочке (sidebar, `<main>`) получают `inert`; на предка
+drawer'а inert/aria-hidden не ставится, чужой inert не снимается.
+
+### CabinetHeader
+
+```
+CabinetHeader (components/CabinetHeader/)        ADR-031
+├── hamburger (<=600px, если layout передал onMenuOpen) + крошки
+│     <nav aria-label="Навигационная цепочка"><ol> «Главная» (ссылка) / … / текущая
+│     resolveBreadcrumbs(): crumbLabels → dynamicCrumbs (parent) → ближайший раздел
+├── CabinetSwitcher (только 601–980px — rail; на <=600px он в drawer)
+├── Поиск — заглушка: <input type="search" disabled>, скрыт <=980px
+├── Уведомления — заглушка: aria-disabled, без счётчика/точки (на mobile не скрыт)
+├── Оформление — ThemeToggle compact + extraSection «Версия для слабовидящих»
+│     (существующий A11yToggle variant block; A11yPanel остаётся под шапкой)
+└── Выход — useLogout()
+```
+
+Отступы ряда задаёт layout через `className`, высота — `--cabinet-header-height`
+layout'а (общая линия под brand и шапкой — `.app::after`). Почты и home-иконки
+в шапке нет. Новые действия шапки добавляются только в CabinetHeader.
+
+### Multi-role UI
+
+```text
+shared/lib/roles.js
+├── ROLE_PRIORITY / ROLE_LABELS / ROLE_BADGE_TONES
+├── normalizeRoles(user)
+└── primaryRole(user)
+
+app/guards.jsx
+├── RoleRoute         — membership guard по roles[]
+└── DashboardRedirect — 0/1/many role routing
+
+features/auth/RoleChooser.jsx
+└── явный выбор кабинета для multi-role пользователя без activeRole
+
+features/auth/CabinetSwitcher.jsx
+├── setActiveRole(role) + navigate(getRoleHome(role))
+├── disclosure buttons, Escape/outside-click
+├── fixed panel с viewport clamp
+└── resize/orientation reposition; scroll closes panel
+```
+
+`CabinetSwitcher` меняет UI-контекст и маршрут, но не выдаёт права. В каждом
+кабинете `RoleRoute` проверяет `roles[]`, а backend повторно проверяет membership.
+В `CabinetLayout` и `AdminLayout` desktop/sidebar и narrow/topbar экземпляры
+взаимоисключаются через responsive CSS.
+
+Admin users UI использует `StaffRolesCheckboxes`: три staff-роли редактируются
+set-based, существующая `student` показывается read-only. Student-only/roleless
+пользователь не может получить первую staff-роль через текущий PATCH policy, но
+scalar-only edit остаётся доступным.
+
+При редактировании собственного аккаунта checkbox `admin` заблокирован по
+`currentUser.id === editedUser.id`; остальные staff-роли остаются доступны согласно
+общей policy. Это UX-защита: авторитетный self-admin guard находится на backend.
+
+### Admin Navigation and Email Domains
+
+`AdminLayout` рендерит статический `ADMIN_NAV_GROUPS`, а breadcrumbs выводятся из
+тех же данных:
+
+```text
+Управление → Пользователи
+Контент    → Материалы, Новости, Тесты
+Система    → Типы материалов, Темы, Типы встреч, Домены регистрации,
+             Журнал действий
+Аккаунт    → Безопасность
+```
+
+Домены регистрации вынесены из пользовательских настроек на отдельный route
+`/admin/email-domains`. `EmailDomainsPage` ограничивает рабочую ширину до 760 px и
+композирует `EmailDomainsSection`; API-вызовы находятся в `api/domains.api.js`,
+состояние — в `useAllowedDomains`. UI поддерживает add, disable с confirm,
+reactivate, loading/error/empty states и показывает backend 409 ровно в одном alert.
+
+`/admin/settings` содержит только персональную безопасность администратора и смену
+пароля (рабочая ширина 520 px). Разделы allowlist и account security не смешиваются.
+Прямой вход и reload на `/admin/email-domains` должны проходить через обычный
+`RoleRoute` с membership-ролью `admin`.
+
+### Admin Audit Viewer
+
+`/admin/audit` — read-only просмотр трёх журналов аудита (backend Stage 8,
+ADR-023). Feature-модуль `features/admin/audit/`: `api/audit.api.js` (HTTP),
+`hooks/` (состояние), `pages/AuditLogsPage.jsx` (композиция),
+`components/` (UI), `lib/` (подписи и чистое форматирование).
+
+Три вкладки — три отдельных эндпоинта; журналы **не** объединяются в одну ленту:
+у них разные контракты, разные безопасные DTO и нет надёжного correlation_id
+между `audit_log` и `data_change_log`.
+
+| Вкладка | Endpoint | Специфичные фильтры |
+|---|---|---|
+| Действия | `GET /api/admin/audit/events` | категория (frontend-only), событие, результат, роль действия, тип объекта, точный id объекта, «показывать просмотры журнала» |
+| Входы и безопасность | `GET /api/admin/audit/auth-events` | событие, успех/отказ, способ входа (`auth_method`: Пароль / Яндекс ID / VK ID — из `options.auth_methods`) |
+| Изменённые поля | `GET /api/admin/audit/data-changes` | таблица, операция, роль действия, точный id записи |
+
+Справочник значений — `GET /api/admin/audit/options` (`useAuditOptions`),
+отдельным hook'ом: его ошибка не подменяет ошибку списка, при недоступном
+справочнике таблица работает на базовых фильтрах, а registry-зависимые селекты
+отключаются.
+
+**Фильтры хранятся по журналам, а не одним плоским объектом** (`lib/auditFilters.js`):
+наборы допустимых значений у журналов разные (`actor_kind=system` существует для
+`audit_log` и отсутствует у двух других; у `auth_log` нет фильтра роли вовсе),
+поэтому общий объект при переключении вкладки унёс бы чужое значение и получил
+422. `setFilters` маршрутизирует патч по срезам, неизвестный ключ отбрасывается.
+
+**Выбранный участник живёт в `useAdminAuditLogs`**, а `AuditActorPicker` полностью
+controlled (`value` + `resetKey`): иначе после сброса фильтров подпись осталась бы
+на экране при уже снятом `actor_uuid`. В API уходит только `actor_uuid` — ни
+введённый текст, ни ФИО, ни email в запрос журнала не попадают.
+
+Ограничения контракта, которые обязан соблюдать UI:
+
+- точный `entity_id` доступен только с явным не-пользовательским `entity_type`,
+  `record_id` — только с не-`users` таблицей (иначе backend отвечает 422:
+  целочисленный id без типа цели неоднозначен и превращал бы `users.id` в ключ
+  поиска);
+- обе даты либо ни одной, окно ≤ 90 дней; по умолчанию — последние 7 календарных
+  дней по Москве, всегда отправляются явными датами;
+- пагинация ограничена `max_result_window`: `totalPages =
+  min(ceil(total/size), floor(window/size))`;
+- `entry_id` — строка (BIGINT), к `Number` не приводится.
+
+Состояние страницы **не** синхронизируется с query string и не пишется в
+`localStorage`. Polling, export, copy-all и detail-запрос отсутствуют; модалка
+подробностей строится из уже загруженной строки. Рендеринг закрытый: компоненты
+достают из DTO только разрешённые поля, `details` обходится по закрытой карте
+`DETAIL_KEY_ORDER`, неизвестный ключ не показывается. Email везде маскируется.
+
+### Modal System
+
+```
+Modal.jsx (primitive)
+├── createPortal → document.body
+├── Focus trap (Tab cycling)
+├── Escape → onClose
+├── Saves/restores focus
+└── exposes focusFirst() via useImperativeHandle
+
+AuthModal (zIndex=2000)         → <Modal> → LoginForm / RegisterForm
+ForgotPasswordModal (zIndex=2100) → <Modal> → ForgotPasswordStepper
+AssignModal                     → <Modal> → форма назначения психолога
+```
+
+### Forgot Password Flow
+
+```
+ForgotPasswordModal
+└── ForgotPasswordStepper (state machine via useForgotPassword)
+    ├── StepEmail    → forgotPassword(email)
+    ├── StepOTP      → OTPInput + resend countdown
+    ├── StepNewPassword → PasswordStrength meter
+    └── StepSuccess
+```
+
+### Supervisor Engagements
+
+Модуль управления связями студент ↔ психолог. Доступен только роли `supervisor`.
+
+```
+/supervisor/engagements
+└── EngagementsPage (pages/supervisor/)
+    ├── useStudents (features/supervisor/hooks/)
+    │   └── getSupervisorStudents() → api/supervisor.api.js
+    ├── таблица студентов (имя, email, текущий психолог, статус)
+    ├── поиск с debounce 300ms
+    ├── пагинация (серверная)
+    └── AssignModal (features/supervisor/components/)
+        ├── mode="assign"   → createEngagement()
+        ├── mode="transfer" → transferEngagement()
+        └── mode="close"    → closeEngagement()
+```
+
+**Три сценария в AssignModal:**
+- `assign` — назначить психолога (engagement не существует)
+- `transfer` — переназначить (смена психолога в активном engagement)
+- `close` — закрыть связь (завершить engagement)
+
+После успешного действия: `closeModal() → refetch()`.
+
+Список психологов для выбора загружается через `getSupervisorPsychologists()` при открытии modal режима assign/transfer. Применяется `cancelled`-флаг для защиты от race condition при размонтировании.
+
+### Materials Filter (SearchBar)
+
+```
+SearchBar
+├── desktop: FiltersDropdown (absolute div, no portal)
+└── mobile:  FilterSheet (createPortal bottom sheet)
+
+Both share: tag multiselect + sort radio + clear
+State lives in: useMaterials hook → MaterialsPage props → SearchBar
+```
+
+### Admin UI terminology
+
+В пользовательском интерфейсе админки используются продуктовые названия:
+- `/admin/categories` отображается как «Типы материалов»
+- `/admin/tags` отображается как «Темы»
+
+Технические имена API, модулей и моделей остаются `categories` и `tags`.
+Не переименовывать файлы и URL ради UI-терминов.
+
+### Student Diary MVP
+
+`StudentHome` и `/student/diary` используют real `/api/diary/*`. StudentHome построен
+вокруг `nextStepCard`, `actionCardsGrid` и условного `observationCard`; fake GAD-7,
+sleep/anxiety, fake appointment/psychologist/date удалены. Карточка психолога не утверждает
+наличие или отсутствие встречи: «Связаться с психологом можно в чате. Информация о встречах
+появится здесь позже.»
+
+`DiaryPage` поддерживает mood-only quick check-in, optional collapsible emotions/text,
+observation summary, history `limit/offset`, load more, edit/delete и inline errors.
+После успешного delete история перечитывается с offset=0, а сравнение today entry
+использует local date helper, не UTC `toISOString()`.
+
+Observation summary загружает `/api/diary/summary?period=14d|month|year`, фильтрует
+points с `mood_score=null` и выводит tiles `Отметок`, `Последняя отметка`/`Последний период`,
+`Диапазон`, а также последние 3–5 отметок в chips. Линейный `MoodChart`, SVG, оси и линии
+удалены после UI smoke. Тексты описательные и не интерпретируют данные медицински.
+
+### Messenger / Chat UI (Stage 31y–31z-hotfix)
+
+```
+MessageList (features/chat/components/MessageList.jsx)
+├── фильтрует messages.filter(m => !m.deleted) — удалённые не попадают в рендер
+├── date-сепараторы + author header (shouldShowAuthorHeader, lib/messageShape.js)
+└── MessageItem (на каждое видимое сообщение)
+    ├── определяет own/incoming/system, авто-собирает header/avatar/layout
+    ├── manageable + onStartEdit/onRequestDelete → проп в MessageActionsMenu
+    ├── MessageBubble — визуальный компонент (variant: incoming|outgoing|system)
+    │   └── текст (linkify) + meta (время · «изменено» · ✓/✓✓) ВНУТРИ bubble
+    ├── MessageActionsMenu — кебаб-меню «…», сосед bubble (не внутри него)
+    │   └── «Редактировать» / «Удалить» — только для своих сообщений в active engagement
+    └── DeleteMessageDialog — confirm перед удалением (shared Modal/Button)
+```
+
+**MessageBubble — governance:** feature-specific компонент чата
+(`src/features/chat/components/MessageBubble.jsx` + `.module.css`), НЕ глобальный
+shared UI. Не переносить в `src/components/UI` пока нет второго независимого
+потребителя за пределами Messenger (см. `docs/UI_COMPONENTS_GUIDE.md`). Перед
+добавлением новых chat-контролов — проверить существующие `features/chat/components/`
+и `src/components/UI`.
+
+**Meta-формат внутри bubble:** `изменено · время · ✓/✓✓` —
+- «изменено» — только если есть `editedAt` И сообщение не системное;
+- read receipts (✓/✓✓) — только у исходящих (`mine`) пользовательских сообщений;
+  входящие и системные — без receipts;
+- CSS: `.bubble{display:flex;flex-wrap:wrap;align-items:flex-end}`,
+  `.text{flex:0 1 auto;min-width:0}`, `.meta{flex:0 0 auto;margin-left:auto}` —
+  короткий текст и meta в одну строку, длинный — meta переносится вниз-направо
+  (Telegram-style), без JS-измерения ширины.
+
+**Delete policy:** удаление своего сообщения — soft delete на backend (нет
+физического `DELETE` строки); запись/шифротекст остаются для audit/security.
+`MessageList` скрывает `deleted` сообщения из ленты — без какого-либо placeholder
+текста («Сообщение удалено» не используется и не должен использоваться).
+
+**Polling reconcile (Stage 31ab):** `pollNew` в `useChatCore` (shared core hook,
+wrapped by `useStudentChat` и `usePsychologistChat`) использует
+`reconcileMessagesSnapshot` (`lib/messageShape.js`) вместо `mergeMessages`.
+Функция синхронизирует локальный state со snapshot сервера (limit=50): удаляет из state
+сообщения, которые backend больше не возвращает (soft-deleted). Удалённое сообщение
+исчезает у собеседника после следующего polling tick (≤ 8 сек) без переоткрытия диалога.
+`mergeMessages` (add/update only) сохранён. MVP-ограничение: reconcile покрывает только
+последние 50 сообщений; история старше snapshot window — только при переоткрытии.
+
+**System messages:** отдельный `variant="system"` в `MessageBubble` — header
+«MindCare», текст слева, время внутри bubble, без меню действий, без «изменено»,
+без read receipts; никогда не считаются исходящими, даже если backend пришлёт
+`mine=true` (defensive guard в `MessageItem`).
+
+**Chat hook architecture (Stage 31ad).** `useStudentChat` и `usePsychologistChat` —
+thin wrapper'ы поверх общего `useChatCore(adapter)` (`features/chat/hooks/useChatCore.js`).
+Core обслуживает: conversations state, selected conversation, messages state,
+loadList / loadMessages, send / editMessage / deleteMessage, mark-read,
+polling (list + messages), stale-response guard (`selectedRef`),
+`lastIdRef` / `knownMaxId`, `pollBusyRef`, `reconcileMessagesSnapshot`,
+409 Conflict via optional `getConversation`.
+Role-specific остаётся в adapter-объекте wrapper'а: API endpoints,
+`getConversation` (null у студента → silent list reload при 409;
+`getPsychologistConversation` у психолога → точечный refresh conversation при 409),
+`listErrorMessage`.
+`useSystemConversation` — отдельный hook, **не входит** в `useChatCore`
+(system conversation — не engagement conversation).
+Page-компоненты (`ChatPage`, `PsychologistChatPage`) не требовали изменений.
+Backend, API-эндпоинты, Alembic, UI-компоненты (`ChatWindow`, `MessageList`,
+`MessageBubble`) не менялись.
+
+---
+
+## 6. Data Flow
+
+```
+User interaction
+       ↓
+Custom hook (useStudents, useAdminUsers, ...)
+       ↓
+api/<domain>.api.js
+       ↓
+api/client.js (token injection + 401 retry)
+       ↓
+FastAPI backend → PostgreSQL
+       ↓
+setState in hook → Page re-renders
+```
+
+**Правила работы с `data/` (моки):**
+
+`data/` содержит mock-данные только для разработки UI компонентов в момент, когда соответствующий API-эндпоинт ещё не реализован на бэке.
+
+Hook может временно импортировать из `data/` напрямую — но это всегда временное состояние.
+
+**Как только бэк-эндпоинт готов:**
+
+- Hook переводится на `api/<domain>.api.js`
+- Прямой импорт из `data/` удаляется из hook
+
+**Запрещено:** оставлять `try API → catch fallback to mock` как постоянный паттерн в production-коде.
+
+**Все новые модули после 2026-05-20** реализуются сразу через API — без промежуточного этапа с моками.
+
+---
+
+## 6.1 Server-side filtering & pagination
+
+**Правило:** Любой список из БД фильтруется, сортируется и пагинируется
+**на сервере**, не на клиенте. Клиент отображает то что прислал бэк.
+
+**Исключение:** статические списки (список факультетов, ролей, типов
+консультаций) — отдаются целиком и могут фильтроваться на клиенте,
+если их меньше 50 элементов.
+
+---
+
+### Единый формат запроса
+
+```
+GET /api/<resource>?page=1&size=20&search=...&<filters>
+```
+
+**Стандартные параметры:**
+
+| Параметр | Тип | Описание | Дефолт |
+|----------|-----|----------|--------|
+| `page`   | int | Номер страницы, начиная с 1 | 1 |
+| `size`   | int | Количество элементов на странице (макс. 100) | 20 |
+| `search` | str | Подстрока для поиска (обычно по имени/email) | — |
+| `sort`   | str | Поле сортировки (например, `created_at`) | зависит от ресурса |
+| `order`  | str | `asc` или `desc` | `desc` |
+
+---
+
+### Единый формат ответа
+
+```json
+{
+  "items": [...],
+  "total": 142,
+  "page": 1,
+  "size": 20
+}
+```
+
+---
+
+### Hook contract для серверных списков
+
+```js
+const {
+  items,           // массив текущей страницы (от бэка, без .filter)
+  loading,         // флаг загрузки
+  error,           // объект ошибки или null
+  total,           // общее число (для пагинатора)
+  page, setPage,   // текущая страница и сеттер
+  query, setQuery, // поисковая строка
+  filters, setFilters, // объект доменных фильтров: { role, is_active, ... }
+  refetch          // ручной перезапрос
+} = useResource();
+```
+
+**Внутри hook:**
+- При изменении `page`, `query`, `filters` — делается новый запрос к API
+- На `setQuery` навешен debounce 300ms
+- При смене `query` или `filters` — `page` сбрасывается на 1
+- Hook **не делает** локальной фильтрации над `items`
+
+---
+
+### Что запрещено
+
+| Запрет | Почему |
+|--------|--------|
+| `items.filter(...)` в компонентах | Фильтрация — задача бэка |
+| Загрузка списка одним запросом без `size` | Не масштабируется |
+| Импорт из `data/` в новых hooks | См. раздел 6 |
+| Хранить весь список в state и фильтровать его | То же самое |
+| Свой формат пагинации в каждом эндпоинте | Усложняет фронт |
+
+---
+
+### Где это применяется
+
+Все списки длиннее 50 элементов в управленческих разделах и личных кабинетах:
+- Список юзеров (админ)
+- Список записей на консультации (супервизор, психолог)
+- Список результатов тестов (супервизор, связанный психолог)
+- Журналы аудита (админ)
+- Список своих записей (студент) — да, тоже через пагинацию, на случай
+  если у студента 50+ записей за годы учёбы
+
+**Не применяется** к:
+- Профилю (один объект, не список)
+- Текущему юзеру `/api/users/me`
+- Спискам в формах (выпадашки факультетов, ролей)
+
+## 7. Component Layering
+
+| Level | Location | Knows domain? | Has fetch? | Example |
+|---|---|---|---|---|
+| Shell | `app/` | No | No | `App.jsx`, `router.jsx` |
+| Page | `pages/` | No | No | `MaterialsPage`, `EngagementsPage` |
+| Feature | `features/<domain>/` | Yes | Via hooks | `AuthModal`, `AssignModal` |
+| Primitive | `components/` | No | No | `Modal`, `Icon`, `CabinetLayout` |
+
+**Правило:** если компонент вызывает `useAuth()`, делает API call или знает о доменной модели → он в `features/`, не в `components/`.
+
+**CabinetLayout** — исключение: это primitive layout-компонент, который принимает всю конфигурацию через props (`navSections`, `crumbLabels`). Он не знает о конкретных ролях и маршрутах. **CabinetHeader** — то же исключение: роль и крошки приходят props'ами, из features — только CabinetSwitcher, ThemeToggle, A11yToggle и `useLogout`.
+
+---
+
+## 8. Open Issues
+
+### 8.1 ~~useMaterials импортирует mock напрямую~~ — закрыто
+
+`hooks/useMaterials.js` переведён на реальный API. `materials.api.js` реэкспортирует из `articles.api.js`.
+
+**Осталось ограничение:** сортировка материалов в публичном UI всё ещё клиентская.
+
+### 8.2 NewsListItem без CSS модуля
+
+`features/news/components/NewsListItem.jsx` не имеет своего `.module.css`. Стили живут в `NewsSection.module.css`.
+
+### 8.3 Дублирование в filter компонентах
+
+`FiltersDropdown.jsx` и `FilterSheet.jsx` содержат одинаковые константы (`SORT_OPTIONS`) и SVG иконки.
+
+### 8.4 LoginForm использует устаревший паттерн ошибок
+
+`LoginForm.jsx` хранит ошибки полей как булевы значения. Это противоречит стандарту раздела 10 (единый `errors` со строками + `errors._form`).
+
+### 8.5 Social login buttons — нефункциональные
+
+`LoginForm` и `RegisterForm` рендерят кнопки Telegram / VK / Yandex без `onClick`. Dead UI.
+
+### 8.6 Нет глобального ErrorBoundary
+
+Любая render-ошибка крэшит всё приложение.
+
+### 8.7 Кабинеты студента, психолога и супервизора — текущий статус
+
+- `StudentHome` реализован вокруг реальных diary-данных; `/student/diary`, `/student/calendar`,
+  `/student/chat`, `/student/group-sessions`, `/student/settings` уже подключены к real API.
+- Кабинет психолога уже содержит студентов, карточку студента, чат, записи, календарь,
+  групповые занятия и read-only расписание/разовые изменения.
+- Кабинет супервизора уже содержит назначения, типы встреч, расписание, ручную запись
+  registered/walk-in клиентов и групповые занятия.
+- Оставшиеся заглушки/будущие разделы зависят от текущей навигации и должны проверяться по коду.
+
+~~`ConsultantDashboard.jsx` и `DashboardLayout.jsx`~~ — удалены как мёртвый код.
+
+### 8.8 `useAdminTags` не имеет `filters` в hook-контракте
+
+`useAdminTags` возвращает контракт без `filters` и `setFilters` — намеренное отступление (теги фильтруются только по имени).
+
+### 8.9 ~~Кабинет студента использует собственный layout, не CabinetLayout~~
+
+Закрыто: `StudentLayout.jsx` использует `CabinetLayout` (как psychologist/supervisor); шапка всех кабинетов — `CabinetHeader` (ADR-031).
+
+---
+
+## 9. Recommendations
+
+### 9.1 Вынести SORT_OPTIONS и иконки из filter компонентов
+
+Создать `pages/materials/components/_filterConstants.js`.
+
+### 9.2 Co-locate NewsListItem styles
+
+Создать `features/news/components/NewsListItem.module.css`.
+
+### 9.3 Добавить ErrorBoundary
+
+```jsx
+// src/app/ErrorBoundary.jsx
+class ErrorBoundary extends React.Component { ... }
+```
+
+### 9.4 Wire или удалить social login
+
+Реализовать OAuth для Telegram/VK/Yandex, либо убрать кнопки.
+
+### 9.5 Серверная сортировка материалов
+
+Добавить серверные параметры `sort`/`order` в `GET /api/articles` и убрать клиентский `.reverse()`.
+
+### 9.6 Lazy loading страниц
+
+```jsx
+const Home = lazy(() => import('../pages/home/Home'));
+// + <Suspense fallback={<PageSkeleton />}>
+```
+
+### 9.7 ~~Список назначенных клиентов в кабинете психолога~~ — закрыто
+
+Реализованы `/psychologist/students` и `/psychologist/students/:studentId`.
+
+### 9.8 Отображение психолога у студента
+
+Показать текущего назначенного психолога в `StudentHome` / `StudentSettings`.
+
+---
+
+## 10. Conventions
+
+### Именование файлов
+
+| Тип | Конвенция | Пример |
+|---|---|---|
+| React компонент | PascalCase | `AssignModal.jsx` |
+| Hook | camelCase, префикс `use` | `useStudents.js` |
+| API модуль | camelCase, суффикс `.api.js` | `supervisor.api.js` |
+| CSS Module | camelCase, совпадает с компонентом | `AssignModal.module.css` |
+| Mock данные | camelCase, суффикс `.mock.js` | `materials.mock.js` |
+| Утилиты | camelCase | `utils.js` |
+
+### Hook контракт
+
+#### 1. Data-fetching (один объект или короткий список)
+
+```js
+return { data, loading, error, refetch }
+// или
+return { items, loading, error, refetch }
+```
+
+#### 2. Form
+
+```js
+return { values, errors, handleChange, handleSubmit }
+```
+
+#### 3. Server-side list (пагинация)
+
+```js
+return {
+  items, loading, error, total,
+  page, setPage,
+  query, setQuery,
+  filters, setFilters,
+  refetch
+}
+```
+
+#### 4. Infinite scroll (опционально)
+
+```js
+return { items, loading, error, hasMore, loadMore }
+```
+
+### CSS Modules
+
+- Один `.module.css` на один компонент
+- Классы в camelCase: `.cardTitle`, `.btnPrimary`
+- Никаких глобальных селекторов внутри модуля
+
+### Error handling в формах
+
+```js
+const [errors, setErrors] = useState({});
+// { email: 'Некорректный формат', _form: 'Сервер недоступен' }
+```
+
+```jsx
+{errors.email && <span className={styles.hint} role="alert">{errors.email}</span>}
+{errors._form && <div className={styles.formError} role="alert">{errors._form}</div>}
+```
+
+### Порядок imports
+
+```js
+// 1. React + внешние
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+
+// 2. Внутренние (features, components, api, hooks)
+import { useStudents } from '../../features/supervisor/hooks/useStudents';
+import Modal from '../../components/Modal/Modal';
+
+// 3. Локальные (тот же или дочерний folder)
+import styles from './EngagementsPage.module.css';
+```
+
+---
+
+## 11. Dependencies
+
+| Package | Version | Role |
+|---|---|---|
+| `react` | 19.2 | UI framework |
+| `react-dom` | 19.2 | DOM renderer + `createPortal` |
+| `react-router-dom` | 7.14.2 | Client-side routing |
+| `react-scripts` | 5.0.1 | CRA build toolchain |
+| `@tiptap/react` | 3.x | Rich-text editor (admin: articles, news) |
+| `dompurify` | 3.x | HTML sanitization (ContentPreview) |
+| `@testing-library/react` | 16.x | Component testing |
+
+**Backend proxy:** `package.json` → `"proxy": "http://localhost:8000"`. Все `/api/*` запросы проксируются на FastAPI во время разработки.

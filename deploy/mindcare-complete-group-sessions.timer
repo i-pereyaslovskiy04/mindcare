@@ -1,0 +1,19 @@
+[Unit]
+Description=MindCare: run group-session completion every 10 minutes
+Documentation=file:///media/data2/psycho/mindcare/deploy/STAGE_5C_DEPLOYMENT.md
+
+[Timer]
+# Периодичность 10 минут — компромисс: `status` групповых занятий в
+# supervisor/psychologist-списках отстаёт не более чем на один тик. Запись
+# студента на прошедшее занятие при этом невозможна независимо от таймера
+# (регистрация сама проверяет status/booking_enabled/lead time), поэтому более
+# частый прогон не требуется по безопасности — только по актуальности UI.
+OnBootSec=5min
+OnUnitActiveSec=10min
+AccuracySec=1min
+# Пропущенные во время простоя тики выполняются один раз при старте.
+Persistent=true
+Unit=mindcare-complete-group-sessions.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,144 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../auth/AuthContext';
+import { useAdminUsers } from '../hooks/useAdminUsers';
+import UsersFilters from '../components/UsersFilters';
+import UsersTable from '../components/UsersTable';
+import UserCreateModal from '../components/UserCreateModal';
+import UserEditModal from '../components/UserEditModal';
+import UserLifecycleDialog from '../components/UserLifecycleDialog';
+import Button from '../../../../components/UI/Button/Button';
+import styles from './UsersPage.module.css';
+
+function Pagination({ page, total, size, onPageChange }) {
+  const totalPages = Math.max(1, Math.ceil(total / size));
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className={styles.pagination}>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        disabled={page === 1}
+        onClick={() => onPageChange(page - 1)}
+      >
+        ← Назад
+      </Button>
+      <span className={styles.pageInfo}>Стр. {page} из {totalPages}</span>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        disabled={page === totalPages}
+        onClick={() => onPageChange(page + 1)}
+      >
+        Вперёд →
+      </Button>
+    </div>
+  );
+}
+
+export default function UsersPage() {
+  const {
+    items, loading, error, total,
+    page, setPage, size,
+    query, setQuery,
+    filters, setFilters,
+    refetch,
+  } = useAdminUsers();
+
+  const { user, impersonate } = useAuth();
+  const navigate = useNavigate();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);   // user object for edit
+  // ADR-028: { user, mode: 'deactivate' | 'restore' } — отключение/восстановление.
+  const [lifecycleTarget, setLifecycleTarget] = useState(null);
+  const [impersonating, setImpersonating] = useState(null); // uuid in progress
+  const [impersonateError, setImpersonateError] = useState('');
+
+  const handleImpersonate = async (item) => {
+    if (impersonating) return;
+    setImpersonateError('');
+    setImpersonating(item.uuid);
+    try {
+      await impersonate(item.uuid);
+      // Кабинет целевого пользователя выберет DashboardRedirect.
+      navigate('/dashboard', { replace: true });
+    } catch (e) {
+      setImpersonateError(
+        e?.message || 'Не удалось войти под именем пользователя.'
+      );
+      setImpersonating(null);
+    }
+  };
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <h1 className={styles.title}>Пользователи</h1>
+          {!loading && <span className={styles.total}>{total} всего</span>}
+        </div>
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
+          + Добавить
+        </Button>
+      </div>
+
+      <UsersFilters
+        query={query}
+        onQueryChange={setQuery}
+        filters={filters}
+        onFiltersChange={setFilters}
+      />
+
+      {impersonateError && (
+        <p className={styles.impersonateError} role="alert">
+          {impersonateError}
+        </p>
+      )}
+
+      <UsersTable
+        items={items}
+        loading={loading}
+        error={error}
+        currentUserId={user ? Number(user.id) : null}
+        onEdit={(u) => setEditTarget(u)}
+        onDeactivate={(u) => setLifecycleTarget({ user: u, mode: 'deactivate' })}
+        onRestore={(u) => setLifecycleTarget({ user: u, mode: 'restore' })}
+        onImpersonate={handleImpersonate}
+      />
+
+      <Pagination
+        page={page}
+        total={total}
+        size={size}
+        onPageChange={setPage}
+      />
+
+      {/* ── Modals ── */}
+      <UserCreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => { setCreateOpen(false); refetch(); }}
+      />
+
+      <UserEditModal
+        open={!!editTarget}
+        uuid={editTarget?.uuid}
+        userInfo={editTarget}
+        onClose={() => setEditTarget(null)}
+        onUpdated={() => { setEditTarget(null); refetch(); }}
+      />
+
+      <UserLifecycleDialog
+        open={!!lifecycleTarget}
+        mode={lifecycleTarget?.mode}
+        userInfo={lifecycleTarget?.user}
+        onClose={() => setLifecycleTarget(null)}
+        onDone={() => { setLifecycleTarget(null); refetch(); }}
+      />
+    </div>
+  );
+}

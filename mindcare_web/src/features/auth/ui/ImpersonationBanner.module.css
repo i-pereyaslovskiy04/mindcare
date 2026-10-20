@@ -1,0 +1,39 @@
+/* Плашка impersonation (ADR-025). Цвета — только ролевые токены темы. */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px 20px;
+  padding: 10px 20px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border-bottom: 2px solid var(--warning);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.text strong {
+  font-weight: 700;
+}
+
+.returnBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 600px) {
+  .banner {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
+}

@@ -1,0 +1,64 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--espresso);
+  margin: 0;
+}
+
+.total {
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+
+.pageInfo {
+  font-size: 13px;
+  color: var(--text-light);
+  min-width: 110px;
+  text-align: center;
+}
+
+/* Ошибка входа «под именем» (ADR-025). */
+.impersonateError {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error-border);
+  border-radius: 8px;
+  font-size: 14px;
+}

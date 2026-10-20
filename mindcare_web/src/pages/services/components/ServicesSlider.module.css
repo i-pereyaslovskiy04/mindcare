@@ -1,0 +1,75 @@
+.slider {
+  width: 100%;
+}
+
+/* ── Header row ─────────────────────────── */
+
+.sliderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: clamp(24px, 2.5vw, 36px);
+}
+
+.sliderTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--fs-h2);
+  font-weight: 400;
+  line-height: var(--lh-h2);
+  color: var(--espresso);
+}
+
+/* ── Arrow controls ─────────────────────── */
+
+.arrows {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--nav-border);
+  background: var(--warm-white);
+  color: var(--espresso);
+  cursor: pointer;
+  transition: background 0.17s, border-color 0.17s, color 0.17s, transform 0.14s;
+}
+
+.arrow:hover:not(:disabled) {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--text-on-dark);
+  transform: scale(1.06);
+}
+
+.arrow:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.arrowOff {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ── Scrollable track ───────────────────── */
+
+.sliderTrack {
+  display: flex;
+  gap: var(--grid-gap);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 12px; /* room for card hover shadow */
+  margin-bottom: -12px;
+}
+
+.sliderTrack::-webkit-scrollbar {
+  display: none;
+}
