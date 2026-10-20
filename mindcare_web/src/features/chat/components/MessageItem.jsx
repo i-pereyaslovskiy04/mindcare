@@ -1,4 +1,4 @@
-import Icon from '../../../components/Icon/Icon';
+import { SYSTEM_MONOGRAM } from '../lib/conversationView';
 import MessageActionsMenu from './MessageActionsMenu';
 import MessageBubble from './MessageBubble';
 import styles from './ChatWindow.module.css';
@@ -33,7 +33,7 @@ export default function MessageItem({
     <div className={`${styles.msg} ${isMe ? styles.msgMe : ''}`}>
       {!isMe && (
         <div className={`${styles.msgAvatar} ${isSystem ? styles.msgAvatarSystem : ''}`}>
-          {isSystem ? <Icon name="bell" size={14} /> : contactInitials}
+          {isSystem ? <span aria-hidden="true">{SYSTEM_MONOGRAM}</span> : contactInitials}
         </div>
       )}
 

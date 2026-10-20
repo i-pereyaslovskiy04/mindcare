@@ -4,6 +4,8 @@ import {
   getMyVerification,
   getStudentVerification,
   getStudentVerifications,
+  getPendingVerificationsCount,
+  getStudentVerificationHistory,
   rejectStudentVerification,
   submitMyVerification,
 } from './studentVerification.api';
@@ -53,5 +55,22 @@ test('карточка и решения адресуются uuid конкре�
   expect(apiFetch).toHaveBeenNthCalledWith(
     3, `/api/supervisor/student-verifications/${uuid}/reject`,
     { method: 'POST', body: JSON.stringify({ reason: 'Причина' }) },
+  );
+});
+
+test('счётчик очереди — статический путь pending-count', () => {
+  getPendingVerificationsCount();
+  expect(apiFetch).toHaveBeenCalledWith('/api/supervisor/student-verifications/pending-count');
+});
+
+test('история — порция по курсору before', () => {
+  const uuid = '1b4e28ba-2fa1-11d2-883f-0016d3cca427';
+  getStudentVerificationHistory(uuid, { before: 'c-1', size: 10 });
+  getStudentVerificationHistory(uuid);
+  expect(apiFetch).toHaveBeenNthCalledWith(
+    1, `/api/supervisor/student-verifications/${uuid}/history?before=c-1&size=10`,
+  );
+  expect(apiFetch).toHaveBeenNthCalledWith(
+    2, `/api/supervisor/student-verifications/${uuid}/history`,
   );
 });

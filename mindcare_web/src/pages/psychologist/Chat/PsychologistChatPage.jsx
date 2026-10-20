@@ -6,9 +6,13 @@ import ChatWindow from '../../../features/chat/components/ChatWindow';
 import { useSystemConversation } from '../../../features/chat/hooks/useSystemConversation';
 import {
   SYSTEM_DIALOG_ID,
+  SYSTEM_EMPTY_TEXT,
   SYSTEM_NOTICE,
+  SYSTEM_QUERY_PARAM,
   formatLastTime,
   initialsOf,
+  isSystemDeepLink,
+  omitSearchParams,
   splitConversations,
   systemContact,
 } from '../../../features/chat/lib/conversationView';
@@ -119,6 +123,7 @@ export default function PsychologistChatPage() {
     messages: sysMessages,
     loading: sysLoading,
     error: sysError,
+    metaLoaded: sysMetaLoaded,
     refreshMeta: sysRefreshMeta,
     open: sysOpen,
     close: sysClose,
@@ -133,6 +138,9 @@ export default function PsychologistChatPage() {
   const queryConversation = searchParams.get('conversation');
   const queryStudent = searchParams.get('student');
   const hasQuickOpenQuery = Boolean(queryConversation || queryStudent);
+  // ?system=1 (deep-link на системную беседу) приоритетнее quick-open: пока он
+  // не обработан, диалог по ?conversation= / ?student= не открывается.
+  const systemDeepLink = isSystemDeepLink(searchParams);
 
   // Лёгкий poll метаданных системной беседы (unread в списке).
   useEffect(() => {
@@ -152,8 +160,23 @@ export default function PsychologistChatPage() {
     };
   }, [systemSelected, sysOpen, sysPollNew, sysClose]);
 
+  // Deep-link ?system=1: после первой загрузки метаданных системной беседы
+  // выбираем её так же, как кликом в списке (open + mark-read делает эффект
+  // выше), затем без новой записи в history убираем system и параметры
+  // quick-open: открывать в той же навигации второй диалог не нужно.
   useEffect(() => {
-    if (!hasQuickOpenQuery) return;
+    if (!systemDeepLink || !sysMetaLoaded) return;
+    setQuickOpenError('');
+    setQuickOpenTargetUuid(null);
+    setSystemSelected(true);
+    setSearchParams(
+      omitSearchParams(searchParams, [SYSTEM_QUERY_PARAM, 'conversation', 'student']),
+      { replace: true },
+    );
+  }, [systemDeepLink, sysMetaLoaded, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!hasQuickOpenQuery || systemDeepLink) return;
 
     if (listLoading) return;
 
@@ -175,6 +198,7 @@ export default function PsychologistChatPage() {
   }, [
     conversations,
     hasQuickOpenQuery,
+    systemDeepLink,
     listLoading,
     queryConversation,
     queryStudent,
@@ -227,7 +251,7 @@ export default function PsychologistChatPage() {
     );
   } else {
     // Группировка (Stage 31s): архив (закрытые с историей) — сверху и свёрнут;
-    // активные диалоги — в основном списке; «Системные уведомления» — последними.
+    // активные диалоги — в основном списке; «Системные сообщения» — последними.
     const { archived, active } = splitConversations(conversations);
     const archivedContacts = archived.map(toContact);
     const contacts = [...active.map(toContact), systemContact(sysConv)];
@@ -243,7 +267,7 @@ export default function PsychologistChatPage() {
       } else if (sysLoading && sysMessages.length === 0) {
         pane = (
           <div className={styles.paneState}>
-            <p className={styles.stateText}>Загрузка уведомлений…</p>
+            <p className={styles.stateText}>Загрузка системных сообщений…</p>
           </div>
         );
       } else {
@@ -253,7 +277,7 @@ export default function PsychologistChatPage() {
             messages={sysMessages}
             readOnly
             readOnlyNotice={SYSTEM_NOTICE}
-            emptyText="Пока нет системных уведомлений."
+            emptyText={SYSTEM_EMPTY_TEXT}
             onBack={handleBack}
           />
         );

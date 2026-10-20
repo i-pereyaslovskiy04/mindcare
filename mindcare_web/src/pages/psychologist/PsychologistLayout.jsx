@@ -34,9 +34,10 @@ const CRUMB_LABELS = {
   '/psychologist/settings':      'Настройки',
 };
 
+// parent — раздел из CRUMB_LABELS, промежуточная крошка-ссылка.
 const DYNAMIC_CRUMBS = [
-  { prefix: '/psychologist/students/', label: 'Карточка студента' },
-  { prefix: '/psychologist/tests/', label: 'Тест' },
+  { prefix: '/psychologist/students/', label: 'Карточка студента', parent: '/psychologist/students' },
+  { prefix: '/psychologist/tests/', label: 'Тест', parent: '/psychologist/tests' },
 ];
 
 export default function PsychologistLayout() {

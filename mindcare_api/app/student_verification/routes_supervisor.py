@@ -12,8 +12,14 @@
     именем» уже зафиксирован admin_user_impersonated.
 
   GET  ""                 — список без номера билета (без аудита);
-  GET  /{uuid}            — карточка с полным номером: content_read
-                            INDEPENDENT + RAISE, сбой → 503 без номера;
+  GET  /pending-count     — только число заявок в очереди (бейдж меню, без
+                            аудита); объявлен ДО /{uuid};
+  GET  /{uuid}            — карточка с полным номером и первой порцией
+                            истории: content_read INDEPENDENT + RAISE на
+                            каждую раскрываемую заявку, сбой → 503 без номера
+                            и пояснений;
+  GET  /{uuid}/history    — следующая порция истории (?before=<uuid>&size):
+                            content_read на каждое раскрываемое пояснение;
   POST /{uuid}/approve    — решение; POST /{uuid}/reject {reason}.
 Отказы решений — {"detail", "code"} + student_verification_review_failed после
 отката. Malformed UUID → 422 (FastAPI).
@@ -30,11 +36,14 @@ from app.auth.deps import get_current_user, require_role, resolve_role_or_403
 from app.student_verification import errors, service
 from app.student_verification.routes import error_response
 from app.student_verification.schemas import (
-    HistoryItem, ListStatusFilter, PaginatedVerificationsOut, RejectIn,
-    VerificationCardOut,
+    DecisionOut, ListStatusFilter, PaginatedVerificationsOut, PendingCountOut,
+    RejectIn, VerificationCardOut, VerificationHistoryOut,
 )
 
 _NO_STORE = "no-store, private"
+_AUDIT_UNAVAILABLE = (
+    "Не удалось зафиксировать обращение к данным заявки. Повторите попытку."
+)
 
 
 def _forbid_impersonation(current_user: dict = Depends(get_current_user)) -> None:
@@ -81,6 +90,14 @@ def list_verifications(
     return {"items": items, "total": total, "page": page, "size": size}
 
 
+# Статический маршрут — ДО /{request_uuid}, иначе «pending-count» попал бы в
+# параметр UUID (422).
+@router.get("/pending-count", response_model=PendingCountOut)
+def pending_verifications_count(response: Response):
+    response.headers["Cache-Control"] = _NO_STORE
+    return {"count": service.pending_count()}
+
+
 @router.get("/{request_uuid}", response_model=VerificationCardOut)
 def get_verification_card(
     request_uuid: UUID,
@@ -97,13 +114,41 @@ def get_verification_card(
     except errors.VerificationError as exc:
         return error_response(exc)
     except AuditError:
-        # Fail-closed: факт чтения не зафиксирован → номер не отдаём.
+        # Fail-closed: факт чтения не зафиксирован → ни номер, ни пояснения.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Не удалось зафиксировать обращение к данным заявки. Повторите попытку.",
+            detail=_AUDIT_UNAVAILABLE,
         ) from None
     response.headers["Cache-Control"] = _NO_STORE
     return card
+
+
+@router.get("/{request_uuid}/history", response_model=VerificationHistoryOut)
+def get_verification_history(
+    request_uuid: UUID,
+    request: Request,
+    response: Response,
+    before: Optional[UUID] = Query(default=None),
+    size: int = Query(default=10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    reviewer_id = _reviewer(current_user)
+    ip, ua = _client(request)
+    try:
+        history = service.get_history_for_review(
+            request_uuid, before=before, size=size,
+            reviewer_id=reviewer_id, ip=ip, user_agent=ua,
+        )
+    except errors.VerificationError as exc:
+        return error_response(exc)
+    except AuditError:
+        # Fail-closed: чтение пояснений не зафиксировано → не отдаём их.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_AUDIT_UNAVAILABLE,
+        ) from None
+    response.headers["Cache-Control"] = _NO_STORE
+    return history
 
 
 def _decide(
@@ -134,7 +179,7 @@ def _decide(
         return error_response(exc)
 
 
-@router.post("/{request_uuid}/approve", response_model=HistoryItem)
+@router.post("/{request_uuid}/approve", response_model=DecisionOut)
 def approve_verification(
     request_uuid: UUID,
     request: Request,
@@ -143,7 +188,7 @@ def approve_verification(
     return _decide(request_uuid, "approve", request, current_user)
 
 
-@router.post("/{request_uuid}/reject", response_model=HistoryItem)
+@router.post("/{request_uuid}/reject", response_model=DecisionOut)
 def reject_verification(
     request_uuid: UUID,
     body: RejectIn,

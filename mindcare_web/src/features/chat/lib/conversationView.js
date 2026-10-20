@@ -3,8 +3,17 @@
  */
 
 export const SYSTEM_DIALOG_ID = '__system__';
+
+// Единый контракт отображения системной беседы. Это SYSTEM MESSAGE —
+// постоянные записи в беседе «Психология ДонГУ», а не NOTIFICATION: слово
+// «уведомления» и колокольчик зарезервированы за будущими уведомлениями шапки.
+export const SYSTEM_SENDER_NAME = 'Психология ДонГУ';
+export const SYSTEM_MESSAGE_MARKER = 'Системное сообщение';
+export const SYSTEM_SECTION_TITLE = 'Системные сообщения';
+export const SYSTEM_MONOGRAM = 'ПД';
 export const SYSTEM_NOTICE =
-  'Это системные уведомления. Ответить в этот диалог нельзя.';
+  'Это системные сообщения Психологии ДонГУ. Ответить на них нельзя.';
+export const SYSTEM_EMPTY_TEXT = 'Системных сообщений пока нет.';
 
 export function initialsOf(name) {
   return (name || '')
@@ -59,11 +68,35 @@ export function systemContact(sysConv) {
   return {
     id: SYSTEM_DIALOG_ID,
     system: true,
-    name: 'Системные уведомления',
+    name: SYSTEM_SENDER_NAME,
     initials: '',
-    role: 'Системные уведомления',
-    lastMsg: 'Уведомления MindCare',
+    role: SYSTEM_MESSAGE_MARKER,
+    // Статичное превью: реальный текст последнего сообщения — отдельный этап.
+    lastMsg: SYSTEM_MESSAGE_MARKER,
     time: formatLastTime(sysConv?.last_message_at),
     unread: sysConv?.unread_count || 0,
   };
+}
+
+/**
+ * Deep-link на системную беседу: `/student/chat?system=1`,
+ * `/psychologist/chat?system=1`. Страница Messenger открывает беседу тем же
+ * путём, что и клик по ней в списке, и затем убирает параметр (replace).
+ * Другие значения параметра ничего не открывают.
+ */
+export const SYSTEM_QUERY_PARAM = 'system';
+
+export function isSystemDeepLink(searchParams) {
+  return searchParams.get(SYSTEM_QUERY_PARAM) === '1';
+}
+
+/**
+ * Параметры запроса без перечисленных ключей — plain-объект для
+ * setSearchParams. Остальные параметры сохраняются: каждый deep-link убирает
+ * только свои ключи, не затирая чужие до их обработки.
+ */
+export function omitSearchParams(searchParams, keys) {
+  return Object.fromEntries(
+    [...searchParams.entries()].filter(([key]) => !keys.includes(key)),
+  );
 }

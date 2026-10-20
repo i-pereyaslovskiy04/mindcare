@@ -5,6 +5,7 @@ import Badge from '../../components/UI/Badge/Badge';
 import { useStudents } from '../../features/supervisor/hooks/useStudents';
 import AssignModal from '../../features/supervisor/components/AssignModal';
 import StudentTestResults from '../../features/tests/ui/StudentTestResults';
+import UserContactsDialog from '../../features/contacts/ui/UserContactsDialog';
 import {
   createEngagement,
   transferEngagement,
@@ -31,6 +32,7 @@ export default function EngagementsPage() {
   // modal: { mode, student } | null
   const [modal, setModal]     = useState(null);
   const [resultsFor, setResultsFor] = useState(null); // студент для просмотра результатов
+  const [contactsFor, setContactsFor] = useState(null); // студент для просмотра контактов
   const [notice, setNotice]   = useState(null); // { type: 'success'|'error', text }
 
   function showNotice(type, text) {
@@ -187,6 +189,14 @@ export default function EngagementsPage() {
                           >
                             Результаты
                           </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setContactsFor(student)}
+                            aria-label={`Контакты: ${student.full_name}`}
+                          >
+                            Контакты
+                          </Button>
                           {!eng ? (
                             <Button
                               variant="primary"
@@ -267,6 +277,15 @@ export default function EngagementsPage() {
           student={modal.student}
           onConfirm={handleConfirm}
           onClose={closeModal}
+        />
+      )}
+
+      {/* Контакты студента (ADR-032): значений в таблице нет, чтение фиксируется в журнале */}
+      {contactsFor && (
+        <UserContactsDialog
+          userUuid={contactsFor.uuid}
+          name={contactsFor.full_name}
+          onClose={() => setContactsFor(null)}
         />
       )}
 

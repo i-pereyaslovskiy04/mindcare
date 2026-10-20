@@ -54,6 +54,13 @@
   letter-spacing: 0.04em;
   line-height: 1.3;
   flex-shrink: 0;
+  /* brand — ссылка на главную кабинета: без подчёркивания, фокус внутри
+     (sidebar с overflow: hidden обрезал бы внешний outline). */
+  text-decoration: none;
+}
+.brand:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: calc(var(--focus-ring-width) * -1);
 }
 .brand em {
   font-style: italic;
@@ -103,6 +110,7 @@
 .userInfo {
   overflow: hidden;
   min-width: 0;
+  flex: 1;
 }
 .userName {
   font-size: 14px;
@@ -114,7 +122,10 @@
   text-overflow: ellipsis;
 }
 .userRole {
-  display: inline-flex;
+  /* Блок под именем: подпись роли (одна роль) или полноширинная кнопка
+     «Сменить кабинет» (несколько ролей). */
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: 5px;
   font-size: 11px;
@@ -246,120 +257,12 @@
   height: 100vh;
 }
 
-/* Topbar. Высота согласована с .brand через var --cabinet-header-height;
-   горизонтальную линию рисует общий .app::after, border-bottom здесь не нужен. */
+/* Topbar — CabinetHeader (components/CabinetHeader). Здесь только отступы
+   ряда этого layout'а; высота (var --cabinet-header-height), крошки и кнопки —
+   в CabinetHeader.module.css. */
 .topbar {
-  box-sizing: border-box;
-  min-height: var(--cabinet-header-height);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 16px 36px;
-  background: var(--warm-white);
-  flex-shrink: 0;
   gap: 16px;
-}
-.crumbs {
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  color: var(--text-light);
-  text-transform: uppercase;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.crumbs span {
-  color: var(--espresso);
-}
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-/* Скрыт на desktop (>980px) — там switcher виден в sidebar .userInfo.
-   Показывается только когда sidebar сворачивается/скрывается, чтобы
-   переключатель кабинета оставался доступен на любой ширине. */
-.topbarSwitcher {
-  display: none;
-  color: var(--espresso);
-}
-.search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--cream);
-  border: 1px solid var(--nav-border);
-  border-radius: 10px;
-  padding: 8px 14px;
-  width: 280px;
-  transition: border-color 0.15s, background 0.15s;
-}
-.search:focus-within {
-  border-color: var(--coffee);
-  background: var(--warm-white);
-}
-.search input {
-  border: none;
-  background: transparent;
-  outline: none;
-  flex: 1;
-  font-size: 13px;
-  color: var(--text-main);
-  font-family: inherit;
-  cursor: default;
-}
-.search input::placeholder {
-  color: var(--text-light);
-}
-/* Ссылка «На главную» (публичный /) — тот же стиль, что в AdminLayout. */
-.homeLink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  text-decoration: none;
-  flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.homeLink:hover {
-  background: rgba(var(--espresso-rgb), 0.08);
-  color: var(--espresso);
-}
-.homeLink:focus-visible {
-  outline: 2px solid var(--coffee);
-  outline-offset: 2px;
-}
-
-.iconBtn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--nav-border);
-  background: var(--warm-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--coffee);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  position: relative;
-  flex-shrink: 0;
-}
-.iconBtn:hover {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-.dot {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--error);
-  border: 1.5px solid var(--warm-white);
 }
 
 /* Content */
@@ -374,91 +277,12 @@
   margin: 0 auto;
 }
 
-/* ── MOBILE NAV (hamburger + drawer) ────────────────────────────── */
-/* Левая группа topbar: кнопка меню + breadcrumb */
-.topbarLeft {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-/* Кнопка-гамбургер: скрыта на desktop, показывается на мобильной ширине */
-.mobileMenuButton {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--nav-border);
-  border-radius: 10px;
-  background: var(--warm-white);
-  color: var(--espresso);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
-}
-.mobileMenuButton:hover {
-  background: var(--sand);
-  border-color: var(--latte);
-}
-
-/* Drawer + backdrop: position:fixed → вне grid, не влияют на layout */
-.mobileBackdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim);
-  z-index: 90;
-}
-.mobileDrawer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: min(82vw, 300px);
-  background: var(--nav-bg);
-  border-right: 1px solid var(--nav-border);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  z-index: 100;
-  box-shadow: 0 8px 30px rgba(var(--shadow-rgb), 0.28);
-}
-/* Drawer — отдельный fixed-элемент вне .app, общий .app::after до него не
-   достаёт, поэтому brand'у возвращаем собственный нижний разделитель. */
+/* ── MOBILE DRAWER (<=600px) ────────────────────────────────────── */
+/* Hamburger — в CabinetHeader, drawer/backdrop/«Закрыть» — CabinetDrawer.
+   Здесь только правила содержимого: drawer — отдельный fixed-элемент вне
+   .app::after, поэтому brand'у возвращаем собственный нижний разделитель. */
 .mobileDrawer .brand {
   border-bottom: 1px solid var(--nav-border);
-}
-
-.drawerClose {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 8px;
-  z-index: 1;
-  transition: background 0.15s, color 0.15s;
-}
-.drawerClose:hover {
-  background: var(--sand);
-  color: var(--espresso);
-}
-
-/* Подстраховка: на desktop drawer/backdrop никогда не видны */
-@media (min-width: 601px) {
-  .mobileDrawer,
-  .mobileBackdrop {
-    display: none;
-  }
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────── */
@@ -494,13 +318,9 @@
     padding: 14px 8px;
   }
 
-  /* Sidebar switcher скрыт вместе с userInfo — показываем topbar-копию,
-     чтобы multi-role пользователь мог переключить кабинет и в icon-rail
-     режиме (801–980px), и на мобильных ширинах (<=600px). */
-  .topbarSwitcher {
-    display: inline-flex;
-    align-items: center;
-  }
+  /* Sidebar switcher скрыт вместе с userInfo — CabinetHeader показывает
+     свою копию (<=980px), чтобы multi-role пользователь мог переключить
+     кабинет и в icon-rail режиме, и на мобильных ширинах (<=600px). */
 
   /* Nav: collapse to icons */
   .sidebar .navSectionLabel {
@@ -536,9 +356,6 @@
   .topbar {
     padding: 14px 20px;
   }
-  .search {
-    display: none;
-  }
 
   /* Content: less padding */
   .content {
@@ -557,19 +374,7 @@
   .sidebar {
     display: none;
   }
-  /* Навигация доступна через мобильное меню */
-  .mobileMenuButton {
-    display: inline-flex;
-  }
-  /* Разгружаем тесную мобильную шапку: остаются hamburger + breadcrumb + logout.
-     Колокольчик и почта скрыты (доступны на tablet/desktop). */
-  .iconBtnOptional {
-    display: none;
-  }
-  /* breadcrumb не должен выталкивать logout — обрезаем по месту */
-  .crumbs {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-  }
+  /* Навигация — через мобильное меню (hamburger в CabinetHeader). Мобильная
+     шапка (hamburger, крошки, уведомления, «Оформление», выход) — правила в
+     CabinetHeader.module.css. */
 }

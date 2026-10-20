@@ -32,6 +32,9 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
    Self-service раздел (/student/settings#student-verification) — только чистый
    student вне режима «под именем»; supervisor-раздел /supervisor/student-verifications
    в режиме «под именем» запросов не делает
+✅ Контакты пользователя (ADR-032): HTTP только через `api/contacts.api.js`; владелец — `features/contacts/hooks/useMyContacts` + `ui/ContactsEditor` (введённое не теряется при ошибке и конфликте версий, `id` строки — UUID, создаётся один раз), сотрудник — только чтение (`useUserContacts` + `ui/ContactsReadOnly`/`UserContactsDialog`; данные привязаны к uuid). Значения контактов не логировать; `err.body` целиком не выводить. Ссылкой значение становится только через `lib/href.contactHref` (https/http, mailto, tel; `rel="noopener noreferrer nofollow"`)
+✅ Вкладки — только `components/UI/Tabs` (`AuditTabs` — тонкая обёртка); поле формы с подписью — `components/UI/TextField` (label↔input, hint/error через aria-describedby). Неактивные панели вкладок держать смонтированными с атрибутом `hidden` (без `display` на обёртке и без подстрок `grid/cards/columns` в именах классов — режим ГОСТ принудительно делает их `display:block`)
+✅ Настройки аккаунта: страница `pages/student/Settings` — только композиция; логика в `features/accountSettings` (ФИО и телефон сохраняются раздельно, PATCH несёт только свой ключ). После смены/установки пароля: navigate → `clearSession()`, без `logout`
 ✅ LinkifiedText: внутренние ссылки — ТОЛЬКО для system-сообщений
    (MessageBubble → allowInternalLinks) и ТОЛЬКО пути из точного allowlist
    INTERNAL_LINKS → router <Link> с подписью из allowlist; прочие относительные и
@@ -51,6 +54,22 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 **Breakpoints:** разные по слоям осознанно — Messenger 900px, CabinetLayout 600px
 (+980px icon-rail). Не «выравнивать» их между собой.
 
+**Шапка кабинетов (ADR-031):** одна — `components/CabinetHeader/` для
+CabinetLayout (student/psychologist/supervisor) и AdminLayout. Порядок справа:
+[CabinetSwitcher 601–980px] → Поиск → [Уведомления] → Оформление → Выход; на <=600px
+слева hamburger, switcher — в drawer (CabinetDrawer, общий для admin). Поиск —
+честная заглушка (disabled). Колокольчик — только student/psychologist
+(`features/bell`, ADR-031 «Дополнение 2026-10-20»): слой над системной беседой
+«Психология ДонГУ», badge — её реальный `unread_count`, панель — до 5
+непрочитанных, открытие ничего не отмечает прочитанным, переход —
+`/<кабинет>/chat?system=1`; своего read/unread и notification API нет. Badge
+«Сообщения» — только личные диалоги (системная беседа — в колокольчике);
+кнопки почты и home-иконки нет; brand — ссылка на корень кабинета. Крошки — только
+из явных `crumbLabels`/`dynamicCrumbs` (`parent` — промежуточный уровень), не из
+URL. Тема и версия для слабовидящих — одна кнопка «Оформление»: ThemeToggle
+compact + существующий A11yToggle секцией `extraSection`. Новые кнопки в шапку —
+только в CabinetHeader, не в layout'ы.
+
 ---
 
 ### Frontend: темы и доступность
@@ -63,7 +82,9 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
 ✅ Цвета — ТОЛЬКО через CSS-переменные из src/styles/tokens/ (per-theme файлы,
    ключ — data-theme на <html>). Ни одного raw hex/rgba в компонентах
 ✅ Палитры: dongu (по умолчанию, фирменная бело-синяя гамма ДонГУ), coffee
-   (прежний дизайн), nature, classic, hc (AAA);
+   (прежний дизайн), nature, classic, hc (AAA). hc в обычном списке тем
+   (ThemeToggle) не предлагается — только если уже активна (prefers-contrast /
+   прежний выбор); контрастные схемы — в версии для слабовидящих (ADR-031);
    режимы: light / dark / system (следит за prefers-color-scheme вживую).
    Итог: data-theme="{palette}-{light|dark}"
 ✅ Новый код пишется на ролевых токенах (--surface, --primary, --on-surface,
@@ -165,7 +186,7 @@ Feature-specific UI разрешён только с обоснованием в
 - Calendar format chips
 - CabinetLayout nav badges
 - CabinetLayout navBadgeSoon
-- CabinetLayout notification dot
+- CabinetHeader .iconBtn (36×36, геометрия триггера ThemeToggle compact)
 - SearchBar count overlay
 - SearchBar removable chips
 - TaskItem badges

@@ -13,14 +13,13 @@ const ROLE_OPTIONS = [
   { value: 'supervisor',   label: ROLE_LABELS.supervisor },
 ];
 
-// ADR-028: «Отключён» включает и ранее удалённые аккаунты (backend добавляет
-// их сам при is_active=false) — их тоже восстанавливает администратор.
-const STATUS_OPTIONS = [
-  { value: '',      label: 'Все' },
-  { value: 'true',  label: 'Активен' },
-  { value: 'false', label: 'Отключён' },
-];
-
+/**
+ * Фильтры /admin/users. Видимость аккаунтов задаёт ОДИН контрол — галочка
+ * «Показать отключённых» (ADR-028): без неё — только активные, с ней —
+ * активные и отключённые, в т.ч. ранее удалённые. Отдельного селектора
+ * статуса нет, чтобы два контрола не задавали конфликтующие условия.
+ * Параметры API собирает useAdminUsers.
+ */
 export default function UsersFilters({ query, onQueryChange, filters, onFiltersChange }) {
   return (
     <div className={styles.filters}>
@@ -40,18 +39,10 @@ export default function UsersFilters({ query, onQueryChange, filters, onFiltersC
         placeholder="Все роли"
       />
 
-      <Select
-        style={{ minWidth: 140 }}
-        value={filters.is_active}
-        options={STATUS_OPTIONS}
-        onChange={(val) => onFiltersChange({ ...filters, is_active: val })}
-        placeholder="Все"
-      />
-
       <Checkbox
-        checked={filters.includeDeleted}
-        onChange={() => onFiltersChange({ ...filters, includeDeleted: !filters.includeDeleted })}
-        label="Показать ранее удалённых"
+        checked={filters.showDisabled}
+        onChange={() => onFiltersChange({ ...filters, showDisabled: !filters.showDisabled })}
+        label="Показать отключённых"
       />
     </div>
   );

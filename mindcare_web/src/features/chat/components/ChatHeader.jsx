@@ -1,5 +1,5 @@
 import Icon from '../../../components/Icon/Icon';
-import { hasPresence } from '../lib/conversationView';
+import { SYSTEM_MONOGRAM, hasPresence } from '../lib/conversationView';
 import styles from './ChatWindow.module.css';
 
 export default function ChatHeader({ contact, onBack = null }) {
@@ -18,7 +18,7 @@ export default function ChatHeader({ contact, onBack = null }) {
         </button>
       )}
       <div className={`${styles.headerAvatar} ${contact.system ? styles.headerAvatarSystem : ''}`}>
-        {contact.system ? <Icon name="bell" size={18} /> : contact.initials}
+        {contact.system ? <span aria-hidden="true">{SYSTEM_MONOGRAM}</span> : contact.initials}
       </div>
 
       <div className={styles.headerInfo}>

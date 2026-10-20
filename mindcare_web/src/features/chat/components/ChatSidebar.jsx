@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ChatListItem from './ChatListItem';
+import { SYSTEM_SECTION_TITLE } from '../lib/conversationView';
 import styles from './ChatSidebar.module.css';
 
 function dialogWord(n) {
@@ -14,7 +15,7 @@ function dialogWord(n) {
  * Список диалогов разбит на секции (Stage 31v):
  *   «Архив»  — сверху, сворачиваемый блок (только если есть archivedContacts);
  *   «Сообщения» — активные диалоги (основной фокус);
- *   «Системные уведомления» — system-беседа (приходит внутри `contacts` с
+ *   «Системные сообщения» — system-беседа (приходит внутри `contacts` с
  *     флагом `system`, выносится в отдельную секцию внизу).
  * Карточки во всех секциях — один и тот же ChatListItem с общим selected-стилем;
  * архивные лишь приглушены (muted) и вложены, но не «другой компонент».
@@ -93,7 +94,7 @@ export default function ChatSidebar({ contacts, archivedContacts = [], activeId,
         {systemContacts.length > 0 && (
           <section className={`${styles.section} ${styles.systemSection}`}>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Системные уведомления</h2>
+              <h2 className={styles.sectionTitle}>{SYSTEM_SECTION_TITLE}</h2>
             </div>
             <div className={styles.sectionBody}>
               {systemContacts.map((contact) => (

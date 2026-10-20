@@ -1,0 +1,208 @@
+/* Шапка кабинета. Отступы и gap ряда задаёт layout через className
+   (у CabinetLayout и AdminLayout они разные на узких ширинах), высоту —
+   var(--cabinet-header-height) layout'а: брэнд и topbar остаются одной линией. */
+.header {
+  box-sizing: border-box;
+  min-height: var(--cabinet-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--warm-white);
+  flex-shrink: 0;
+}
+
+/* Левая группа: hamburger + хлебные крошки. Сжимается только она —
+   кнопки справа всегда доступны целиком. */
+.lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Hamburger мобильного drawer'а: скрыт шире 600px (там sidebar/rail).
+   Перенесён из CabinetLayout.module.css без изменения внешнего вида. */
+.menuBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  color: var(--espresso);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.menuBtn:hover {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.menuBtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* ── Хлебные крошки ─────────────────────────────────────────────── */
+.crumbs {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.crumbList {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--text-light);
+  text-transform: uppercase;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crumbList li {
+  display: inline;
+}
+
+/* «Главная» выглядит как прежний первый сегмент крошек (text-light), а не как
+   web-ссылка: без подчёркивания; при наведении лишь чуть темнеет. */
+.crumbLink {
+  color: var(--text-light);
+  text-decoration: none;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.crumbLink:hover {
+  color: var(--text-muted);
+}
+
+.crumbLink:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.crumbCurrent {
+  color: var(--espresso);
+}
+
+/* ── Правая группа ──────────────────────────────────────────────── */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Скрыт на desktop (>980px) — там switcher виден в sidebar .userInfo. */
+.switcher {
+  display: none;
+  color: var(--espresso);
+}
+
+/* Поиск — заглушка: выглядит как поле поиска, но выключен. pointer-events
+   у самого input сняты, чтобы подсказка title обёртки показывалась и над ним. */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--cream);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  width: 280px;
+  color: var(--text-light);
+  cursor: default;
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: var(--text-main);
+  font-family: inherit;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search input::placeholder {
+  color: var(--text-light);
+  opacity: 1;
+}
+
+/* Иконки шапки: 36×36, radius 10 — та же геометрия, что у триггера
+   «Оформление» (ThemeToggle compact), шапка остаётся одной ровной линией.
+   Feature-specific: shared Button variant="icon" — прозрачный, radius 8. */
+.iconBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: var(--warm-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--coffee);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.iconBtn:hover {
+  background: var(--sand);
+  border-color: var(--latte);
+}
+
+.iconBtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 980px) {
+  .switcher {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Поиск-заглушка не занимает место на узких ширинах. */
+  .search {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .menuBtn {
+    display: inline-flex;
+  }
+
+  .actions {
+    gap: 6px;
+  }
+
+  /* Sidebar скрыт, переключатель кабинета — в блоке пользователя drawer'а.
+     Остаются колокольчик (student/psychologist), «Оформление» и выход
+     (см. ADR-031, дополнения). */
+  .switcher {
+    display: none;
+  }
+
+  /* Промежуточные уровни крошек скрыты: «Главная / текущая страница». */
+  .crumbList .crumbMiddle {
+    display: none;
+  }
+}

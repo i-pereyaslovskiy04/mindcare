@@ -9,16 +9,12 @@ beforeEach(() => {
   api.getMeetingTypes.mockResolvedValue({ items: [] });
 });
 
-test('shows the supervisor label in the supervisor cabinet', async () => {
-  render(<MeetingTypesPage cabinetRole="supervisor" />);
+// Декоративной подписи роли над заголовком нет ни в одном кабинете
+// (страница общая для /supervisor и /admin); содержательный h1 остаётся.
+test('no decorative role label above the heading', async () => {
+  render(<MeetingTypesPage />);
   await waitFor(() => expect(api.getMeetingTypes).toHaveBeenCalled());
-  expect(screen.getByText('Супервизор')).toBeInTheDocument();
-  expect(screen.queryByText('Администратор')).toBeNull();
-});
-
-test('shows the admin label in the admin cabinet', async () => {
-  render(<MeetingTypesPage cabinetRole="admin" />);
-  await waitFor(() => expect(api.getMeetingTypes).toHaveBeenCalled());
-  expect(screen.getByText('Администратор')).toBeInTheDocument();
   expect(screen.queryByText('Супервизор')).toBeNull();
+  expect(screen.queryByText('Администратор')).toBeNull();
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Типы встреч');
 });

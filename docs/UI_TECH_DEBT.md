@@ -64,15 +64,28 @@
 
 ---
 
-## CabinetLayout notification dot
+## ~~CabinetLayout notification dot~~ — удалён (ADR-031)
 
-- **Где:** `components/CabinetLayout/CabinetLayout.jsx`
-- **Похоже на:** count overlay badge
-- **Почему оставлено:** декоративный dot-индикатор, не статус сущности.
-- **Что делать дальше:** не мигрировать в Badge.
-- **Можно мигрировать позже:** нет, не Badge
+- **Было:** постоянная красная точка на колокольчике в шапке кабинета —
+  ложный индикатор непрочитанного.
+- **Закрыто:** шапка вынесена в `components/CabinetHeader/`; колокольчик —
+  честная заглушка (`aria-disabled`, без точки и счётчика). Реальный индикатор
+  появится вместе с центром уведомлений (отдельный этап) — тогда решать, нужен
+  ли count-badge.
+
+---
+
+## CabinetHeader icon buttons
+
+- **Где:** `components/CabinetHeader/CabinetHeader.module.css` (`.iconBtn`)
+- **Похоже на:** `Button variant="icon"`
+- **Почему оставлено:** шапка — одна линия 36×36 / radius 10 с триггером
+  «Оформление» (`ThemeToggle compact`); shared icon-кнопка прозрачная, radius 8.
+  Выход в админке тоже переведён на этот стиль (раньше — shared Button).
+- **Что делать дальше:** если shared Button получит вариант с такой геометрией —
+  мигрировать шапку и триггер ThemeToggle вместе.
+- **Можно мигрировать позже:** да
 - **Риск:** низкий
-- **Закрыто:** `aria-hidden="true"` добавлен
 
 ---
 
@@ -191,7 +204,8 @@
 ## Audit tabs (журнал действий)
 
 - **Где:** `features/admin/audit/components/AuditTabs.jsx`
-- **Похоже на:** shared Tabs (не существует)
+- **Статус (2026-10-14):** `AuditTabs` поднят в `components/UI/Tabs` (вторая страница со вкладками — `/student/settings`); сам файл — тонкая обёртка с прежними id/экспортами. **Осталось:** `pages/psychologist/Appointments/AppointmentsPage.jsx` со своими inline-вкладками — мигрировать на shared Tabs.
+- **Похоже на:** shared Tabs (теперь существует)
 - **Почему оставлено:** shared Tabs в проекте нет. Ближайший аналог — inline-разметка вкладок в `pages/psychologist/Appointments/AppointmentsPage.jsx`: без `aria-controls`, без клавиатурной навигации и без roving tabIndex, переиспользовать там нечего. Реализация в audit — полный tablist (`role="tablist"/"tab"/"tabpanel"`, `aria-selected`, `aria-controls`, стрелки, Home/End).
 - **Что делать дальше:** при появлении второй страницы со вкладками — поднять `AuditTabs` в `components/UI/Tabs` и мигрировать на него разметку AppointmentsPage.
 - **Можно мигрировать позже:** да, кандидат №1 на shared-компонент

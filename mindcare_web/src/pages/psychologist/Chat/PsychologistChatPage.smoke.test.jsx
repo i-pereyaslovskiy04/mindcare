@@ -98,10 +98,10 @@ test('psychologist ChatPage renders conversation list + placeholder (no auto-ope
   renderPage();
   // заголовок раздела
   expect(await screen.findByText('Сообщения')).toBeInTheDocument();
-  // клиентский диалог и секция системных уведомлений в списке
+  // клиентский диалог и секция системных сообщений в списке
   expect(await screen.findByText('Анна Смирнова')).toBeInTheDocument();
   expect(
-    screen.getByRole('heading', { level: 2, name: 'Системные уведомления' }),
+    screen.getByRole('heading', { level: 2, name: 'Системные сообщения' }),
   ).toBeInTheDocument();
   // VK-like: ничего не открыто — показан placeholder
   expect(
@@ -190,4 +190,75 @@ test('psychologist ChatPage does not crash when quick-open query is not found', 
   expect(screen.getByText('Выберите диалог, чтобы открыть переписку.')).toBeInTheDocument();
   expect(chatApi.getPsychologistConversationMessages).not.toHaveBeenCalled();
   expect(setSearchParamsMock).toHaveBeenCalledWith({}, { replace: true });
+});
+
+const SYSTEM_CONV = {
+  uuid: 'sys-1', type: 'system', last_message_at: new Date().toISOString(), unread_count: 1,
+};
+const SYSTEM_MSG = {
+  id: 10,
+  uuid: 'sm-10',
+  sender_id: null,
+  sender_role: 'system',
+  is_mine: false,
+  content: 'Новая запись от Анна Смирнова',
+  created_at: new Date().toISOString(),
+  read_at: null,
+};
+
+test('psychologist ChatPage opens system conversation from ?system=1 and clears query', async () => {
+  chatApi.getSystemConversation.mockResolvedValue({ conversation: SYSTEM_CONV });
+  chatApi.getSystemMessages.mockResolvedValue({ items: [SYSTEM_MSG] });
+  renderPage('system=1');
+
+  expect(await screen.findByText('Новая запись от Анна Смирнова')).toBeInTheDocument();
+  expect(chatApi.getSystemMessages).toHaveBeenCalledWith({ limit: 100 });
+  // mark-read — существующий механизм открытия системной беседы.
+  await waitFor(() => expect(chatApi.markSystemConversationRead).toHaveBeenCalledTimes(1));
+  expect(setSearchParamsMock).toHaveBeenCalledWith({}, { replace: true });
+  expect(chatApi.getPsychologistConversationMessages).not.toHaveBeenCalled();
+  expect(screen.queryByText('Выберите диалог, чтобы открыть переписку.')).not.toBeInTheDocument();
+});
+
+test('psychologist ChatPage does not clear ?system=1 before system conversation loads', async () => {
+  let resolveMeta;
+  chatApi.getSystemConversation.mockReturnValue(new Promise((resolve) => {
+    resolveMeta = resolve;
+  }));
+  renderPage('system=1');
+
+  expect(await screen.findByText('Анна Смирнова')).toBeInTheDocument();
+  expect(setSearchParamsMock).not.toHaveBeenCalled();
+  expect(chatApi.getSystemMessages).not.toHaveBeenCalled();
+
+  resolveMeta({ conversation: SYSTEM_CONV });
+  await waitFor(() => expect(chatApi.getSystemMessages).toHaveBeenCalledWith({ limit: 100 }));
+  await waitFor(() => expect(chatApi.markSystemConversationRead).toHaveBeenCalledTimes(1));
+  expect(setSearchParamsMock).toHaveBeenCalledWith({}, { replace: true });
+});
+
+test('psychologist ChatPage: ?system=1 has priority over quick-open params', async () => {
+  chatApi.getSystemMessages.mockResolvedValue({ items: [SYSTEM_MSG] });
+  renderPage('system=1&conversation=conv-2');
+
+  expect(await screen.findByText('Новая запись от Анна Смирнова')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(setSearchParamsMock).toHaveBeenCalledWith({}, { replace: true });
+  });
+  // Второй диалог в той же навигации не открывается и не помечается прочитанным.
+  expect(chatApi.getPsychologistConversationMessages).not.toHaveBeenCalled();
+  expect(chatApi.markPsychologistConversationRead).not.toHaveBeenCalled();
+  expect(screen.queryByText('Диалог со студентом не найден.')).not.toBeInTheDocument();
+});
+
+test('psychologist ChatPage: quick-open without ?system=1 does not open system conversation', async () => {
+  renderPage('conversation=conv-2');
+
+  await waitFor(() => {
+    expect(chatApi.getPsychologistConversationMessages).toHaveBeenCalledWith('conv-2', {
+      limit: 100,
+    });
+  });
+  expect(chatApi.getSystemMessages).not.toHaveBeenCalled();
+  expect(chatApi.markSystemConversationRead).not.toHaveBeenCalled();
 });

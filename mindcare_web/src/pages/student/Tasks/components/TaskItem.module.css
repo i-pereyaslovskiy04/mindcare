@@ -145,3 +145,13 @@
 .dot {
   color: var(--nav-border);
 }
+
+/* Touch: чекбокс визуально 20×20, область нажатия ~44×44. Расширение (12px)
+   не выходит за padding карточки (16/18px) и gap до текста (14px). */
+@media (hover: none) {
+  .checkbox::before {
+    content: '';
+    position: absolute;
+    inset: -12px;
+  }
+}

@@ -60,7 +60,7 @@ export function useSystemConversation() {
       setError(
         typeof m === 'string' && m && !/^HTTP \d+$/.test(m)
           ? m
-          : 'Не удалось загрузить уведомления.',
+          : 'Не удалось загрузить системные сообщения.',
       );
     } finally {
       setLoading(false);

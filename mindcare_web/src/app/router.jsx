@@ -163,9 +163,9 @@ export default function AppRouter() {
       >
         <Route index                          element={<SupervisorHome />} />
         <Route path="engagements"           element={<EngagementsPage />} />
-        <Route path="meeting-types"         element={<MeetingTypesPage cabinetRole="supervisor" />} />
-        <Route path="banner-slides"         element={<BannerSlidesPage cabinetRole="supervisor" />} />
-        <Route path="service-cards"         element={<ServiceCardsPage cabinetRole="supervisor" />} />
+        <Route path="meeting-types"         element={<MeetingTypesPage />} />
+        <Route path="banner-slides"         element={<BannerSlidesPage />} />
+        <Route path="service-cards"         element={<ServiceCardsPage />} />
         <Route path="tests"                 element={<AdminTestsPage cabinetRole="supervisor" />} />
         <Route path="tests/new"             element={<TestFormPage cabinetRole="supervisor" />} />
         <Route path="tests/:uuid"           element={<TestFormPage cabinetRole="supervisor" />} />
@@ -190,9 +190,9 @@ export default function AppRouter() {
         <Route path="tests"        element={<AdminTestsPage />} />
         <Route path="tests/new"    element={<TestFormPage />} />
         <Route path="tests/:uuid"  element={<TestFormPage />} />
-        <Route path="meeting-types" element={<MeetingTypesPage cabinetRole="admin" />} />
-        <Route path="banner-slides" element={<BannerSlidesPage cabinetRole="admin" />} />
-        <Route path="service-cards" element={<ServiceCardsPage cabinetRole="admin" />} />
+        <Route path="meeting-types" element={<MeetingTypesPage />} />
+        <Route path="banner-slides" element={<BannerSlidesPage />} />
+        <Route path="service-cards" element={<ServiceCardsPage />} />
         <Route path="email-domains" element={<EmailDomainsPage />} />
         <Route path="audit"        element={<AuditLogsPage />} />
         <Route path="settings"   element={<AdminSettingsPage />} />

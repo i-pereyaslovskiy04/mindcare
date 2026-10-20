@@ -5,7 +5,6 @@ import Button from '../../components/UI/Button/Button';
 import Checkbox from '../../components/UI/Checkbox/Checkbox';
 import ImageUpload from '../../components/UI/ImageUpload/ImageUpload';
 import Modal from '../../components/Modal/Modal';
-import { ROLE_LABELS } from '../../shared/lib/roles';
 import {
   getSupervisorServiceCards,
   createServiceCard,
@@ -48,7 +47,7 @@ const EMPTY_FORM = {
 
 const COLS = 5;
 
-export default function ServiceCardsPage({ cabinetRole = 'supervisor' }) {
+export default function ServiceCardsPage() {
   const { items, loading, error, refetch } = useAdminServiceCards();
   const [modal, setModal]   = useState(null); // null | 'create' | item
   const [form, setForm]     = useState(EMPTY_FORM);
@@ -58,8 +57,6 @@ export default function ServiceCardsPage({ cabinetRole = 'supervisor' }) {
   const [deleting, setDeleting]         = useState(false);
   const [deleteError, setDeleteError]   = useState('');
 
-  // Лейбл — из роли МАРШРУТА (cabinetRole), а не legacy user.role.
-  const roleLabel = ROLE_LABELS[cabinetRole] ?? '';
 
   function openCreate() {
     setForm(EMPTY_FORM);
@@ -143,7 +140,6 @@ export default function ServiceCardsPage({ cabinetRole = 'supervisor' }) {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <div className={styles.labelTag}>{roleLabel}</div>
           <h1 className={styles.pageTitle}>Карточки <em>услуг</em></h1>
           <p className={styles.pageSub}>Карточки услуг на странице «Услуги».</p>
         </div>

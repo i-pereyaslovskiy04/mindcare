@@ -2,7 +2,68 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff: `docs/HANDOFFS/2026-10-07-student-verification-dongu.md` —
+Актуальные handoff'ы — два параллельных этапа, объединённых merge
+`mindcare_alex` → `mindcare_igor`:
+
+1. `docs/HANDOFFS/2026-10-14-user-contacts-settings.md` (ветка `mindcare_alex`) —
+серверные контакты пользователя и три раздела `/student/settings` (**ADR-032**,
+миграция `a7d3f1c8e5b2`): основной телефон + до 10 дополнительных способов
+связи (`user_contacts`, Fernet `enc:v1:`, CAS по `version`, обязательные
+клиентские UUID); чтение сотрудником — `GET /api/staff/users/{uuid}/contacts`
+(назначенный психолог при строгом активном сопровождении, в т.ч. клиент со
+staff-ролью; супервизор — только чистые студенты; admin сам по себе — нет),
+fail-closed аудит `user_contacts_content_read`; impersonation закрыт;
+настройки = «Личные данные» / «Контакты» / «Безопасность» на общем
+`components/UI/Tabs`; установка пароля для аккаунта без пароля через
+`ForgotPasswordModal`. REGISTRY 121 → 123. **Перед запуском API применить
+`alembic upgrade head`.**
+
+2. `docs/HANDOFFS/2026-10-14-calendar-cleanup.md` (ветка `mindcare_igor`) — Student
+Calendar Cleanup (frontend-only, этап завершён, commit `3e5ed2f`): каждый день
+месяца — кнопка, выбирает дату формы записи (одно состояние `bookDate`,
+синхронно с `DateInput` в обе стороны; `DateInput` получил `labelledBy`) и
+открывает немодальное окно дня (пустой день — «На этот день записей нет»;
+закрывается сменой месяца, «✕», Escape); `mockEvents` удалён — только сессии
+из API; прошедшая — итоговый статус или наступивший `starts_at` при любом
+статусе (прошедшая `pending_confirmation` — в истории, без отмены); на одной
+колонке форма записи сразу после календаря (grid-areas); карточки «Предстоящие
+сессии» — информация / статус / действия без переполнения; «История сессий»
+свёрнута, показывает итог (`completed`/`cancelled`/`declined`/`no_show`), у
+прошедшей `confirmed` итога нет (backend её в `completed` не переводит — долг
+в BACKLOG).
+
+Предыдущий блок (`mindcare_alex`): `docs/HANDOFFS/2026-10-13-verification-queue-history-cabinet-ui.md` —
+corrective pass (без миграций, REGISTRY 121 без изменений): в `/admin/users` одна
+галочка «Показать отключённых» (выкл → `is_active=true`, вкл → `include_deleted=true`;
+селектор статуса убран); бейдж ожидающих заявок в меню супервизора
+(`GET /api/supervisor/student-verifications/pending-count`, опрос 30 с, без аудита);
+страница проверки — очередь только pending по 20 без фильтров; полная история
+подтверждения в карточке (`GET …/{uuid}/history?before=`, keyset) с причинами
+прежних отказов под `student_verification_content_read` — по событию на каждую
+раскрытую заявку (расширение смысла, ADR-029 «Дополнение 2026-10-13»); новый текст
+раздела пользователя без упоминания супервизора; декоративная подпись роли над h1
+убрана во всех кабинетах; заметная кнопка «Сменить кабинет» (причина жалобы —
+предполагаемая, браузерный smoke не выполнялся).
+
+Предыдущий handoff (`mindcare_igor`): `docs/HANDOFFS/2026-10-14-a11y-basics.md` — Student /
+Shared Accessibility Basics (frontend-only, этап завершён, commit `e4f222b`):
+закрытая shared `Modal` изолирована (`inert`, после fade-out `visibility: hidden`
+— вне Tab и дерева доступности); открытый `CabinetDrawer` делает фон (sidebar,
+`<main>`) `inert`; в `/student/settings` подписи полей пароля и профиля связаны
+с полями (`htmlFor`/`id`, ошибка пароля — `role="alert"` + `aria-describedby`);
+`Select` получил `labelledBy` для внешней подписи; touch-зоны (`hover: none`)
+у `Toggle`, чекбокса задачи и «⋯» дневника/сообщения.
+
+Предыдущий handoff (завершённый UI-shell этап):
+`docs/HANDOFFS/2026-10-14-cabinet-header.md` — единая
+шапка кабинетов (**ADR-031**, frontend-only): `components/CabinetHeader/` у
+CabinetLayout и AdminLayout; brand — ссылка на корень кабинета, home-иконка и
+кнопка почты удалены, крошки — ссылки из явных подписей; поиск и колокольчик —
+честные заглушки; тема и версия для слабовидящих — одна кнопка «Оформление»
+(существующий A11yToggle внутри панели, логика A11y не менялась); палитра `hc`
+не предлагается в обычном списке тем.
+
+Предыдущий handoff: `docs/HANDOFFS/2026-10-07-student-verification-dongu.md` —
 подтверждение статуса студента ДонГУ (**ADR-029**, миграция `f5a3c8d1e7b2`):
 отдельный статус, не роль (роль `student` и подпись «Пользователь» прежние);
 заявку (факультет из каталога 12 + номер билета, `enc:v1:`) подаёт только
@@ -15,7 +76,7 @@ id). Приглашение и результат — system-сообщения 
 `/student/settings#student-verification` кликабельна только в system-сообщениях.
 REGISTRY 115 → 121.
 
-Предыдущий handoff: `docs/HANDOFFS/2026-10-07-registration-domain-hint-user-role-label.md` —
+Ранее: `docs/HANDOFFS/2026-10-07-registration-domain-hint-user-role-label.md` —
 понятный отказ по домену при регистрации по email (init и confirm отвечают одним
 текстом со списком активных доменов из БД, публичный `GET /api/public/email-domains`,
 подсказка в форме; регистрация через Яндекс по ADR-027 п. 5 от allowlist освобождена

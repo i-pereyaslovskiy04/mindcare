@@ -1,0 +1,110 @@
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 18px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface-container);
+}
+
+.tab {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 140px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab:hover {
+  color: var(--on-surface);
+  background: var(--surface-elevated);
+}
+
+.tab:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+
+/* Не только цвет: подчёркивание остаётся видимым и в режиме для слабовидящих. */
+.tabActive::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+/* indicator="fill" (сегменты): без подчёркивания и без акцентной заливки —
+   выбранная вкладка не похожа на primary-кнопку действия. Она «приподнята»:
+   фон поверхности, рамка 1px --outline, лёгкая тень и жирное начертание.
+   Рамка 1px есть у всех вкладок варианта (у невыбранных — прозрачная), поэтому
+   размеры при переключении не меняются. В режиме для слабовидящих (там все
+   button получают фон схемы + рамку 2px) выбранная — инверсия и внутренняя
+   рамка; префикс :root[data-a11y='on'] поднимает специфичность выше глобального
+   правила «все кнопки — фон схемы» (как в A11yPanel). */
+.indicatorFill .tab {
+  border: 1px solid transparent;
+}
+
+.indicatorFill .tab:hover {
+  background: var(--surface-container-high);
+}
+
+.indicatorFill .tabActive,
+.indicatorFill .tabActive:hover {
+  background: var(--surface);
+  color: var(--on-surface);
+  border-color: var(--outline);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.12);
+}
+
+.indicatorFill .tabActive::after {
+  content: none;
+}
+
+:root[data-a11y='on'] .indicatorFill .tabActive {
+  background: var(--a11y-fg);
+  color: var(--a11y-bg);
+  box-shadow: inset 0 0 0 3px var(--a11y-bg);
+}
+
+/* Равные колонки без min-width — три раздела помещаются в строку на мобильном. */
+.fill {
+  flex-wrap: nowrap;
+}
+
+.fill .tab {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 9px 6px;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+@media (max-width: 380px) {
+  .fill {
+    flex-direction: column;
+  }
+}

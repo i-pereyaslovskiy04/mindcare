@@ -149,12 +149,15 @@ mindcare_web/
     ├── components/            ← domain-agnostic UI primitives
     │   ├── Icon/
     │   │   └── Icon.jsx       ← общий SVG-компонент (name, size, stroke)
-    │   ├── CabinetLayout/     ← общий layout для кабинетов psychologist и supervisor
+    │   ├── CabinetLayout/     ← общий layout кабинетов student, psychologist и supervisor
     │   │   ├── CabinetLayout.jsx + .module.css
     │   │   └── CabinetSettingsPage.jsx + .module.css
-    │   ├── Modal/
-    │   │   ├── Modal.jsx
-    │   │   └── Modal.module.css
+    │   ├── CabinetHeader/     ← общая шапка всех кабинетов и админки (ADR-031)
+    │   │   ├── CabinetHeader.jsx + .module.css
+    │   │   └── breadcrumbs.js ← resolveBreadcrumbs (только явные подписи)
+    │   ├── Modal/             ← общая модалка: смонтирована всегда, закрытая —
+    │   │   ├── Modal.jsx         inert + visibility:hidden после fade-out
+    │   │   └── Modal.module.css  (вне Tab и дерева доступности)
     │   ├── CodeInput/
     │   │   └── CodeInput.jsx + .module.css
     │   ├── Navbar/
@@ -322,7 +325,9 @@ src/api/
 
 **Icon** (`components/Icon/Icon.jsx`) — единственный общий SVG-компонент для иконок в кабинетах и adminпанели. Props: `name`, `size=18`, `stroke=1.5`. Не имеет CSS-модуля (чистый SVG).
 
-**CabinetLayout** (`components/CabinetLayout/`) — общий layout для кабинетов psychologist и supervisor. Принимает `navSections` и `crumbLabels` как конфигурацию. Не используется в student cabinet.
+**CabinetLayout** (`components/CabinetLayout/`) — общий layout для кабинетов student, psychologist и supervisor. Принимает `navSections`, `crumbLabels` и `dynamicCrumbs` как конфигурацию; шапка — `CabinetHeader`.
+
+**CabinetHeader** (`components/CabinetHeader/`) — общая шапка CabinetLayout и AdminLayout (ADR-031): крошки + [CabinetSwitcher] → Поиск → Уведомления → Оформление → Выход.
 
 ### Shared — общие утилиты
 
@@ -678,11 +683,14 @@ user = {
 ```
 CabinetLayout (components/CabinetLayout/)
 ├── Sidebar с navSections (конфигурируется каждым Layout)
-├── Breadcrumbs через crumbLabels
+├── Brand — ссылка на корень кабинета (/student, /psychologist, /supervisor)
 ├── Avatar с getInitials() из shared/lib/utils.js
-├── CabinetSwitcher: sidebar на desktop, topbar на узких viewport
+├── CabinetSwitcher: sidebar на desktop, в CabinetHeader на узких viewport
+├── CabinetHeader (крошки из crumbLabels/dynamicCrumbs, hamburger <=600px)
+├── CabinetDrawer — mobile drawer (<=600px) с той же разметкой sidebar
 └── <Outlet /> для вложенных маршрутов
 
+StudentLayout      → CabinetLayout (navSections = самопомощь/терапия/аккаунт)
 PsychologistLayout → CabinetLayout (navSections = рабочие секции психолога)
 SupervisorLayout   → CabinetLayout (navSections = секции супервизии)
 
@@ -690,7 +698,35 @@ CabinetSettingsPage — общая страница настроек, подкл
   через /psychologist/settings и /supervisor/settings
 ```
 
-Student cabinet **не использует** CabinetLayout — у него собственный `StudentLayout` со своим Sidebar.
+AdminLayout (`features/admin/`) — отдельный layout (свой sidebar и навигация
+`ADMIN_NAV_GROUPS`), но та же модель ширин и те же общие части: >980px полный
+sidebar, 601–980px icon-rail 72px, <=600px sidebar скрыт → hamburger в
+`CabinetHeader` + `CabinetDrawer` с той же разметкой sidebar; brand ведёт на `/admin`.
+
+`CabinetDrawer` (`components/CabinetDrawer/`) — общий mobile drawer обоих layout'ов:
+фокус при открытии на «Закрыть меню», Tab по кругу внутри, Escape / backdrop /
+переход по пункту закрывают, фокус возвращается на hamburger. Пока открыт —
+соседи drawer'а в оболочке (sidebar, `<main>`) получают `inert`; на предка
+drawer'а inert/aria-hidden не ставится, чужой inert не снимается.
+
+### CabinetHeader
+
+```
+CabinetHeader (components/CabinetHeader/)        ADR-031
+├── hamburger (<=600px, если layout передал onMenuOpen) + крошки
+│     <nav aria-label="Навигационная цепочка"><ol> «Главная» (ссылка) / … / текущая
+│     resolveBreadcrumbs(): crumbLabels → dynamicCrumbs (parent) → ближайший раздел
+├── CabinetSwitcher (только 601–980px — rail; на <=600px он в drawer)
+├── Поиск — заглушка: <input type="search" disabled>, скрыт <=980px
+├── Уведомления — заглушка: aria-disabled, без счётчика/точки (на mobile не скрыт)
+├── Оформление — ThemeToggle compact + extraSection «Версия для слабовидящих»
+│     (существующий A11yToggle variant block; A11yPanel остаётся под шапкой)
+└── Выход — useLogout()
+```
+
+Отступы ряда задаёт layout через `className`, высота — `--cabinet-header-height`
+layout'а (общая линия под brand и шапкой — `.app::after`). Почты и home-иконки
+в шапке нет. Новые действия шапки добавляются только в CabinetHeader.
 
 ### Multi-role UI
 
@@ -1100,7 +1136,7 @@ const {
 
 **Правило:** если компонент вызывает `useAuth()`, делает API call или знает о доменной модели → он в `features/`, не в `components/`.
 
-**CabinetLayout** — исключение: это primitive layout-компонент, который принимает всю конфигурацию через props (`navSections`, `crumbLabels`). Он не знает о конкретных ролях и маршрутах.
+**CabinetLayout** — исключение: это primitive layout-компонент, который принимает всю конфигурацию через props (`navSections`, `crumbLabels`). Он не знает о конкретных ролях и маршрутах. **CabinetHeader** — то же исключение: роль и крошки приходят props'ами, из features — только CabinetSwitcher, ThemeToggle, A11yToggle и `useLogout`.
 
 ---
 
@@ -1148,9 +1184,9 @@ const {
 
 `useAdminTags` возвращает контракт без `filters` и `setFilters` — намеренное отступление (теги фильтруются только по имени).
 
-### 8.9 Кабинет студента использует собственный layout, не CabinetLayout
+### 8.9 ~~Кабинет студента использует собственный layout, не CabinetLayout~~
 
-`StudentLayout.jsx` и `ClientDashboard.jsx` образуют собственную структуру, отличную от psychologist/supervisor. При будущем рефакторинге — рассмотреть унификацию.
+Закрыто: `StudentLayout.jsx` использует `CabinetLayout` (как psychologist/supervisor); шапка всех кабинетов — `CabinetHeader` (ADR-031).
 
 ---
 

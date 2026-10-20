@@ -221,6 +221,14 @@ def test_profile_fields_enum():
         validation.validate_metadata(PROFILE, {"fields": ["email"]})
 
 
+def test_profile_fields_enum_accepts_contacts_without_values():
+    # ADR-032: сохранение контактов пишет profile_updated с fields=["contacts"].
+    ok = validation.validate_metadata(PROFILE, {"fields": ["contacts"]})
+    assert ok == {"fields": ["contacts"]}
+    with pytest.raises(AuditError):
+        validation.validate_metadata(PROFILE, {"fields": ["contacts", "emails"]})
+
+
 # ── Context ──────────────────────────────────────────────────────────────────
 
 def test_context_validation():

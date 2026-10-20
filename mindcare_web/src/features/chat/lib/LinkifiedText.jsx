@@ -11,33 +11,22 @@
  *   - backend и хранение не затрагиваются (HTML в БД не пишется).
  *
  * Внутренние ссылки (ADR-029): только при allowInternalLinks (MessageBubble
- * включает его ТОЛЬКО для system-сообщений MindCare) и только для путей из
+ * включает его ТОЛЬКО для system-сообщений) и только для путей из
  * ТОЧНОГО allowlist INTERNAL_LINKS. Путь должен стоять отдельным словом:
  * «/student/settings#student-verification-x», «x/student/…», «//host/…» и
  * любые иные относительные пути остаются текстом. Ссылка рендерится через
  * router <Link> (переход внутри SPA, без перезагрузки) с подписью из allowlist.
  */
 import { Link } from 'react-router-dom';
+import { INTERNAL_LINKS, INTERNAL_RE } from './internalLinks';
+
+// Allowlist внутренних ссылок живёт в internalLinks.js (без зависимости от
+// router — его использует и текстовое превью колокольчика шапки).
+export { INTERNAL_LINKS };
 
 const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
 // Хвостовая пунктуация, которую не считаем частью ссылки.
 const TRAILING_RE = /[),.;:!?]+$/;
-
-export const INTERNAL_LINKS = Object.freeze({
-  '/student/settings#student-verification': 'Подтверждение студента ДонГУ',
-});
-
-function escapeRe(value) {
-  return value.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-}
-
-// Путь — отдельное слово: слева начало строки, пробел или «(»; справа конец
-// строки, пробел или хвостовая пунктуация. Lookbehind не используется
-// (поддержка старых Safari) — левый разделитель захватывается группой.
-const INTERNAL_RE = new RegExp(
-  `(^|[\\s(])(${Object.keys(INTERNAL_LINKS).map(escapeRe).join('|')})(?=$|[\\s),.;:!?])`,
-  'g',
-);
 
 function pushInternal(parts, segment, keyBase) {
   let last = 0;

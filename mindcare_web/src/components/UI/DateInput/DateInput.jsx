@@ -28,12 +28,17 @@ const CalendarIcon = () => (
  * Стилизованное поле выбора даты (только дата, без времени и без нативного
  * datetime-local popup). Controlled: value 'YYYY-MM-DD' | '', onChange(next).
  *
- * Props: value, onChange, label?, placeholder?, disabled?, error?, id?, min?, max?
+ * Props: value, onChange, label?, labelledBy?, placeholder?, disabled?, error?, id?, min?, max?
+ *
+ * labelledBy — id внешней видимой подписи (когда форма рисует свою подпись
+ * вместо `label`): становится aria-labelledby поля вместе с id самого поля,
+ * поэтому имя — «подпись + показанная дата/placeholder».
  */
 export default function DateInput({
   value = '',
   onChange,
   label,
+  labelledBy,
   placeholder = 'дд.мм.гггг',
   disabled = false,
   error,
@@ -174,6 +179,7 @@ export default function DateInput({
           type="button"
           className={[styles.control, isOpen && styles.controlOpen, error && styles.controlError]
             .filter(Boolean).join(' ')}
+          aria-labelledby={!label && labelledBy ? `${labelledBy} ${fieldId}` : undefined}
           aria-haspopup="dialog"
           aria-expanded={isOpen}
           aria-controls={isOpen ? dialogId : undefined}

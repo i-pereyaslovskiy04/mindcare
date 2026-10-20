@@ -10,7 +10,7 @@ import styles from './MessageBubble.module.css';
  * variant:
  *   outgoing — своё сообщение (тёмный bubble справа, time + receipts);
  *   incoming — сообщение собеседника (светлый bubble слева, только time);
- *   system   — системное уведомление MindCare (тот же фундамент, что incoming,
+ *   system   — системное сообщение (тот же фундамент, что incoming,
  *              чуть нейтральнее фон, без receipts).
  */
 export default function MessageBubble({
@@ -42,8 +42,8 @@ export default function MessageBubble({
         </div>
       ) : (
         <div className={styles.text}>
-          {/* Внутренние ссылки (точный allowlist) — только у system-сообщений
-              MindCare: пользователь не может сформировать такую ссылку сам. */}
+          {/* Внутренние ссылки (точный allowlist) — только у system-сообщений:
+              пользователь не может сформировать такую ссылку сам. */}
           <LinkifiedText text={text} allowInternalLinks={isSystem} />
         </div>
       )}

@@ -43,7 +43,7 @@ _ROLE_DIFF_META = MappingProxyType({
 _PROFILE_META = MappingProxyType({
     "fields": FieldSpec(
         type="str_list", fmt=StringFormat.ENUM,
-        enum=frozenset({"full_name", "phone"}),
+        enum=frozenset({"full_name", "phone", "contacts"}),
     ),
 })
 _ATTACH_UPLOAD_META = MappingProxyType({
@@ -355,7 +355,8 @@ _ALL += [
                 {"self_deactivation_not_allowed", "impersonation_forbidden",
                  "account_already_disabled", "internal_error"}),
     _audit_fail("profile_update_failed", _STAFF,
-                {"user_not_found", "invalid_request", "internal_error"}),
+                {"user_not_found", "invalid_request", "internal_error",
+                 "contacts_version_conflict"}),
 ]
 
 # ── AUDIT_LOG: Stage 5B-1 appointments + walk-in cards (success lifecycle) ────
@@ -519,6 +520,20 @@ _ALL += [
                 {"verification_not_found", "self_review_forbidden",
                  "reviewer_not_allowed", "verification_already_decided",
                  "account_inactive"}),
+]
+
+# ── AUDIT_LOG: контакты пользователя (ADR-032) ────────────────────────────────
+# Чтение контактов сотрудником — новый доступ к персональному содержимому:
+# INDEPENDENT + RAISE (fail-closed — при сбое записи значения не отдаются).
+# Target — пользователь, чьи контакты раскрыты; metadata пуста. Чтение владельцем
+# своих контактов и сохранение (profile_updated, fields=["contacts"]) — отдельных
+# событий не требуют. Отказ доступа: единый код access_denied (не раскрываем,
+# отсутствует ли пользователь или нет права).
+_ALL += [
+    _audit_ok("user_contacts_content_read", {"psychologist", "supervisor"}, "user",
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+    _audit_fail("user_contacts_read_failed", {"psychologist", "supervisor"},
+                {"access_denied"}),
 ]
 
 # ── AUDIT_LOG: Stage 8 — привилегированное чтение журналов ────────────────────

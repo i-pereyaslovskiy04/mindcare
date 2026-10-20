@@ -1,15 +1,12 @@
 import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
-import {
-  formatVerificationDate,
-  verificationStatusLabel,
-  verificationStatusTone,
-} from '../lib/status';
+import { formatVerificationDateTime } from '../lib/status';
 import styles from './VerificationsTable.module.css';
 
 /**
- * Список заявок подтверждения студента для supervisor (ADR-029).
- * Номер билета в списке отсутствует (backend его не отдаёт) — только в карточке.
+ * Очередь заявок подтверждения студента для supervisor (ADR-029): только
+ * ожидающие проверки, поэтому столбцов статуса и проверившего нет. Номер
+ * билета в списке отсутствует (backend его не отдаёт) — только в карточке.
  */
 export default function VerificationsTable({ items, onOpen }) {
   return (
@@ -20,8 +17,6 @@ export default function VerificationsTable({ items, onOpen }) {
             <th scope="col">Пользователь</th>
             <th scope="col">Факультет</th>
             <th scope="col">Подана</th>
-            <th scope="col">Статус</th>
-            <th scope="col">Проверил</th>
             <th scope="col"><span className={styles.srOnly}>Действия</span></th>
           </tr>
         </thead>
@@ -36,22 +31,7 @@ export default function VerificationsTable({ items, onOpen }) {
                 )}
               </td>
               <td>{item.faculty?.label || '—'}</td>
-              <td className={styles.nowrap}>{formatVerificationDate(item.submitted_at)}</td>
-              <td>
-                <Badge tone={verificationStatusTone(item.status)}>
-                  {verificationStatusLabel(item.status)}
-                </Badge>
-              </td>
-              <td>
-                {item.reviewer?.full_name ? (
-                  <>
-                    <div>{item.reviewer.full_name}</div>
-                    <div className={styles.email}>{formatVerificationDate(item.reviewed_at)}</div>
-                  </>
-                ) : (
-                  <span className={styles.muted}>—</span>
-                )}
-              </td>
+              <td className={styles.nowrap}>{formatVerificationDateTime(item.submitted_at)}</td>
               <td className={styles.actions}>
                 <Button
                   type="button"

@@ -15,8 +15,17 @@ import styles from './CabinetSwitcher.module.css';
  *
  * currentRole — роль текущего кабинета (в кабинетах) либо activeRole (в профиле);
  * null → состояние «Выбрать кабинет».
+ *
+ * Список кабинетов — ВСЕ активные роли из roles[] (в т.ч. student →
+ * «Пользователь» у staff); selectableRoles() здесь намеренно не используется:
+ * он скрывает student у staff только для выбора кабинета при входе.
+ *
+ * При нескольких ролях trigger — заметная кнопка «Сменить кабинет» с текущей
+ * ролью (а не подпись роли, визуально неотличимая от статичной метки).
+ * variant: 'sidebar' — полноширинная кнопка в блоке пользователя (sidebar и
+ * mobile drawer); 'compact' — копия в topbar при свёрнутом sidebar.
  */
-export default function CabinetSwitcher({ currentRole = null }) {
+export default function CabinetSwitcher({ currentRole = null, variant = 'sidebar' }) {
   const navigate = useNavigate();
   const { user, setActiveRole } = useAuth();
   const [open, setOpen] = useState(false);
@@ -129,23 +138,38 @@ export default function CabinetSwitcher({ currentRole = null }) {
     );
   }
 
-  const triggerLabel = currentRole
-    ? (ROLE_LABELS[currentRole] ?? currentRole)
-    : 'Выбрать кабинет';
+  const currentLabel = currentRole ? (ROLE_LABELS[currentRole] ?? currentRole) : null;
+  const actionLabel = currentLabel ? 'Сменить кабинет' : 'Выбрать кабинет';
+  // Доступное имя содержит видимый текст действия (WCAG 2.5.3) и текущую роль.
+  const triggerName = currentLabel
+    ? `${actionLabel} (текущий: ${currentLabel})`
+    : actionLabel;
 
   return (
-    <div className={styles.root} ref={rootRef}>
+    <div
+      className={`${styles.root} ${variant === 'compact' ? styles.rootCompact : styles.rootSidebar}`}
+      ref={rootRef}
+    >
       <button
         type="button"
         ref={triggerRef}
-        className={styles.trigger}
+        className={`${styles.trigger} ${variant === 'compact' ? styles.compact : styles.sidebar}`}
         aria-expanded={open}
         aria-controls={panelId}
+        aria-label={triggerName}
+        title={triggerName}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onTriggerKeyDown}
       >
-        <span className={styles.dot} aria-hidden="true" />
-        <span className={styles.triggerLabel}>{triggerLabel}</span>
+        <span className={styles.triggerText}>
+          <span className={styles.triggerAction}>{actionLabel}</span>
+          {currentLabel && (
+            <span className={styles.triggerCurrent}>
+              <span className={styles.dot} aria-hidden="true" />
+              <span className={styles.triggerLabel}>{currentLabel}</span>
+            </span>
+          )}
+        </span>
         <span className={styles.chevron} aria-hidden="true">▾</span>
       </button>
 

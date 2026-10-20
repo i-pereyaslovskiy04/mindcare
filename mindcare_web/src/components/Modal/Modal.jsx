@@ -5,6 +5,17 @@ import styles from './Modal.module.css';
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/**
+ * Общая модалка. Смонтирована всегда (сохраняет состояние содержимого и
+ * анимацию появления/исчезновения), поэтому закрытое состояние изолируется
+ * явно: overlay получает `inert` (ни фокуса, ни кликов, ни дерева доступности
+ * — сразу, и на время анимации закрытия), а после неё CSS скрывает его через
+ * `visibility: hidden`. Одного aria-hidden недостаточно: фокусируемые потомки
+ * оставались в порядке Tab.
+ *
+ * Открытая: фокус на первый контрол, Tab по кругу внутри карточки, Escape
+ * закрывает, после закрытия фокус возвращается на прежний элемент (триггер).
+ */
 const Modal = forwardRef(function Modal(
   { open, onClose, ariaLabel, zIndex = 2000, wide = false, size = 'sm', children },
   ref
@@ -62,6 +73,7 @@ const Modal = forwardRef(function Modal(
       className={`${styles.overlay} ${open ? styles.open : ''}`}
       style={{ zIndex }}
       aria-hidden={!open}
+      inert={!open}
     >
       <div
         className={`${styles.card} ${wide ? styles.cardWide : size === 'md' ? styles.cardMd : size === 'lg' ? styles.cardLg : ''}`}

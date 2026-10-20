@@ -277,6 +277,14 @@
   }
 }
 
+/* Одна колонка карточек — по доступной ширине контента, а не по шелл-брейкпоинту
+   600px: на 601–768px рядом с icon-rail 72px и отступами 2×16px контенту остаётся
+   ~497–664px, и две колонки (~230–320px) теснее одной колонки на 600px (~568px,
+   rail уже скрыт). С 769px rail-контент ≥665px — две колонки по ≥325px. */
+@media (max-width: 768px) {
+  .actionCardsGrid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 600px) {
   .pageTitle { font-size: 30px; }
   .nextStepCard { padding: 20px; }
@@ -287,5 +295,4 @@
     width: 100%;
   }
   .nextStepActions > * { text-align: center; justify-content: center; }
-  .actionCardsGrid { grid-template-columns: 1fr; }
 }

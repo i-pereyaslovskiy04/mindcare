@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation, Outlet, NavLink, Link } from 'react-router-dom';
-import { useAuth, useLogout } from '../auth/AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import CabinetSwitcher from '../auth/CabinetSwitcher';
 import Icon from '../../components/Icon/Icon';
-import Button from '../../components/UI/Button/Button';
-import ThemeToggle from '../theme/ThemeToggle';
-import A11yToggle from '../a11y/A11yToggle';
+import CabinetHeader from '../../components/CabinetHeader/CabinetHeader';
+import CabinetDrawer from '../../components/CabinetDrawer/CabinetDrawer';
+import { resolveBreadcrumbs } from '../../components/CabinetHeader/breadcrumbs';
 import A11yPanel from '../a11y/A11yPanel';
 import { getInitials } from '../../shared/lib/utils';
 import { normalizeRoles } from '../../shared/lib/roles';
@@ -53,11 +53,22 @@ const CRUMB_LABELS = ADMIN_NAV_GROUPS.reduce((acc, group) => {
   return acc;
 }, {});
 
+const DYNAMIC_CRUMBS = [
+  { prefix: '/admin/tests/', label: 'Тест', parent: '/admin/tests' },
+];
+
+// Корень админки: index-маршрут /admin перенаправляет на /admin/users.
+const ADMIN_HOME = '/admin';
+
 export default function AdminLayout() {
   const { pathname } = useLocation();
   const { user, activeRole, setActiveRole } = useAuth();
-  const logout = useLogout();
-  const crumb = CRUMB_LABELS[pathname] ?? 'Панель';
+  const breadcrumbs = resolveBreadcrumbs({
+    pathname,
+    homePath: ADMIN_HOME,
+    crumbLabels: CRUMB_LABELS,
+    dynamicCrumbs: DYNAMIC_CRUMBS,
+  });
 
   // Синхронизируем activeRole с открытым admin-кабинетом (прямой URL/reload).
   useEffect(() => {
@@ -66,93 +77,93 @@ export default function AdminLayout() {
     }
   }, [activeRole, user, setActiveRole]);
 
+  // Мобильное меню (drawer, <=600px) — та же модель, что в CabinetLayout.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const menuButtonRef = useRef(null);
+  const drawerId = useId();
+
+  // Закрывать drawer при переходе в другой раздел.
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
+  // Разметка sidebar переиспользуется в desktop aside и в mobile drawer —
+  // навигация одна (ADMIN_NAV_GROUPS), отдельной мобильной копии нет.
+  const sidebarInner = (
+    <>
+      {/* Текстовый brand — ссылка на главную панели управления. */}
+      <Link
+        to={ADMIN_HOME}
+        className={styles.brand}
+        aria-label="Психология ДонГУ, панель управления — на главную"
+        title="На главную панели управления"
+        onClick={closeMenu}
+      >
+        {/* Монограмма icon-rail (<=980px): «ПД» — Психология ДонГУ. */}
+        <span className={styles.brandShort} aria-hidden="true">ПД</span>
+        <span className={styles.brandFull}>
+          Психо<em>логия</em> ДонГУ
+        </span>
+        <span className={styles.brandSub}>Панель управления</span>
+      </Link>
+
+      <div className={styles.user}>
+        <div className={styles.avatar}>{getInitials(user?.name)}</div>
+        <div className={styles.userInfo}>
+          <div className={styles.userName}>{user?.name ?? 'Администратор'}</div>
+          <div className={styles.userRole}>
+            <CabinetSwitcher currentRole="admin" />
+          </div>
+        </div>
+      </div>
+
+      <nav className={styles.nav}>
+        {ADMIN_NAV_GROUPS.map((group) => (
+          <div key={group.label} className={styles.navGroup}>
+            <div className={styles.navSectionLabel}>{group.label}</div>
+            {group.items.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `${styles.navItem} ${isActive ? styles.active : ''}`
+                }
+                aria-label={item.label}
+                title={item.label}
+                onClick={closeMenu}
+              >
+                <span className={styles.navIcon}>
+                  <Icon name={item.icon} size={18} />
+                </span>
+                <span className={styles.navLabel}>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      <div className={styles.foot}>
+        ФГАОУ ВО «Донецкий государственный университет»
+        <br />
+        <a href="mailto:support@donnu.ru">support@donnu.ru</a>
+      </div>
+    </>
+  );
+
   return (
     <div className={styles.app} data-cabinet-shell>
-      <aside className={styles.sidebar}>
-
-        <div className={styles.brand}>
-          <span className={styles.brandShort}>М</span>
-          <span className={styles.brandFull}>
-            Психо<em>логия</em> ДонГУ
-          </span>
-          <span className={styles.brandSub}>Панель управления</span>
-        </div>
-
-        <div className={styles.user}>
-          <div className={styles.avatar}>{getInitials(user?.name)}</div>
-          <div className={styles.userInfo}>
-            <div className={styles.userName}>{user?.name ?? 'Администратор'}</div>
-            <div className={styles.userRole}>
-              <CabinetSwitcher currentRole="admin" />
-            </div>
-          </div>
-        </div>
-
-        <nav className={styles.nav}>
-          {ADMIN_NAV_GROUPS.map((group) => (
-            <div key={group.label} className={styles.navGroup}>
-              <div className={styles.navSectionLabel}>{group.label}</div>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `${styles.navItem} ${isActive ? styles.active : ''}`
-                  }
-                  aria-label={item.label}
-                  title={item.label}
-                >
-                  <span className={styles.navIcon}>
-                    <Icon name={item.icon} size={18} />
-                  </span>
-                  <span className={styles.navLabel}>{item.label}</span>
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <div className={styles.foot}>
-          ФГАОУ ВО «Донецкий государственный университет»
-          <br />
-          <a href="mailto:support@donnu.ru">support@donnu.ru</a>
-        </div>
-
-      </aside>
+      {/* Sidebar: полный >980px, icon-rail 601–980px, скрыт <=600px. */}
+      <aside className={styles.sidebar}>{sidebarInner}</aside>
 
       <main className={styles.main} data-cabinet-main>
-        <div className={styles.topbar}>
-          <div className={styles.crumbs}>
-            Администратор / <span>{crumb}</span>
-          </div>
-          <div className={styles.actions}>
-            {/* Дублирует switcher из sidebar .userInfo, но видим только
-                когда sidebar свёрнут в icon-rail (<=980px). */}
-            <div className={styles.topbarSwitcher}>
-              <CabinetSwitcher currentRole="admin" />
-            </div>
-            <Link
-              to="/"
-              className={styles.homeLink}
-              aria-label="На главную"
-              title="На главную"
-            >
-              <Icon name="home" size={16} />
-            </Link>
-            <A11yToggle compact />
-            <ThemeToggle compact />
-            <Button
-              type="button"
-              variant="icon"
-              size="sm"
-              aria-label="Выйти"
-              title="Выйти"
-              onClick={logout}
-            >
-              <Icon name="logout" size={16} />
-            </Button>
-          </div>
-        </div>
+        <CabinetHeader
+          className={styles.topbar}
+          cabinetRole="admin"
+          breadcrumbs={breadcrumbs}
+          onMenuOpen={() => setMenuOpen(true)}
+          menuOpen={menuOpen}
+          menuId={drawerId}
+          menuButtonRef={menuButtonRef}
+        />
 
         {/* Панель настроек ГОСТ — под шапкой, видна только в режиме */}
         <A11yPanel />
@@ -163,6 +174,18 @@ export default function AdminLayout() {
           </div>
         </div>
       </main>
+
+      {/* Mobile drawer (<=600px, only when open). */}
+      <CabinetDrawer
+        open={menuOpen}
+        onClose={closeMenu}
+        returnFocusRef={menuButtonRef}
+        id={drawerId}
+        label="Меню панели управления"
+        className={styles.mobileDrawer}
+      >
+        {sidebarInner}
+      </CabinetDrawer>
     </div>
   );
 }
