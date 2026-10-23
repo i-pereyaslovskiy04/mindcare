@@ -1,60 +1,70 @@
 """
 Email message layer — формирует письма для конкретных событий.
 Не знает про SMTP, режимы доставки или конфиг.
+
+Визуальное оформление — через app.services.email_brand (единый бренд
+«Психология ДонГУ»), НЕ через пользовательскую тему интерфейса.
 """
 
 from datetime import datetime, timezone
 
 from app.services._smtp import send_email
+from app.services.email_brand import (
+    BORDER,
+    BRAND_NAME,
+    CARD_BG,
+    CODE_BG,
+    CODE_BORDER,
+    CODE_TEXT,
+    HEADER_BG,
+    HEADER_FG,
+    HEADER_SUB,
+    PAGE_BG,
+    TEXT_LIGHT,
+    TEXT_MAIN,
+    TEXT_MUTED,
+)
 
-# ─── Цвета из variables.css frontend-проекта ─────────────────────────────────
-#   --warm-white  #FAF7F2   страничный фон
-#   --espresso    #4A3728   header bar, цвет кода
-#   --milk        #EDE4D3   текст на тёмном фоне
-#   --latte       #C9B99A   рамка code-box, subtitle header
-#   --cream       #F5F0E8   фон code-box
-#   --text-main   #2E2318   заголовок письма
-#   --text-muted  #5C4D3C   основной текст тела
-#   --text-light  #8A7260   дисклеймер, footer
-#   --nav-border  #D8CDBF   горизонтальный разделитель
+# ─── Единый HTML-шаблон OTP/welcome письма ───────────────────────────────────
+# Table-based верстка, inline-стили, без flex/grid/JS/внешних ресурсов и без
+# CSS-переменных (почтовые клиенты их не поддерживают надёжно). Цвета —
+# фиксированный бренд email_brand, подставленный f-строкой при импорте
+# модуля (НЕ зависит от runtime/пользовательской темы).
+# Подстановка на вызов: {code}, {year}, {heading}, {description}.
 
-# ─── Единый HTML-шаблон OTP письма ───────────────────────────────────────────
-# Table-based верстка, inline-стили, без flex/grid/JS/внешних ресурсов.
-# Подстановка: {code}, {year}, {heading}, {description}.
-
-_OTP_HTML = """\
+_OTP_HTML = f"""\
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>{heading}</title>
+  <title>{{heading}}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#FAF7F2;
+<body style="margin:0;padding:0;background-color:{PAGE_BG};
              font-family:Arial,Helvetica,sans-serif;">
 
   <!-- outer: задаёт фон и вертикальный отступ -->
   <table width="100%" cellpadding="0" cellspacing="0" border="0"
-         style="background-color:#FAF7F2;">
+         style="background-color:{PAGE_BG};">
     <tr>
       <td align="center" style="padding:48px 16px;">
 
         <!-- card: белый, скруглённый -->
         <table cellpadding="0" cellspacing="0" border="0"
-               style="background-color:#ffffff;border-radius:12px;
+               style="background-color:{CARD_BG};border-radius:12px;
                       max-width:480px;width:100%;">
 
           <!-- ── header bar ─────────────────────────────────────────────── -->
           <tr>
-            <td style="background-color:#4A3728;border-radius:12px 12px 0 0;
+            <td style="background-color:{HEADER_BG};border-radius:12px 12px 0 0;
                        padding:24px 32px;">
               <p style="margin:0;font-size:20px;font-weight:bold;
-                        color:#EDE4D3;letter-spacing:0.02em;">
-                MindCare
+                        color:{HEADER_FG};letter-spacing:0.02em;">
+                {BRAND_NAME}
               </p>
               <p style="margin:5px 0 0;font-size:12px;font-weight:normal;
-                        color:#C9B99A;letter-spacing:0.03em;">
-                Психологическая помощь &#183; ДонГУ
+                        color:{HEADER_SUB};letter-spacing:0.03em;">
+                MindCare &#183; платформа психологической поддержки
               </p>
             </td>
           </tr>
@@ -64,29 +74,31 @@ _OTP_HTML = """\
             <td style="padding:32px 32px 24px;">
 
               <p style="margin:0 0 8px;font-size:18px;font-weight:bold;
-                        color:#2E2318;line-height:1.3;">
-                {heading}
+                        color:{TEXT_MAIN};line-height:1.3;">
+                {{heading}}
               </p>
-              <p style="margin:0 0 28px;font-size:14px;color:#5C4D3C;
+              <p style="margin:0 0 28px;font-size:14px;color:{TEXT_MUTED};
                         line-height:1.65;">
-                {description}
+                {{description}}
               </p>
 
               <!-- OTP code block -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" style="padding:0 0 28px;">
-                    <table cellpadding="0" cellspacing="0" border="0">
+                    <table cellpadding="0" cellspacing="0" border="0"
+                           style="max-width:416px;">
                       <tr>
                         <td align="center"
-                            style="background-color:#F5F0E8;
-                                   border:1.5px solid #C9B99A;
+                            style="background-color:{CODE_BG};
+                                   border:1.5px solid {CODE_BORDER};
                                    border-radius:10px;
-                                   padding:18px 44px;">
+                                   padding:18px 24px;">
                           <span style="font-size:36px;font-weight:bold;
-                                       color:#4A3728;letter-spacing:10px;
-                                       font-family:Courier New,Courier,monospace;">
-                            {code}
+                                       color:{CODE_TEXT};letter-spacing:10px;
+                                       font-family:Courier New,Courier,monospace;
+                                       word-break:break-all;overflow-wrap:break-word;">
+                            {{code}}
                           </span>
                         </td>
                       </tr>
@@ -95,7 +107,7 @@ _OTP_HTML = """\
                 </tr>
               </table>
 
-              <p style="margin:0;font-size:13px;color:#8A7260;line-height:1.6;">
+              <p style="margin:0;font-size:13px;color:{TEXT_LIGHT};line-height:1.6;">
                 Если вы не запрашивали это действие&nbsp;&#8212; просто
                 проигнорируйте письмо. Ваши данные в безопасности.
               </p>
@@ -108,7 +120,7 @@ _OTP_HTML = """\
             <td style="padding:0 32px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="border-top:1px solid #D8CDBF;
+                  <td style="border-top:1px solid {BORDER};
                              font-size:0;line-height:0;">&nbsp;</td>
                 </tr>
               </table>
@@ -118,10 +130,10 @@ _OTP_HTML = """\
           <!-- ── footer ────────────────────────────────────────────────── -->
           <tr>
             <td style="padding:16px 32px 24px;">
-              <p style="margin:0;font-size:11px;color:#8A7260;
+              <p style="margin:0;font-size:11px;color:{TEXT_LIGHT};
                         text-align:center;line-height:1.5;">
-                &#169; {year} MindCare &nbsp;&#183;&nbsp; ДонГУ
-                &nbsp;&#183;&nbsp; Психологическая поддержка
+                &#169; {{year}} {BRAND_NAME} &nbsp;&#183;&nbsp; MindCare
+                &nbsp;&#183;&nbsp; Донецкий государственный университет
               </p>
             </td>
           </tr>
@@ -137,19 +149,19 @@ _OTP_HTML = """\
 </html>
 """
 
-_OTP_PLAIN = """\
-{heading} — MindCare
+_OTP_PLAIN = f"""\
+{{heading}} — {BRAND_NAME} (MindCare)
 
-Ваш код: {code}
+Ваш код: {{code}}
 
-{description_plain}
+{{description_plain}}
 Код действителен 10 минут.
 
 Если вы не запрашивали это действие — проигнорируйте письмо.
 
 ---
-MindCare · Психологическая помощь · ДонГУ
-© {year}
+{BRAND_NAME} · MindCare · Донецкий государственный университет
+© {{year}}
 """
 
 
