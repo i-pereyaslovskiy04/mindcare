@@ -226,7 +226,7 @@ describe('mobile drawer админки (<=600px — та же модель, чт
     expect(within(drawer).getByText('Система')).toBeInTheDocument();
     // Переключатель кабинета и поддержка — как в sidebar.
     expect(within(drawer).getByRole('button', { name: /Администратор/ })).toBeInTheDocument();
-    expect(within(drawer).getByRole('link', { name: 'support@donnu.ru' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'psychology.center@donnu.ru' })).toBeInTheDocument();
   });
 
   test('фокус в drawer на «Закрыть меню»; Escape закрывает и возвращает фокус', () => {

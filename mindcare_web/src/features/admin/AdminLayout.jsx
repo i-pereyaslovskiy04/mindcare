@@ -144,7 +144,7 @@ export default function AdminLayout() {
       <div className={styles.foot}>
         ФГАОУ ВО «Донецкий государственный университет»
         <br />
-        <a href="mailto:support@donnu.ru">support@donnu.ru</a>
+        <a href="mailto:psychology.center@donnu.ru">psychology.center@donnu.ru</a>
       </div>
     </>
   );
