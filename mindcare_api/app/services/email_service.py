@@ -19,7 +19,9 @@ from app.services.email_brand import (
     HEADER_BG,
     HEADER_FG,
     HEADER_SUB,
+    ORG_NAME,
     PAGE_BG,
+    TAGLINE,
     TEXT_LIGHT,
     TEXT_MAIN,
     TEXT_MUTED,
@@ -64,7 +66,7 @@ _OTP_HTML = f"""\
               </p>
               <p style="margin:5px 0 0;font-size:12px;font-weight:normal;
                         color:{HEADER_SUB};letter-spacing:0.03em;">
-                MindCare &#183; платформа психологической поддержки
+                {TAGLINE}
               </p>
             </td>
           </tr>
@@ -108,7 +110,7 @@ _OTP_HTML = f"""\
               </table>
 
               <p style="margin:0;font-size:13px;color:{TEXT_LIGHT};line-height:1.6;">
-                Если вы не запрашивали это действие&nbsp;&#8212; просто
+                Если вы не запрашивали это действие&nbsp;- просто
                 проигнорируйте письмо. Ваши данные в безопасности.
               </p>
 
@@ -132,8 +134,7 @@ _OTP_HTML = f"""\
             <td style="padding:16px 32px 24px;">
               <p style="margin:0;font-size:11px;color:{TEXT_LIGHT};
                         text-align:center;line-height:1.5;">
-                &#169; {{year}} {BRAND_NAME} &nbsp;&#183;&nbsp; MindCare
-                &nbsp;&#183;&nbsp; Донецкий государственный университет
+                &#169; {{year}} {BRAND_NAME} &nbsp;&#183;&nbsp; {ORG_NAME}
               </p>
             </td>
           </tr>
@@ -150,17 +151,17 @@ _OTP_HTML = f"""\
 """
 
 _OTP_PLAIN = f"""\
-{{heading}} — {BRAND_NAME} (MindCare)
+{{heading}} - {BRAND_NAME}
 
 Ваш код: {{code}}
 
 {{description_plain}}
 Код действителен 10 минут.
 
-Если вы не запрашивали это действие — проигнорируйте письмо.
+Если вы не запрашивали это действие - проигнорируйте письмо.
 
 ---
-{BRAND_NAME} · MindCare · Донецкий государственный университет
+{BRAND_NAME} · {ORG_NAME}
 © {{year}}
 """
 
@@ -200,7 +201,7 @@ def send_registration_otp(to_email: str, code: str) -> None:
     _send_otp_email(
         to_email=to_email,
         code=code,
-        subject="Подтверждение регистрации — MindCare",
+        subject=f"Подтверждение регистрации - {BRAND_NAME}",
         heading="Подтверждение регистрации",
         description_html=(
             "Введите код ниже, чтобы завершить создание аккаунта. "
@@ -214,7 +215,7 @@ def send_password_reset_otp(to_email: str, code: str) -> None:
     _send_otp_email(
         to_email=to_email,
         code=code,
-        subject="Восстановление пароля — MindCare",
+        subject=f"Восстановление пароля - {BRAND_NAME}",
         heading="Восстановление пароля",
         description_html=(
             "Введите код, чтобы сбросить пароль. "
@@ -228,18 +229,18 @@ def send_welcome_psychologist(to_email: str, name: str, password: str) -> None:
     _send_otp_email(
         to_email=to_email,
         code=password,
-        subject="Добро пожаловать в MindCare — ваши данные для входа",
-        heading="Ваш аккаунт создан",
+        subject=f"Добро пожаловать в «{BRAND_NAME}» - ваши данные для входа",
+        heading="Ваша учётная запись создана",
         description_html=(
             f"Здравствуйте, <strong>{name}</strong>!<br><br>"
-            "Для вас создан аккаунт психолога на платформе MindCare. "
-            "Ниже — ваш временный пароль. "
+            f"Для вас создана учётная запись психолога в сервисе «{BRAND_NAME}». "
+            "Ниже - ваш временный пароль. "
             "Пожалуйста, войдите и смените его при первой возможности."
         ),
         description_plain=(
             f"Здравствуйте, {name}!\n\n"
-            "Для вас создан аккаунт психолога на платформе MindCare.\n"
-            "Ниже — ваш временный пароль. Смените его при первом входе."
+            f"Для вас создана учётная запись психолога в сервисе «{BRAND_NAME}».\n"
+            "Ниже - ваш временный пароль. Смените его при первом входе."
         ),
     )
 
@@ -253,18 +254,18 @@ def send_welcome_staff(to_email: str, name: str, password: str) -> None:
     _send_otp_email(
         to_email=to_email,
         code=password,
-        subject="Добро пожаловать в MindCare — ваши данные для входа",
-        heading="Ваш аккаунт создан",
+        subject=f"Добро пожаловать в «{BRAND_NAME}» - ваши данные для входа",
+        heading="Ваша учётная запись создана",
         description_html=(
             f"Здравствуйте, <strong>{name}</strong>!<br><br>"
-            "Для вас создан аккаунт на платформе психологической службы "
-            "MindCare. Ниже — ваш временный пароль. "
+            f"Для вас создана учётная запись в сервисе «{BRAND_NAME}». "
+            "Ниже - ваш временный пароль. "
             "Пожалуйста, войдите и смените его при первой возможности."
         ),
         description_plain=(
             f"Здравствуйте, {name}!\n\n"
-            "Для вас создан аккаунт на платформе психологической службы "
-            "MindCare.\nНиже — ваш временный пароль. Смените его при первом входе."
+            f"Для вас создана учётная запись в сервисе «{BRAND_NAME}».\n"
+            "Ниже - ваш временный пароль. Смените его при первом входе."
         ),
     )
 
@@ -276,17 +277,17 @@ def send_welcome_student(to_email: str, name: str, password: str) -> None:
     _send_otp_email(
         to_email=to_email,
         code=password,
-        subject="Добро пожаловать в MindCare — ваши данные для входа",
-        heading="Ваш аккаунт создан",
+        subject=f"Добро пожаловать в «{BRAND_NAME}» - ваши данные для входа",
+        heading="Ваша учётная запись создана",
         description_html=(
             f"Здравствуйте, <strong>{name}</strong>!<br><br>"
-            "Для вас создан аккаунт на платформе психологической службы "
-            "MindCare. Ниже — ваш временный пароль. "
+            f"Для вас создана учётная запись в сервисе «{BRAND_NAME}». "
+            "Ниже - ваш временный пароль. "
             "Пожалуйста, войдите и смените его при первом входе."
         ),
         description_plain=(
             f"Здравствуйте, {name}!\n\n"
-            "Для вас создан аккаунт на платформе психологической службы "
-            "MindCare.\nНиже — ваш временный пароль. Смените его при первом входе."
+            f"Для вас создана учётная запись в сервисе «{BRAND_NAME}».\n"
+            "Ниже - ваш временный пароль. Смените его при первом входе."
         ),
     )

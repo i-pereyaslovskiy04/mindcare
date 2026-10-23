@@ -242,7 +242,7 @@
     `MessageItem` (полный компонент сообщения: own/incoming/system, author header,
     avatar/layout, `canManage`, меню действий) и `MessageBubble` (feature-specific
     визуальный bubble: текст + linkify + meta) разделены; meta (время/«изменено»/
-    ✓/✓✓) — внутри bubble; system-сообщения рендерятся как bubble от «MindCare».
+    ✓/✓✓) — внутри bubble; system-сообщения рендерятся как bubble от «Психология ДонГУ».
     Frontend-only
   - ✅ Stage 31z-hotfix: **компактная Telegram-style meta** — `.bubble` через
     `display:flex;flex-wrap:wrap;align-items:flex-end`: короткое сообщение и meta —

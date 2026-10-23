@@ -977,7 +977,7 @@ wrapped by `useStudentChat` и `usePsychologistChat`) использует
 последние 50 сообщений; история старше snapshot window — только при переоткрытии.
 
 **System messages:** отдельный `variant="system"` в `MessageBubble` — header
-«MindCare», текст слева, время внутри bubble, без меню действий, без «изменено»,
+«Психология ДонГУ», текст слева, время внутри bubble, без меню действий, без «изменено»,
 без read receipts; никогда не считаются исходящими, даже если backend пришлёт
 `mine=true` (defensive guard в `MessageItem`).
 

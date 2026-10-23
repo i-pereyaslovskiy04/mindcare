@@ -81,8 +81,8 @@ try:
 
     stage = "send"
     print(f"STEP 6 [{stage}]: отправка письма на {TO} ...")
-    msg = MIMEText("Тест SMTP — MindCare. Если видите это, всё работает.", "plain", "utf-8")
-    msg["Subject"] = "MindCare SMTP test"
+    msg = MIMEText("Тест SMTP - Психология ДонГУ. Если видите это, всё работает.", "plain", "utf-8")
+    msg["Subject"] = "Психология ДонГУ - SMTP test"
     msg["From"] = FROM
     msg["To"] = TO
     server.send_message(msg)

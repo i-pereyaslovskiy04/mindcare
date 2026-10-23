@@ -221,13 +221,13 @@ class TestCriticalContentPreserved:
         assert "734829" in msg["html"]
         assert "734829" in msg["body"]
 
-    def test_password_reset_subject_unchanged(self):
+    def test_password_reset_subject_uses_brand_name(self):
         email_service.send_password_reset_otp("a@x.com", "111111")
-        assert self.sent[-1]["subject"] == "Восстановление пароля — MindCare"
+        assert self.sent[-1]["subject"] == f"Восстановление пароля - {email_brand.BRAND_NAME}"
 
-    def test_registration_subject_unchanged(self):
+    def test_registration_subject_uses_brand_name(self):
         email_service.send_registration_otp("a@x.com", "111111")
-        assert self.sent[-1]["subject"] == "Подтверждение регистрации — MindCare"
+        assert self.sent[-1]["subject"] == f"Подтверждение регистрации - {email_brand.BRAND_NAME}"
 
     def test_welcome_staff_password_present_in_html_and_plain(self):
         email_service.send_welcome_staff("a@x.com", "Имя", "S3cr3t!Pass")
@@ -292,3 +292,99 @@ class TestLongCodeDoesNotBreakLayout:
         long_password = "St4ffTmpPass!9"
         html = _render_html(code=long_password)
         assert long_password in html
+
+
+# ─── 7. Legacy "MindCare" отсутствует в пользовательских email-текстах ───────
+# Официальное пользовательское название — «Психология ДонГУ» (email_brand.
+# BRAND_NAME). "MindCare" остаётся техническим именем проекта/репозитория,
+# но получатель письма больше не должен его видеть ни в subject, ни в теле,
+# ни в plain-text fallback — ни для одного из пяти email flow.
+
+class TestNoLegacyMindCareBrandInEmail:
+    @pytest.fixture(autouse=True)
+    def _capture(self, monkeypatch):
+        self.sent = []
+
+        def _fake(to, subject, body, html=None):
+            self.sent.append({"to": to, "subject": subject, "body": body, "html": html})
+
+        monkeypatch.setattr(email_service, "send_email", _fake)
+
+    def _assert_no_mindcare(self, msg):
+        assert "MindCare" not in msg["subject"]
+        assert "MindCare" not in msg["html"]
+        assert "MindCare" not in msg["body"]
+
+    def test_registration_otp_has_no_mindcare(self):
+        email_service.send_registration_otp("a@x.com", "111111")
+        self._assert_no_mindcare(self.sent[-1])
+
+    def test_password_reset_otp_has_no_mindcare(self):
+        email_service.send_password_reset_otp("a@x.com", "222222")
+        self._assert_no_mindcare(self.sent[-1])
+
+    def test_welcome_psychologist_has_no_mindcare(self):
+        email_service.send_welcome_psychologist("a@x.com", "Имя", "Pass123!")
+        self._assert_no_mindcare(self.sent[-1])
+
+    def test_welcome_staff_has_no_mindcare(self):
+        email_service.send_welcome_staff("a@x.com", "Имя", "Pass123!")
+        self._assert_no_mindcare(self.sent[-1])
+
+    def test_welcome_student_has_no_mindcare(self):
+        email_service.send_welcome_student("a@x.com", "Имя", "Pass123!")
+        self._assert_no_mindcare(self.sent[-1])
+
+    def test_email_brand_tagline_and_org_name_defined(self):
+        """TAGLINE/ORG_NAME — централизованные константы (не per-template
+        hardcode), используемые header-subtitle и footer."""
+        assert email_brand.TAGLINE
+        assert email_brand.ORG_NAME == "Донецкий государственный университет"
+        html = _render_html()
+        assert email_brand.TAGLINE in html
+        assert email_brand.ORG_NAME in html
+
+
+# ─── 8. Пунктуация пользовательского текста: без длинного тире ───────────────
+# Редакционное правило этапа polish: пользовательские email-тексты используют
+# обычный дефис с пробелами (" - "), не длинное тире (—/&#8212;). Правило не
+# затрагивает docstring/комментарии модуля (не рендерятся пользователю).
+
+class TestNoEmDashInUserFacingText:
+    def test_html_has_no_em_dash(self):
+        html = _render_html()
+        assert "—" not in html
+        assert "&#8212;" not in html
+
+    def test_plain_has_no_em_dash(self):
+        plain = _render_plain()
+        assert "—" not in plain
+
+    def test_subjects_have_no_em_dash(self, monkeypatch):
+        sent = []
+        monkeypatch.setattr(
+            email_service, "send_email",
+            lambda to, subject, body, html=None: sent.append(subject),
+        )
+        email_service.send_registration_otp("a@x.com", "111111")
+        email_service.send_password_reset_otp("a@x.com", "222222")
+        email_service.send_welcome_staff("a@x.com", "Имя", "Pass123!")
+        email_service.send_welcome_student("a@x.com", "Имя", "Pass123!")
+        for subject in sent:
+            assert "—" not in subject, subject
+
+    def test_welcome_texts_use_service_wording_not_platform(self, monkeypatch):
+        """Пункт 2 polish-этапа: «учётная запись в сервисе», не «аккаунт на
+        платформе»."""
+        sent = []
+        monkeypatch.setattr(
+            email_service, "send_email",
+            lambda to, subject, body, html=None: sent.append(html),
+        )
+        email_service.send_welcome_staff("a@x.com", "Имя", "Pass123!")
+        email_service.send_welcome_student("a@x.com", "Имя", "Pass123!")
+        email_service.send_welcome_psychologist("a@x.com", "Имя", "Pass123!")
+        for html in sent:
+            assert "на платформе" not in html
+            assert "учётная запись" in html
+            assert "в сервисе «Психология ДонГУ»" in html
