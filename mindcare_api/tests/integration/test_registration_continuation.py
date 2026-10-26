@@ -35,6 +35,7 @@ from sqlalchemy import func
 
 from app.audit import service as audit_service
 from app.auth import otp_service, service as auth_service, storage as auth_storage
+from app.core.normalization import normalize_email
 from app.db.models import AuthLog, OtpVerification, User
 from app.db.session import SessionLocal
 
@@ -457,8 +458,17 @@ def test_audit_writer_failure_does_not_break_registration(client, letters, test_
 #
 # Запрос ждёт advisory lock по email, который держит другая транзакция; пока
 # он ждёт, контролируемые часы переходят через срок кода / конец cooldown.
-# Решение обязано приниматься по времени ПОСЛЕ получения lock. Ожидание lock
-# подтверждается по pg_locks (не угадывается паузой).
+# Решение обязано приниматься по времени ПОСЛЕ получения lock.
+#
+# Ожидание подтверждается по pg_locks ИМЕННО для проверяемой транзакции:
+# backend PID её соединения (pg_backend_pid() в той же сессии, что затем зовёт
+# lock_email_otp) + ключ lock этого email + текущая БД. Посторонний waiter
+# сигнал не даёт (см. test_foreign_waiter_does_not_trigger_on_waiting).
+
+# Настоящий lock - до любых monkeypatch (держатель lock им пользуется напрямую).
+_REAL_LOCK_EMAIL_OTP = otp_service.lock_email_otp
+_OID_MASK = 0xFFFFFFFF   # pg_locks.classid/objid - oid (беззнаковые 32 бита)
+
 
 class _Clock:
     def __init__(self, now):
@@ -468,39 +478,98 @@ class _Clock:
         return self.now
 
 
-def _hold_email_lock(email, held, release):
+def _email_lock_ids(email):
+    """(key1, key2) pg_advisory_xact_lock(int4, int4) - тем же кодом, что у
+    lock_email_otp, без повторения алгоритма."""
+    return (otp_service._OTP_EMAIL_LOCK_KEY1,
+            otp_service._email_lock_key(normalize_email(email)))
+
+
+def _waits_on(pid, lock_ids):
+    """PID ждёт (NOT granted) именно advisory lock (key1, key2) в этой БД.
+    Двухаргументная форма: classid=key1, objid=key2, objsubid=2."""
+    key1, key2 = lock_ids
     with SessionLocal() as db:
-        otp_service.lock_email_otp(db, email)
+        return bool(db.execute(sa.text(
+            "SELECT EXISTS (SELECT 1 FROM pg_locks"
+            " WHERE locktype = 'advisory' AND NOT granted AND pid = :pid"
+            "   AND database = (SELECT oid FROM pg_database"
+            "                   WHERE datname = current_database())"
+            "   AND classid::bigint = :c AND objid::bigint = :o AND objsubid = 2)"
+        ), {"pid": pid, "c": key1 & _OID_MASK, "o": key2 & _OID_MASK}).scalar())
+
+
+def _when_target_waits(pid, lock_ids, on_waiting, *, on_poll=None, deadline_s=15):
+    """on_waiting() - ровно тогда, когда pid ждёт именно lock_ids. Без пауз:
+    каждый шаг - запрос к pg_locks; on_poll() - после каждой отрицательной
+    проверки (для теста самого helper)."""
+    end = time.monotonic() + deadline_s
+    while time.monotonic() < end:
+        if _waits_on(pid, lock_ids):
+            on_waiting()
+            return
+        if on_poll is not None:
+            on_poll()
+    raise AssertionError("целевая транзакция не встала в ожидание своего lock")
+
+
+class _LockProbe:
+    """Подменяет lock_email_otp (в otp_service и storage) обёрткой: сначала
+    pg_backend_pid() в ТОЙ ЖЕ сессии, что затем ждёт lock, затем - по желанию
+    - остановка на gate, затем настоящий lock. Production-код не меняется."""
+
+    def __init__(self, monkeypatch, gate=None):
+        self.pid = None
+        self.reported = threading.Event()
+        self._gate = gate
+
+        def _probe(db, email):
+            self.pid = db.execute(sa.text("SELECT pg_backend_pid()")).scalar()
+            self.reported.set()
+            if self._gate is not None:
+                assert self._gate.wait(30)
+            return _REAL_LOCK_EMAIL_OTP(db, email)
+
+        monkeypatch.setattr(otp_service, "lock_email_otp", _probe)
+        monkeypatch.setattr(auth_storage, "lock_email_otp", _probe)
+
+
+def _hold_advisory_lock(lock_ids, held, release, pid_box=None, pid_ready=None):
+    """Держит advisory lock (key1, key2) до release. pid_box/pid_ready - PID
+    соединения, которое затем берёт (или ждёт) этот lock."""
+    with SessionLocal() as db:
+        if pid_box is not None:
+            pid_box.append(db.execute(sa.text("SELECT pg_backend_pid()")).scalar())
+            pid_ready.set()
+        db.execute(sa.text("SELECT pg_advisory_xact_lock(:k1, :k2)"),
+                   {"k1": lock_ids[0], "k2": lock_ids[1]})
         held.set()
         release.wait(timeout=30)
         db.rollback()
 
 
-def _wait_until_waiting_for_advisory_lock(deadline_s=15):
-    end = time.monotonic() + deadline_s
-    while time.monotonic() < end:
-        with SessionLocal() as db:
-            waiting = db.execute(sa.text(
-                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
-            )).scalar()
-        if waiting:
-            return
-        time.sleep(0.01)
-    raise AssertionError("запрос не встал в ожидание advisory lock")
+def _hold_email_lock(email, held, release):
+    with SessionLocal() as db:
+        _REAL_LOCK_EMAIL_OTP(db, email)
+        held.set()
+        release.wait(timeout=30)
+        db.rollback()
 
 
-def _run_while_lock_held(email, fn, on_waiting):
+def _run_while_lock_held(monkeypatch, email, fn, on_waiting):
     """fn() в отдельном потоке, пока lock email держит другая транзакция;
-    on_waiting() - когда fn() уже ждёт lock; затем lock отпускается."""
+    on_waiting() - когда соединение fn() уже ждёт ИМЕННО этот lock; затем
+    lock отпускается."""
     held, release = threading.Event(), threading.Event()
     holder = threading.Thread(target=_hold_email_lock, args=(email, held, release))
     holder.start()
+    probe = _LockProbe(monkeypatch)
     try:
         assert held.wait(15)
         with ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(fn)
-            _wait_until_waiting_for_advisory_lock()
-            on_waiting()
+            assert probe.reported.wait(15), "fn() не дошла до lock_email_otp"
+            _when_target_waits(probe.pid, _email_lock_ids(email), on_waiting)
             release.set()
             try:
                 return ("ok", future.result(timeout=30))
@@ -509,6 +578,81 @@ def _run_while_lock_held(email, fn, on_waiting):
     finally:
         release.set()
         holder.join(15)
+
+
+def test_foreign_waiter_does_not_trigger_on_waiting(client, test_email, monkeypatch):
+    """Посторонний waiter (другой PID и другой ключ) не даёт сигнала: сигнал -
+    только когда целевая транзакция ждёт свой lock."""
+    foreign_ids = _email_lock_ids(f"foreign-{test_email}")       # lock A
+    target_ids = _email_lock_ids(test_email)                     # lock B
+    assert foreign_ids != target_ids
+    releases = []
+
+    def _spawn_holder(lock_ids, pid_box=None, pid_ready=None):
+        held, release = threading.Event(), threading.Event()
+        t = threading.Thread(target=_hold_advisory_lock,
+                             args=(lock_ids, held, release, pid_box, pid_ready))
+        t.start()
+        releases.append((release, t))
+        return held
+
+    gate = threading.Event()
+    calls = []
+    negative_polls = threading.Event()
+    try:
+        # 1-2. Посторонний lock A и постороннее соединение, которое его ждёт.
+        assert _spawn_holder(foreign_ids).wait(15)
+        foreign_pid, foreign_pid_ready = [], threading.Event()
+        _spawn_holder(foreign_ids, foreign_pid, foreign_pid_ready)   # ждёт A
+        assert foreign_pid_ready.wait(15)
+        foreign_waiting = threading.Event()
+        _when_target_waits(foreign_pid[0], foreign_ids, foreign_waiting.set)
+        assert foreign_waiting.is_set()
+
+        # Lock B держит другая транзакция - целевому worker будет кого ждать.
+        assert _spawn_holder(target_ids).wait(15)
+
+        # 3. Целевой worker остановлен на gate ДО вызова настоящего lock_email_otp.
+        probe = _LockProbe(monkeypatch, gate=gate)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                otp_service.create_or_update_otp, test_email, "Имя Фамилия", None,
+            )
+            assert probe.reported.wait(15)
+            target_pid = probe.pid
+            assert target_pid != foreign_pid[0]
+            # Прежний глобальный признак («любой NOT granted advisory») здесь
+            # уже сработал бы - а целевая транзакция ещё ничего не ждёт.
+            with SessionLocal() as db:
+                any_waiter = db.execute(sa.text(
+                    "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+                )).scalar()
+            assert any_waiter >= 1
+            assert not _waits_on(target_pid, target_ids)
+
+            # 4-5. Helper наблюдает pg_locks, пока worker стоит на gate: ни одного
+            # вызова on_waiting, хотя посторонний waiter есть.
+            def _on_waiting():
+                calls.append(_waits_on(target_pid, target_ids))
+
+            def _on_poll():
+                negative_polls.set()
+                if not gate.is_set():
+                    assert calls == []
+                    gate.set()           # 6. worker продолжает - к своему lock B
+
+            # 7-8. Сигнал - только когда worker ждёт именно B.
+            _when_target_waits(target_pid, target_ids, _on_waiting, on_poll=_on_poll)
+            assert negative_polls.is_set()
+            assert calls == [True]
+            for release, _ in releases:
+                release.set()
+            future.result(timeout=30)
+    finally:
+        gate.set()
+        for release, t in releases:
+            release.set()
+            t.join(15)
 
 
 @pytest.mark.parametrize("mode", ["reference", "email"])
@@ -535,7 +679,7 @@ def test_code_expiring_while_waiting_for_lock_is_expired(
     def _expire():
         clock.now = base + timedelta(seconds=60)
 
-    kind, result = _run_while_lock_held(test_email, confirm, _expire)
+    kind, result = _run_while_lock_held(monkeypatch, test_email, confirm, _expire)
     assert kind == "error", "истёкший во время ожидания lock код принят"
     assert result.error_code == "otp_expired"
     assert _users(test_email) == 0 and _rows(test_email) == []
@@ -559,7 +703,7 @@ def test_registration_cooldown_ending_while_waiting_for_lock(
         clock.now = decided_at
 
     kind, issue = _run_while_lock_held(
-        test_email,
+        monkeypatch, test_email,
         lambda: otp_service.issue_registration_otp(test_email, "Имя Фамилия", "bcrypt$x"),
         _pass_cooldown,
     )
@@ -590,7 +734,7 @@ def test_shared_issue_helper_cooldown_ending_while_waiting_for_lock(
         clock.now = decided_at
 
     kind, result = _run_while_lock_held(
-        test_email,
+        monkeypatch, test_email,
         lambda: otp_service.create_or_update_otp(test_email, "Имя Фамилия", None),
         _pass_cooldown,
     )
@@ -616,7 +760,7 @@ def test_cooldown_still_active_after_lock_is_rejected(client, letters, test_emai
         clock.now = base + timedelta(seconds=40)
 
     kind, exc = _run_while_lock_held(
-        test_email,
+        monkeypatch, test_email,
         lambda: otp_service.issue_registration_otp(test_email, "Имя Фамилия", "bcrypt$x"),
         _still_cooldown,
     )
