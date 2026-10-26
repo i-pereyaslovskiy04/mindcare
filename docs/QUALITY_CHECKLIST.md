@@ -280,7 +280,9 @@ control / set-based API, а не single-role replace:
 - Production/staging настройки — в `.env`, не захардкожены в коде.
 - `.env.example` содержит все обязательные переменные.
 - `.env` не коммитится (покрыт `.gitignore`).
-- `ALLOWED_ORIGINS` — список frontend origins через запятую.
+- `ALLOWED_ORIGINS` — список frontend origins через запятую (только CORS).
+- `FRONTEND_PUBLIC_URL` — публичный адрес frontend для ссылок в письмах; не
+  подменять им `ALLOWED_ORIGINS` и `OAUTH_*` (см. `deploy/README.md`).
 - `DATABASE_URL` не захардкожен в коде.
 
 ---
@@ -304,6 +306,29 @@ control / set-based API, а не single-role replace:
   soft-fail после commit, их сбой не откатывает core-операцию.
 - Изменения этих UoW требуют **failure-injection тестов на реальном состоянии БД**
   (`test_register_confirm_atomic`, `test_password_uow_atomic`) — недостаточно мокать service.
+
+**Продолжение регистрации по ссылке из письма (инварианты, не ломать):**
+
+- Registration reference = `otp_verifications.id` выпуска кода обычной
+  регистрации (UUIDv4). Миграции нет. Каждый успешный `register/init` —
+  новая запись и новый UUID, прежние записи email удаляются тем же commit;
+  отказ по cooldown и rollback ничего не меняют; сбой SMTP после commit новый
+  выпуск не отменяет.
+- Письмо строится из данных выпуска (`RegistrationOtpIssue`) той же
+  транзакции — не из повторного поиска по email.
+- Выпуск кода (обычная регистрация, reset, регистрация через провайдера) и
+  confirm обычной регистрации берут `lock_email_otp` (advisory lock по
+  нормализованному email); confirm по reference после lock перечитывает
+  запись по тому же id и на другую запись email не переключается.
+- Обычный confirm выбирает только записи с хешем пароля: reset-OTP и код
+  регистрации через провайдера им не подтверждаются, их попытки не тратятся.
+- Reference — только во fragment (`/register/confirm#r=<uuid>`) и в теле POST;
+  не в query, storage, router state и журнале. GET ссылки ничего не
+  подтверждает, без кода регистрация невозможна.
+- Rate limit `confirm:email` действует и для запроса без email (email берётся
+  из записи выпуска).
+- Тесты: `tests/integration/test_registration_continuation.py`,
+  `tests/test_register_confirm_continuation_unit.py`.
 
 ---
 
@@ -582,7 +607,7 @@ npm run build
 - своё короткое сообщение → bubble компактный, meta (время/✓✓) в одну строку с текстом;
 - своё длинное сообщение → текст оборачивается, meta переносится вниз-направо;
 - входящее сообщение → время внутри bubble, без read receipts;
-- system-сообщение → header «MindCare», текст слева, время внутри bubble, без меню действий;
+- system-сообщение → header «Психология ДонГУ», текст слева, время внутри bubble, без меню действий;
 - редактирование через кебаб-меню → текст и пометка «изменено» обновляются на месте;
 - удаление через кебаб-меню + confirm (пользователь A) → у A сообщение пропадает немедленно;
   у B сообщение пропадает после следующего polling tick (≤ 8 сек) без переоткрытия диалога;

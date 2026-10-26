@@ -1,5 +1,7 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, field_validator
-from typing import Literal, Optional
+from pydantic import (
+    UUID4, BaseModel, ConfigDict, EmailStr, Field, StrictBool, field_validator,
+)
+from typing import Annotated, Literal, Optional, Union
 from datetime import datetime
 
 Role = Literal["student", "psychologist", "admin", "supervisor"]
@@ -22,9 +24,41 @@ class RegisterInitRequest(BaseModel):
     password: str
 
 
-class RegisterConfirmRequest(BaseModel):
+# Код подтверждения регистрации: ровно 6 ASCII-цифр, строкой (ведущие нули
+# сохраняются). [0-9], а не \d: \d в Unicode-режиме принял бы и не-ASCII цифры.
+OtpCode = Annotated[str, Field(pattern=r"^[0-9]{6}$")]
+
+
+class RegisterConfirmByEmailRequest(BaseModel):
+    """Шаг кода в исходной вкладке: email из формы регистрации + код."""
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr = Field(max_length=_EMAIL_MAX_LEN)
-    code: str
+    code: OtpCode
+
+
+class RegisterConfirmByReferenceRequest(BaseModel):
+    """Ссылка из письма: registration_reference (UUIDv4 выпуска кода) + код.
+    Reference лишь выбирает ожидающую регистрацию, без кода она не завершится."""
+    model_config = ConfigDict(extra="forbid")
+
+    registration_reference: UUID4
+    code: OtpCode
+
+
+# POST /api/auth/register/confirm: ровно один идентификатор выпуска кода.
+# extra="forbid" у обеих моделей: оба идентификатора сразу, ни одного или
+# посторонние поля - 422, двусмысленного состояния нет.
+RegisterConfirmRequest = Union[
+    RegisterConfirmByEmailRequest, RegisterConfirmByReferenceRequest,
+]
+
+
+class RegisterConfirmResponse(BaseModel):
+    """email - только у подтверждения по ссылке (для формы входа) и только
+    после успешного commit; у подтверждения по email поля нет."""
+    message: str
+    email: Optional[str] = None
 
 
 class LoginRequest(BaseModel):

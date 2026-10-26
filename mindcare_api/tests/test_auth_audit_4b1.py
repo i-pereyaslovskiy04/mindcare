@@ -3,6 +3,7 @@ Stage 4B-1 — no-DB unit-тесты переноса auth-событий на r
 failure-code contract. Service-mapping через mock storage; route-mapping через spy
 record_event + fake request. Реальная БД не используется.
 """
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +13,7 @@ from app.auth import routes, service, storage
 from app.auth.errors import OtpExpiredError, OtpInvalidError
 from app.auth.schemas import (
     ChangePasswordRequest, LoginRequest, PasswordResetConfirmRequest,
-    RegisterConfirmRequest, RegisterInitRequest, PasswordResetInitRequest,
+    RegisterConfirmByEmailRequest, RegisterInitRequest, PasswordResetInitRequest,
 )
 from app.auth.security import hash_session_token
 from app.audit import validation as audit_validation
@@ -328,7 +329,7 @@ def test_route_register_confirm_success(monkeypatch):
     monkeypatch.setattr(routes.service, "register_confirm",
                         lambda **k: {"id": 11, "email": "n@e.com"})
     routes.register_confirm(
-        body=RegisterConfirmRequest(email="n@e.com", code="123456"),
+        body=RegisterConfirmByEmailRequest(email="n@e.com", code="123456"),
         request=_fake_request(),
     )
     kw = calls[-1]
@@ -345,11 +346,13 @@ def test_route_register_confirm_failure(monkeypatch):
         _raiser(service.AuthError("Срок действия кода истёк", 400,
                                   audit_code="otp_expired")),
     )
-    with pytest.raises(HTTPException):
-        routes.register_confirm(
-            body=RegisterConfirmRequest(email="n@e.com", code="000000"),
-            request=_fake_request(),
-        )
+    resp = routes.register_confirm(
+        body=RegisterConfirmByEmailRequest(email="n@e.com", code="000000"),
+        request=_fake_request(),
+    )
+    # Отказ - JSON {detail} (код для клиента - только если задан error_code).
+    assert resp.status_code == 400
+    assert json.loads(resp.body) == {"detail": "Срок действия кода истёк"}
     kw = calls[-1]
     assert kw["event"] == "registration_failed" and kw["actor"].kind == "anonymous"
     assert kw["failure_reason_code"] == "otp_expired"
@@ -390,7 +393,7 @@ def test_route_password_reset_success_and_failure(monkeypatch):
 
 _EMAIL_SCHEMAS = [
     (RegisterInitRequest, {"name": "Integ User", "password": "Secret123"}),
-    (RegisterConfirmRequest, {"code": "123456"}),
+    (RegisterConfirmByEmailRequest, {"code": "123456"}),
     (LoginRequest, {"password": "Secret123"}),
     (PasswordResetInitRequest, {}),
     (PasswordResetConfirmRequest, {"code": "123456", "new_password": "Secret123"}),

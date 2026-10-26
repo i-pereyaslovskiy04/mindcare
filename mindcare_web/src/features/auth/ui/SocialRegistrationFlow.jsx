@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { oauthRegistrationInit, oauthRegistrationPreview } from '../../../api/auth.api';
 import { useAuth } from '../AuthContext';
 import RegistrationOtpStep, {
-  EMPTY_CODE, RESEND_COOLDOWN, useResendTimer,
+  EMPTY_CODE, OTP_STATUS, RESEND_COOLDOWN, useResendTimer,
 } from './RegistrationOtpStep';
 import SocialEmailStep from './SocialEmailStep';
 import { isRegistrationTerminal, registrationErrorMessage } from '../lib/oauthCallback';
@@ -301,25 +301,34 @@ function RegistrationOtpController({
     }
   };
 
+  let otpStatus = OTP_STATUS.READY;
+  if (terminal) otpStatus = OTP_STATUS.BLOCKED;
+  else if (busy || authLoading) otpStatus = OTP_STATUS.SUBMITTING;
+
   return (
     <RegistrationOtpStep
-      email={maskedEmail}
+      description={(
+        <>
+          Отправили 6-значный код на{' '}
+          <strong className={styles.stepDescStrong}>{maskedEmail}</strong>
+        </>
+      )}
       code={otp}
       onCodeChange={(next) => { setOtp(next); setOtpError(''); }}
       error={otpError}
-      timer={timer}
-      onResend={handleResend}
+      resend={{ secondsLeft: timer, onResend: handleResend }}
       onConfirm={handleConfirm}
-      loading={busy || authLoading}
-      blocked={terminal}
+      status={otpStatus}
       consent={{
         checked: consent,
         error: consentError,
         onChange: (value) => { setConsent(value); setConsentError(!value); },
         onMissing: () => setConsentError(true),
       }}
-      backLabel={emailEditable ? 'Изменить email' : 'Начать заново'}
-      onBack={emailEditable ? () => onChangeEmail(maskedEmail) : onRestart}
+      secondaryAction={{
+        label: emailEditable ? 'Изменить email' : 'Начать заново',
+        onClick: emailEditable ? () => onChangeEmail(maskedEmail) : onRestart,
+      }}
     />
   );
 }

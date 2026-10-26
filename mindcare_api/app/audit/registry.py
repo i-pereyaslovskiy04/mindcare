@@ -160,6 +160,9 @@ _ALL += [
     # (история не переписывается). email_already_exists /
     # oauth_identity_already_linked / oauth_ticket_invalid — отказы confirm
     # регистрации через провайдера; отдельных событий нет, count не меняется.
+    # registration_reference_invalid — подтверждение по ссылке из письма с
+    # недействующим reference (неизвестен / использован / заменён); user_email
+    # тогда NULL, сам reference в журнал не пишется.
     _auth("registration_succeeded", ActorPolicy.USER_REQUIRED, {"student"},
           {Outcome.SUCCESS}, frozenset(), email=True,
           auth_method=AuthMethodPolicy.OPTIONAL),
@@ -167,7 +170,7 @@ _ALL += [
           {Outcome.FAILURE},
           {"otp_invalid", "otp_expired", "domain_not_allowed", "internal_error",
            "email_already_exists", "oauth_identity_already_linked",
-           "oauth_ticket_invalid"},
+           "oauth_ticket_invalid", "registration_reference_invalid"},
           email=True, auth_method=AuthMethodPolicy.OPTIONAL),
     # auth_method (Stage Social Auth 3A): успешный вход всегда знает способ —
     # password (/auth/login) или провайдер (/auth/oauth/complete).

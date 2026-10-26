@@ -17,6 +17,12 @@
  *     sessionStorage. Перезагрузка страницы его теряет — пользователь начинает
  *     вход через провайдера заново.
  *
+ * Registration handoff (`registeredEmail`):
+ *   - Регистрация подтверждена по ссылке из письма (/register/confirm#r=…),
+ *     главная `/` открывает вход с этим email. Одноразово и ТОЛЬКО в памяти:
+ *     не в URL, router state, localStorage и sessionStorage; перезагрузка его
+ *     теряет (вход откроется без подстановки).
+ *
  * All HTTP calls go through api/auth.api.js → api/client.js.
  * No raw fetch() in this file.
  */
@@ -103,6 +109,7 @@ export function AuthProvider({ children }) {
   // Незавершённая регистрация через провайдера: { ticket, provider, emailStep }
   // либо null. Только память — см. комментарий в начале файла.
   const [socialRegistration, setSocialRegistration] = useState(null);
+  const [registeredEmail, setRegisteredEmail] = useState(null);
 
   /** Expose token to the HTTP client. */
   const getToken = useCallback(() => tokenRef.current, []);
@@ -243,6 +250,16 @@ export function AuthProvider({ children }) {
 
   /** «Начать заново», закрытие модалки, терминальная ошибка: ticket забыт. */
   const clearSocialRegistration = useCallback(() => setSocialRegistration(null), []);
+
+  // ── Registration handoff (только память) ──────────────────────────────────
+
+  /** Регистрация по ссылке подтверждена: email для формы входа на `/`. */
+  const rememberRegisteredEmail = useCallback((email) => {
+    setRegisteredEmail(typeof email === 'string' && email ? email : null);
+  }, []);
+
+  /** Главная применила email (или он больше не нужен). */
+  const clearRegisteredEmail = useCallback(() => setRegisteredEmail(null), []);
 
   // Ticket не переживает ни появления сессии (регистрация завершена либо
   // пользователь уже вошёл), ни ухода с главной.
@@ -412,6 +429,9 @@ export function AuthProvider({ children }) {
     socialRegistration,
     beginSocialRegistration,
     clearSocialRegistration,
+    registeredEmail,
+    rememberRegisteredEmail,
+    clearRegisteredEmail,
     logout,
     deactivateOwnAccount,
     clearSession,

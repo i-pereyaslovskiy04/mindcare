@@ -142,7 +142,7 @@ function DeactivationCard({ deactivateOwnAccount, endSession }) {
       <section className={`${styles.card} ${styles.cardDanger}`} aria-labelledby="settings-deactivate-title">
         <h2 id="settings-deactivate-title" className={styles.sectionTitle}>Отключение аккаунта</h2>
         <p className={styles.dangerText}>
-          Вы потеряете доступ к MindCare на всех устройствах. Ваши данные
+          Вы потеряете доступ к сервису «Психология ДонГУ» на всех устройствах. Ваши данные
           и email сохранятся — восстановить аккаунт может только
           администратор по вашему обращению.
         </p>

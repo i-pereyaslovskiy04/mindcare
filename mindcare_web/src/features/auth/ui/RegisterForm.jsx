@@ -1,10 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
 import { registerInit, registerConfirm } from '../../../api/auth.api';
 import SocialButtons from './SocialButtons';
-import RegistrationOtpStep, { EMPTY_CODE, useResendTimer } from './RegistrationOtpStep';
+import RegistrationOtpStep, {
+  EMPTY_CODE, OTP_STATUS, useResendTimer,
+} from './RegistrationOtpStep';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
 import useAllowedEmailDomains from '../hooks/useAllowedEmailDomains';
 
@@ -27,8 +29,13 @@ const STRENGTH_CLASSES = ['', 'w', 'm', 's'];
 /**
  * onStepChange(step) — 'form' | 'code': AuthModal прячет вкладки
  * «Вход | Регистрация» на шаге подтверждения кода.
+ *
+ * onRegisteredWithoutLogin(email) — регистрация подтверждена, но
+ * автоматический вход не удался: учётная запись уже создана, а код
+ * использован, поэтому на шаг кода не возвращаемся — владелец показывает
+ * вход с этим email.
  */
-export default function RegisterForm({ onSuccess, onStepChange }) {
+export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWithoutLogin }) {
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -46,6 +53,8 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
   const [otp, setOtp] = useState(EMPTY_CODE);
   const [otpError, setOtpError] = useState('');
   const [timer, restartTimer] = useResendTimer();
+  // Один confirm за раз (сверх защиты в RegistrationOtpStep).
+  const confirming = useRef(false);
 
   // Shared
   const [isLoading, setIsLoading] = useState(false);
@@ -125,23 +134,45 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
   // --- Step 2 submit — confirm OTP (авто-подтверждение — в RegistrationOtpStep) ---
   const handleConfirm = useCallback(async (digits) => {
     const code = digits.join('');
-    if (code.length < 6) return;
+    if (code.length < 6 || confirming.current) return;
+    confirming.current = true;
     setOtpError('');
     setIsLoading(true);
     try {
-      await registerConfirm({ email, code });
-      await login({ email, password });
+      try {
+        await registerConfirm({ email, code });
+      } catch (err) {
+        setOtpError(err.message || 'Неверный код. Попробуйте снова.');
+        setOtp(EMPTY_CODE);
+        // Домен могли отключить между init и confirm — обновляем подсказку.
+        if (err.status === 422) refetchDomains();
+        return;
+      }
+      // Учётная запись создана. Сбой входа — не повод возвращать к
+      // использованному коду: вход с этим email (пароль пользователь знает).
+      try {
+        await login({ email, password });
+      } catch {
+        // Шаг кода больше не нужен (код использован), пароль в форме — тоже.
+        setOtp(EMPTY_CODE);
+        setPassword('');
+        setConfirmPassword('');
+        setPasswordStrength(0);
+        setStep('form');
+        onStepChange?.('form');
+        onRegisteredWithoutLogin?.(email.trim());
+        return;
+      }
       onSuccess();
       navigate('/dashboard');
-    } catch (err) {
-      setOtpError(err.message || 'Неверный код. Попробуйте снова.');
-      setOtp(EMPTY_CODE);
-      // Домен могли отключить между init и confirm — обновляем подсказку.
-      if (err.status === 422) refetchDomains();
     } finally {
+      confirming.current = false;
       setIsLoading(false);
     }
-  }, [email, password, login, navigate, onSuccess, refetchDomains]);
+  }, [
+    email, password, login, navigate, onSuccess, onStepChange, onRegisteredWithoutLogin,
+    refetchDomains,
+  ]);
 
   // --- Resend ---
   const handleResend = async () => {
@@ -164,16 +195,22 @@ export default function RegisterForm({ onSuccess, onStepChange }) {
   if (step === 'code') {
     return (
       <RegistrationOtpStep
-        email={email}
+        description={(
+          <>
+            Отправили 6-значный код на{' '}
+            <strong className={styles.stepDescStrong}>{email}</strong>
+          </>
+        )}
         code={otp}
         onCodeChange={(next) => { setOtp(next); setOtpError(''); }}
         error={otpError}
-        timer={timer}
-        onResend={handleResend}
+        resend={{ secondsLeft: timer, onResend: handleResend }}
         onConfirm={handleConfirm}
-        loading={isLoading}
-        backLabel="← Изменить данные"
-        onBack={() => { goToStep('form'); setApiError(''); }}
+        status={isLoading ? OTP_STATUS.SUBMITTING : OTP_STATUS.READY}
+        secondaryAction={{
+          label: '← Изменить данные',
+          onClick: () => { goToStep('form'); setApiError(''); },
+        }}
       />
     );
   }

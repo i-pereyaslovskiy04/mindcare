@@ -66,6 +66,7 @@ class AuthError(Exception):
         message: str,
         status_code: int = 400,
         audit_code: Optional[str] = None,
+        error_code: Optional[str] = None,
     ):
         self.message = message          # клиентское сообщение (может быть на русском)
         self.status_code = status_code  # HTTP status
@@ -73,6 +74,10 @@ class AuthError(Exception):
         # для loggable failure-путей (register_confirm/login/password_reset_confirm);
         # для прочих AuthError допустим None (их routes не пишут failure-audit в 4B-1).
         self.audit_code = audit_code
+        # Стабильный машинный код для клиента ({detail, code}): по нему UI
+        # выбирает состояние, а не по тексту. Сейчас его отдаёт только
+        # register_confirm; None — ответ без code.
+        self.error_code = error_code
 
 
 # ---------------------------------------------------------------------------
@@ -121,19 +126,26 @@ def register_init(name: str, email: str, password: str) -> None:
         raise AuthError(_EMAIL_TAKEN_MESSAGE, 409)
 
     from app.auth import otp_service
+    from app.auth.errors import RegistrationEmailTakenError
     from app.services.email_service import send_registration_otp
 
     password_hash = _hash(password)
     try:
-        code = otp_service.create_or_update_otp(
+        issue = otp_service.issue_registration_otp(
             email, name.strip(), password_hash
         )
+    except RegistrationEmailTakenError:
+        raise AuthError(_EMAIL_TAKEN_MESSAGE, 409)
     except ValueError as e:
         raise AuthError(str(e), 429)
 
     log.info("[register_init] sending OTP to %s", mask_email(email))
     try:
-        send_registration_otp(email, code)
+        # Ссылка «Продолжить регистрацию» несёт reference ЭТОГО выпуска (из той
+        # же транзакции): подтвердить код можно и после закрытия вкладки.
+        send_registration_otp(
+            email, issue.code, registration_reference=issue.registration_reference,
+        )
     except Exception:
         log.exception(
             "[register_init] failed to send email to %s", mask_email(email)
@@ -142,13 +154,19 @@ def register_init(name: str, email: str, password: str) -> None:
 
 
 def register_confirm(
-    email: str,
-    code: str,
+    email: Optional[str] = None,
+    code: str = "",
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    *,
+    registration_reference: Optional[str] = None,
 ) -> dict:
     """
     Подтверждает регистрацию атомарно (Stage 31m-fix-b2).
+
+    Ровно один идентификатор выпуска кода: email (шаг кода в исходной вкладке)
+    либо registration_reference (ссылка из письма). Код обязателен в обоих
+    случаях: reference лишь выбирает ожидающую регистрацию.
 
     OTP-валидация, создание/реактивация пользователя, роль student, обязательные
     consent_records и потребление OTP выполняются как одна core DB-транзакция
@@ -157,7 +175,10 @@ def register_confirm(
     выполняется уже ПОСЛЕ успешного commit (его сбой не откатывает регистрацию).
     """
     from app.email_domains.errors import EmailDomainNotAllowedError
-    from app.auth.errors import OtpExpiredError, OtpInvalidError
+    from app.auth.errors import (
+        OtpAttemptsExhaustedError, OtpExpiredError, OtpInvalidError,
+        RegistrationReferenceInvalidError,
+    )
     try:
         user = storage.register_confirm_atomic(
             email=email,
@@ -165,6 +186,7 @@ def register_confirm(
             required_consent_types=REQUIRED_CONSENTS,
             ip=ip,
             user_agent=user_agent,
+            registration_reference=registration_reference,
         )
     except EmailDomainNotAllowedError as e:
         # Домен отключили между init и confirm — новое регистрационное действие
@@ -187,17 +209,35 @@ def register_confirm(
             500,
             audit_code="internal_error",
         )
+    except RegistrationReferenceInvalidError as e:
+        raise AuthError(
+            str(e), 400,
+            audit_code="registration_reference_invalid",
+            error_code="registration_reference_invalid",
+        )
     except OtpExpiredError as e:
-        raise AuthError(str(e), 400, audit_code="otp_expired")
+        raise AuthError(str(e), 400, audit_code="otp_expired", error_code="otp_expired")
+    except OtpAttemptsExhaustedError as e:
+        # В журнале - прежний otp_invalid; клиенту - отдельный код: этим кодом
+        # регистрацию уже не завершить, нужен новый.
+        raise AuthError(
+            str(e), 400, audit_code="otp_invalid", error_code="otp_attempts_exhausted",
+        )
     except OtpInvalidError as e:
-        # Явно только типизированный OTP-сбой (not-found/attempts/wrong).
-        raise AuthError(str(e), 400, audit_code="otp_invalid")
+        # Явно только типизированный OTP-сбой (not-found/wrong).
+        raise AuthError(str(e), 400, audit_code="otp_invalid", error_code="otp_invalid")
     # Прочий (неожиданный) ValueError НЕ маскируется под otp_invalid: он
     # распространяется как внутренняя ошибка (route не ловит → 500), а не даёт
     # клиенту ложный «неверный код». Durable-обработка неожиданного — Stage 5A.
 
     run_post_registration_actions(user, ip=ip, user_agent=user_agent)
     return user
+
+
+def resolve_registration_reference(reference: str) -> Optional[str]:
+    """Email ожидающей обычной регистрации по reference из ссылки в письме или
+    None. Только для rate limit и аудита в route; подтверждение - под lock."""
+    return storage.resolve_registration_reference(reference)
 
 
 def run_post_registration_actions(

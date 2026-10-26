@@ -28,8 +28,8 @@ export default function Footer() {
             <div className={styles.brandDesc}>
               Центр психологической помощи при Донецком государственном университете.
             </div>
-            <a className={styles.mailLink} href="mailto:support@donnu.ru">
-              support@donnu.ru
+            <a className={styles.mailLink} href="mailto:psychology.center@donnu.ru">
+              psychology.center@donnu.ru
             </a>
           </div>
 

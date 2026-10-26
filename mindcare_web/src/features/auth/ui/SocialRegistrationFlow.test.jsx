@@ -389,7 +389,8 @@ describe('VK ID (email выбирает пользователь)', () => {
     [{ status: 400, code: 'oauth_ticket_invalid' },
       'Время на завершение регистрации истекло. Начните заново через VK.'],
     [{ status: 409, code: 'oauth_identity_already_linked' },
-      'Этот аккаунт VK уже привязан к MindCare. Нажмите «VK» ещё раз, чтобы войти.'],
+      'Этот аккаунт VK уже связан с учётной записью в сервисе «Психология ДонГУ». '
+      + 'Нажмите «VK» ещё раз, чтобы войти.'],
   ])('терминальная ошибка init %j → обычная AuthModal «Вход»', async (props, text) => {
     authApi.oauthRegistrationInit.mockRejectedValue(Object.assign(new Error('RAW'), props));
     renderFlow(VK);

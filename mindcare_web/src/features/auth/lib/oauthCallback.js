@@ -78,7 +78,7 @@ function buildFragmentMessages(label) {
     // (Stage VK-1A — только вход). Для Яндекса backend этот код больше не
     // выдаёт (Stage 4) — остаётся безопасным fallback.
     social_registration_not_available:
-      `Аккаунт ${label} пока не привязан к MindCare. `
+      `Аккаунт ${label} пока не связан с учётной записью в сервисе «Психология ДонГУ». `
       + `Вход через ${label} доступен только для уже связанных аккаунтов.`,
     account_unavailable:
       'Доступ к аккаунту сейчас недоступен. Обратитесь к администратору.',
@@ -238,7 +238,8 @@ function buildRegistrationMessages(label) {
     email_already_exists:
       'Аккаунт с таким email уже существует. Войдите по email и паролю.',
     oauth_identity_already_linked:
-      `Этот аккаунт ${label} уже привязан к MindCare. Нажмите «${label}» ещё раз, чтобы войти.`,
+      `Этот аккаунт ${label} уже связан с учётной записью в сервисе «Психология ДонГУ». `
+      + `Нажмите «${label}» ещё раз, чтобы войти.`,
     oauth_ticket_invalid:
       `Время на завершение регистрации истекло. Начните заново через ${label}.`,
     email_delivery_failed: 'Не удалось отправить письмо. Попробуйте позже.',
