@@ -21,9 +21,9 @@ export const REGISTRATION_CONFIRMED_MESSAGE =
  *                    автоматическая отправка кода);
  *   socialEmail    — шаг «Почта для регистрации» (SocialEmailStep, VK ID);
  *   socialOtp      — шаг «Подтверждение регистрации» (RegistrationOtpStep);
- *   confirm        — «Подтверждение регистрации» по email и коду без исходной
- *                    вкладки (/register/confirm, RegistrationConfirmForm): без
- *                    вкладок; после успеха — «Вход» с сообщением, без автовхода.
+ *   confirm        — «Подтверждение регистрации» по ссылке из письма
+ *                    (/register/confirm#r=…, RegistrationConfirmForm): только
+ *                    код, без вкладок; после успеха — «Вход», без автовхода.
  * В social-режимах вкладок нет, а LoginForm и RegisterForm не монтируются:
  * это продолжение уже начатой регистрации, а не выбор способа входа. Режим
  * social-регистрации не связан с состоянием вкладки «Регистрация».
@@ -49,7 +49,15 @@ const MODE_BY_SOCIAL_STEP = Object.freeze({
  * технический маршрут без своих форм).
  *
  * initialTab — вкладка, с которой модалка ОТКРЫВАЕТСЯ ('login' | 'register'),
- * либо 'confirm' — шаг подтверждения регистрации по email и коду.
+ * либо 'confirm' — шаг подтверждения регистрации по ссылке из письма.
+ *
+ * registrationReference — reference из ссылки (шаг 'confirm'); null — ссылка
+ * без данных (шаг объясняет и предлагает начать заново).
+ * onRegistrationConfirmed(email) / onRegistrationRestart() — владелец
+ * маршрута шага 'confirm' сам уводит с адреса ссылки; без них модалка
+ * переключает вкладку на месте («Вход» с сообщением / «Регистрация»).
+ * loginEmail — email, подставляемый в форму входа при открытии (только из
+ * памяти, например после подтверждения по ссылке).
  * Применяется при каждом открытии (и при смене initialTab на открытой
  * модалке); дальше пользователь переключает вкладки сам.
  *
@@ -67,7 +75,8 @@ const MODE_BY_SOCIAL_STEP = Object.freeze({
  */
 export default function AuthModal({
   isOpen, onClose, message, messageTone = 'info', initialTab = 'login',
-  social = null, onSocialExit,
+  social = null, onSocialExit, registrationReference = null,
+  onRegistrationConfirmed, onRegistrationRestart, loginEmail = '',
 }) {
   const tone = safeMessageTone(messageTone);
   const startTab = START_TABS.includes(initialTab) ? initialTab : 'login';
@@ -78,8 +87,9 @@ export default function AuthModal({
   // показываются — это уже не выбор режима.
   const [registerStep, setRegisterStep] = useState('form');
   const [socialStep, setSocialStep] = useState(SOCIAL_STEP.LOADING);
-  // Регистрация подтверждена на шаге confirm: сообщение над «Входом» и email
-  // для формы входа (только в памяти; пароль неизвестен — входит пользователь сам).
+  // Регистрация подтверждена без автовхода (шаг confirm без владельца маршрута
+  // или сбой автовхода после шага кода): сообщение над «Входом» и email для
+  // формы входа (только в памяти).
   const [confirmed, setConfirmed] = useState(null);
   // Открытие, смена initialTab и вход/выход из social-режима отслеживаются во
   // время рендера (не эффектом): нужная вкладка видна с первого кадра, без
@@ -105,11 +115,22 @@ export default function AuthModal({
   const confirming = confirmStep || (activeTab === 'register' && registerStep === 'code');
   const loginMessage = confirmed ? REGISTRATION_CONFIRMED_MESSAGE : message;
   const loginTone = confirmed ? 'info' : tone;
+  const prefillEmail = confirmed?.email ?? loginEmail ?? '';
 
   const handleConfirmed = useCallback((email) => {
     setConfirmed({ email });
     setActiveTab('login');
   }, []);
+
+  const handleReferenceConfirmed = useCallback((email) => {
+    if (onRegistrationConfirmed) onRegistrationConfirmed(email);
+    else handleConfirmed(email);
+  }, [onRegistrationConfirmed, handleConfirmed]);
+
+  const handleRegistrationRestart = useCallback(() => {
+    if (onRegistrationRestart) onRegistrationRestart();
+    else setActiveTab('register');
+  }, [onRegistrationRestart]);
 
   const handleForgotPassword = useCallback(() => {
     onClose();
@@ -176,8 +197,8 @@ export default function AuthModal({
                     </div>
                   )}
                   <LoginForm
-                    key={confirmed ? `confirmed:${confirmed.email}` : 'login'}
-                    initialEmail={confirmed?.email ?? ''}
+                    key={prefillEmail ? `prefill:${prefillEmail}` : 'login'}
+                    initialEmail={prefillEmail}
                     onSuccess={onClose}
                     onForgotPassword={handleForgotPassword}
                   />
@@ -188,12 +209,17 @@ export default function AuthModal({
                   aria-labelledby={confirming ? undefined : 'tab-register'}
                   hidden={activeTab !== 'register'}
                 >
-                  <RegisterForm onSuccess={onClose} onStepChange={setRegisterStep} />
+                  <RegisterForm
+                    onSuccess={onClose}
+                    onStepChange={setRegisterStep}
+                    onRegisteredWithoutLogin={handleConfirmed}
+                  />
                 </div>
                 {confirmStep && (
                   <RegistrationConfirmForm
-                    onConfirmed={handleConfirmed}
-                    onRestart={() => setActiveTab('register')}
+                    registrationReference={registrationReference}
+                    onConfirmed={handleReferenceConfirmed}
+                    onRestart={handleRegistrationRestart}
                   />
                 )}
               </div>

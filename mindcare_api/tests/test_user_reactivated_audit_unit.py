@@ -47,7 +47,10 @@ def _rc_db(existing_row):
     def _query(model):
         q = MagicMock()
         if model is OtpVerification:
-            q.filter.return_value.first.return_value = otp
+            # Код обычной регистрации: filter(email, хеш пароля) -> последний
+            # выпуск -> FOR UPDATE.
+            (q.filter.return_value.order_by.return_value
+             .with_for_update.return_value.first.return_value) = otp
         elif model is Consent:
             q.filter.return_value.order_by.return_value.first.return_value = consent
         elif model is User.id:
@@ -127,7 +130,7 @@ def test_register_init_rejects_any_existing_row_before_otp(monkeypatch):
 
     def _no_otp(*a, **kw):
         raise AssertionError("OTP must not be created for an existing account")
-    monkeypatch.setattr("app.auth.otp_service.create_or_update_otp", _no_otp)
+    monkeypatch.setattr("app.auth.otp_service.issue_registration_otp", _no_otp)
     with pytest.raises(auth_service.AuthError) as ei:
         auth_service.register_init("Имя Фамилия", EMAIL, "password123")
     assert (ei.value.status_code, ei.value.message) == (409, "Email уже зарегистрирован")

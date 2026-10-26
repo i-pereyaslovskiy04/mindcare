@@ -307,6 +307,29 @@ control / set-based API, а не single-role replace:
 - Изменения этих UoW требуют **failure-injection тестов на реальном состоянии БД**
   (`test_register_confirm_atomic`, `test_password_uow_atomic`) — недостаточно мокать service.
 
+**Продолжение регистрации по ссылке из письма (инварианты, не ломать):**
+
+- Registration reference = `otp_verifications.id` выпуска кода обычной
+  регистрации (UUIDv4). Миграции нет. Каждый успешный `register/init` —
+  новая запись и новый UUID, прежние записи email удаляются тем же commit;
+  отказ по cooldown и rollback ничего не меняют; сбой SMTP после commit новый
+  выпуск не отменяет.
+- Письмо строится из данных выпуска (`RegistrationOtpIssue`) той же
+  транзакции — не из повторного поиска по email.
+- Выпуск кода (обычная регистрация, reset, регистрация через провайдера) и
+  confirm обычной регистрации берут `lock_email_otp` (advisory lock по
+  нормализованному email); confirm по reference после lock перечитывает
+  запись по тому же id и на другую запись email не переключается.
+- Обычный confirm выбирает только записи с хешем пароля: reset-OTP и код
+  регистрации через провайдера им не подтверждаются, их попытки не тратятся.
+- Reference — только во fragment (`/register/confirm#r=<uuid>`) и в теле POST;
+  не в query, storage, router state и журнале. GET ссылки ничего не
+  подтверждает, без кода регистрация невозможна.
+- Rate limit `confirm:email` действует и для запроса без email (email берётся
+  из записи выпуска).
+- Тесты: `tests/integration/test_registration_continuation.py`,
+  `tests/test_register_confirm_continuation_unit.py`.
+
 ---
 
 ## 8. Tables / pagination rules

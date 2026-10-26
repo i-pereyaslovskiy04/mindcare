@@ -100,9 +100,13 @@
 - Тесты: `tests/integration/test_password_uow_atomic.py` (11, с failure-injection); backend full suite **282 passed**
 
 **Открытые security/future направления (после Stages 21–25b):**
-- **OTP concurrency / row locking** — атомарные confirm-flows не берут `SELECT … FOR UPDATE`;
-  при гонке двух одновременных confirm возможен двойной проход OTP-валидации. Решение —
-  `SELECT FOR UPDATE` или conditional update. **Deferred** (вне scope Stage 31m-fix-b3)
+- **OTP concurrency / row locking** — частично закрыто (2026-10-26, продолжение
+  регистрации по ссылке): выпуск кода всех потоков и confirm обычной регистрации
+  сериализованы advisory lock по email (`otp_service.lock_email_otp`) + FOR UPDATE
+  записи; confirm регистрации через провайдера уже брал FOR UPDATE. Остаётся:
+  **password reset confirm** читает запись OTP без блокировки — при гонке двух
+  confirm возможен двойной проход валидации. Решение — тот же lock / FOR UPDATE.
+  **Deferred**
 - **Transactional outbox** — гарантированная доставка post-commit уведомлений (welcome/security/engagement);
   сейчас они best-effort soft-fail. **Deferred** (намеренно не делаем на этом этапе)
 - **HttpOnly Secure SameSite cookie + CSRF** вместо localStorage-токена
@@ -771,7 +775,8 @@ touch-зоны `Toggle`, чекбокса задачи, «⋯» записи д�
   через обычную регистрацию. Имя из Яндекса — начальное, меняется в профиле
 - ⏳ OTP: связь записи с ticket логическая (email + NULL-хеш), отдельной
   колонки и счётчика попыток на ticket нет; уникальности `otp_verifications`
-  по email на уровне БД по-прежнему нет (см. «OTP concurrency»)
+  по email на уровне БД по-прежнему нет — одна запись на email держится
+  сериализацией выпуска кода (advisory lock, см. «OTP concurrency»)
 - 🔴 До включения в production: отдельное PROD-приложение Яндекс OAuth
   (аккаунт организации, один https Redirect URI), верификация сервиса
   (иначе пользователи видят предупреждение), HTTPS/reverse proxy с маскировкой

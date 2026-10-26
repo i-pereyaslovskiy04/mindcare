@@ -63,11 +63,22 @@ export function registerInit({ name, email, password }) {
   });
 }
 
-/** POST /api/auth/register/confirm — verifies OTP, creates account. */
-export function registerConfirm({ email, code }) {
+/**
+ * POST /api/auth/register/confirm — verifies OTP, creates account.
+ *
+ * Ровно один идентификатор выпуска кода:
+ *   { email, code }                 — шаг кода в исходной вкладке → { message };
+ *   { registrationReference, code } — ссылка из письма (reference из
+ *                                     fragment) → { message, email }.
+ * Reference уходит только в теле POST (не в URL запроса).
+ */
+export function registerConfirm({ email, registrationReference, code }) {
+  const body = registrationReference
+    ? { registration_reference: registrationReference, code }
+    : { email, code };
   return apiFetch(`${BASE}/register/confirm`, {
     method: 'POST',
-    body: JSON.stringify({ email, code }),
+    body: JSON.stringify(body),
   });
 }
 

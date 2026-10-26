@@ -40,4 +40,3 @@ BORDER = "#DCE3EC"        # --nav-border  горизонтальный разд�
 CODE_BG = "#EEF2F7"       # --milk        фон блока OTP-кода / временного пароля
 CODE_BORDER = "#C3D2E6"   # --latte       рамка блока кода
 CODE_TEXT = "#16233D"     # --espresso    цвет цифр кода
-CTA_TEXT = "#FFFFFF"      # --on-primary  текст кнопки на фоне ACCENT

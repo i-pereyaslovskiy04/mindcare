@@ -197,3 +197,81 @@ test('confirm: ошибка неверного кода (400) подсказку
   expect(await screen.findByText('Неверный код. Осталось попыток: 4')).toBeInTheDocument();
   expect(domainsApi.getPublicEmailDomains).toHaveBeenCalledTimes(1);
 });
+
+// ── шаг кода: автовход, его сбой, повторная отправка, двойное подтверждение ──
+
+test('успешный confirm → автоматический вход и кабинет', async () => {
+  login.mockResolvedValue({});
+  const onSuccess = jest.fn();
+  render(<RegisterForm onSuccess={onSuccess} />);
+  await settled();
+  fillAndSubmit();
+  await screen.findByRole('group', { name: 'Код подтверждения' });
+  pasteCode('012345');
+  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard'));
+  expect(authApi.registerConfirm).toHaveBeenCalledWith({ email: EMAIL, code: '012345' });
+  expect(login).toHaveBeenCalledWith({ email: EMAIL, password: 'SecurePass42!' });
+  expect(onSuccess).toHaveBeenCalled();
+});
+
+test('сбой автовхода после успешного confirm → onRegisteredWithoutLogin(email), не шаг кода', async () => {
+  login.mockRejectedValue(new Error('Сеть недоступна'));
+  const onRegisteredWithoutLogin = jest.fn();
+  const onSuccess = jest.fn();
+  render(<RegisterForm onSuccess={onSuccess} onRegisteredWithoutLogin={onRegisteredWithoutLogin} />);
+  await settled();
+  fillAndSubmit();
+  await screen.findByRole('group', { name: 'Код подтверждения' });
+  pasteCode();
+  await waitFor(() => expect(onRegisteredWithoutLogin).toHaveBeenCalledWith(EMAIL));
+  expect(onSuccess).not.toHaveBeenCalled();
+  expect(mockNavigate).not.toHaveBeenCalled();
+  // К использованному коду не вернуться: форма на первом шаге, пароли стёрты.
+  expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
+  expect(screen.getByLabelText('Пароль')).toHaveValue('');
+  expect(screen.getByLabelText('Повторите пароль')).toHaveValue('');
+  expect(screen.queryByText('Сеть недоступна')).toBeNull();
+});
+
+test('один код — один confirm: вставка, кнопка и Enter до ответа не дублируют запрос', async () => {
+  let resolve;
+  authApi.registerConfirm.mockReturnValue(new Promise((r) => { resolve = r; }));
+  login.mockResolvedValue({});
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await settled();
+  fillAndSubmit();
+  await screen.findByRole('group', { name: 'Код подтверждения' });
+  pasteCode();
+  const button = screen.getByRole('button', { name: 'Подтвердить' });
+  fireEvent.click(button);
+  fireEvent.submit(screen.getByRole('form', { name: 'Подтверждение регистрации' }));
+  await waitFor(() => expect(authApi.registerConfirm).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Проверяем…' }));
+  resolve({ message: 'ok' });
+  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard'));
+  expect(authApi.registerConfirm).toHaveBeenCalledTimes(1);
+});
+
+test('повторная отправка кода после таймера — тот же init', async () => {
+  jest.useFakeTimers();
+  try {
+    render(<RegisterForm onSuccess={jest.fn()} />);
+    await act(async () => { await Promise.resolve(); });
+    fillAndSubmit();
+    await act(async () => { await Promise.resolve(); });
+    await screen.findByRole('group', { name: 'Код подтверждения' });
+    expect(screen.getByText(/Отправить повторно через/)).toBeInTheDocument();
+    // Отсчёт — цепочка секундных таймеров: каждый следующий ставится после рендера.
+    for (let i = 0; i < 61; i += 1) {
+      act(() => { jest.advanceTimersByTime(1000); });
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить повторно' }));
+    await act(async () => { await Promise.resolve(); });
+    expect(authApi.registerInit).toHaveBeenCalledTimes(2);
+    expect(authApi.registerInit).toHaveBeenLastCalledWith({
+      name: 'Иван Тестов', email: EMAIL, password: 'SecurePass42!',
+    });
+  } finally {
+    jest.useRealTimers();
+  }
+});

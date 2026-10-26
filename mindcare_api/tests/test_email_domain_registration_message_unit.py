@@ -151,6 +151,7 @@ def nothing_after_domain_refusal(monkeypatch):
 
     monkeypatch.setattr(storage, "email_exists_any", _boom)
     monkeypatch.setattr("app.auth.otp_service.create_or_update_otp", _boom)
+    monkeypatch.setattr("app.auth.otp_service.issue_registration_otp", _boom)
     monkeypatch.setattr("app.services.email_service.send_registration_otp", _boom)
     monkeypatch.setattr(service, "run_post_registration_actions", _boom)
 

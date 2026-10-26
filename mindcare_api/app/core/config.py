@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = "http://localhost:3000"
     # --- PUBLIC FRONTEND ---
     # Публичный адрес frontend этого окружения: абсолютные ссылки backend →
-    # frontend (кнопки в письмах). Не путать с ALLOWED_ORIGINS (CORS) и с
+    # frontend (ссылки в письмах). Не путать с ALLOWED_ORIGINS (CORS) и с
     # OAUTH_* (адреса OAuth callback). Сборка ссылок — app/core/public_urls.py.
     FRONTEND_PUBLIC_URL: str = "http://localhost:3000"
     # --- SOCIAL AUTH (Stage Social Auth 2B; не секреты) ---

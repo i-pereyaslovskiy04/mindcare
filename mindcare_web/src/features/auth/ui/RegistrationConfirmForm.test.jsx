@@ -1,110 +1,143 @@
+import fs from 'fs';
+import path from 'path';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import RegistrationConfirmForm, { CONFIRM_FALLBACK_ERROR } from './RegistrationConfirmForm';
+import RegistrationConfirmForm, {
+  ATTEMPTS_EXHAUSTED_MESSAGE, CODE_EXPIRED_MESSAGE, CONFIRM_FALLBACK_ERROR,
+  REFERENCE_INVALID_MESSAGE, REFERENCE_MISSING_MESSAGE,
+} from './RegistrationConfirmForm';
 import * as authApi from '../../../api/auth.api';
 
 jest.mock('../../../api/auth.api', () => ({ registerConfirm: jest.fn() }));
 
+const SOURCE = fs.readFileSync(path.join(__dirname, 'RegistrationConfirmForm.jsx'), 'utf8');
+
+const REF = '8a62d590-71a1-4b17-90f7-4a5ff0c9d782';
 const EMAIL = 'student@donnu.ru';
 
-function renderForm() {
+function setup(props = {}) {
   const onConfirmed = jest.fn();
   const onRestart = jest.fn();
-  render(<RegistrationConfirmForm onConfirmed={onConfirmed} onRestart={onRestart} />);
+  render(
+    <RegistrationConfirmForm
+      registrationReference={REF}
+      onConfirmed={onConfirmed}
+      onRestart={onRestart}
+      {...props}
+    />,
+  );
   return { onConfirmed, onRestart };
 }
 
+const cells = () => within(screen.getByRole('group', { name: 'Код подтверждения' })).getAllByRole('textbox');
+
 function typeCode(digits) {
-  const group = screen.getByRole('group', { name: 'Код подтверждения' });
-  within(group).getAllByRole('textbox').forEach((input, i) => {
+  cells().forEach((input, i) => {
     fireEvent.change(input, { target: { value: digits[i] } });
   });
 }
 
-const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Подтвердить регистрацию' }));
+const rejected = (message, code) => Object.assign(new Error(message), { status: 400, code });
 
 beforeEach(() => {
   jest.clearAllMocks();
-  authApi.registerConfirm.mockResolvedValue({ message: 'Регистрация завершена' });
+  authApi.registerConfirm.mockResolvedValue({ message: 'Регистрация завершена', email: EMAIL });
 });
 
-test('открывается сам по себе: пустые email и код, без прежнего состояния', () => {
-  renderForm();
+test('по ссылке: общий шаг кода, только код, без поля email', () => {
+  setup();
   expect(screen.getByRole('heading', { name: 'Подтверждение регистрации' })).toBeInTheDocument();
-  expect(screen.getByLabelText('Email')).toHaveValue('');
-  const group = screen.getByRole('group', { name: 'Код подтверждения' });
-  within(group).getAllByRole('textbox').forEach((input) => expect(input).toHaveValue(''));
-  expect(authApi.registerConfirm).not.toHaveBeenCalled();
+  expect(screen.getByText('Введите 6-значный код из письма.')).toBeInTheDocument();
+  expect(cells()).toHaveLength(6);
+  expect(screen.queryByLabelText('Email')).toBeNull();
+  expect(screen.queryByRole('textbox', { name: /email/i })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Начать регистрацию заново' })).toBeInTheDocument();
+  // Reference не показывается и повторной отправки нет.
+  expect(document.body).not.toHaveTextContent(REF);
+  expect(screen.queryByText(/Отправить повторно/)).toBeNull();
 });
 
-test('email и код уходят в существующий register/confirm; успех → onConfirmed(email)', async () => {
-  const { onConfirmed } = renderForm();
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: `  ${EMAIL} ` } });
-  typeCode('482915');
-  submit();
+test('код из 6 цифр → POST { registrationReference, code } один раз → onConfirmed(email из ответа)', async () => {
+  const { onConfirmed } = setup();
+  typeCode('012345');
+  fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
   await waitFor(() => expect(onConfirmed).toHaveBeenCalledWith(EMAIL));
-  expect(authApi.registerConfirm).toHaveBeenCalledWith({ email: EMAIL, code: '482915' });
+  expect(authApi.registerConfirm).toHaveBeenCalledTimes(1);
+  expect(authApi.registerConfirm).toHaveBeenCalledWith({ registrationReference: REF, code: '012345' });
 });
 
-test('без корректного email или полного кода запрос не уходит', () => {
-  renderForm();
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'not-an-email' } });
-  typeCode('48291 ');
-  submit();
-  expect(authApi.registerConfirm).not.toHaveBeenCalled();
-  expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true');
+test('reference и код не попадают в storage', async () => {
+  const setItem = jest.spyOn(Storage.prototype, 'setItem');
+  const { onConfirmed } = setup();
+  typeCode('482915');
+  await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+  expect(setItem).not.toHaveBeenCalled();
+  setItem.mockRestore();
+});
+
+test('во время проверки ячейки недоступны', async () => {
+  let resolve;
+  authApi.registerConfirm.mockReturnValue(new Promise((r) => { resolve = r; }));
+  setup();
+  typeCode('482915');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Проверяем…' })).toBeDisabled());
+  cells().forEach((cell) => expect(cell).toBeDisabled());
+  resolve({ message: 'ok', email: EMAIL });
+  await waitFor(() => expect(authApi.registerConfirm).toHaveBeenCalledTimes(1));
+});
+
+test('неверный код → текст backend, код очищен, фокус на первой ячейке', async () => {
+  const message = 'Неверный код. Осталось попыток: 4';
+  authApi.registerConfirm.mockRejectedValue(rejected(message, 'otp_invalid'));
+  const { onConfirmed } = setup();
+  typeCode('111111');
+  const alert = await screen.findByText(message);
+  expect(alert).toHaveAttribute('role', 'alert');
+  cells().forEach((cell) => expect(cell).toHaveValue(''));
+  await waitFor(() => expect(cells()[0]).toHaveFocus());
+  expect(onConfirmed).not.toHaveBeenCalled();
+});
+
+test('ошибка без понятного текста → безопасный общий текст', async () => {
+  authApi.registerConfirm.mockRejectedValue(new Error('HTTP 500'));
+  setup();
+  typeCode('111111');
+  expect(await screen.findByText(CONFIRM_FALLBACK_ERROR)).toBeInTheDocument();
 });
 
 test.each([
-  'Срок действия кода истёк. Начните регистрацию заново',
-  'Неверный код. Осталось попыток: 4',
-  'Код не найден или уже использован',
-])('ошибка backend показывается понятным текстом: %s', async (message) => {
-  authApi.registerConfirm.mockRejectedValue(Object.assign(new Error(message), { status: 400 }));
-  const { onConfirmed } = renderForm();
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: EMAIL } });
+  ['registration_reference_invalid', REFERENCE_INVALID_MESSAGE],
+  ['otp_expired', CODE_EXPIRED_MESSAGE],
+  ['otp_attempts_exhausted', ATTEMPTS_EXHAUSTED_MESSAGE],
+])('код %s → терминальный экран: объяснение и «Начать регистрацию заново»', async (code, text) => {
+  authApi.registerConfirm.mockRejectedValue(rejected('текст backend', code));
+  const { onRestart } = setup();
   typeCode('111111');
-  submit();
-  expect(await screen.findByText(message)).toHaveClass('apiError');
-  expect(onConfirmed).not.toHaveBeenCalled();
-  // Код очищен для повторного ввода, email остаётся.
-  const group = screen.getByRole('group', { name: 'Код подтверждения' });
-  within(group).getAllByRole('textbox').forEach((input) => expect(input).toHaveValue(''));
-  expect(screen.getByLabelText('Email')).toHaveValue(EMAIL);
+  expect(await screen.findByText(text)).toHaveAttribute('role', 'alert');
+  expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Начать регистрацию заново' }));
+  expect(onRestart).toHaveBeenCalledTimes(1);
 });
 
-test('ошибка без текста → нейтральное сообщение', async () => {
-  authApi.registerConfirm.mockRejectedValue(new Error('HTTP 500'));
-  renderForm();
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: EMAIL } });
-  typeCode('111111');
-  submit();
-  expect(await screen.findByText(CONFIRM_FALLBACK_ERROR)).toHaveAttribute('role', 'alert');
-});
-
-test('«Начать регистрацию заново» вызывает onRestart и не шлёт register/init', () => {
-  const { onRestart } = renderForm();
+test.each([[null], [undefined], ['']])('нет reference (%p) → объяснение без поля email и без кода', (ref) => {
+  const { onRestart } = setup({ registrationReference: ref });
+  expect(screen.getByText(REFERENCE_MISSING_MESSAGE)).toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
+  expect(screen.queryByLabelText('Email')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Начать регистрацию заново' }));
   expect(onRestart).toHaveBeenCalledTimes(1);
   expect(authApi.registerConfirm).not.toHaveBeenCalled();
 });
 
-test('email и код не попадают в URL и браузерное хранилище', async () => {
-  const setLocal = jest.spyOn(Storage.prototype, 'setItem');
-  const before = window.location.href;
-  const { onConfirmed } = renderForm();
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: EMAIL } });
-  typeCode('482915');
-  submit();
-  await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
-  expect(setLocal).not.toHaveBeenCalled();
-  expect(window.location.href).toBe(before);
-  expect(window.location.href).not.toMatch(/482915|donnu/);
-  setLocal.mockRestore();
+test('отдельного OTP UI нет: форма использует общий RegistrationOtpStep', () => {
+  expect(SOURCE).toMatch(/import RegistrationOtpStep[^;]+from '\.\/RegistrationOtpStep'/);
+  expect(SOURCE).toMatch(/<RegistrationOtpStep\s/);
+  expect(SOURCE).not.toMatch(/CodeInput/);
+  expect(SOURCE).not.toMatch(/localStorage|sessionStorage|navigate\(/);
 });
 
-test('тексты без длинного тире и без «аккаунт»', () => {
-  const { container } = render(
-    <RegistrationConfirmForm onConfirmed={jest.fn()} onRestart={jest.fn()} />,
-  );
-  expect(container.textContent).not.toMatch(/—|аккаунт/);
+test('«Начать регистрацию заново» на шаге кода → onRestart', () => {
+  const { onRestart } = setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Начать регистрацию заново' }));
+  expect(onRestart).toHaveBeenCalledTimes(1);
 });

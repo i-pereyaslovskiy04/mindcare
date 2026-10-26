@@ -1,5 +1,6 @@
 import {
-  AUTH_TABS, authEntryState, authRequestFrom, DEFAULT_MESSAGE_TONE, safeMessageTone,
+  AUTH_TABS, authEntryState, authRequestFrom, DEFAULT_MESSAGE_TONE, registrationReferenceFrom,
+  safeMessageTone,
 } from './authEntry';
 import { fragmentTone } from './oauthCallback';
 
@@ -52,4 +53,26 @@ describe('шаг подтверждения регистрации (confirm)', (
     expect(authEntryState('admin')).toEqual({ openAuth: 'login' });
     expect(AUTH_TABS).toEqual(['login', 'register']);
   });
+});
+
+// ── reference продолжения регистрации из fragment ссылки ────────────────────
+
+const REF = '8a62d590-71a1-4b17-90f7-4a5ff0c9d782';
+
+test('registrationReferenceFrom: #r=<UUIDv4> → reference в нижнем регистре', () => {
+  expect(registrationReferenceFrom(`#r=${REF}`)).toBe(REF);
+  expect(registrationReferenceFrom(`r=${REF}`)).toBe(REF);
+  expect(registrationReferenceFrom(`#r=${REF.toUpperCase()}`)).toBe(REF);
+  expect(registrationReferenceFrom(`#x=1&r=${REF}`)).toBe(REF);
+});
+
+test('registrationReferenceFrom: иное → null', () => {
+  for (const bad of [
+    '', '#', '#r=', '#r=not-a-uuid', `#ref=${REF}`, `#r=${REF}x`,
+    '#r=8a62d590-71a1-1b17-90f7-4a5ff0c9d782',          // не v4
+    '#r=00000000-0000-0000-0000-000000000000',
+    null, undefined, 42, {},
+  ]) {
+    expect(registrationReferenceFrom(bad)).toBeNull();
+  }
 });

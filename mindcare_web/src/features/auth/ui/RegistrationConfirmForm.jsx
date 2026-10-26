@@ -1,113 +1,101 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import styles from './AuthModal.module.css';
-import CodeInput from '../../../components/CodeInput/CodeInput';
 import { registerConfirm } from '../../../api/auth.api';
-import { EMPTY_CODE } from './RegistrationOtpStep';
-
-const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+import RegistrationOtpStep, { EMPTY_CODE, OTP_STATUS } from './RegistrationOtpStep';
 
 export const CONFIRM_FALLBACK_ERROR = 'Не удалось подтвердить регистрацию. Попробуйте снова.';
 
+export const REFERENCE_MISSING_MESSAGE =
+  'Эта ссылка не содержит данных для продолжения регистрации. Начните регистрацию заново.';
+export const REFERENCE_INVALID_MESSAGE =
+  'Ссылка недействительна или срок её действия истёк. Начните регистрацию заново.';
+export const CODE_EXPIRED_MESSAGE = 'Срок действия кода истёк. Начните регистрацию заново.';
+export const ATTEMPTS_EXHAUSTED_MESSAGE =
+  'Попытки ввода кода исчерпаны. Начните регистрацию заново.';
+
+// Машинные коды backend, после которых этим кодом регистрацию не завершить:
+// остаётся только начать её заново. Состояние выбирается по code, не по тексту.
+const TERMINAL_MESSAGES = Object.freeze({
+  registration_reference_invalid: REFERENCE_INVALID_MESSAGE,
+  otp_expired: CODE_EXPIRED_MESSAGE,
+  otp_attempts_exhausted: ATTEMPTS_EXHAUSTED_MESSAGE,
+});
+
+function readableError(err) {
+  const m = err?.message;
+  return typeof m === 'string' && m && !/^HTTP \d+$/.test(m) ? m : CONFIRM_FALLBACK_ERROR;
+}
+
 /**
- * «Подтверждение регистрации» без исходной вкладки: пользователь пришёл по
- * кнопке «Продолжить регистрацию» из письма (/register/confirm) или после
- * перезагрузки и вводит email и код сам. Тот же POST /api/auth/register/confirm,
- * что у обычного шага кода (backend подтверждает по email + код).
+ * «Подтверждение регистрации» по ссылке из письма (/register/confirm#r=<uuid>):
+ * тонкий controller над общим RegistrationOtpStep. Пользователь вводит ТОЛЬКО
+ * код: выпуск кода выбирает registrationReference (из fragment ссылки,
+ * разбирает владелец), email не нужен.
  *
- * Пароль здесь неизвестен, поэтому автоматического входа нет: onConfirmed(email)
- * — владелец показывает вход с сообщением. Email и код живут только в state
- * этой формы: не в URL, не в localStorage/sessionStorage.
+ * Хранит только код. Reference не показывается и уходит на backend только в
+ * теле POST ({ registration_reference, code }). Пароль здесь неизвестен —
+ * автоматического входа нет: onConfirmed(email) получает email из ответа
+ * backend (только после успешной регистрации), владелец показывает вход.
  *
- * onRestart — «Начать регистрацию заново» (обычная форма регистрации): новый
- * код можно получить только через неё, register/init требует имя и пароль.
+ * Нет reference (старое письмо, обрезанная ссылка) или он недействителен,
+ * код истёк, попытки исчерпаны — экран с объяснением и одним действием
+ * «Начать регистрацию заново» (onRestart). Повторной отправки по reference
+ * нет: новый код даёт только обычная форма регистрации.
  */
-export default function RegistrationConfirmForm({ onConfirmed, onRestart }) {
-  const [email, setEmail] = useState('');
+export default function RegistrationConfirmForm({ registrationReference, onConfirmed, onRestart }) {
   const [code, setCode] = useState(EMPTY_CODE);
-  const [emailError, setEmailError] = useState(false);
-  const [codeError, setCodeError] = useState(false);
-  const [apiError, setApiError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState(OTP_STATUS.READY);
+  const [terminal, setTerminal] = useState(null);   // { message, announce }
+  const confirming = useRef(false);
 
-  const codeComplete = code.every((d) => d !== '');
+  if (!registrationReference || terminal) {
+    const message = terminal?.message ?? REFERENCE_MISSING_MESSAGE;
+    return (
+      <div className={`${styles.authPanel} ${styles.active}`}>
+        <h2 className={styles.stepTitle}>Подтверждение регистрации</h2>
+        <p className={styles.stepDesc} role={terminal?.announce ? 'alert' : undefined}>
+          {message}
+        </p>
+        <button type="button" className={styles.authBtn} onClick={onRestart}>
+          Начать регистрацию заново
+        </button>
+      </div>
+    );
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setApiError('');
-    const emailOk = isEmail(email.trim());
-    setEmailError(!emailOk);
-    setCodeError(!codeComplete);
-    if (!emailOk || !codeComplete) return;
-
-    setLoading(true);
+  const handleConfirm = async (digits) => {
+    const value = digits.join('');
+    if (value.length < 6 || confirming.current) return;
+    confirming.current = true;
+    setError('');
+    setStatus(OTP_STATUS.SUBMITTING);
     try {
-      const confirmedEmail = email.trim();
-      await registerConfirm({ email: confirmedEmail, code: code.join('') });
-      onConfirmed(confirmedEmail);
+      const data = await registerConfirm({ registrationReference, code: value });
+      onConfirmed(typeof data?.email === 'string' ? data.email : '');
     } catch (err) {
-      const m = err?.message;
-      setApiError(typeof m === 'string' && m && !/^HTTP \d+$/.test(m) ? m : CONFIRM_FALLBACK_ERROR);
+      const terminalMessage = TERMINAL_MESSAGES[err?.code];
+      if (terminalMessage) {
+        setTerminal({ message: terminalMessage, announce: true });
+        return;
+      }
+      setError(readableError(err));
       setCode(EMPTY_CODE);
+      setStatus(OTP_STATUS.READY);
     } finally {
-      setLoading(false);
+      confirming.current = false;
     }
   };
 
   return (
-    <form className={`${styles.authPanel} ${styles.active}`} onSubmit={handleSubmit} noValidate>
-      <h2 className={styles.stepTitle}>Подтверждение регистрации</h2>
-      <p className={styles.stepDesc}>
-        Введите email, который указали при регистрации, и код из письма.
-      </p>
-
-      <div className={`${styles.authField} ${emailError ? styles.hasErr : ''}`}>
-        <label htmlFor="rc-email">Email</label>
-        <input
-          type="email"
-          id="rc-email"
-          placeholder="Введите email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => { setEmail(e.target.value); setApiError(''); }}
-          onBlur={() => setEmailError(Boolean(email) && !isEmail(email.trim()))}
-          className={emailError ? styles.err : email && isEmail(email.trim()) ? styles.ok : ''}
-          aria-invalid={emailError ? 'true' : undefined}
-          aria-describedby={emailError ? 'rc-email-hint' : undefined}
-        />
-        <span className={styles.authHint} id="rc-email-hint" role="alert">
-          Введите корректный email
-        </span>
-      </div>
-
-      <div className={`${styles.authField} ${codeError ? styles.hasErr : ''}`}>
-        {/* Видимая подпись; доступное имя у группы цифр CodeInput — то же. */}
-        <span className={styles.fieldLabel} aria-hidden="true">Код подтверждения</span>
-        <CodeInput
-          value={code}
-          onChange={(next) => { setCode(next); setCodeError(false); setApiError(''); }}
-          error={codeError || Boolean(apiError)}
-        />
-        <span className={styles.authHint} id="rc-code-hint" role="alert">
-          Введите 6 цифр из письма
-        </span>
-      </div>
-
-      {apiError && (
-        <div className={styles.apiError} role="alert">{apiError}</div>
-      )}
-
-      <button type="submit" className={styles.authBtn} disabled={loading}>
-        {loading ? 'Проверяем…' : 'Подтвердить регистрацию'}
-      </button>
-
-      <p className={styles.stepDesc}>
-        Код истёк или письмо не пришло? Заполните форму регистрации ещё раз.
-      </p>
-      <div className={styles.otpAux}>
-        <button type="button" className={styles.ghost} onClick={onRestart} disabled={loading}>
-          Начать регистрацию заново
-        </button>
-      </div>
-    </form>
+    <RegistrationOtpStep
+      description="Введите 6-значный код из письма."
+      code={code}
+      onCodeChange={(next) => { setCode(next); setError(''); }}
+      error={error}
+      onConfirm={handleConfirm}
+      status={status}
+      secondaryAction={{ label: 'Начать регистрацию заново', onClick: onRestart }}
+    />
   );
 }

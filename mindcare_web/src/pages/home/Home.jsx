@@ -6,9 +6,11 @@ import Hero from './components/Hero';
 import QuickActions from './components/QuickActions';
 import NewsSection from '../../features/news/components/NewsSection';
 import Footer from '../../components/Footer/Footer';
-import AuthModal from '../../features/auth/ui/AuthModal';
+import AuthModal, { REGISTRATION_CONFIRMED_MESSAGE } from '../../features/auth/ui/AuthModal';
 import CookieBanner from '../../components/CookieBanner/CookieBanner';
-import { AUTH_CONFIRM, authEntryState, authRequestFrom } from '../../features/auth/lib/authEntry';
+import {
+  AUTH_CONFIRM, authEntryState, authRequestFrom, registrationReferenceFrom,
+} from '../../features/auth/lib/authEntry';
 
 // Router-state контракт ({ openAuth, message?, messageTone? }) и его
 // валидация — features/auth/lib/authEntry.js. Пишут его guards, истечение
@@ -22,31 +24,51 @@ import { AUTH_CONFIRM, authEntryState, authRequestFrom } from '../../features/au
 const CLOSED = { open: false, tab: 'login', message: '', messageTone: 'info' };
 
 // Шаги модалки, которые задаёт сам маршрут (адрес не меняется и переживает F5):
-// /register/confirm → «Подтверждение регистрации» (кнопка из письма).
+// /register/confirm#r=<reference> → «Подтверждение регистрации» (ссылка из письма).
 const ROUTE_AUTH = new Set([AUTH_CONFIRM]);
 
 /**
  * routeAuth — шаг AuthModal, заданный маршрутом (`/register/confirm` →
  * 'confirm'). В отличие от одноразового router state он не стирается: адрес
- * остаётся, и перезагрузка снова открывает тот же шаг. Закрытие модалки на
- * таком маршруте уводит на `/` (replace).
+ * вместе с fragment (`#r=<reference>`) остаётся, и перезагрузка снова
+ * открывает тот же шаг. Явная ссылка из письма важнее незавершённой
+ * регистрации через провайдера: та на этом маршруте не показывается.
+ * Уход с адреса ссылки — replace на `/`: закрытие модалки, «Начать
+ * регистрацию заново» (вкладка «Регистрация») и успешное подтверждение
+ * («Вход» с подставленным email из памяти AuthContext).
  */
 export default function Home({ routeAuth = null }) {
   const location = useLocation();
   const {
     loading, isAuthenticated, socialRegistration, clearSocialRegistration,
+    registeredEmail, rememberRegisteredEmail, clearRegisteredEmail,
   } = useAuth();
-  const social = socialRegistration ?? null;
   const navigate = useNavigate();
 
   const request = authRequestFrom(location.state);
   const routeTab = ROUTE_AUTH.has(routeAuth) ? routeAuth : null;
+  const social = routeTab ? null : (socialRegistration ?? null);
+  const registrationReference = routeTab === AUTH_CONFIRM
+    ? registrationReferenceFrom(location.hash)
+    : null;
 
   const [auth, setAuth] = useState(() => {
     if (request) return { open: true, ...request };
     if (routeTab) return { ...CLOSED, open: true, tab: routeTab };
+    // Регистрация только что подтверждена по ссылке: вход с этим email.
+    if (registeredEmail) {
+      return {
+        open: true, tab: 'login', message: REGISTRATION_CONFIRMED_MESSAGE,
+        messageTone: 'info', email: registeredEmail,
+      };
+    }
     return CLOSED;
   });
+
+  // Email передан один раз: после применения на главной он не нужен.
+  useEffect(() => {
+    if (registeredEmail && !routeTab) clearRegisteredEmail();
+  }, [registeredEmail, routeTab, clearRegisteredEmail]);
 
   // Новая навигация с openAuth, когда Home уже смонтирован (например, guard
   // вернул на `/` с открытой главной): применяется во время рендера по ключу
@@ -60,11 +82,15 @@ export default function Home({ routeAuth = null }) {
   // Router state одноразовый: очищаем его через роутер (replace), чтобы
   // «назад»/обновление страницы не открывали модалку повторно. После очистки
   // request === null, поэтому эффект не зацикливается.
+  // Fragment сохраняется: на /register/confirm в нём reference из ссылки.
   const hasRequest = request !== null;
   useEffect(() => {
     if (!hasRequest) return;
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
-  }, [hasRequest, location.key, location.pathname, location.search, navigate]);
+    navigate(
+      `${location.pathname}${location.search}${location.hash ?? ''}`,
+      { replace: true, state: null },
+    );
+  }, [hasRequest, location.key, location.pathname, location.search, location.hash, navigate]);
 
   const handleOpenAuth = () => {
     if (isAuthenticated) return;
@@ -90,6 +116,16 @@ export default function Home({ routeAuth = null }) {
       ...authRequestFrom(authEntryState(exit?.tab, exit?.message, exit?.messageTone)),
     });
   };
+  // Ссылка из письма: регистрация подтверждена — адрес ссылки больше не нужен,
+  // на главной откроется вход с этим email (передача только через память).
+  const handleRegistrationConfirmed = (email) => {
+    rememberRegisteredEmail(email);
+    navigate('/', { replace: true });
+  };
+  // «Начать регистрацию заново»: обычная форма регистрации на главной.
+  const handleRegistrationRestart = () => {
+    navigate('/', { replace: true, state: authEntryState('register') });
+  };
   // Кабинет выбирает DashboardRedirect (multi-role: chooser/activeRole).
   const handleGoToDashboard = () => navigate('/dashboard');
 
@@ -111,6 +147,10 @@ export default function Home({ routeAuth = null }) {
           messageTone={auth.messageTone}
           social={social}
           onSocialExit={handleSocialExit}
+          registrationReference={registrationReference}
+          onRegistrationConfirmed={routeTab ? handleRegistrationConfirmed : undefined}
+          onRegistrationRestart={routeTab ? handleRegistrationRestart : undefined}
+          loginEmail={auth.email ?? ''}
         />
       )}
       <CookieBanner />

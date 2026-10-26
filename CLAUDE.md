@@ -466,11 +466,23 @@ Frontend: `npm test -- --watchAll=false`, `npm run lint`, `npm run build`.
 Регистрация:
 POST /api/auth/register/init  → OTP на email
 POST /api/auth/register/confirm → создаёт user + consent_records
-  (email + код; тот же endpoint у страницы /register/confirm — кнопка
-  «Продолжить регистрацию» в письме: главная + AuthModal на том же адресе,
-  переживает F5; ввод email и кода без исходной вкладки, после успеха —
-  «Вход» без автовхода; ссылки в письмах —
-  от FRONTEND_PUBLIC_URL, см. deploy/README.md «Окружения и адреса»)
+  Ровно один идентификатор выпуска кода (extra=forbid, код — 6 ASCII-цифр):
+  {email, code}                  — шаг кода в исходной вкладке → {message},
+                                   затем автовход;
+  {registration_reference, code} — ссылка «Продолжить регистрацию →» из письма
+                                   (/register/confirm#r=<uuid>: главная +
+                                   AuthModal, только код, переживает F5)
+                                   → {message, email}; после успеха replace
+                                   на «/» и «Вход» с email из памяти, без
+                                   автовхода.
+  registration_reference = otp_verifications.id (UUIDv4; без миграции):
+  каждый успешный init — новая запись/UUID, прежний выпуск не действует;
+  cooldown/rollback прежний выпуск не меняют. Выпуск и confirm обычной
+  регистрации сериализованы advisory lock по email (+ FOR UPDATE записи).
+  Ошибки — {detail, code}: registration_reference_invalid / otp_invalid /
+  otp_expired / otp_attempts_exhausted. Reference — только во fragment и в
+  теле POST; GET ссылки ничего не подтверждает. Ссылки в письмах — от
+  FRONTEND_PUBLIC_URL, см. deploy/README.md «Окружения и адреса»
 
 Логин:
 POST /api/auth/login → session_token в ответе
@@ -564,8 +576,10 @@ Conventional Commits:
 - ~~Password reset confirm / change password не атомарны (пароль изменён, старые сессии живы)~~ —
   закрыто (Stage 31m-fix-b3): password_hash + revoke sessions (+ consume OTP) в одной транзакции;
   system-уведомление soft-fail после commit
-- Остаётся pending (deferred): OTP concurrency / `SELECT … FOR UPDATE`;
-  transactional outbox для post-commit уведомлений
+- OTP concurrency: выпуск кода (все потоки) и confirm обычной регистрации
+  сериализованы advisory lock по email + FOR UPDATE записи; confirm через
+  провайдера — FOR UPDATE. Остаётся pending (deferred): password reset confirm
+  без блокировки записи OTP; transactional outbox для post-commit уведомлений
 - ~~`_get_primary_role` read-fallback `"student"`~~ — закрыто в ADR-018:
   отсутствие активных ролей возвращает `role=null`, доступ отклоняется; источник
   истины — активные `roles[]`

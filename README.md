@@ -751,7 +751,7 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 - request-scoped DB session (debounce `touch_session` закрыт в Stage 26);
 - `target_user_id` в auth_log для поиска операций по субъекту;
 - retention policy для chat_messages (открытый продуктовый вопрос);
-- OTP concurrency / row locking: атомарные confirm-flows не берут `SELECT … FOR UPDATE`, при гонке двух confirm возможен двойной проход валидации (deferred);
+- OTP concurrency / row locking: выпуск кода и confirm обычной регистрации сериализованы (advisory lock по email + FOR UPDATE); password reset confirm запись OTP не блокирует, при гонке двух confirm возможен двойной проход валидации (deferred);
 - transactional outbox для гарантированной доставки post-commit уведомлений (deferred);
 - UI просмотра `user_legal_basis_records` в карточке пользователя админки.
 

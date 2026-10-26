@@ -367,56 +367,117 @@ describe('регистрация через провайдера внутри Au
   });
 });
 
-// ── /register/confirm: шаг подтверждения задан маршрутом ─────────────────────
+// ── /register/confirm#r=<reference>: шаг подтверждения задан маршрутом ───────
 
+const REF = '8a62d590-71a1-4b17-90f7-4a5ff0c9d782';
+const REG_EMAIL = 'student@donnu.ru';
 const confirmHeading = () => screen.queryByRole('heading', { name: 'Подтверждение регистрации' });
+const codeGroup = () => screen.queryByRole('group', { name: 'Код подтверждения' });
 
-function atConfirmRoute(key = 'c1') {
-  mockLocation = { pathname: '/register/confirm', search: '', key, state: null };
+function atConfirmRoute({ key = 'c1', hash = `#r=${REF}`, state = null } = {}) {
+  mockLocation = { pathname: '/register/confirm', search: '', hash, key, state };
 }
 
-test('прямое открытие /register/confirm → шаг подтверждения, адрес не меняется', async () => {
+function typeCode(digits) {
+  within(codeGroup()).getAllByRole('textbox').forEach((input, i) => {
+    fireEvent.change(input, { target: { value: digits[i] } });
+  });
+}
+
+function mockAuthHandoff(over = {}) {
+  const handoff = {
+    rememberRegisteredEmail: jest.fn(),
+    clearRegisteredEmail: jest.fn(),
+    registeredEmail: null,
+    ...over,
+  };
+  AuthContext.useAuth.mockReturnValue({
+    loading: false, isAuthenticated: false, login: jest.fn(), ...handoff,
+  });
+  return handoff;
+}
+
+test('прямое открытие ссылки → шаг кода без поля email, адрес не меняется', async () => {
   atConfirmRoute();
   render(<Home routeAuth="confirm" />);
   await settled();
   expect(dialog()).toBeInTheDocument();
   expect(confirmHeading()).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Подтвердить регистрацию' })).toBeInTheDocument();
+  expect(codeGroup()).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: 'Email' })).toBeNull();
   expect(screen.queryByRole('tablist')).toBeNull();
-  // Ни редиректа, ни очистки state: адрес остаётся /register/confirm.
+  expect(dialog()).not.toHaveTextContent(REF);
+  // Ни редиректа, ни очистки: адрес с fragment остаётся.
   expect(mockNavigate).not.toHaveBeenCalled();
 });
 
-test('повторное открытие маршрута (F5) снова показывает шаг подтверждения', async () => {
-  atConfirmRoute('c1');
+test('повторное открытие ссылки (F5) снова показывает шаг кода', async () => {
+  atConfirmRoute({ key: 'c1' });
   const { unmount } = render(<Home routeAuth="confirm" />);
   await settled();
-  expect(confirmHeading()).toBeInTheDocument();
+  expect(codeGroup()).toBeInTheDocument();
   unmount();
 
-  // Перезагрузка: новый монтаж той же страницы, без React state и router state.
-  atConfirmRoute('c2');
+  // Перезагрузка: новый монтаж той же страницы, fragment в адресе тот же.
+  atConfirmRoute({ key: 'c2' });
   render(<Home routeAuth="confirm" />);
   await settled();
-  expect(confirmHeading()).toBeInTheDocument();
+  expect(codeGroup()).toBeInTheDocument();
   expect(mockNavigate).not.toHaveBeenCalled();
 });
 
-test('введённые email и код не попадают в адрес', async () => {
+test('код уходит в POST { registrationReference, code }; reference не в storage и не в адресе', async () => {
+  const setItem = jest.spyOn(Storage.prototype, 'setItem');
+  mockAuthHandoff();
+  authApi.registerConfirm.mockReturnValue(new Promise(() => {}));
   atConfirmRoute();
   render(<Home routeAuth="confirm" />);
   await settled();
-  fireEvent.change(screen.getByLabelText('Email', { selector: '#rc-email' }), {
-    target: { value: 'student@donnu.ru' },
-  });
-  const group = screen.getByRole('group', { name: 'Код подтверждения' });
-  within(group).getAllByRole('textbox').forEach((input, i) => {
-    fireEvent.change(input, { target: { value: '482915'[i] } });
-  });
+  typeCode('012345');
+  await waitFor(() => expect(authApi.registerConfirm).toHaveBeenCalledWith({
+    registrationReference: REF, code: '012345',
+  }));
+  expect(authApi.registerConfirm).toHaveBeenCalledTimes(1);
+  expect(setItem.mock.calls.flat().join(' ')).not.toMatch(new RegExp(`${REF}|012345`));
   expect(mockNavigate).not.toHaveBeenCalled();
-  expect(mockLocation.pathname).toBe('/register/confirm');
-  expect(mockLocation.search).toBe('');
-  expect(window.location.href).not.toMatch(/donnu|482915/);
+  setItem.mockRestore();
+});
+
+test('успех → email в память (AuthContext) и replace на главную', async () => {
+  const handoff = mockAuthHandoff();
+  authApi.registerConfirm.mockResolvedValue({ message: 'Регистрация завершена', email: REG_EMAIL });
+  atConfirmRoute();
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  typeCode('482915');
+  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true }));
+  expect(handoff.rememberRegisteredEmail).toHaveBeenCalledWith(REG_EMAIL);
+  // Email не передаётся ни через router state, ни через адрес.
+  expect(JSON.stringify(mockNavigate.mock.calls)).not.toContain(REG_EMAIL);
+  expect(handoff.clearRegisteredEmail).not.toHaveBeenCalled();
+});
+
+test('главная после успеха → «Вход» с сообщением и подставленным email; передача одноразовая', async () => {
+  const handoff = mockAuthHandoff({ registeredEmail: REG_EMAIL });
+  render(<Home />);
+  await settled();
+  expect(selectedTab()).toHaveTextContent('Вход');
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Регистрация завершена. Войдите в свою учётную запись.',
+  );
+  const loginPanel = screen.getByRole('tabpanel', { name: 'Вход' });
+  expect(within(loginPanel).getByLabelText('Email')).toHaveValue(REG_EMAIL);
+  expect(within(loginPanel).getByLabelText('Пароль')).toHaveValue('');
+  expect(handoff.clearRegisteredEmail).toHaveBeenCalled();
+});
+
+test('«Начать регистрацию заново» → replace на главную с вкладкой «Регистрация»', async () => {
+  atConfirmRoute();
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  fireEvent.click(screen.getByRole('button', { name: 'Начать регистрацию заново' }));
+  expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true, state: { openAuth: 'register' } });
 });
 
 test('закрытие шага подтверждения уводит на главную (replace)', async () => {
@@ -425,6 +486,47 @@ test('закрытие шага подтверждения уводит на г�
   await settled();
   fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
   expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+});
+
+test.each([
+  ['без fragment', ''],
+  ['без r', '#x=1'],
+  ['не UUID', '#r=not-a-uuid'],
+  ['не UUIDv4', '#r=8a62d590-71a1-1b17-90f7-4a5ff0c9d782'],
+])('ссылка %s → объяснение и «Начать регистрацию заново», без поля email и кода', async (_, hash) => {
+  atConfirmRoute({ hash });
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  expect(screen.getByText(
+    'Эта ссылка не содержит данных для продолжения регистрации. Начните регистрацию заново.',
+  )).toBeInTheDocument();
+  expect(codeGroup()).toBeNull();
+  expect(screen.queryByRole('textbox', { name: 'Email' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Начать регистрацию заново' })).toBeInTheDocument();
+});
+
+test('очистка router state сохраняет fragment ссылки', async () => {
+  atConfirmRoute({ state: { openAuth: 'login' } });
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  expect(mockNavigate).toHaveBeenCalledWith(
+    `/register/confirm#r=${REF}`, { replace: true, state: null },
+  );
+});
+
+test('явная ссылка важнее незавершённой регистрации через провайдера', async () => {
+  AuthContext.useAuth.mockReturnValue({
+    loading: false, isAuthenticated: false, login: jest.fn(),
+    socialRegistration: Object.freeze({ ticket: 'tkt_HIDDEN_0123456789abcdefghijk', provider: 'vk', emailStep: true }),
+    clearSocialRegistration: jest.fn(),
+  });
+  atConfirmRoute();
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  expect(codeGroup()).toBeInTheDocument();
+  expect(screen.getByTestId('auth-modal-body')).toHaveAttribute('data-mode', 'confirm');
+  expect(screen.queryByRole('heading', { name: 'Почта для регистрации' })).toBeNull();
+  expect(authApi.oauthRegistrationPreview).not.toHaveBeenCalled();
 });
 
 test('главная без routeAuth и router state — модалка закрыта (обычный /)', async () => {

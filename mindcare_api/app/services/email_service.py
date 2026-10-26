@@ -10,7 +10,7 @@ import html
 from datetime import datetime, timezone
 from typing import Optional
 
-from app.core.public_urls import LOGIN_PATH, REGISTER_CONFIRM_PATH, frontend_url
+from app.core.public_urls import LOGIN_PATH, frontend_url, registration_continue_path
 from app.services._smtp import send_email
 from app.services.email_brand import (
     ACCENT,
@@ -20,7 +20,6 @@ from app.services.email_brand import (
     CODE_BG,
     CODE_BORDER,
     CODE_TEXT,
-    CTA_TEXT,
     HEADER_BG,
     HEADER_FG,
     HEADER_SUB,
@@ -38,7 +37,7 @@ from app.services.email_brand import (
 # фиксированный бренд email_brand, подставленный f-строкой при импорте
 # модуля (НЕ зависит от runtime/пользовательской темы).
 # Подстановка на вызов: {code}, {year}, {heading}, {description}, {cta}
-# ({cta} — кнопка перехода в сервис или пустая строка).
+# ({cta} — ссылка перехода в сервис или пустая строка).
 
 _OTP_HTML = f"""\
 <!DOCTYPE html>
@@ -174,40 +173,30 @@ _OTP_PLAIN = f"""\
 """
 
 
-# ─── Кнопка перехода в сервис (CTA) ─────────────────────────────────────────
-# Bulletproof-кнопка: таблица на всю ширину карточки (на телефоне — во всю
-# ширину экрана), фон — фирменный ACCENT, ссылка — блок внутри ячейки (вся
-# кнопка кликабельна). Под кнопкой — подсказка, куда она ведёт.
+# ─── Ссылка перехода в сервис (CTA) ─────────────────────────────────────────
+# Компактная текстовая ссылка под кодом: подсказка, куда она ведёт, и обычный
+# <a> фирменного цвета ACCENT с подчёркиванием. Без фона, кнопки на всю
+# ширину и display:block — простые inline-стили, понятные почтовым клиентам.
+# В plain-text — полный адрес отдельной строкой.
+
+CTA_ARROW = "\u2192"   # «→» после текста ссылки
+
 
 def _cta_html(label: str, url: str, note: str) -> str:
     href = html.escape(url, quote=True)
+    text = html.escape(f"{label} {CTA_ARROW}")
     return f"""\
-<table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="padding:0 0 12px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                           style="max-width:416px;">
-                      <tr>
-                        <td align="center" bgcolor="{ACCENT}"
-                            style="background-color:{ACCENT};border-radius:10px;">
-                          <a href="{href}" target="_blank" rel="noopener noreferrer"
-                             style="display:block;padding:14px 24px;font-size:15px;
-                                    font-weight:bold;line-height:1.3;color:{CTA_TEXT};
-                                    text-decoration:none;border-radius:10px;">{label}</a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:0 0 24px;font-size:13px;color:{TEXT_MUTED};
-                        line-height:1.6;text-align:center;">
+<p style="margin:0 0 6px;font-size:14px;color:{TEXT_MUTED};line-height:1.6;">
                 {note}
+              </p>
+              <p style="margin:0 0 24px;font-size:16px;line-height:1.5;">
+                <a href="{href}" target="_blank" rel="noopener noreferrer"
+                   style="color:{ACCENT};font-weight:bold;text-decoration:underline;">{text}</a>
               </p>"""
 
 
 def _cta_plain(label: str, url: str, note: str) -> str:
-    return f"\n{label}: {url}\n{note}\n"
+    return f"\n{note}\n{label} {CTA_ARROW}\n{url}\n"
 
 
 # ─── Internal helper ─────────────────────────────────────────────────────────
@@ -223,9 +212,9 @@ def _send_otp_email(
     cta_path: Optional[str] = None,
     cta_note: str = "",
 ) -> None:
-    """cta_label + cta_path — кнопка перехода в сервис ({FRONTEND_PUBLIC_URL}
+    """cta_label + cta_path — ссылка перехода в сервис ({FRONTEND_PUBLIC_URL}
     + путь, без email/кода/пароля в ссылке). Если FRONTEND_PUBLIC_URL не задан
-    корректно, письмо уходит без кнопки, а не со сломанной ссылкой."""
+    корректно, письмо уходит без ссылки, а не со сломанной."""
     year = datetime.now(timezone.utc).year
     cta_url = frontend_url(cta_path) if (cta_label and cta_path) else None
     cta_html = _cta_html(cta_label, cta_url, cta_note) if cta_url else ""
@@ -251,9 +240,7 @@ def _send_otp_email(
 
 
 CONTINUE_REGISTRATION_LABEL = "Продолжить регистрацию"
-CONTINUE_REGISTRATION_NOTE = (
-    "Откроется страница подтверждения: введите email и этот код."
-)
+CONTINUE_REGISTRATION_NOTE = "Откройте страницу и введите код из этого письма."
 LOGIN_LABEL = "Войти в сервис"
 LOGIN_NOTE = "Войдите с этим email и временным паролем."
 
@@ -262,13 +249,17 @@ LOGIN_NOTE = "Войдите с этим email и временным парол�
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 def send_registration_otp(
-    to_email: str, code: str, *, with_continue_link: bool = False,
+    to_email: str, code: str, *, registration_reference: Optional[str] = None,
 ) -> None:
-    """with_continue_link=True — регистрация по email и паролю: кнопка
-    «Продолжить регистрацию» ведёт на /register/confirm (ввод email и кода
-    без исходной вкладки). Регистрация через Яндекс/VK зовёт без кнопки: её
-    подтверждение требует ticket из памяти вкладки, /register/confirm его
-    не продолжит."""
+    """registration_reference — регистрация по email и паролю: ссылка
+    «Продолжить регистрацию →» ведёт на /register/confirm#r=<reference> ЭТОГО
+    выпуска кода (там вводится только код, email не нужен). Регистрация через
+    Яндекс/VK зовёт без reference и без ссылки: её подтверждение требует
+    ticket из памяти вкладки, /register/confirm его не продолжит."""
+    continue_path = (
+        registration_continue_path(registration_reference)
+        if registration_reference is not None else None
+    )
     _send_otp_email(
         to_email=to_email,
         code=code,
@@ -279,8 +270,8 @@ def send_registration_otp(
             "Он действителен&nbsp;<strong>10&nbsp;минут</strong>."
         ),
         description_plain="Введите код ниже, чтобы завершить создание учётной записи.",
-        cta_label=CONTINUE_REGISTRATION_LABEL if with_continue_link else None,
-        cta_path=REGISTER_CONFIRM_PATH if with_continue_link else None,
+        cta_label=CONTINUE_REGISTRATION_LABEL if continue_path else None,
+        cta_path=continue_path,
         cta_note=CONTINUE_REGISTRATION_NOTE,
     )
 
