@@ -3,21 +3,24 @@
  *
  * Route guards:
  *   <PrivateRoute>   — requires authentication, redirects to / (with login modal) when unauthenticated.
- *   <LegacyAuthRedirect> — /login, /register и /register/confirm: replace-редирект
- *                      на / с AuthModal на нужной вкладке или шаге (отдельных
- *                      страниц входа нет). /register/confirm — кнопка
- *                      «Продолжить регистрацию» из письма: ввод email и кода.
+ *   <LegacyAuthRedirect> — /login и /register: replace-редирект на / с AuthModal
+ *                      на нужной вкладке (отдельных страниц входа нет).
+ *   <GuestOnly>      — /register/confirm (кнопка «Продолжить регистрацию» из
+ *                      письма): та же главная с AuthModal на шаге «Подтверждение
+ *                      регистрации»; адрес остаётся и переживает F5; вошедший
+ *                      пользователь идёт в кабинет.
  *   <RoleRoute>      — requires specific role(s), redirects to /profile on mismatch.
  *
  * Public routes: /, /about, /services, /news, /materials, /auth/callback, /health
- * Compatibility redirects: /login, /register, /register/confirm → / + AuthModal
+ * Compatibility redirects: /login, /register → / + AuthModal
+ * Guest route: /register/confirm → главная + AuthModal (шаг подтверждения)
  * Private routes: /dashboard, /profile
  * Role routes:   /student/*, /psychologist/*, /supervisor/*, /admin/*
  */
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import {
-  PrivateRoute, RoleRoute, DashboardRedirect, LegacyAuthRedirect,
+  PrivateRoute, RoleRoute, DashboardRedirect, LegacyAuthRedirect, GuestOnly,
 } from './guards';
 
 // ── Public pages ──────────────────────────────────────────────────────────────
@@ -114,7 +117,7 @@ export default function AppRouter() {
       {/* Auth: канонический UI — / + AuthModal; эти адреса — только совместимость */}
       <Route path="/login"    element={<LegacyAuthRedirect tab="login" />} />
       <Route path="/register" element={<LegacyAuthRedirect tab="register" />} />
-      <Route path="/register/confirm" element={<LegacyAuthRedirect tab="confirm" />} />
+      <Route path="/register/confirm" element={<GuestOnly><Home routeAuth="confirm" /></GuestOnly>} />
       {/* Публичный: завершение входа через внешний провайдер (Stage Social Auth 3B) */}
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 

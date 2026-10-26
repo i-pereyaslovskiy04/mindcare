@@ -64,6 +64,18 @@ export function DashboardRedirect() {
 }
 
 /**
+ * Маршрут только для гостя (без отдельной страницы): вошедший пользователь
+ * идёт в кабинет, остальным рендерится children (главная с AuthModal). Пока
+ * сессия проверяется, children рендерятся — Home сама не показывает модалку
+ * до окончания загрузки.
+ */
+export function GuestOnly({ children }) {
+  const { user, loading } = useAuth();
+  if (!loading && user) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
+/**
  * Совместимость для `/login` и `/register` (закладки, внешние и старые
  * внутренние ссылки, история браузера). Отдельных страниц входа больше нет:
  * канонический UI — главная `/` + AuthModal. Редирект — replace, вкладка —

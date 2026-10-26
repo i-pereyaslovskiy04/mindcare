@@ -366,3 +366,77 @@ describe('регистрация через провайдера внутри Au
     expect(authApi.oauthRegistrationPreview).not.toHaveBeenCalled();
   });
 });
+
+// ── /register/confirm: шаг подтверждения задан маршрутом ─────────────────────
+
+const confirmHeading = () => screen.queryByRole('heading', { name: 'Подтверждение регистрации' });
+
+function atConfirmRoute(key = 'c1') {
+  mockLocation = { pathname: '/register/confirm', search: '', key, state: null };
+}
+
+test('прямое открытие /register/confirm → шаг подтверждения, адрес не меняется', async () => {
+  atConfirmRoute();
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  expect(dialog()).toBeInTheDocument();
+  expect(confirmHeading()).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Подтвердить регистрацию' })).toBeInTheDocument();
+  expect(screen.queryByRole('tablist')).toBeNull();
+  // Ни редиректа, ни очистки state: адрес остаётся /register/confirm.
+  expect(mockNavigate).not.toHaveBeenCalled();
+});
+
+test('повторное открытие маршрута (F5) снова показывает шаг подтверждения', async () => {
+  atConfirmRoute('c1');
+  const { unmount } = render(<Home routeAuth="confirm" />);
+  await settled();
+  expect(confirmHeading()).toBeInTheDocument();
+  unmount();
+
+  // Перезагрузка: новый монтаж той же страницы, без React state и router state.
+  atConfirmRoute('c2');
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  expect(confirmHeading()).toBeInTheDocument();
+  expect(mockNavigate).not.toHaveBeenCalled();
+});
+
+test('введённые email и код не попадают в адрес', async () => {
+  atConfirmRoute();
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  fireEvent.change(screen.getByLabelText('Email', { selector: '#rc-email' }), {
+    target: { value: 'student@donnu.ru' },
+  });
+  const group = screen.getByRole('group', { name: 'Код подтверждения' });
+  within(group).getAllByRole('textbox').forEach((input, i) => {
+    fireEvent.change(input, { target: { value: '482915'[i] } });
+  });
+  expect(mockNavigate).not.toHaveBeenCalled();
+  expect(mockLocation.pathname).toBe('/register/confirm');
+  expect(mockLocation.search).toBe('');
+  expect(window.location.href).not.toMatch(/donnu|482915/);
+});
+
+test('закрытие шага подтверждения уводит на главную (replace)', async () => {
+  atConfirmRoute();
+  render(<Home routeAuth="confirm" />);
+  await settled();
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+  expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+});
+
+test('главная без routeAuth и router state — модалка закрыта (обычный /)', async () => {
+  render(<Home />);
+  await settled();
+  expect(dialog()).toBeNull();
+  expect(confirmHeading()).toBeNull();
+});
+
+test('неизвестный routeAuth модалку не открывает', async () => {
+  atConfirmRoute();
+  render(<Home routeAuth="admin" />);
+  await settled();
+  expect(dialog()).toBeNull();
+});

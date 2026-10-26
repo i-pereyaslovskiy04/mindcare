@@ -8,7 +8,7 @@ import NewsSection from '../../features/news/components/NewsSection';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 import CookieBanner from '../../components/CookieBanner/CookieBanner';
-import { authEntryState, authRequestFrom } from '../../features/auth/lib/authEntry';
+import { AUTH_CONFIRM, authEntryState, authRequestFrom } from '../../features/auth/lib/authEntry';
 
 // Router-state контракт ({ openAuth, message?, messageTone? }) и его
 // валидация — features/auth/lib/authEntry.js. Пишут его guards, истечение
@@ -21,7 +21,17 @@ import { authEntryState, authRequestFrom } from '../../features/auth/lib/authEnt
 // AuthModal открыта в social-режиме (шаг email и/или шаг кода).
 const CLOSED = { open: false, tab: 'login', message: '', messageTone: 'info' };
 
-export default function Home() {
+// Шаги модалки, которые задаёт сам маршрут (адрес не меняется и переживает F5):
+// /register/confirm → «Подтверждение регистрации» (кнопка из письма).
+const ROUTE_AUTH = new Set([AUTH_CONFIRM]);
+
+/**
+ * routeAuth — шаг AuthModal, заданный маршрутом (`/register/confirm` →
+ * 'confirm'). В отличие от одноразового router state он не стирается: адрес
+ * остаётся, и перезагрузка снова открывает тот же шаг. Закрытие модалки на
+ * таком маршруте уводит на `/` (replace).
+ */
+export default function Home({ routeAuth = null }) {
   const location = useLocation();
   const {
     loading, isAuthenticated, socialRegistration, clearSocialRegistration,
@@ -30,8 +40,13 @@ export default function Home() {
   const navigate = useNavigate();
 
   const request = authRequestFrom(location.state);
+  const routeTab = ROUTE_AUTH.has(routeAuth) ? routeAuth : null;
 
-  const [auth, setAuth] = useState(() => (request ? { open: true, ...request } : CLOSED));
+  const [auth, setAuth] = useState(() => {
+    if (request) return { open: true, ...request };
+    if (routeTab) return { ...CLOSED, open: true, tab: routeTab };
+    return CLOSED;
+  });
 
   // Новая навигация с openAuth, когда Home уже смонтирован (например, guard
   // вернул на `/` с открытой главной): применяется во время рендера по ключу
@@ -62,6 +77,8 @@ export default function Home() {
     if (social) clearSocialRegistration();
     // Закрытие сбрасывает сообщение и тон — при следующем открытии их нет.
     setAuth((prev) => ({ ...CLOSED, tab: prev.tab }));
+    // Шаг, заданный маршрутом, закрыт — адрес больше не должен его открывать.
+    if (routeTab) navigate('/', { replace: true });
   };
   // Регистрация через провайдера закончилась без аккаунта («Начать заново»
   // либо терминальная ошибка): ticket забыт, модалка остаётся открытой в

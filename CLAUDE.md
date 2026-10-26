@@ -467,8 +467,9 @@ Frontend: `npm test -- --watchAll=false`, `npm run lint`, `npm run build`.
 POST /api/auth/register/init  → OTP на email
 POST /api/auth/register/confirm → создаёт user + consent_records
   (email + код; тот же endpoint у страницы /register/confirm — кнопка
-  «Продолжить регистрацию» в письме: / + AuthModal, ввод email и кода без
-  исходной вкладки, после успеха — «Вход» без автовхода; ссылки в письмах —
+  «Продолжить регистрацию» в письме: главная + AuthModal на том же адресе,
+  переживает F5; ввод email и кода без исходной вкладки, после успеха —
+  «Вход» без автовхода; ссылки в письмах —
   от FRONTEND_PUBLIC_URL, см. deploy/README.md «Окружения и адреса»)
 
 Логин:

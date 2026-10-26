@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { render, screen } from '@testing-library/react';
 import {
-  RoleRoute, DashboardRedirect, PrivateRoute, LegacyAuthRedirect,
+  RoleRoute, DashboardRedirect, PrivateRoute, LegacyAuthRedirect, GuestOnly,
 } from './guards';
 import * as AuthContext from '../features/auth/AuthContext';
 
@@ -237,22 +237,32 @@ test('/login и /register — совместимые редиректы, отд�
 
 // ── /register/confirm: кнопка «Продолжить регистрацию» из письма ─────────────
 
-test('/register/confirm → replace на главную, шаг подтверждения регистрации', () => {
-  mockAuth({ user: null });
-  render(<LegacyAuthRedirect tab="confirm" />);
-  expect(screen.getByText('NAV:/ STATE:{"openAuth":"confirm"} REPLACE')).toBeInTheDocument();
-});
-
-test('/register/confirm зарегистрирован ровно один раз, без email и кода в адресе', () => {
+test('/register/confirm — главная с шагом подтверждения на том же адресе (без редиректа)', () => {
   expect(ROUTER_SOURCE).toMatch(
-    /<Route path="\/register\/confirm" element=\{<LegacyAuthRedirect tab="confirm" \/>\} \/>/,
+    /<Route path="\/register\/confirm" element=\{<GuestOnly><Home routeAuth="confirm" \/><\/GuestOnly>\} \/>/,
   );
   expect(ROUTER_SOURCE.match(/path="\/register\/confirm"/g)).toHaveLength(1);
+  expect(ROUTER_SOURCE).not.toMatch(/LegacyAuthRedirect tab="confirm"/);
+  // Ни параметров, ни query: email и код в адрес не попадают.
   expect(ROUTER_SOURCE).not.toMatch(/register\/confirm\/:|register\/confirm\?/);
 });
 
-test('/register/confirm для вошедшего пользователя → кабинет', () => {
+test('GuestOnly: гостю — содержимое маршрута, без редиректа (адрес сохраняется)', () => {
+  mockAuth({ user: null });
+  render(<GuestOnly><div>CONFIRM_SCREEN</div></GuestOnly>);
+  expect(screen.getByText('CONFIRM_SCREEN')).toBeInTheDocument();
+  expect(screen.queryByText(/NAV:/)).toBeNull();
+});
+
+test('GuestOnly: при загрузке сессии содержимое остаётся, без редиректа', () => {
+  mockAuth({ user: null, loading: true });
+  render(<GuestOnly><div>CONFIRM_SCREEN</div></GuestOnly>);
+  expect(screen.getByText('CONFIRM_SCREEN')).toBeInTheDocument();
+});
+
+test('GuestOnly: вошедший пользователь → кабинет', () => {
   mockAuth({ user: { roles: ['student'] } });
-  render(<LegacyAuthRedirect tab="confirm" />);
+  render(<GuestOnly><div>CONFIRM_SCREEN</div></GuestOnly>);
   expect(screen.getByText('NAV:/dashboard')).toBeInTheDocument();
+  expect(screen.queryByText('CONFIRM_SCREEN')).toBeNull();
 });
