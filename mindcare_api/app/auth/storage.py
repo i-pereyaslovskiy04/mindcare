@@ -17,11 +17,14 @@ from app.db.models import (
 )
 from app.auth.security import generate_session_token, hash_session_token
 from app.auth.errors import (
-    OtpExpiredError, OtpInvalidError, ProfileActorContextError,
+    OtpAttemptsExhaustedError, OtpExpiredError, OtpInvalidError,
+    ProfileActorContextError, RegistrationReferenceInvalidError,
 )
 # OTP-хелперы переиспользуются для атомарного confirm (один пакет app.auth,
 # цикла импортов нет: otp_service не импортирует storage).
-from app.auth.otp_service import _verify_code, MAX_ATTEMPTS, _utcnow
+from app.auth.otp_service import (
+    _verify_code, MAX_ATTEMPTS, _utcnow, lock_email_otp,
+)
 from app.core.config import SESSION_EXPIRE_DAYS
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
@@ -422,56 +425,160 @@ def enqueue_registration_invite_in_tx(db, user_id: int) -> None:
     )
 
 
+REGISTRATION_REFERENCE_INVALID_MESSAGE = (
+    "Ссылка недействительна или срок её действия истёк. "
+    "Начните регистрацию заново."
+)
+
+
+def _ordinary_registration_otp(db, email: str):
+    """
+    Актуальная запись кода ОБЫЧНОЙ регистрации для email (FOR UPDATE) или None.
+
+    Только записи с хешем пароля: запись без него - код reset или регистрации
+    через провайдера, её попытки здесь не тратятся. Если исторически осталось
+    несколько записей, выбор детерминирован - самый поздний выпуск (новые
+    выпуски дублей не создают: issue_registration_otp удаляет прежние).
+    """
+    return (
+        db.query(OtpVerification)
+        .filter(
+            OtpVerification.email == email,
+            OtpVerification.password_hash.isnot(None),
+        )
+        .order_by(
+            OtpVerification.last_sent_at.desc(),
+            OtpVerification.created_at.desc(),
+            OtpVerification.id,
+        )
+        .with_for_update()
+        .first()
+    )
+
+
+def resolve_registration_reference(reference: str) -> Optional[str]:
+    """
+    Email выпуска обычной регистрации по registration_reference
+    (otp_verifications.id) или None: запись не найдена либо это код другого
+    потока (без хеша пароля). Только чтение, без блокировок: route нужен
+    email для rate limit и аудита; авторитетная проверка - под lock в
+    register_confirm_atomic.
+    """
+    with SessionLocal() as db:
+        row = (
+            db.query(OtpVerification.email, OtpVerification.password_hash)
+            .filter(OtpVerification.id == reference)
+            .first()
+        )
+    if row is None or row.password_hash is None:
+        return None
+    return row.email
+
+
+def _lock_registration_otp(db, *, email: Optional[str], reference: Optional[str]):
+    """
+    Выбирает и блокирует запись кода обычной регистрации.
+
+    email-режим (шаг кода в исходной вкладке): lock по email, затем актуальная
+    запись с хешем пароля; нет её - OtpInvalidError.
+
+    reference-режим (ссылка из письма): email берётся из записи с этим id;
+    lock по email; ПОСЛЕ ожидания lock запись перечитывается по тому же id
+    под FOR UPDATE - её могли заменить новым выпуском или подтвердить, пока
+    шло ожидание. На другую запись этого email выбор не переключается
+    никогда. Не найдена / другой поток - RegistrationReferenceInvalidError.
+
+    Возвращает (normalized_email, record).
+    """
+    if reference is not None:
+        ref_email = resolve_registration_reference(reference)
+        if ref_email is None:
+            raise RegistrationReferenceInvalidError(REGISTRATION_REFERENCE_INVALID_MESSAGE)
+        lock_email_otp(db, ref_email)
+        record = (
+            db.query(OtpVerification)
+            .filter(OtpVerification.id == reference)
+            .with_for_update()
+            .first()
+        )
+        if (
+            record is None
+            or record.password_hash is None
+            or record.email != ref_email
+        ):
+            raise RegistrationReferenceInvalidError(REGISTRATION_REFERENCE_INVALID_MESSAGE)
+        return ref_email, record
+
+    email = normalize_email(email)
+    lock_email_otp(db, email)
+    record = _ordinary_registration_otp(db, email)
+    if record is None:
+        raise OtpInvalidError("Код не найден или уже использован")
+    return email, record
+
+
 def register_confirm_atomic(
-    email: str,
+    email: Optional[str],
     code: str,
     required_consent_types: list[str],
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    *,
+    registration_reference: Optional[str] = None,
 ) -> dict:
     """
     Атомарное подтверждение self-registration (Stage 31m-fix-b2).
+
+    Запись кода выбирается ровно одним идентификатором: email (шаг кода в
+    исходной вкладке) либо registration_reference (otp_verifications.id из
+    ссылки в письме). Выбор и блокировка - _lock_registration_otp: advisory
+    lock по email (сериализация с выпуском кода и вторым confirm) и FOR UPDATE
+    записи; запись без хеша пароля (reset / регистрация через провайдера)
+    обычным confirm не выбирается, её попытки не тратятся.
 
     В ОДНОЙ сессии и ОДНОМ финальном commit:
       1. validate OTP (без удаления, если код верный);
       2. убедиться, что все обязательные consent-политики существуют;
       3. создать нового пользователя; если email уже принадлежит любой строке
-         users (в т.ч. отключённой/soft-deleted) — AccountUnavailableError без
+         users (в т.ч. отключённой/soft-deleted) - AccountUnavailableError без
          мутаций (ADR-028: реактивацию выполняет только администратор);
       4. назначить роль student;
       5. создать все обязательные consent_records (с ip/user_agent);
       6. consume (delete) OTP;
       7. commit.
 
-    Любой сбой core-шага (2–6) поднимает исключение до commit → транзакция
-    откатывается целиком: пользователь, user_roles и consent_records не
+    Любой сбой core-шага (2-6) поднимает исключение до commit: транзакция
+    откатывается целиком, пользователь, user_roles и consent_records не
     сохраняются даже частично, а OTP НЕ потребляется (повторная попытка
     возможна тем же кодом).
 
-    OTP failure-пути (не найден / истёк / превышены попытки / неверный код)
-    сохраняют текущую политику attempts: для них выполняется отдельный commit
+    OTP failure-пути (истёк / превышены попытки / неверный код) сохраняют
+    текущую политику attempts: для них выполняется отдельный commit
     (пользователь при этом не создаётся).
 
     Бросает:
-      ValueError              — проблема OTP (service → HTTP 400);
-      AccountUnavailableError — email занят любой строкой users (→ HTTP 409);
-      RegistrationDataError   — нет роли student или consent-политики (→ 500).
+      RegistrationReferenceInvalidError - reference не указывает на действующий
+                                выпуск (неизвестен / использован / заменён);
+      OtpExpiredError           - срок кода истёк (запись удаляется);
+      OtpAttemptsExhaustedError - попытки исчерпаны (запись удаляется);
+      OtpInvalidError           - нет кода для email / неверный код;
+      AccountUnavailableError   - email занят любой строкой users (HTTP 409);
+      RegistrationDataError     - нет роли student или consent-политики (500).
 
     SMTP/email и welcome-уведомление СЮДА не входят (письмо отправляется на
-    init-шаге; welcome — soft-fail после commit на уровне service).
+    init-шаге; welcome - soft-fail после commit на уровне service).
     """
-    email = normalize_email(email)
-    now = _utcnow()
+    if (email is None) == (registration_reference is None):
+        raise ValueError("exactly one of email / registration_reference is required")
 
     with SessionLocal() as db:
         # ── 1. OTP validation ───────────────────────────────────────────────
-        record = (
-            db.query(OtpVerification)
-            .filter(OtpVerification.email == email)
-            .first()
+        email, record = _lock_registration_otp(
+            db, email=email, reference=registration_reference,
         )
-        if not record:
-            raise OtpInvalidError("Код не найден или уже использован")
+        # Время - ПОСЛЕ lock и перечитывания записи: пока ждали lock, срок кода
+        # мог истечь, и прежнее значение пропустило бы истёкший код.
+        now = _utcnow()
 
         if now > record.expires_at:
             db.delete(record)
@@ -481,7 +588,9 @@ def register_confirm_atomic(
         if record.attempts >= MAX_ATTEMPTS:
             db.delete(record)
             db.commit()
-            raise OtpInvalidError("Превышено число попыток. Начните регистрацию заново")
+            raise OtpAttemptsExhaustedError(
+                "Превышено число попыток. Начните регистрацию заново"
+            )
 
         if not _verify_code(code, record.code):
             record.attempts += 1
@@ -489,7 +598,7 @@ def register_confirm_atomic(
             if remaining <= 0:
                 db.delete(record)
                 db.commit()
-                raise OtpInvalidError(
+                raise OtpAttemptsExhaustedError(
                     "Неверный код. Попытки исчерпаны. Начните регистрацию заново"
                 )
             db.commit()
@@ -505,13 +614,10 @@ def register_confirm_atomic(
         assert_email_domain_allowed_in_tx(db, email)
 
         name = record.name
+        # Хеш пароля гарантирован выбором записи (_lock_registration_otp):
+        # запись без него (reset / регистрация через провайдера) сюда не
+        # доходит - её попытки не тратятся, аккаунт без пароля не создаётся.
         password_hash = record.password_hash
-        # Регистрационный OTP всегда несёт хеш пароля из register_init. Запись
-        # без хеша — это reset-OTP (password_reset_init хранит NULL); принять
-        # её как регистрацию значило бы создать/реактивировать аккаунт без
-        # пароля. Отказ до любых изменений, OTP не потребляется.
-        if password_hash is None:
-            raise OtpInvalidError("Код не найден или уже использован")
 
         # 2. Обязательные consent-политики обязаны существовать (seed data).
         consent_ids = required_consent_ids(db, required_consent_types)

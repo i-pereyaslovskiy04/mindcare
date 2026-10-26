@@ -3,11 +3,16 @@ import styles from './AuthModal.module.css';
 import Modal from '../../../components/Modal/Modal';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
+import RegistrationConfirmForm from './RegistrationConfirmForm';
 import SocialRegistrationFlow, { SOCIAL_STEP } from './SocialRegistrationFlow';
 import ForgotPasswordModal from '../forgot-password/ForgotPasswordModal';
-import { safeMessageTone } from '../lib/authEntry';
+import { AUTH_CONFIRM, AUTH_TABS, safeMessageTone } from '../lib/authEntry';
 
-const TABS = ['login', 'register'];
+// Куда может открыться модалка: вкладки и шаг подтверждения регистрации.
+const START_TABS = [...AUTH_TABS, AUTH_CONFIRM];
+
+export const REGISTRATION_CONFIRMED_MESSAGE =
+  'Регистрация завершена. Войдите в свою учётную запись.';
 
 /**
  * Явные режимы модалки.
@@ -15,7 +20,10 @@ const TABS = ['login', 'register'];
  *   socialLoading  — регистрация через провайдера: подготовка (preview либо
  *                    автоматическая отправка кода);
  *   socialEmail    — шаг «Почта для регистрации» (SocialEmailStep, VK ID);
- *   socialOtp      — шаг «Подтверждение регистрации» (RegistrationOtpStep).
+ *   socialOtp      — шаг «Подтверждение регистрации» (RegistrationOtpStep);
+ *   confirm        — «Подтверждение регистрации» по ссылке из письма
+ *                    (/register/confirm#r=…, RegistrationConfirmForm): только
+ *                    код, без вкладок; после успеха — «Вход», без автовхода.
  * В social-режимах вкладок нет, а LoginForm и RegisterForm не монтируются:
  * это продолжение уже начатой регистрации, а не выбор способа входа. Режим
  * social-регистрации не связан с состоянием вкладки «Регистрация».
@@ -26,6 +34,7 @@ export const AUTH_MODAL_MODE = Object.freeze({
   SOCIAL_LOADING: 'socialLoading',
   SOCIAL_EMAIL: 'socialEmail',
   SOCIAL_OTP: 'socialOtp',
+  CONFIRM: 'confirm',
 });
 
 const MODE_BY_SOCIAL_STEP = Object.freeze({
@@ -39,7 +48,16 @@ const MODE_BY_SOCIAL_STEP = Object.freeze({
  * только совместимые редиректы на `/` с этой модалкой; `/auth/callback` —
  * технический маршрут без своих форм).
  *
- * initialTab — вкладка, с которой модалка ОТКРЫВАЕТСЯ ('login' | 'register').
+ * initialTab — вкладка, с которой модалка ОТКРЫВАЕТСЯ ('login' | 'register'),
+ * либо 'confirm' — шаг подтверждения регистрации по ссылке из письма.
+ *
+ * registrationReference — reference из ссылки (шаг 'confirm'); null — ссылка
+ * без данных (шаг объясняет и предлагает начать заново).
+ * onRegistrationConfirmed(email) / onRegistrationRestart() — владелец
+ * маршрута шага 'confirm' сам уводит с адреса ссылки; без них модалка
+ * переключает вкладку на месте («Вход» с сообщением / «Регистрация»).
+ * loginEmail — email, подставляемый в форму входа при открытии (только из
+ * памяти, например после подтверждения по ссылке).
  * Применяется при каждом открытии (и при смене initialTab на открытой
  * модалке); дальше пользователь переключает вкладки сам.
  *
@@ -57,10 +75,11 @@ const MODE_BY_SOCIAL_STEP = Object.freeze({
  */
 export default function AuthModal({
   isOpen, onClose, message, messageTone = 'info', initialTab = 'login',
-  social = null, onSocialExit,
+  social = null, onSocialExit, registrationReference = null,
+  onRegistrationConfirmed, onRegistrationRestart, loginEmail = '',
 }) {
   const tone = safeMessageTone(messageTone);
-  const startTab = TABS.includes(initialTab) ? initialTab : 'login';
+  const startTab = START_TABS.includes(initialTab) ? initialTab : 'login';
   const inSocial = Boolean(social);
   const [activeTab, setActiveTab] = useState(startTab);
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -68,6 +87,10 @@ export default function AuthModal({
   // показываются — это уже не выбор режима.
   const [registerStep, setRegisterStep] = useState('form');
   const [socialStep, setSocialStep] = useState(SOCIAL_STEP.LOADING);
+  // Регистрация подтверждена без автовхода (шаг confirm без владельца маршрута
+  // или сбой автовхода после шага кода): сообщение над «Входом» и email для
+  // формы входа (только в памяти).
+  const [confirmed, setConfirmed] = useState(null);
   // Открытие, смена initialTab и вход/выход из social-режима отслеживаются во
   // время рендера (не эффектом): нужная вкладка видна с первого кадра, без
   // устаревшего состояния.
@@ -77,6 +100,7 @@ export default function AuthModal({
   ) {
     setOpening({ isOpen, startTab, inSocial });
     if (isOpen) setActiveTab(startTab);
+    setConfirmed(null);
     if (opening.inSocial !== inSocial) {
       // Формы обычного режима перемонтируются с первого шага — их прежние
       // шаги не должны прятать вкладки; новый social-поток начинается с начала.
@@ -84,8 +108,29 @@ export default function AuthModal({
       setSocialStep(SOCIAL_STEP.LOADING);
     }
   }
-  const mode = inSocial ? MODE_BY_SOCIAL_STEP[socialStep] : AUTH_MODAL_MODE.ENTRY;
-  const confirming = activeTab === 'register' && registerStep === 'code';
+  const confirmStep = activeTab === AUTH_CONFIRM;
+  let mode = AUTH_MODAL_MODE.ENTRY;
+  if (inSocial) mode = MODE_BY_SOCIAL_STEP[socialStep];
+  else if (confirmStep) mode = AUTH_MODAL_MODE.CONFIRM;
+  const confirming = confirmStep || (activeTab === 'register' && registerStep === 'code');
+  const loginMessage = confirmed ? REGISTRATION_CONFIRMED_MESSAGE : message;
+  const loginTone = confirmed ? 'info' : tone;
+  const prefillEmail = confirmed?.email ?? loginEmail ?? '';
+
+  const handleConfirmed = useCallback((email) => {
+    setConfirmed({ email });
+    setActiveTab('login');
+  }, []);
+
+  const handleReferenceConfirmed = useCallback((email) => {
+    if (onRegistrationConfirmed) onRegistrationConfirmed(email);
+    else handleConfirmed(email);
+  }, [onRegistrationConfirmed, handleConfirmed]);
+
+  const handleRegistrationRestart = useCallback(() => {
+    if (onRegistrationRestart) onRegistrationRestart();
+    else setActiveTab('register');
+  }, [onRegistrationRestart]);
 
   const handleForgotPassword = useCallback(() => {
     onClose();
@@ -143,15 +188,20 @@ export default function AuthModal({
                   aria-labelledby="tab-login"
                   hidden={activeTab !== 'login'}
                 >
-                  {message && (
+                  {loginMessage && (
                     <div
-                      className={tone === 'error' ? styles.errorMessage : styles.infoMessage}
-                      role={tone === 'error' ? 'alert' : 'status'}
+                      className={loginTone === 'error' ? styles.errorMessage : styles.infoMessage}
+                      role={loginTone === 'error' ? 'alert' : 'status'}
                     >
-                      {message}
+                      {loginMessage}
                     </div>
                   )}
-                  <LoginForm onSuccess={onClose} onForgotPassword={handleForgotPassword} />
+                  <LoginForm
+                    key={prefillEmail ? `prefill:${prefillEmail}` : 'login'}
+                    initialEmail={prefillEmail}
+                    onSuccess={onClose}
+                    onForgotPassword={handleForgotPassword}
+                  />
                 </div>
                 <div
                   id="panel-register"
@@ -159,8 +209,22 @@ export default function AuthModal({
                   aria-labelledby={confirming ? undefined : 'tab-register'}
                   hidden={activeTab !== 'register'}
                 >
-                  <RegisterForm onSuccess={onClose} onStepChange={setRegisterStep} />
+                  <RegisterForm
+                    onSuccess={onClose}
+                    onStepChange={setRegisterStep}
+                    onRegisteredWithoutLogin={handleConfirmed}
+                  />
                 </div>
+                {confirmStep && (
+                  <RegistrationConfirmForm
+                    // Новая ссылка (другой fragment в той же вкладке) — новый
+                    // поток: код, ошибка и терминальный экран прежней не живут.
+                    key={registrationReference ?? 'no-reference'}
+                    registrationReference={registrationReference}
+                    onConfirmed={handleReferenceConfirmed}
+                    onRestart={handleRegistrationRestart}
+                  />
+                )}
               </div>
             </>
           )}

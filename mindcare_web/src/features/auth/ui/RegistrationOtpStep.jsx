@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import styles from './AuthModal.module.css';
 import CodeInput from '../../../components/CodeInput/CodeInput';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
 
 export const RESEND_COOLDOWN = 60;
 export const EMPTY_CODE = Object.freeze(['', '', '', '', '', '']);
+
+/** Состояние шага: ввод кода / идёт проверка / подтвердить уже нельзя. */
+export const OTP_STATUS = Object.freeze({
+  READY: 'ready',
+  SUBMITTING: 'submitting',
+  BLOCKED: 'blocked',
+});
+
+/** Задержка авто-подтверждения после ввода шестой цифры (мс). */
+const AUTO_CONFIRM_DELAY = 120;
 
 /**
  * Обратный отсчёт до повторной отправки кода: [секунды, перезапуск].
@@ -22,70 +32,126 @@ export function useResendTimer(initialSeconds = 0) {
 }
 
 /**
- * Шаг «Подтверждение регистрации» — общий для регистрации по email и паролю
- * и для регистрации через Яндекс (Stage Social Auth 4): заголовок, адрес, куда
- * ушёл код, `CodeInput`, таймер и повторная отправка, кнопка «Подтвердить» и
- * ссылка назад. Вкладок «Вход | Регистрация» на этом шаге нет — это уже не
- * выбор режима, а подтверждение.
+ * Шаг «Подтверждение регистрации» — ОДИН вид для всех способов регистрации:
+ * по email и паролю (шаг кода в исходной вкладке), по ссылке из письма
+ * (/register/confirm, только код) и через провайдера (Яндекс/VK). Заголовок,
+ * описание, `CodeInput`, ошибка, необязательные согласие и повторная
+ * отправка, кнопка «Подтвердить» и вторичное действие. Вкладок «Вход |
+ * Регистрация» на этом шаге нет.
  *
- * Только разметка и UX: запросы к backend делает владелец шага (onConfirm,
- * onResend). Когда введены все 6 цифр, onConfirm вызывается автоматически —
- * если подтверждение сейчас допустимо (нет загрузки, согласие при наличии
- * чекбокса отмечено, шаг не заблокирован).
+ * Только разметка и UX. Шаг не знает ни адреса, куда ушёл код, ни reference
+ * из ссылки, ни пароля, ни endpoint, ни навигации, ни правил автовхода —
+ * это дело владельца (controller).
  *
- * consent — необязательный компактный чекбокс согласия MindCare:
- *   { checked, onChange, error, onMissing } (регистрация через Яндекс; у
- *   регистрации по паролю согласие уже принято на первом шаге). onMissing —
- *   нажали «Подтвердить» без согласия: показать подсказку.
+ *   code / onCodeChange — массив из 6 цифр;
+ *   onConfirm(code)     — подтвердить (вызывает владелец запросом к backend);
+ *   description         — текст под заголовком (узел);
+ *   status              — OTP_STATUS: ready | submitting | blocked;
+ *   error               — текст ошибки (объявляется role="alert" и связан с
+ *                         ячейками через aria-describedby);
+ *   resend?             — { secondsLeft, onResend }: таймер и «Отправить повторно»;
+ *   secondaryAction?    — { label, onClick }: «Изменить данные», «Начать заново»;
+ *   consent?            — { checked, onChange, error, onMissing }: компактный
+ *                         чекбокс согласия (регистрация через провайдера).
+ *
+ * Подтверждение — один раз на введённый код: автоматически после шестой
+ * цифры, по Enter или кнопкой; повторные срабатывания до ответа владельца
+ * (смены status или кода) отбрасываются. Во время проверки ячейки
+ * недоступны. Фокус — на первой ячейке при открытии шага и после ошибки,
+ * когда владелец очистил код.
  */
 export default function RegistrationOtpStep({
-  email,
   code,
   onCodeChange,
-  error,
-  timer,
-  onResend,
   onConfirm,
-  loading = false,
-  blocked = false,
+  description,
+  status = OTP_STATUS.READY,
+  error,
+  resend,
+  secondaryAction,
   consent,
-  backLabel,
-  onBack,
 }) {
+  const errorId = useId();
+  const titleId = useId();
+  const codeRef = useRef(null);
+  const ready = status === OTP_STATUS.READY;
+  const submitting = status === OTP_STATUS.SUBMITTING;
   const consentMissing = consent ? !consent.checked : false;
   const complete = code.every((d) => d !== '');
-  const canConfirm = complete && !loading && !blocked && !consentMissing;
+  const empty = code.every((d) => d === '');
+  const canConfirm = complete && ready && !consentMissing;
 
   // Свежий обработчик без перезапуска эффекта авто-подтверждения.
   const confirmRef = useRef(onConfirm);
   useEffect(() => { confirmRef.current = onConfirm; }, [onConfirm]);
 
+  // Один confirm на код: авто-подтверждение, Enter и кнопка в одном кадре не
+  // запускают параллельные запросы. Снимается, когда владелец ответил
+  // (status не submitting) или код изменился.
+  const pending = useRef(false);
+  useEffect(() => {
+    if (status !== OTP_STATUS.SUBMITTING) pending.current = false;
+  }, [status, code]);
+
+  const confirmOnce = useCallback((digits) => {
+    if (pending.current) return;
+    pending.current = true;
+    confirmRef.current(digits);
+  }, []);
+
   useEffect(() => {
     if (!canConfirm) return undefined;
-    const id = setTimeout(() => confirmRef.current(code), 120);
+    const id = setTimeout(() => confirmOnce(code), AUTO_CONFIRM_DELAY);
     return () => clearTimeout(id);
-  }, [code, canConfirm]);
+  }, [code, canConfirm, confirmOnce]);
 
-  const handleConfirmClick = () => {
+  // Фокус на первую ячейку: при открытии шага и после ошибки (код очищен).
+  // Modal при открытии ставит фокус на первый контрол в следующем кадре —
+  // шаг, открытый вместе с модалкой, возвращает фокус себе после этого.
+  useEffect(() => {
+    if (!ready || !empty) return undefined;
+    codeRef.current?.focus();
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => codeRef.current?.focus());
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [ready, empty, error]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
     if (consent && !consent.checked) {
       consent.onMissing();   // показать подсказку согласия
       return;
     }
-    onConfirm(code);
+    if (!complete || !ready) return;
+    confirmOnce(code);
   };
 
   return (
-    <div className={`${styles.authPanel} ${styles.active}`}>
-      <h2 className={styles.stepTitle}>Подтверждение регистрации</h2>
-      <p className={styles.stepDesc}>
-        Отправили 6-значный код на{' '}
-        <strong className={styles.stepDescStrong}>{email}</strong>
-      </p>
+    <form
+      className={`${styles.authPanel} ${styles.active}`}
+      onSubmit={handleSubmit}
+      noValidate
+      aria-labelledby={titleId}
+    >
+      <h2 className={styles.stepTitle} id={titleId}>Подтверждение регистрации</h2>
+      {description && <p className={styles.stepDesc}>{description}</p>}
 
-      <CodeInput value={code} onChange={onCodeChange} error={!!error} />
+      <CodeInput
+        ref={codeRef}
+        value={code}
+        onChange={onCodeChange}
+        error={!!error}
+        disabled={!ready}
+        describedBy={errorId}
+      />
 
       {error && (
-        <div className={styles.apiError} role="alert">{error}</div>
+        <div className={styles.apiError} id={errorId} role="alert">{error}</div>
       )}
 
       {consent && (
@@ -120,18 +186,18 @@ export default function RegistrationOtpStep({
         </>
       )}
 
-      {!blocked && (timer > 0 ? (
+      {resend && status !== OTP_STATUS.BLOCKED && (resend.secondsLeft > 0 ? (
         <p className={styles.otpTimer}>
           Отправить повторно через{' '}
-          <span className={styles.otpTimerCount}>{timer}</span> с
+          <span className={styles.otpTimerCount}>{resend.secondsLeft}</span> с
         </p>
       ) : (
         <div className={styles.otpAux}>
           <button
             type="button"
             className={styles.ghost}
-            onClick={onResend}
-            disabled={loading}
+            onClick={resend.onResend}
+            disabled={!ready}
           >
             Отправить повторно
           </button>
@@ -139,23 +205,25 @@ export default function RegistrationOtpStep({
       ))}
 
       <button
-        type="button"
+        type="submit"
         className={styles.authBtn}
-        onClick={handleConfirmClick}
-        disabled={loading || blocked || !complete}
+        disabled={!ready || !complete}
       >
-        {loading ? 'Проверяем…' : 'Подтвердить'}
+        {submitting ? 'Проверяем…' : 'Подтвердить'}
       </button>
 
-      <div className={styles.otpAux}>
-        <button
-          type="button"
-          className={`${styles.ghost} ${styles.ghostMuted}`}
-          onClick={onBack}
-        >
-          {backLabel}
-        </button>
-      </div>
-    </div>
+      {secondaryAction && (
+        <div className={styles.otpAux}>
+          <button
+            type="button"
+            className={`${styles.ghost} ${styles.ghostMuted}`}
+            onClick={secondaryAction.onClick}
+            disabled={submitting}
+          >
+            {secondaryAction.label}
+          </button>
+        </div>
+      )}
+    </form>
   );
 }

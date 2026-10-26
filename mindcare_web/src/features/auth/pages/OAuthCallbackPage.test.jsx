@@ -264,7 +264,7 @@ test.each([
     'Яндекс ID не передал адрес электронной почты, поэтому зарегистрироваться '
     + 'через Яндекс не получится. Зарегистрируйтесь по email и паролю.', 'error'],
   ['social_registration_not_available',
-    'Аккаунт Яндекс пока не привязан к MindCare. '
+    'Аккаунт Яндекс пока не связан с учётной записью в сервисе «Психология ДонГУ». '
     + 'Вход через Яндекс доступен только для уже связанных аккаунтов.', 'error'],
   ['oauth_cancelled', MSG.cancelled, 'info'],
 ])('#error=%s → AuthModal «Вход» (тон %s), fragment вычищен', (code, message, tone) => {
@@ -437,7 +437,7 @@ describe('VK ID', () => {
     setUrl('#error=social_registration_not_available');
     render(<OAuthCallbackPage />);
     expectCanonicalModalError(
-      'Аккаунт VK пока не привязан к MindCare. '
+      'Аккаунт VK пока не связан с учётной записью в сервисе «Психология ДонГУ». '
       + 'Вход через VK доступен только для уже связанных аккаунтов.',
       'error',
     );

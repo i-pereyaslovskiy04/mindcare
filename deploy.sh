@@ -182,6 +182,9 @@ print(key)
 
   ALLOWED_ORIGINS="http://localhost:3000"
   [ -n "$SERVER_IP" ] && ALLOWED_ORIGINS="$ALLOWED_ORIGINS,http://${SERVER_IP}:3000"
+  # Адрес для ссылок в письмах. Для PRODUCTION замените в .env на
+  # https://mindcare.donnu.ru (см. deploy/README.md, «Окружения и адреса»).
+  FRONTEND_PUBLIC_URL="http://${SERVER_IP:-localhost}:3000"
 
   cat > "$API_ENV" <<EOF
 # --- DATABASE ---
@@ -200,7 +203,10 @@ EMAIL_MODE=${EMAIL_MODE}
 ${SMTP_BLOCK}
 
 NEWS_IMAGE_MAX_SIZE_MB=20
+
+# --- CORS / PUBLIC FRONTEND (см. deploy/README.md, «Окружения и адреса») ---
 ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+FRONTEND_PUBLIC_URL=${FRONTEND_PUBLIC_URL}
 
 # --- ENCRYPTION ---
 DATA_ENCRYPTION_KEY=${FERNET_KEY}

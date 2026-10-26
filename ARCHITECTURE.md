@@ -140,7 +140,7 @@ full retention для физических файлов soft-deleted attachments
 сообщения скрыты из ленты без плейсхолдера. Визуальное облачко выделено в отдельный
 feature-specific `MessageBubble` (не shared UI): meta (время/«изменено»/✓/✓✓) — внутри bubble,
 компактно для коротких сообщений и с переносом вниз-направо для длинных (Telegram-style);
-system-сообщения всегда bubble от «MindCare», без меню действий и без read receipts. Подробнее —
+system-сообщения всегда bubble от «Психология ДонГУ», без меню действий и без read receipts. Подробнее —
 `mindcare_web/ARCHITECTURE.md`.
 
 **Mobile (Stage 30d):** breakpoints различаются по слоям — Messenger переключается в

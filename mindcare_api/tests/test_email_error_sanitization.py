@@ -16,6 +16,7 @@ import pytest
 
 from app.core.normalization import mask_email
 from app.auth import service
+from app.auth.otp_service import RegistrationOtpIssue
 
 
 # ─── mask_email ────────────────────────────────────────────────────────────────
@@ -53,7 +54,13 @@ def test_register_init_sanitizes_smtp_failure():
              "app.email_domains.service.assert_email_domain_allowed",
              return_value=None,
          ), \
-         patch("app.auth.otp_service.create_or_update_otp", return_value="123456"), \
+         patch(
+             "app.auth.otp_service.issue_registration_otp",
+             return_value=RegistrationOtpIssue(
+                 code="123456",
+                 registration_reference="8a62d590-71a1-4b17-90f7-4a5ff0c9d782",
+             ),
+         ), \
          patch(
              "app.services.email_service.send_registration_otp",
              side_effect=smtplib.SMTPException(_SECRET),

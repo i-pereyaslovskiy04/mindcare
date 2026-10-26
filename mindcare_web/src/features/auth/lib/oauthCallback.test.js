@@ -218,7 +218,7 @@ describe('провайдер (Stage Social Auth VK-1A)', () => {
     expect(fragmentMsg(cancelled, 'yandex')).toBe('Вход через Яндекс отменён.');
     expect(fragmentMsg(cancelled)).toBe('Вход через Яндекс отменён.');   // по умолчанию
     expect(fragmentMsg({ kind: 'error', code: 'social_registration_not_available' }, 'vk')).toBe(
-      'Аккаунт VK пока не привязан к MindCare. '
+      'Аккаунт VK пока не связан с учётной записью в сервисе «Психология ДонГУ». '
       + 'Вход через VK доступен только для уже связанных аккаунтов.',
     );
     expect(fragmentMsg({ kind: 'error', code: 'oauth_failed' }, 'vk'))
@@ -286,7 +286,8 @@ describe('шаг email и исправимые ошибки (Stage Social Auth V
     expect(lib.registrationErrorMessage({ code: 'oauth_ticket_invalid' }, 'vk'))
       .toBe('Время на завершение регистрации истекло. Начните заново через VK.');
     expect(lib.registrationErrorMessage({ code: 'oauth_identity_already_linked' }, 'vk'))
-      .toBe('Этот аккаунт VK уже привязан к MindCare. Нажмите «VK» ещё раз, чтобы войти.');
+      .toBe('Этот аккаунт VK уже связан с учётной записью в сервисе «Психология ДонГУ». '
+        + 'Нажмите «VK» ещё раз, чтобы войти.');
     expect(lib.registrationErrorMessage({ code: 'oauth_ticket_invalid' }))
       .toBe('Время на завершение регистрации истекло. Начните заново через Яндекс.');
     expect(lib.registrationErrorMessage({ code: 'email_already_exists' }, 'vk'))

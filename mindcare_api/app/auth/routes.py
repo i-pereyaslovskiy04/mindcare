@@ -1,11 +1,14 @@
 import ipaddress
 
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import JSONResponse
 
 from app.core.rate_limit import RateLimitExceeded, enforce as enforce_rate_limit
 from app.auth.schemas import (
     RegisterInitRequest,
+    RegisterConfirmByReferenceRequest,
     RegisterConfirmRequest,
+    RegisterConfirmResponse,
     LoginRequest,
     SessionResponse,
     UserResponse,
@@ -28,12 +31,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _RATE_LIMIT_MESSAGE = "Слишком много попыток. Попробуйте позже."
 
 
-def _check_rate_limit(action: str, request: Request, email: str | None = None) -> None:
+def _check_rate_limit(
+    action: str, request: Request, email: str | None = None, *, by_ip: bool = True,
+) -> None:
     """
     Лимит по IP и нормализованному email. При превышении — 429 с единым
-    сообщением, не раскрывающим существование email.
+    сообщением, не раскрывающим существование email. by_ip=False — только
+    email (IP этого запроса уже учтён отдельным вызовом).
     """
-    ip = request.client.host if request.client else None
+    ip = request.client.host if (by_ip and request.client) else None
     try:
         enforce_rate_limit(action, email=email, ip=ip)
     except RateLimitExceeded:
@@ -91,28 +97,61 @@ def register_init(body: RegisterInitRequest, request: Request):
     return {"message": "Код подтверждения отправлен на email"}
 
 
-@router.post("/register/confirm", response_model=MessageResponse, status_code=201)
+@router.post(
+    "/register/confirm",
+    response_model=RegisterConfirmResponse,
+    response_model_exclude_none=True,
+    status_code=201,
+)
 def register_confirm(body: RegisterConfirmRequest, request: Request):
-    _check_rate_limit("confirm", request, email=body.email)
+    """
+    Два контракта одного endpoint (ровно один идентификатор, см. схемы):
+      {email, code}                  - шаг кода в исходной вкладке;
+      {registration_reference, code} - ссылка из письма (/register/confirm#r=...).
+    Ответ подтверждения по ссылке содержит email (для формы входа) - только
+    после успешного commit. Ошибка - {detail, code}: code стабилен
+    (registration_reference_invalid / otp_invalid / otp_expired /
+    otp_attempts_exhausted), detail - текст для пользователя.
+    """
+    by_reference = isinstance(body, RegisterConfirmByReferenceRequest)
+    if by_reference:
+        reference = str(body.registration_reference)
+        # Лимит по email не ослабляется тем, что клиент email не передаёт:
+        # IP - сразу, email - по записи выпуска (неизвестный reference - без
+        # email; угадать UUIDv4 нельзя, ответ тот же 400).
+        _check_rate_limit("confirm", request)
+        email = service.resolve_registration_reference(reference)
+        if email is not None:
+            _check_rate_limit("confirm", request, email=email, by_ip=False)
+    else:
+        reference = None
+        email = body.email
+        _check_rate_limit("confirm", request, email=email)
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     try:
         user = service.register_confirm(
-            email=body.email,
+            email=None if by_reference else email,
             code=body.code,
             ip=ip,
             user_agent=user_agent,
+            registration_reference=reference,
         )
     except service.AuthError as e:
+        # reference, код и хеши в журнал не попадают; неизвестный reference -
+        # user_email=None.
         record_event(
             event="registration_failed",
             actor=Actor.anonymous(),
             outcome=Outcome.FAILURE,
             failure_reason_code=e.audit_code,
-            user_email=body.email,
+            user_email=email,
             context=_audit_context(request),
         )
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        content = {"detail": e.message}
+        if e.error_code:
+            content["code"] = e.error_code
+        return JSONResponse(status_code=e.status_code, content=content)
     record_event(
         event="registration_succeeded",
         actor=Actor.user(int(user["id"]), "student"),
@@ -120,6 +159,8 @@ def register_confirm(body: RegisterConfirmRequest, request: Request):
         user_email=user["email"],
         context=_audit_context(request),
     )
+    if by_reference:
+        return {"message": "Регистрация завершена", "email": user["email"]}
     return {"message": "Регистрация завершена"}
 
 

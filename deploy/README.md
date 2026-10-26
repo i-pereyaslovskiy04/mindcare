@@ -20,6 +20,69 @@
 > `mindcare-maintenance-failure@`. Ручной запуск:
 > `cd mindcare_api && .venv/bin/python scripts/deliver_system_message_intents.py [--dry-run] [--limit N]`.
 
+## Окружения и адреса
+
+| Окружение | Публичный адрес frontend | Что это |
+|---|---|---|
+| LOCAL | `http://localhost:3000` (backend `http://localhost:8000`) | разработка; DEV OAuth-приложения разработчика |
+| TEST | `https://mindcare.donru.edu.ru` | legacy тестовый сервер, сейчас почти не используется; **не** production, production OAuth-приложения не использует |
+| PRODUCTION | `https://mindcare.donnu.ru` | основной сервис; OAuth-приложения Яндекс и VK принадлежат университету |
+
+Демо-стенд в локальной сети (раздел ниже) — отдельный стенд, не TEST и не
+PRODUCTION; его адреса задаются по тем же правилам.
+
+Четыре разных адреса в `mindcare_api/.env` — не подменять один другим:
+
+| Переменная | Назначение | PRODUCTION |
+|---|---|---|
+| `ALLOWED_ORIGINS` | CORS: frontend origins, которым разрешено обращаться к API (через запятую) | `https://mindcare.donnu.ru` |
+| `FRONTEND_PUBLIC_URL` | публичный адрес frontend для абсолютных ссылок backend → frontend (кнопки в письмах) | `https://mindcare.donnu.ru` |
+| `OAUTH_CALLBACK_BASE_URL` | база backend-адреса, куда провайдер OAuth возвращает браузер | `https://mindcare.donnu.ru` |
+| `OAUTH_FRONTEND_CALLBACK_URL` | страница frontend, куда backend передаёт результат OAuth | `https://mindcare.donnu.ru/auth/callback` |
+
+PRODUCTION `.env` (адресная часть; реальные ID приложений в git не коммитить):
+
+```env
+ALLOWED_ORIGINS=https://mindcare.donnu.ru
+FRONTEND_PUBLIC_URL=https://mindcare.donnu.ru
+
+OAUTH_CALLBACK_BASE_URL=https://mindcare.donnu.ru
+OAUTH_FRONTEND_CALLBACK_URL=https://mindcare.donnu.ru/auth/callback
+
+YANDEX_OAUTH_ENABLED=true
+YANDEX_OAUTH_CLIENT_ID=<PRODUCTION_CLIENT_ID>
+
+VK_OAUTH_ENABLED=true
+VK_OAUTH_CLIENT_ID=<PRODUCTION_APP_ID>
+VK_OAUTH_CALLBACK_BASE_URL=
+```
+
+Redirect URI в приложениях университета (PRODUCTION):
+
+- Яндекс: `https://mindcare.donnu.ru/api/auth/oauth/yandex/callback`
+- VK ID: `https://mindcare.donnu.ru/api/auth/oauth/vk/callback`
+
+TEST (`https://mindcare.donru.edu.ru`) настраивается так же, со своим
+адресом во всех четырёх переменных, и **не** получает production ClientID/ID
+приложения: либо собственные тестовые приложения, либо OAuth выключен.
+LOCAL — значения из `mindcare_api/.env.example`.
+
+**Ссылки в письмах** строятся только от `FRONTEND_PUBLIC_URL`:
+
+- письмо с кодом регистрации — «Продолжить регистрацию →» →
+  `{FRONTEND_PUBLIC_URL}/register/confirm#r=<reference>` (страница
+  подтверждения: вводится только код; reference — UUID этого выпуска кода, во
+  fragment, поэтому не уходит на сервер при GET и не попадает в access log и
+  Referer; новое письмо делает ссылку из прежнего недействительной); у
+  регистрации через Яндекс/VK этой ссылки нет;
+- письмо с временным паролем (учётную запись создал администратор или
+  супервизор) — «Войти в сервис →» → `{FRONTEND_PUBLIC_URL}/login`.
+
+Ссылка — компактный текст под кодом, не кнопка; в plain-text версии письма —
+полный адрес. В ссылках нет email, кода, пароля и токенов; открытие ссылки
+ничего не подтверждает. Если `FRONTEND_PUBLIC_URL` не является корректным
+`http(s)`-адресом, письмо уходит без ссылки.
+
 ## Демо-стенд MindCare (локальная сеть)
 
 Постоянно работающий стенд для демонстрации заказчику. Живёт на том же
@@ -165,7 +228,7 @@ sudo systemctl enable --now mindcare-anonymize-ips.timer           # тольк�
   backend пишет в лог при старте (`Yandex ID login enabled (redirect_uri=…)`).
 - DEV и PROD — **разные** приложения Яндекс OAuth (свой ClientID и Redirect
   URI); ClientID боевого приложения в dev `.env` не попадает. Права приложения —
-  «Адрес электронной почты» (`login:email`).
+  `login:email` и `login:info` (адрес почты и имя).
 - Неполная конфигурация (нет ClientID, `http://` не на localhost, URL с
   userinfo/fragment) — адаптер **не** регистрируется, в логе ERROR без
   значений, MindCare стартует как обычно; `/api/auth/oauth/yandex/*` → 404.
