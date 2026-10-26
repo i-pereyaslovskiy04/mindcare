@@ -322,3 +322,106 @@ describe('юридические ссылки открываются в ново
     }
   });
 });
+
+// ── Подтверждение регистрации без исходной вкладки (/register/confirm) ──────
+
+const confirmEmail = 'student@donnu.ru';
+
+// На шаге confirm панели «Вход» и «Регистрация» скрыты, но смонтированы и
+// загружают список провайдеров — дожидаемся его (без act-предупреждений).
+async function hiddenProvidersReady() {
+  await waitFor(() => {
+    const buttons = screen.getAllByRole('button', { name: 'Войти через Яндекс', hidden: true });
+    buttons.forEach((b) => expect(b).toBeEnabled());
+  });
+}
+
+function typeCodeIn(container, digits) {
+  const group = within(container).getByRole('group', { name: 'Код подтверждения' });
+  within(group).getAllByRole('textbox').forEach((input, i) => {
+    fireEvent.change(input, { target: { value: digits[i] } });
+  });
+}
+
+test('initialTab=confirm: шаг подтверждения без вкладок и без прежнего состояния', async () => {
+  render(<AuthModal isOpen onClose={jest.fn()} initialTab="confirm" />);
+  await hiddenProvidersReady();
+  expect(screen.getByTestId('auth-modal-body')).toHaveAttribute('data-mode', AUTH_MODAL_MODE.CONFIRM);
+  expect(screen.getByRole('heading', { name: 'Подтверждение регистрации' })).toBeInTheDocument();
+  expect(screen.queryByRole('tablist')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Подтвердить регистрацию' })).toBeInTheDocument();
+});
+
+test('успешное подтверждение → «Вход» с сообщением и email, без автоматического входа', async () => {
+  const login = jest.fn();
+  AuthContext.useAuth.mockReturnValue({ login, completeOAuthRegistration, loading: false });
+  authApi.registerConfirm.mockResolvedValue({ message: 'Регистрация завершена' });
+  const onClose = jest.fn();
+  render(<AuthModal isOpen onClose={onClose} initialTab="confirm" />);
+  await hiddenProvidersReady();
+  const body = screen.getByTestId('auth-modal-body');
+  fireEvent.change(within(body).getByLabelText('Email', { selector: '#rc-email' }), {
+    target: { value: confirmEmail },
+  });
+  typeCodeIn(body, '482915');
+  fireEvent.click(screen.getByRole('button', { name: 'Подтвердить регистрацию' }));
+
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Регистрация завершена. Войдите в свою учётную запись.',
+  );
+  expect(authApi.registerConfirm).toHaveBeenCalledWith({ email: confirmEmail, code: '482915' });
+  expect(screen.getByRole('tab', { name: 'Вход' })).toHaveAttribute('aria-selected', 'true');
+  const loginPanel = screen.getByRole('tabpanel', { name: 'Вход' });
+  expect(within(loginPanel).getByLabelText('Email')).toHaveValue(confirmEmail);
+  expect(within(loginPanel).getByLabelText('Пароль')).toHaveValue('');
+  expect(login).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.queryByRole('heading', { name: 'Подтверждение регистрации' })).toBeNull();
+});
+
+test('неверный или истёкший код → понятная ошибка, шаг остаётся открытым', async () => {
+  authApi.registerConfirm.mockRejectedValue(Object.assign(
+    new Error('Срок действия кода истёк. Начните регистрацию заново'), { status: 400 },
+  ));
+  render(<AuthModal isOpen onClose={jest.fn()} initialTab="confirm" />);
+  await hiddenProvidersReady();
+  const body = screen.getByTestId('auth-modal-body');
+  fireEvent.change(within(body).getByLabelText('Email', { selector: '#rc-email' }), {
+    target: { value: confirmEmail },
+  });
+  typeCodeIn(body, '111111');
+  fireEvent.click(screen.getByRole('button', { name: 'Подтвердить регистрацию' }));
+  expect(await screen.findByText(/Срок действия кода истёк/)).toHaveAttribute('role', 'alert');
+  expect(screen.getByRole('heading', { name: 'Подтверждение регистрации' })).toBeInTheDocument();
+});
+
+test('«Начать регистрацию заново» → обычная форма регистрации с вкладками', async () => {
+  render(<AuthModal isOpen onClose={jest.fn()} initialTab="confirm" />);
+  await hiddenProvidersReady();
+  fireEvent.click(screen.getByRole('button', { name: 'Начать регистрацию заново' }));
+  await entryReady();
+  expect(screen.getByRole('tab', { name: 'Регистрация' })).toHaveAttribute('aria-selected', 'true');
+  expect(within(registerPanel()).getByLabelText('Имя')).toHaveValue('');
+  expect(authApi.registerInit).not.toHaveBeenCalled();
+});
+
+test('обычный шаг кода в той же вкладке: confirm и автоматический вход, как раньше', async () => {
+  const login = jest.fn().mockResolvedValue({});
+  AuthContext.useAuth.mockReturnValue({ login, completeOAuthRegistration, loading: false });
+  authApi.registerConfirm.mockResolvedValue({ message: 'Регистрация завершена' });
+  const onClose = jest.fn();
+  render(<AuthModal isOpen onClose={onClose} />);
+  await entryReady();
+  fireEvent.click(screen.getByRole('tab', { name: 'Регистрация' }));
+  fillAndSubmit();
+  await screen.findByText(/Отправили 6-значный код/);
+  typeCodeIn(screen.getByTestId('auth-modal-body'), '482915');
+
+  await waitFor(() => expect(login).toHaveBeenCalledWith({
+    email: 'student@donnu.ru', password: 'SecurePass42!',
+  }));
+  expect(authApi.registerConfirm).toHaveBeenCalledWith({ email: 'student@donnu.ru', code: '482915' });
+  expect(onClose).toHaveBeenCalled();
+  // Шаг подтверждения по email и коду в этом сценарии не появлялся.
+  expect(screen.queryByRole('button', { name: 'Подтвердить регистрацию' })).toBeNull();
+});

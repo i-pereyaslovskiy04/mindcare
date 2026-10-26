@@ -38,18 +38,20 @@ LEGACY_COFFEE_HEX = [
 ]
 
 
-def _render_html(heading="H", description="D", code="654321", year=2026):
+def _render_html(heading="H", description="D", code="654321", year=2026, cta=""):
     return email_service._OTP_HTML.format(
-        heading=heading, description=description, code=code, year=year
+        heading=heading, description=description, code=code, year=year, cta=cta,
     )
 
 
-def _render_plain(heading="H", description_plain="D", code="654321", year=2026):
+def _render_plain(heading="H", description_plain="D", code="654321", year=2026,
+                  cta_plain=""):
     return email_service._OTP_PLAIN.format(
         heading=heading,
         description_plain=description_plain,
         code=code,
         year=year,
+        cta_plain=cta_plain,
     )
 
 

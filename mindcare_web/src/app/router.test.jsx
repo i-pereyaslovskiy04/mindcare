@@ -234,3 +234,25 @@ test('/login и /register — совместимые редиректы, отд�
   expect(fs.existsSync(path.join(pagesDir, 'LoginPage.jsx'))).toBe(false);
   expect(fs.existsSync(path.join(pagesDir, 'RegisterPage.jsx'))).toBe(false);
 });
+
+// ── /register/confirm: кнопка «Продолжить регистрацию» из письма ─────────────
+
+test('/register/confirm → replace на главную, шаг подтверждения регистрации', () => {
+  mockAuth({ user: null });
+  render(<LegacyAuthRedirect tab="confirm" />);
+  expect(screen.getByText('NAV:/ STATE:{"openAuth":"confirm"} REPLACE')).toBeInTheDocument();
+});
+
+test('/register/confirm зарегистрирован ровно один раз, без email и кода в адресе', () => {
+  expect(ROUTER_SOURCE).toMatch(
+    /<Route path="\/register\/confirm" element=\{<LegacyAuthRedirect tab="confirm" \/>\} \/>/,
+  );
+  expect(ROUTER_SOURCE.match(/path="\/register\/confirm"/g)).toHaveLength(1);
+  expect(ROUTER_SOURCE).not.toMatch(/register\/confirm\/:|register\/confirm\?/);
+});
+
+test('/register/confirm для вошедшего пользователя → кабинет', () => {
+  mockAuth({ user: { roles: ['student'] } });
+  render(<LegacyAuthRedirect tab="confirm" />);
+  expect(screen.getByText('NAV:/dashboard')).toBeInTheDocument();
+});

@@ -1,5 +1,5 @@
 import {
-  authEntryState, authRequestFrom, DEFAULT_MESSAGE_TONE, safeMessageTone,
+  AUTH_TABS, authEntryState, authRequestFrom, DEFAULT_MESSAGE_TONE, safeMessageTone,
 } from './authEntry';
 import { fragmentTone } from './oauthCallback';
 
@@ -38,4 +38,18 @@ test('fragmentTone: отмена — info, остальное — error', () => 
   expect(fragmentTone({ kind: 'error', code: 'account_unavailable' })).toBe('error');
   expect(fragmentTone({ kind: 'error', code: null })).toBe('error');
   expect(fragmentTone({ kind: 'invalid' })).toBe('error');
+});
+
+describe('шаг подтверждения регистрации (confirm)', () => {
+  it('router state openAuth=confirm открывает шаг подтверждения', () => {
+    expect(authRequestFrom({ openAuth: 'confirm' })).toEqual({
+      tab: 'confirm', message: '', messageTone: 'info',
+    });
+  });
+
+  it('authEntryState допускает confirm и по-прежнему отбрасывает неизвестное', () => {
+    expect(authEntryState('confirm')).toEqual({ openAuth: 'confirm' });
+    expect(authEntryState('admin')).toEqual({ openAuth: 'login' });
+    expect(AUTH_TABS).toEqual(['login', 'register']);
+  });
 });

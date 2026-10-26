@@ -276,6 +276,9 @@ EMAIL_MODE=dev
 # CORS: разрешённые origin'ы фронтенда (через запятую)
 ALLOWED_ORIGINS=http://localhost:3000
 
+# Публичный адрес фронтенда для ссылок в письмах (не CORS)
+FRONTEND_PUBLIC_URL=http://localhost:3000
+
 # Максимальный размер загружаемого изображения в МБ (JPEG/PNG/WebP)
 # При nginx: client_max_body_size должен быть NEWS_IMAGE_MAX_SIZE_MB + 5
 NEWS_IMAGE_MAX_SIZE_MB=20

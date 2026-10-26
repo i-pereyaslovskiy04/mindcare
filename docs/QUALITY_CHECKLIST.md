@@ -280,7 +280,9 @@ control / set-based API, а не single-role replace:
 - Production/staging настройки — в `.env`, не захардкожены в коде.
 - `.env.example` содержит все обязательные переменные.
 - `.env` не коммитится (покрыт `.gitignore`).
-- `ALLOWED_ORIGINS` — список frontend origins через запятую.
+- `ALLOWED_ORIGINS` — список frontend origins через запятую (только CORS).
+- `FRONTEND_PUBLIC_URL` — публичный адрес frontend для ссылок в письмах; не
+  подменять им `ALLOWED_ORIGINS` и `OAUTH_*` (см. `deploy/README.md`).
 - `DATABASE_URL` не захардкожен в коде.
 
 ---

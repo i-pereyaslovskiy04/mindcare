@@ -15,10 +15,11 @@ const AUTH_ERRORS_RU = {
 };
 const toRu = (msg) => AUTH_ERRORS_RU[msg] ?? msg;
 
-export default function LoginForm({ onSuccess, onForgotPassword }) {
+/** initialEmail — подставить email (например, сразу после подтверждения регистрации). */
+export default function LoginForm({ onSuccess, onForgotPassword, initialEmail = '' }) {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);

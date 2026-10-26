@@ -32,7 +32,14 @@ class Settings(BaseSettings):
     # 's3' — будущий S3/MinIO backend (не реализован).
     CHAT_FILE_STORAGE_BACKEND: str = "local_private"
     # --- CORS ---
+    # Только список frontend origins, которым разрешено обращаться к API.
+    # Не canonical URL сервиса: для ссылок — FRONTEND_PUBLIC_URL.
     ALLOWED_ORIGINS: str = "http://localhost:3000"
+    # --- PUBLIC FRONTEND ---
+    # Публичный адрес frontend этого окружения: абсолютные ссылки backend →
+    # frontend (кнопки в письмах). Не путать с ALLOWED_ORIGINS (CORS) и с
+    # OAUTH_* (адреса OAuth callback). Сборка ссылок — app/core/public_urls.py.
+    FRONTEND_PUBLIC_URL: str = "http://localhost:3000"
     # --- SOCIAL AUTH (Stage Social Auth 2B; не секреты) ---
     # База redirect_uri провайдера: {base}/api/auth/oauth/{provider}/callback.
     # В dev — напрямую backend :8000: CRA-прокси не проксирует GET-навигацию

@@ -187,7 +187,9 @@
   gap: 5px;
 }
 
-.authField label {
+/* .fieldLabel — та же подпись над полем без <label> (группа цифр кода). */
+.authField label,
+.authField .fieldLabel {
   font-size: 11.5px;
   font-weight: 600;
   color: var(--text-muted);

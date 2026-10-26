@@ -133,7 +133,9 @@ def register_init(name: str, email: str, password: str) -> None:
 
     log.info("[register_init] sending OTP to %s", mask_email(email))
     try:
-        send_registration_otp(email, code)
+        # Кнопка «Продолжить регистрацию» — подтвердить код можно и после
+        # закрытия вкладки (/register/confirm: email + код).
+        send_registration_otp(email, code, with_continue_link=True)
     except Exception:
         log.exception(
             "[register_init] failed to send email to %s", mask_email(email)

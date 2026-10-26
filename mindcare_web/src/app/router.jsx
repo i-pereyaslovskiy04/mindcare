@@ -3,12 +3,14 @@
  *
  * Route guards:
  *   <PrivateRoute>   — requires authentication, redirects to / (with login modal) when unauthenticated.
- *   <LegacyAuthRedirect> — /login и /register: replace-редирект на / с AuthModal
- *                      на нужной вкладке (отдельных страниц входа нет).
+ *   <LegacyAuthRedirect> — /login, /register и /register/confirm: replace-редирект
+ *                      на / с AuthModal на нужной вкладке или шаге (отдельных
+ *                      страниц входа нет). /register/confirm — кнопка
+ *                      «Продолжить регистрацию» из письма: ввод email и кода.
  *   <RoleRoute>      — requires specific role(s), redirects to /profile on mismatch.
  *
  * Public routes: /, /about, /services, /news, /materials, /auth/callback, /health
- * Compatibility redirects: /login, /register → / + AuthModal
+ * Compatibility redirects: /login, /register, /register/confirm → / + AuthModal
  * Private routes: /dashboard, /profile
  * Role routes:   /student/*, /psychologist/*, /supervisor/*, /admin/*
  */
@@ -112,6 +114,7 @@ export default function AppRouter() {
       {/* Auth: канонический UI — / + AuthModal; эти адреса — только совместимость */}
       <Route path="/login"    element={<LegacyAuthRedirect tab="login" />} />
       <Route path="/register" element={<LegacyAuthRedirect tab="register" />} />
+      <Route path="/register/confirm" element={<LegacyAuthRedirect tab="confirm" />} />
       {/* Публичный: завершение входа через внешний провайдер (Stage Social Auth 3B) */}
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
