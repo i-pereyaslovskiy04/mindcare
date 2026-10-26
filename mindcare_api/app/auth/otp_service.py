@@ -153,7 +153,6 @@ def create_or_update_otp_in_tx(
     email = normalize_email(email)
     plaintext_code = _new_code()
     code_hash      = _hash_code(plaintext_code)
-    now            = _utcnow()
 
     # Тот же lock, что у выпуска кода обычной регистрации: параллельные выпуски
     # по одному email не создают вторую строку.
@@ -162,6 +161,9 @@ def create_or_update_otp_in_tx(
     if lock:
         query = query.with_for_update()
     existing = query.first()
+    # Время - после lock и чтения записи: cooldown и новый срок считаются от
+    # момента, когда решение принимается, а не от начала ожидания lock.
+    now = _utcnow()
 
     if existing:
         elapsed = (now - existing.last_sent_at).total_seconds()
@@ -212,7 +214,6 @@ def issue_registration_otp(
     """
     email = normalize_email(email)
     plaintext_code = _new_code()
-    now = _utcnow()
 
     with SessionLocal() as db:
         lock_email_otp(db, email)
@@ -226,6 +227,9 @@ def issue_registration_otp(
             .with_for_update()
             .all()
         )
+        # Время - после lock и чтения прежних записей: и cooldown, и срок нового
+        # кода - от момента решения (одно значение на всю операцию).
+        now = _utcnow()
         if previous:
             elapsed = (now - max(r.last_sent_at for r in previous)).total_seconds()
             if elapsed < RESEND_COOLDOWN:

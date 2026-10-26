@@ -217,6 +217,9 @@ export default function AuthModal({
                 </div>
                 {confirmStep && (
                   <RegistrationConfirmForm
+                    // Новая ссылка (другой fragment в той же вкладке) — новый
+                    // поток: код, ошибка и терминальный экран прежней не живут.
+                    key={registrationReference ?? 'no-reference'}
                     registrationReference={registrationReference}
                     onConfirmed={handleReferenceConfirmed}
                     onRestart={handleRegistrationRestart}

@@ -542,3 +542,21 @@ test('неизвестный routeAuth модалку не открывает', 
   await settled();
   expect(dialog()).toBeNull();
 });
+
+test('смена fragment в той же вкладке: ошибка прежней ссылки не остаётся без F5', async () => {
+  authApi.registerConfirm.mockRejectedValueOnce(Object.assign(
+    new Error('любой текст'), { status: 400, code: 'registration_reference_invalid' },
+  ));
+  atConfirmRoute({ key: 'a' });
+  const { rerender } = render(<Home routeAuth="confirm" />);
+  await settled();
+  typeCode('111111');
+  const invalid = 'Ссылка недействительна или срок её действия истёк. Начните регистрацию заново.';
+  await screen.findByText(invalid);
+
+  atConfirmRoute({ key: 'b', hash: '#r=0f8f2f44-2a8e-4c1e-9d55-0c3b1d1e2a77' });
+  rerender(<Home routeAuth="confirm" />);
+  expect(screen.queryByText(invalid)).toBeNull();
+  expect(codeGroup()).toBeInTheDocument();
+  expect(mockNavigate).not.toHaveBeenCalled();
+});

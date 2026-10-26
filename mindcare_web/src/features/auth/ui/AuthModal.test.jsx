@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act, fireEvent, render, screen, waitFor, within,
+} from '@testing-library/react';
 import AuthModal, { AUTH_MODAL_MODE } from './AuthModal';
 import * as AuthContext from '../AuthContext';
 import * as authApi from '../../../api/auth.api';
@@ -512,4 +514,107 @@ test('сбой автовхода после успешного confirm → «В
   expect(screen.queryByText(/Отправили 6-значный код/)).toBeNull();
   expect(onClose).not.toHaveBeenCalled();
   expect(authApi.registerConfirm).toHaveBeenCalledTimes(1);
+});
+
+// ── смена ссылки в той же вкладке: состояние привязано к reference ──────────
+
+const REF_B = '0f8f2f44-2a8e-4c1e-9d55-0c3b1d1e2a77';
+const REF_INVALID_TEXT =
+  'Ссылка недействительна или срок её действия истёк. Начните регистрацию заново.';
+
+function modalWith(ref, props = {}) {
+  return (
+    <AuthModal isOpen onClose={jest.fn()} initialTab="confirm" registrationReference={ref} {...props} />
+  );
+}
+
+const codeCells = () => within(
+  within(confirmBody()).getByRole('group', { name: 'Код подтверждения' }),
+).getAllByRole('textbox');
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+test('терминальная ошибка ссылки A → ссылка B: шаг кода снова доступен, ошибки A нет', async () => {
+  authApi.registerConfirm.mockRejectedValueOnce(Object.assign(
+    new Error('любой текст'), { status: 400, code: 'registration_reference_invalid' },
+  ));
+  const { rerender } = render(modalWith(REF));
+  await hiddenProvidersReady();
+  typeCodeIn(confirmBody(), '111111');
+  await screen.findByText(REF_INVALID_TEXT);
+
+  rerender(modalWith(REF_B));
+  expect(screen.queryByText(REF_INVALID_TEXT)).toBeNull();
+  codeCells().forEach((cell) => {
+    expect(cell).toHaveValue('');
+    expect(cell).toBeEnabled();
+    expect(cell).not.toHaveAttribute('aria-invalid');
+  });
+  await waitFor(() => expect(codeCells()[0]).toHaveFocus());
+
+  authApi.registerConfirm.mockResolvedValue({ message: 'Регистрация завершена', email: confirmEmail });
+  typeCodeIn(confirmBody(), '482915');
+  await waitFor(() => expect(authApi.registerConfirm).toHaveBeenLastCalledWith({
+    registrationReference: REF_B, code: '482915',
+  }));
+});
+
+test('часть кода для ссылки A → ссылка B: код пустой', async () => {
+  const { rerender } = render(modalWith(REF));
+  await hiddenProvidersReady();
+  codeCells().slice(0, 3).forEach((cell, i) => {
+    fireEvent.change(cell, { target: { value: '482'[i] } });
+  });
+  expect(codeCells()[2]).toHaveValue('2');
+
+  rerender(modalWith(REF_B));
+  codeCells().forEach((cell) => expect(cell).toHaveValue(''));
+  expect(authApi.registerConfirm).not.toHaveBeenCalled();
+});
+
+test('поздний успех запроса A после перехода на B: UI B не меняется', async () => {
+  const pendingA = deferred();
+  authApi.registerConfirm.mockReturnValueOnce(pendingA.promise);
+  const onRegistrationConfirmed = jest.fn();
+  const { rerender } = render(modalWith(REF, { onRegistrationConfirmed }));
+  await hiddenProvidersReady();
+  typeCodeIn(confirmBody(), '111111');
+  await waitFor(() => expect(authApi.registerConfirm).toHaveBeenCalledTimes(1));
+
+  rerender(modalWith(REF_B, { onRegistrationConfirmed }));
+  await act(async () => { pendingA.resolve({ message: 'Регистрация завершена', email: confirmEmail }); });
+
+  expect(onRegistrationConfirmed).not.toHaveBeenCalled();
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(confirmHeading()).toBeInTheDocument();
+  codeCells().forEach((cell) => {
+    expect(cell).toHaveValue('');
+    expect(cell).toBeEnabled();
+  });
+  expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeInTheDocument();
+});
+
+test('поздняя ошибка запроса A после перехода на B: ни ошибки, ни терминального экрана A', async () => {
+  const pendingA = deferred();
+  authApi.registerConfirm.mockReturnValueOnce(pendingA.promise);
+  const { rerender } = render(modalWith(REF));
+  await hiddenProvidersReady();
+  typeCodeIn(confirmBody(), '111111');
+  await waitFor(() => expect(authApi.registerConfirm).toHaveBeenCalledTimes(1));
+
+  rerender(modalWith(REF_B));
+  await act(async () => {
+    pendingA.reject(Object.assign(
+      new Error('любой текст'), { status: 400, code: 'registration_reference_invalid' },
+    ));
+  });
+
+  expect(screen.queryByText(REF_INVALID_TEXT)).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(within(confirmBody()).getByRole('group', { name: 'Код подтверждения' })).toBeInTheDocument();
 });

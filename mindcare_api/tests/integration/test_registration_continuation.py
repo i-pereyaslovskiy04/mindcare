@@ -24,11 +24,13 @@ Registration reference = otp_verifications.id выпуска кода обычн
 import logging
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+import sqlalchemy as sa
 from sqlalchemy import func
 
 from app.audit import service as audit_service
@@ -449,3 +451,175 @@ def test_audit_writer_failure_does_not_break_registration(client, letters, test_
     r = _by_ref(client, ref, code)
     assert r.status_code == 201 and r.json()["email"] == test_email
     assert _users(test_email) == 1
+
+
+# ── Время после ожидания lock ────────────────────────────────────────────────
+#
+# Запрос ждёт advisory lock по email, который держит другая транзакция; пока
+# он ждёт, контролируемые часы переходят через срок кода / конец cooldown.
+# Решение обязано приниматься по времени ПОСЛЕ получения lock. Ожидание lock
+# подтверждается по pg_locks (не угадывается паузой).
+
+class _Clock:
+    def __init__(self, now):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+
+def _hold_email_lock(email, held, release):
+    with SessionLocal() as db:
+        otp_service.lock_email_otp(db, email)
+        held.set()
+        release.wait(timeout=30)
+        db.rollback()
+
+
+def _wait_until_waiting_for_advisory_lock(deadline_s=15):
+    end = time.monotonic() + deadline_s
+    while time.monotonic() < end:
+        with SessionLocal() as db:
+            waiting = db.execute(sa.text(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+            )).scalar()
+        if waiting:
+            return
+        time.sleep(0.01)
+    raise AssertionError("запрос не встал в ожидание advisory lock")
+
+
+def _run_while_lock_held(email, fn, on_waiting):
+    """fn() в отдельном потоке, пока lock email держит другая транзакция;
+    on_waiting() - когда fn() уже ждёт lock; затем lock отпускается."""
+    held, release = threading.Event(), threading.Event()
+    holder = threading.Thread(target=_hold_email_lock, args=(email, held, release))
+    holder.start()
+    try:
+        assert held.wait(15)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(fn)
+            _wait_until_waiting_for_advisory_lock()
+            on_waiting()
+            release.set()
+            try:
+                return ("ok", future.result(timeout=30))
+            except Exception as exc:   # noqa: BLE001 - исход проверяет тест
+                return ("error", exc)
+    finally:
+        release.set()
+        holder.join(15)
+
+
+@pytest.mark.parametrize("mode", ["reference", "email"])
+def test_code_expiring_while_waiting_for_lock_is_expired(
+    client, letters, test_email, monkeypatch, mode,
+):
+    _init(client, test_email)
+    code, ref = letters[test_email][0]
+    base = otp_service._utcnow()
+    with SessionLocal() as db:
+        db.query(OtpVerification).filter(OtpVerification.id == ref).update(
+            {"expires_at": base + timedelta(seconds=30)})
+        db.commit()
+    clock = _Clock(base)                       # до ожидания lock код ещё действует
+    monkeypatch.setattr(auth_storage, "_utcnow", clock)
+
+    if mode == "reference":
+        def confirm():
+            return auth_service.register_confirm(code=code, registration_reference=ref)
+    else:
+        def confirm():
+            return auth_service.register_confirm(email=test_email, code=code)
+
+    def _expire():
+        clock.now = base + timedelta(seconds=60)
+
+    kind, result = _run_while_lock_held(test_email, confirm, _expire)
+    assert kind == "error", "истёкший во время ожидания lock код принят"
+    assert result.error_code == "otp_expired"
+    assert _users(test_email) == 0 and _rows(test_email) == []
+
+
+def test_registration_cooldown_ending_while_waiting_for_lock(
+    client, letters, test_email, monkeypatch,
+):
+    _init(client, test_email)
+    (old,) = _rows(test_email)
+    base = otp_service._utcnow()
+    with SessionLocal() as db:
+        db.query(OtpVerification).filter(OtpVerification.id == old.id).update(
+            {"last_sent_at": base})
+        db.commit()
+    clock = _Clock(base + timedelta(seconds=30))     # cooldown ещё действует
+    monkeypatch.setattr(otp_service, "_utcnow", clock)
+    decided_at = base + timedelta(seconds=120)
+
+    def _pass_cooldown():
+        clock.now = decided_at
+
+    kind, issue = _run_while_lock_held(
+        test_email,
+        lambda: otp_service.issue_registration_otp(test_email, "Имя Фамилия", "bcrypt$x"),
+        _pass_cooldown,
+    )
+    assert kind == "ok", issue
+    (row,) = _rows(test_email)
+    assert row.id == issue.registration_reference != old.id
+    # Срок и время отправки - от того же момента решения после lock.
+    assert row.last_sent_at == decided_at == row.created_at
+    assert row.expires_at == decided_at + otp_service.OTP_TTL
+
+
+def test_shared_issue_helper_cooldown_ending_while_waiting_for_lock(
+    client, test_email, monkeypatch,
+):
+    # create_or_update_otp_in_tx - общий выпуск кода (reset, регистрация через
+    # провайдера); здесь через create_or_update_otp, как у password_reset_init.
+    otp_service.create_or_update_otp(test_email, "Имя Фамилия", None)
+    base = otp_service._utcnow()
+    with SessionLocal() as db:
+        db.query(OtpVerification).filter(OtpVerification.email == test_email).update(
+            {"last_sent_at": base})
+        db.commit()
+    clock = _Clock(base + timedelta(seconds=30))
+    monkeypatch.setattr(otp_service, "_utcnow", clock)
+    decided_at = base + timedelta(seconds=120)
+
+    def _pass_cooldown():
+        clock.now = decided_at
+
+    kind, result = _run_while_lock_held(
+        test_email,
+        lambda: otp_service.create_or_update_otp(test_email, "Имя Фамилия", None),
+        _pass_cooldown,
+    )
+    assert kind == "ok", result
+    (row,) = _rows(test_email)
+    assert row.last_sent_at == decided_at
+    assert row.expires_at == decided_at + otp_service.OTP_TTL
+
+
+def test_cooldown_still_active_after_lock_is_rejected(client, letters, test_email, monkeypatch):
+    # Обратный случай: ожидание lock не продлевает и не обходит cooldown.
+    _init(client, test_email)
+    (old,) = _rows(test_email)
+    base = otp_service._utcnow()
+    with SessionLocal() as db:
+        db.query(OtpVerification).filter(OtpVerification.id == old.id).update(
+            {"last_sent_at": base})
+        db.commit()
+    clock = _Clock(base + timedelta(seconds=10))
+    monkeypatch.setattr(otp_service, "_utcnow", clock)
+
+    def _still_cooldown():
+        clock.now = base + timedelta(seconds=40)
+
+    kind, exc = _run_while_lock_held(
+        test_email,
+        lambda: otp_service.issue_registration_otp(test_email, "Имя Фамилия", "bcrypt$x"),
+        _still_cooldown,
+    )
+    assert kind == "error" and "через 20 с" in str(exc)
+    (row,) = _rows(test_email)
+    assert row.id == old.id

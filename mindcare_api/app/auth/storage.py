@@ -570,13 +570,15 @@ def register_confirm_atomic(
     """
     if (email is None) == (registration_reference is None):
         raise ValueError("exactly one of email / registration_reference is required")
-    now = _utcnow()
 
     with SessionLocal() as db:
         # ── 1. OTP validation ───────────────────────────────────────────────
         email, record = _lock_registration_otp(
             db, email=email, reference=registration_reference,
         )
+        # Время - ПОСЛЕ lock и перечитывания записи: пока ждали lock, срок кода
+        # мог истечь, и прежнее значение пропустило бы истёкший код.
+        now = _utcnow()
 
         if now > record.expires_at:
             db.delete(record)

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './AuthModal.module.css';
 import { registerConfirm } from '../../../api/auth.api';
 import RegistrationOtpStep, { EMPTY_CODE, OTP_STATUS } from './RegistrationOtpStep';
@@ -37,6 +37,11 @@ function readableError(err) {
  * автоматического входа нет: onConfirmed(email) получает email из ответа
  * backend (только после успешной регистрации), владелец показывает вход.
  *
+ * Состояние живёт для ОДНОГО reference: владелец монтирует форму с
+ * key=reference, и смена ссылки в той же вкладке начинает поток заново. Ответ
+ * запроса, отправленного до смены ссылки, приходит в уже размонтированную
+ * форму и игнорируется — ни onConfirmed, ни ошибка прежней ссылки.
+ *
  * Нет reference (старое письмо, обрезанная ссылка) или он недействителен,
  * код истёк, попытки исчерпаны — экран с объяснением и одним действием
  * «Начать регистрацию заново» (onRestart). Повторной отправки по reference
@@ -48,6 +53,13 @@ export default function RegistrationConfirmForm({ registrationReference, onConfi
   const [status, setStatus] = useState(OTP_STATUS.READY);
   const [terminal, setTerminal] = useState(null);   // { message, announce }
   const confirming = useRef(false);
+  // Форма ещё показана: ответ после размонтирования (сменилась ссылка, модалку
+  // закрыли) относится к прежнему потоку и ничего не меняет.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   if (!registrationReference || terminal) {
     const message = terminal?.message ?? REFERENCE_MISSING_MESSAGE;
@@ -72,8 +84,10 @@ export default function RegistrationConfirmForm({ registrationReference, onConfi
     setStatus(OTP_STATUS.SUBMITTING);
     try {
       const data = await registerConfirm({ registrationReference, code: value });
+      if (!mounted.current) return;
       onConfirmed(typeof data?.email === 'string' ? data.email : '');
     } catch (err) {
+      if (!mounted.current) return;
       const terminalMessage = TERMINAL_MESSAGES[err?.code];
       if (terminalMessage) {
         setTerminal({ message: terminalMessage, announce: true });
