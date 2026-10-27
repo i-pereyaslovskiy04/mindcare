@@ -14,8 +14,8 @@ jest.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: mockPathname }),
   useNavigate: () => mockNavigate,
   Outlet: () => <div>OUTLET</div>,
-  NavLink: ({ children, to, 'aria-label': ariaLabel }) => (
-    <a href={to} aria-label={ariaLabel}>{children}</a>
+  NavLink: ({ children, to, 'aria-label': ariaLabel, title }) => (
+    <a href={to} aria-label={ariaLabel} title={title}>{children}</a>
   ),
   Link: ({ children, to, className, 'aria-label': ariaLabel, title, onClick }) => (
     <a
@@ -239,8 +239,11 @@ test('badgeLabel даёт пункту понятное доступное им�
   const link = screen.getByRole('link', { name: 'Подтверждение студентов, ожидают проверки: 3' });
   expect(link).toHaveAttribute('href', '/q');
   expect(within(link).getByText('3')).toHaveAttribute('aria-hidden', 'true');
-  const chat = screen.getByRole('link', { name: /Сообщения/ });
-  expect(chat).not.toHaveAttribute('aria-label');
+  expect(link).toHaveAttribute('title', 'Подтверждение студентов, ожидают проверки: 3');
+  // Без badgeLabel — имя и подсказка из подписи пункта (icon-rail её скрывает).
+  const chat = screen.getByRole('link', { name: 'Сообщения' });
+  expect(chat).toHaveAttribute('aria-label', 'Сообщения');
+  expect(chat).toHaveAttribute('title', 'Сообщения');
   expect(within(chat).getByText('2')).not.toHaveAttribute('aria-hidden');
 });
 
@@ -276,4 +279,49 @@ test.each([
   expect(Boolean(screen.queryByRole('button', { name: /^Уведомления/ }))).toBe(visible);
   expect(screen.queryByRole('button', { name: 'Уведомления — скоро' })).toBeNull();
   expect(chatApi.getSystemConversation).toHaveBeenCalledTimes(visible ? 1 : 0);
+});
+
+// ── «На сайт»: переход из кабинета на публичный сайт ────────────────────────
+
+describe('«На сайт» в кабинете', () => {
+  test.each(['student', 'psychologist', 'supervisor'])(
+    '%s: ссылка на / после навигации; бренд по-прежнему ведёт на главную кабинета',
+    (role) => {
+      mockAuth({ roles: [role], activeRole: role });
+      render(<CabinetLayout cabinetRole={role} navSections={NAV} crumbLabels={{}} />);
+      const site = screen.getByRole('link', { name: 'На сайт «Психология ДонГУ»' });
+      expect(site).toHaveAttribute('href', '/');
+      expect(site).toHaveAttribute('title', 'На сайт «Психология ДонГУ»');
+      expect(site).toHaveTextContent('На сайт');
+      // Не рабочий раздел: вне <nav>, без active-состояния.
+      screen.getAllByRole('navigation').forEach((landmark) => {
+        expect(within(landmark).queryByRole('link', { name: 'На сайт «Психология ДонГУ»' })).toBeNull();
+      });
+      expect(site).not.toHaveClass('active');
+      expect(screen.getByRole('link', { name: 'Психология ДонГУ, личный кабинет - на главную' }))
+        .toHaveAttribute('href', `/${role}`);
+      // ADR-031: прежней ссылки «На главную» в шапке нет.
+      expect(screen.queryByRole('link', { name: 'На главную' })).toBeNull();
+    },
+  );
+
+  test('порядок в sidebar: навигация → «На сайт» → footer университета', () => {
+    mockAuth({ roles: ['student'], activeRole: 'student' });
+    render(<CabinetLayout cabinetRole="student" navSections={NAV} crumbLabels={{}} />);
+    const links = within(screen.getByRole('complementary')).getAllByRole('link');
+    const names = links.map((l) => l.getAttribute('aria-label') || l.textContent);
+    expect(names.slice(-2)).toEqual(['На сайт «Психология ДонГУ»', 'psychology.center@donnu.ru']);
+    expect(names.indexOf('Сообщения')).toBeLessThan(names.indexOf('На сайт «Психология ДонГУ»'));
+  });
+
+  test('mobile drawer: «На сайт» есть и закрывает меню', () => {
+    mockAuth({ roles: ['student'], activeRole: 'student' });
+    render(<CabinetLayout cabinetRole="student" navSections={NAV} crumbLabels={{}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+    const drawer = screen.getByRole('dialog', { name: 'Меню кабинета' });
+    const site = within(drawer).getByRole('link', { name: 'На сайт «Психология ДонГУ»' });
+    expect(site).toHaveAttribute('href', '/');
+    fireEvent.click(site);
+    expect(screen.queryByRole('dialog', { name: 'Меню кабинета' })).toBeNull();
+  });
 });

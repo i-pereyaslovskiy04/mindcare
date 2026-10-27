@@ -64,9 +64,16 @@ export default function Navbar({ onOpenAuth }) {
   return (
     <nav className={styles.navbar}>
       <div className={styles.navFull}>
-        <div className={styles.navLogo}>
+        {/* Логотип публичного сайта — на его главную. В кабинетах бренд ведёт на
+            главную кабинета, а на сайт — строка «На сайт» в sidebar. */}
+        <Link
+          to="/"
+          className={styles.navLogo}
+          aria-label="Психология ДонГУ - на главную сайта"
+          onClick={closeMenu}
+        >
           Психо<span className={styles.navLogoHighlight}>логия</span> ДонГУ
-        </div>
+        </Link>
 
         {/* Desktop nav links — hidden on mobile via CSS */}
         <ul className={styles.navLinks}>

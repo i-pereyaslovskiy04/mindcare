@@ -118,9 +118,10 @@ test('renders links to the new email-domains and settings pages', () => {
   expect(securityLink).toHaveAttribute('href', '/admin/settings');
 });
 
-// Отдельная home-иконка на публичный «/» удалена: на главную панели ведёт
-// текстовый brand (а «Главная» в крошках — туда же).
-test('brand «Панель управления» ведёт на /admin; ссылки на публичный «/» нет', () => {
+// Отдельная home-иконка «На главную» в шапке удалена (ADR-031): на главную
+// панели ведёт текстовый brand (а «Главная» в крошках — туда же). На публичный
+// сайт — только строка «На сайт» в sidebar.
+test('brand «Панель управления» ведёт на /admin; на «/» — только «На сайт»', () => {
   mockAuth({ roles: ['admin'], activeRole: 'admin' });
   render(<AdminLayout />);
 
@@ -134,7 +135,9 @@ test('brand «Панель управления» ведёт на /admin; ссы
   expect(within(brand).queryByText('М')).toBeNull();
 
   expect(screen.queryByRole('link', { name: 'На главную' })).toBeNull();
-  expect(screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === '/')).toHaveLength(0);
+  const toSite = screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === '/');
+  expect(toSite).toHaveLength(1);
+  expect(toSite[0]).toHaveAccessibleName('На сайт «Психология ДонГУ»');
 });
 
 test('admin использует общий CabinetHeader: крошки, поиск, оформление, выход; без колокольчика', () => {
@@ -258,4 +261,31 @@ describe('mobile drawer админки (<=600px — та же модель, чт
     }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+});
+
+// ── «На сайт»: переход из панели управления на публичный сайт ───────────────
+
+test('«На сайт» в панели: / в той же вкладке, вне навигации, без active, с подсказкой', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  mockPathname = '/';
+  render(<AdminLayout />);
+  const site = screen.getByRole('link', { name: 'На сайт «Психология ДонГУ»' });
+  expect(site).toHaveAttribute('href', '/');
+  expect(site).toHaveAttribute('title', 'На сайт «Психология ДонГУ»');
+  expect(site).not.toHaveAttribute('target');
+  screen.getAllByRole('navigation').forEach((landmark) => {
+    expect(within(landmark).queryByRole('link', { name: 'На сайт «Психология ДонГУ»' })).toBeNull();
+  });
+  expect(site).not.toHaveClass('active');
+  expect(screen.getByRole('link', { name: 'Психология ДонГУ, панель управления - на главную' }))
+    .toHaveAttribute('href', '/admin');
+});
+
+test('mobile drawer панели: «На сайт» есть и закрывает меню', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(<AdminLayout />);
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+  const drawer = screen.getByRole('dialog', { name: 'Меню панели управления' });
+  fireEvent.click(within(drawer).getByRole('link', { name: 'На сайт «Психология ДонГУ»' }));
+  expect(screen.queryByRole('dialog', { name: 'Меню панели управления' })).toBeNull();
 });

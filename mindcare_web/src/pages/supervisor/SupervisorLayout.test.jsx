@@ -64,9 +64,9 @@ test('при нуле бейджа нет', async () => {
   getPendingVerificationsCount.mockResolvedValue({ count: 0 });
   render(<SupervisorLayout />);
   await waitFor(() => expect(getPendingVerificationsCount).toHaveBeenCalled());
-  // Точное имя без числа: бейджа нет, aria-label не задан.
+  // Точное имя без числа: бейджа нет — имя и подсказка из подписи пункта.
   const link = screen.getByRole('link', { name: 'Подтверждение студентов' });
-  expect(link).not.toHaveAttribute('aria-label');
+  expect(link).toHaveAttribute('aria-label', 'Подтверждение студентов');
 });
 
 test('ошибка загрузки — бейджа нет (неизвестное значение не показывается нулём)', async () => {
@@ -75,7 +75,7 @@ test('ошибка загрузки — бейджа нет (неизвестн�
   render(<SupervisorLayout />);
   await waitFor(() => expect(getPendingVerificationsCount).toHaveBeenCalled());
   expect(screen.getByRole('link', { name: 'Подтверждение студентов' }))
-    .not.toHaveAttribute('aria-label');
+    .toHaveAttribute('aria-label', 'Подтверждение студентов');
 });
 
 test('в режиме «под именем» и без роли supervisor счётчик не запрашивается', async () => {

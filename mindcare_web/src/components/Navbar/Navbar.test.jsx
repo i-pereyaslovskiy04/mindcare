@@ -87,3 +87,11 @@ test('выбор режима темы в панели работает', () => 
   fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }));
   expect(root().getAttribute('data-theme')).toMatch(/-dark$/);
 });
+
+test('логотип — ссылка на главную сайта; пункт «Главная» остаётся', () => {
+  renderNavbar();
+  const logo = screen.getByRole('link', { name: 'Психология ДонГУ - на главную сайта' });
+  expect(logo).toHaveAttribute('href', '/');
+  expect(logo).toHaveTextContent('Психология ДонГУ');
+  expect(screen.getAllByRole('link', { name: 'Главная' })[0]).toHaveAttribute('href', '/');
+});
