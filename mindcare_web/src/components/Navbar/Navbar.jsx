@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import ThemeToggle from '../../features/theme/ThemeToggle';
-import A11yToggle from '../../features/a11y/A11yToggle';
 import A11yPanel from '../../features/a11y/A11yPanel';
+import {
+  A11Y_APPEARANCE_SECTION, APPEARANCE_LABEL,
+} from '../../features/a11y/appearanceSection';
 import styles from './Navbar.module.css';
 
 const NAV_LINKS = [
@@ -62,9 +64,16 @@ export default function Navbar({ onOpenAuth }) {
   return (
     <nav className={styles.navbar}>
       <div className={styles.navFull}>
-        <div className={styles.navLogo}>
+        {/* Логотип публичного сайта — на его главную. В кабинетах бренд ведёт на
+            главную кабинета, а на сайт — строка «На сайт» в sidebar. */}
+        <Link
+          to="/"
+          className={styles.navLogo}
+          aria-label="Психология ДонГУ - на главную сайта"
+          onClick={closeMenu}
+        >
           Психо<span className={styles.navLogoHighlight}>логия</span> ДонГУ
-        </div>
+        </Link>
 
         {/* Desktop nav links — hidden on mobile via CSS */}
         <ul className={styles.navLinks}>
@@ -79,8 +88,14 @@ export default function Navbar({ onOpenAuth }) {
 
         {/* Right side: user icon (auth-aware) + burger (mobile only) */}
         <div className={styles.navRight}>
-          <A11yToggle />
-          <ThemeToggle compact className={styles.navThemeToggle} />
+          {/* «Оформление» — как в шапке кабинетов: тема, палитра и версия для
+              слабовидящих в одной панели. */}
+          <ThemeToggle
+            compact
+            className={styles.navThemeToggle}
+            label={APPEARANCE_LABEL}
+            extraSection={A11Y_APPEARANCE_SECTION}
+          />
           {!loading && (
             isAuthenticated ? (
               <Link

@@ -143,7 +143,7 @@ function DeactivationCard({ deactivateOwnAccount, endSession }) {
         <h2 id="settings-deactivate-title" className={styles.sectionTitle}>Отключение аккаунта</h2>
         <p className={styles.dangerText}>
           Вы потеряете доступ к сервису «Психология ДонГУ» на всех устройствах. Ваши данные
-          и email сохранятся — восстановить аккаунт может только
+          и email сохранятся - восстановить аккаунт может только
           администратор по вашему обращению.
         </p>
         <Button type="button" variant="danger" onClick={() => { setError(''); setOpen(true); }}>

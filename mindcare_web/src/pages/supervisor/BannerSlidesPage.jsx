@@ -178,7 +178,7 @@ export default function BannerSlidesPage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.pageTitle}>Баннер <em>сайта</em></h1>
-          <p className={styles.pageSub}>Слайды баннера — главная страница и страницы услуг.</p>
+          <p className={styles.pageSub}>Слайды баннера - главная страница и страницы услуг.</p>
         </div>
         <Button type="button" variant="primary" onClick={openCreate}>
           <Icon name="plus" size={14} /> Добавить

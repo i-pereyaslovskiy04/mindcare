@@ -484,6 +484,14 @@ POST /api/auth/register/confirm → создаёт user + consent_records
   теле POST; GET ссылки ничего не подтверждает. Ссылки в письмах — от
   FRONTEND_PUBLIC_URL, см. deploy/README.md «Окружения и адреса»
 
+Регистрация через Яндекс/VK (отдельно от обычной):
+callback → registration-ticket → raw ticket в HttpOnly SameSite=Strict cookie
+mindcare_oauth_registration (Path /api/auth/oauth/registration) → письмо с
+кодом и ссылкой /register/social (без секретов) → в ТОМ ЖЕ браузере
+POST /api/auth/oauth/registration/resume (read-only, код не отправляет) →
+шаг кода + согласие → confirm (ticket из тела или cookie; разные → 409) →
+аккаунт + identity + сессия, cookie удаляется. Без cookie — «начните заново».
+
 Логин:
 POST /api/auth/login → session_token в ответе
 Фронт хранит token в localStorage

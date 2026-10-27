@@ -94,7 +94,7 @@ export default function AdminLayout() {
       <Link
         to={ADMIN_HOME}
         className={styles.brand}
-        aria-label="Психология ДонГУ, панель управления — на главную"
+        aria-label="Психология ДонГУ, панель управления - на главную"
         title="На главную панели управления"
         onClick={closeMenu}
       >
@@ -140,6 +140,23 @@ export default function AdminLayout() {
           </div>
         ))}
       </nav>
+
+      {/* Переход на публичный сайт — не раздел панели: отдельно от навигации,
+          без active-состояния, в той же вкладке. */}
+      <div className={styles.siteNav}>
+        <Link
+          to="/"
+          className={`${styles.navItem} ${styles.siteLink}`}
+          aria-label="На сайт «Психология ДонГУ»"
+          title="На сайт «Психология ДонГУ»"
+          onClick={closeMenu}
+        >
+          <span className={styles.navIcon}>
+            <Icon name="globe" size={18} />
+          </span>
+          <span className={styles.navLabel}>На сайт</span>
+        </Link>
+      </div>
 
       <div className={styles.foot}>
         ФГАОУ ВО «Донецкий государственный университет»

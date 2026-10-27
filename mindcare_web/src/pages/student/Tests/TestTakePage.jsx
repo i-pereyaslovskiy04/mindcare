@@ -224,7 +224,7 @@ export default function TestTakePage() {
       {error && !stale && <p className={styles.error}>{error}</p>}
       {stale && (
         <p className={styles.error} role="alert">
-          Тест обновился, пока вы его проходили, — ответы отправить не удалось.
+          Тест обновился, пока вы его проходили - ответы отправить не удалось.
           Обновите страницу и пройдите тест заново.
         </p>
       )}

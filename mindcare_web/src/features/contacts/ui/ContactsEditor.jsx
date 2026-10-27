@@ -183,7 +183,7 @@ export default function ContactsEditor({ contacts, audienceNote, idPrefix = 'con
                   <div className={styles.rowAlert} role="alert">
                     <p className={styles.rowAlertText}>
                       Сервер не принял прежнюю подпись этого контакта: «{row.label}».
-                      {' '}{errors.hiddenLabel}. Подпись не нужна для связи — её можно удалить.
+                      {' '}{errors.hiddenLabel}. Подпись не нужна для связи - её можно удалить.
                     </p>
                     <Button
                       id={fieldDomId(idPrefix, row.id, 'label')}
@@ -228,7 +228,7 @@ export default function ContactsEditor({ contacts, audienceNote, idPrefix = 'con
           <div className={styles.conflict} role="alert">
             <p className={styles.conflictText}>
               Контакты были изменены в другом окне или на другом устройстве.
-              Ваши правки сохранены в форме — выберите, что сделать.
+              Ваши правки сохранены в форме - выберите, что сделать.
             </p>
             {conflict.saved && (
               <details className={styles.saved}>

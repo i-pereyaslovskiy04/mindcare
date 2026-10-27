@@ -244,6 +244,23 @@
   letter-spacing: 0.05em;
 }
 
+/* Переход на публичный сайт: между рабочей навигацией и footer, отделён
+   разделителем; вид пункта навигации, но спокойнее и без active-состояния. */
+.siteNav {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--nav-border);
+}
+.siteLink {
+  margin-bottom: 0;
+}
+.siteLink .navIcon {
+  color: var(--text-light);
+}
+.siteLink:hover .navIcon {
+  color: var(--espresso);
+}
+
 /* ── sidebar footer ── */
 .foot {
   padding: 14px 16px;
@@ -378,6 +395,10 @@
 
   .sidebar .navItemSoon {
     display: none;
+  }
+
+  .sidebar .siteNav {
+    padding: 8px;
   }
 
   .sidebar .foot {

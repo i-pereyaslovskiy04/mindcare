@@ -428,7 +428,7 @@ export default function SchedulePage() {
 
               <div className={styles.seriesMeta}>
                 Действует: {s.effective_from}
-                {s.effective_until ? ` — ${s.effective_until}` : ' — бессрочно'}
+                {s.effective_until ? ` - ${s.effective_until}` : ' - бессрочно'}
               </div>
 
               {s.breaks.length > 0 && (
@@ -510,7 +510,7 @@ export default function SchedulePage() {
             {editingSeriesId ? 'Редактирование расписания' : 'Новое расписание'}
           </h2>
           <p className={styles.pageSub}>
-            Рабочие окна психолога. Тип встречи выбирается при записи —
+            Рабочие окна психолога. Тип встречи выбирается при записи -
             здесь его указывать не нужно.
           </p>
 

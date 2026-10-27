@@ -111,7 +111,7 @@ export default function GroupSessionsPanel() {
               <span className={styles.metaItem}>
                 <Icon name="calendar" size={13} />
                 {fmtDatetime(gs.starts_at)}
-                {gs.ends_at ? ` — ${fmtDatetime(gs.ends_at)}` : ''}
+                {gs.ends_at ? ` - ${fmtDatetime(gs.ends_at)}` : ''}
               </span>
               <span className={styles.metaItem}>
                 <Icon name="users" size={13} />

@@ -55,7 +55,7 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
       <Link
         to={homePath}
         className={styles.brand}
-        aria-label="Психология ДонГУ, личный кабинет — на главную"
+        aria-label="Психология ДонГУ, личный кабинет - на главную"
         title="На главную кабинета"
         onClick={closeMenu}
       >
@@ -96,10 +96,11 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
                   to={item.to}
                   end={item.end ?? true}
                   onClick={closeMenu}
-                  // badgeLabel — понятное доступное имя («…, ожидают проверки: 3»)
-                  // и в icon-rail, где подпись пункта скрыта.
-                  aria-label={item.badgeLabel ? `${item.label}, ${item.badgeLabel}` : undefined}
-                  title={item.badgeLabel ? `${item.label}, ${item.badgeLabel}` : undefined}
+                  // Доступное имя и подсказка — у каждого пункта: в icon-rail
+                  // подпись скрыта (display: none). С badgeLabel — расширенное
+                  // имя («…, ожидают проверки: 3»).
+                  aria-label={item.badgeLabel ? `${item.label}, ${item.badgeLabel}` : item.label}
+                  title={item.badgeLabel ? `${item.label}, ${item.badgeLabel}` : item.label}
                   className={({ isActive }) =>
                     `${styles.navItem}${isActive ? ` ${styles.active}` : ''}`
                   }
@@ -117,6 +118,22 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
           </div>
         ))}
       </nav>
+
+      {/* Переход на публичный сайт — не рабочий раздел кабинета: отдельно от
+          навигации, без active-состояния, в той же вкладке (сессия та же;
+          обратно — «Личный кабинет» на сайте). */}
+      <div className={styles.siteNav}>
+        <Link
+          to="/"
+          className={`${styles.navItem} ${styles.siteLink}`}
+          aria-label="На сайт «Психология ДонГУ»"
+          title="На сайт «Психология ДонГУ»"
+          onClick={closeMenu}
+        >
+          <span className={styles.navIcon}><Icon name="globe" size={18} /></span>
+          <span className={styles.navLabel}>На сайт</span>
+        </Link>
+      </div>
 
       <div className={styles.foot}>
         ФГАОУ ВО «Донецкий государственный университет»<br />

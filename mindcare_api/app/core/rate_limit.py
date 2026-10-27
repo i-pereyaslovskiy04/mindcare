@@ -59,6 +59,9 @@ RULES: dict[str, tuple[int, float]] = {
     "oauth_registration_email:email":    (3,  900),
     "oauth_registration_confirm:ip":     (30, 600),
     "oauth_registration_confirm:ticket": (10, 600),
+    # Продолжение из письма (/register/social): только чтение, как preview.
+    "oauth_registration_resume:ip":      (60, 300),
+    "oauth_registration_resume:ticket":  (20, 300),
 }
 
 

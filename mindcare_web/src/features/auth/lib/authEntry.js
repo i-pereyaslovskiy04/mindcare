@@ -17,6 +17,11 @@
 export const AUTH_TABS = Object.freeze(['login', 'register']);
 /** Подтверждение регистрации по ссылке из письма (без вкладок «Вход | Регистрация»). */
 export const AUTH_CONFIRM = 'confirm';
+/**
+ * Продолжение регистрации через Яндекс/VK из письма (/register/social). Только
+ * маршрут (Home routeAuth), не router state: ticket — в HttpOnly cookie.
+ */
+export const AUTH_SOCIAL_CONTINUE = 'social';
 const AUTH_ENTRIES = Object.freeze([...AUTH_TABS, AUTH_CONFIRM]);
 export const MESSAGE_TONES = Object.freeze(['info', 'error']);
 export const DEFAULT_MESSAGE_TONE = 'info';

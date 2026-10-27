@@ -355,7 +355,7 @@ function CompactThemeMenu({
                   const isActive = mode === value;
                   const title =
                     value === 'system'
-                      ? `${modeLabel} — сейчас: ${resolvedMode === 'dark' ? 'тёмная' : 'светлая'}`
+                      ? `${modeLabel} - сейчас: ${resolvedMode === 'dark' ? 'тёмная' : 'светлая'}`
                       : modeLabel;
                   return (
                     <button
@@ -459,7 +459,7 @@ export default function ThemeToggle({
           const isActive = mode === value;
           const title =
             value === 'system'
-              ? `${modeLabel} — сейчас: ${resolvedMode === 'dark' ? 'тёмная' : 'светлая'}`
+              ? `${modeLabel} - сейчас: ${resolvedMode === 'dark' ? 'тёмная' : 'светлая'}`
               : modeLabel;
           return (
             <button

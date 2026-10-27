@@ -38,6 +38,14 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
       return <svg {...props}><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9z" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>;
     case 'search':
       return <svg {...props}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>;
+    case 'globe':
+      // Публичный сайт (переход из кабинета «На сайт»); home — главная кабинета.
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+        </svg>
+      );
     case 'arrow-right':
       return <svg {...props}><path d="M5 12h14M13 5l7 7-7 7" /></svg>;
     case 'heart':

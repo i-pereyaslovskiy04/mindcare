@@ -266,3 +266,11 @@ test('GuestOnly: вошедший пользователь → кабинет', 
   expect(screen.getByText('NAV:/dashboard')).toBeInTheDocument();
   expect(screen.queryByText('CONFIRM_SCREEN')).toBeNull();
 });
+
+test('/register/social — главная с продолжением регистрации через провайдера, без секретов в адресе', () => {
+  expect(ROUTER_SOURCE).toMatch(
+    /<Route path="\/register\/social" element=\{<GuestOnly><Home routeAuth="social" \/><\/GuestOnly>\} \/>/,
+  );
+  expect(ROUTER_SOURCE.match(/path="\/register\/social"/g)).toHaveLength(1);
+  expect(ROUTER_SOURCE).not.toMatch(/register\/social\/:|register\/social\?/);
+});

@@ -23,7 +23,7 @@ const DAY_LABEL = [
 
 function fmtPeriod(item) {
   return `Действует: ${item.effective_from}`
-    + (item.effective_until ? ` — ${item.effective_until}` : ' — бессрочно');
+    + (item.effective_until ? ` - ${item.effective_until}` : ' - бессрочно');
 }
 
 /**

@@ -20,6 +20,7 @@ jest.mock('../../features/auth/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../api/auth.api', () => ({
   oauthStart: jest.fn(), registerInit: jest.fn(), registerConfirm: jest.fn(),
   oauthRegistrationInit: jest.fn(), oauthRegistrationPreview: jest.fn(),
+  oauthRegistrationResume: jest.fn(),
 }));
 jest.mock('../../api/config.api', () => ({
   ...jest.requireActual('../../api/config.api'),
@@ -559,4 +560,79 @@ test('смена fragment в той же вкладке: ошибка прежн
   expect(screen.queryByText(invalid)).toBeNull();
   expect(codeGroup()).toBeInTheDocument();
   expect(mockNavigate).not.toHaveBeenCalled();
+});
+
+// ── /register/social: продолжение регистрации через провайдера из письма ────
+
+describe('/register/social', () => {
+  let social;
+  let resumeSocialRegistration;
+  let clearSocialRegistration;
+
+  function mockAuth(over = {}) {
+    AuthContext.useAuth.mockImplementation(() => ({
+      loading: false, isAuthenticated: false, login: jest.fn(),
+      completeOAuthRegistration: jest.fn(),
+      socialRegistration: social, resumeSocialRegistration, clearSocialRegistration,
+      ...over,
+    }));
+  }
+
+  beforeEach(() => {
+    social = null;
+    resumeSocialRegistration = jest.fn(() => {
+      social = Object.freeze({ ticket: null, provider: null, emailStep: false, resume: true });
+    });
+    clearSocialRegistration = jest.fn(() => { social = null; });
+    mockLocation = { pathname: '/register/social', search: '', hash: '', key: 's1', state: null };
+    mockAuth();
+  });
+
+  test('открытие ссылки → один resume; модалка не на «Входе», код не отправляется', async () => {
+    authApi.oauthRegistrationResume.mockReturnValue(new Promise(() => {}));
+    const { rerender } = render(<Home routeAuth="social" />);
+    expect(resumeSocialRegistration).toHaveBeenCalledTimes(1);
+    rerender(<Home routeAuth="social" />);
+    expect(await screen.findByText('Восстанавливаем регистрацию…')).toBeInTheDocument();
+    expect(resumeSocialRegistration).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('вошедшему пользователю resume не нужен', () => {
+    mockAuth({ isAuthenticated: true });
+    render(<Home routeAuth="social" />);
+    expect(resumeSocialRegistration).not.toHaveBeenCalled();
+  });
+
+  test('нет cookie этого браузера → replace на главную: «Вход» с понятным сообщением', async () => {
+    authApi.oauthRegistrationResume.mockRejectedValue(Object.assign(
+      new Error('x'), { status: 400, code: 'oauth_registration_not_found' },
+    ));
+    const { rerender } = render(<Home routeAuth="social" />);
+    rerender(<Home routeAuth="social" />);
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/', {
+      replace: true,
+      state: {
+        openAuth: 'login',
+        message: 'Продолжить регистрацию можно только в браузере, где вы начинали вход '
+          + 'через Яндекс или VK. Начните заново.',
+        messageTone: 'error',
+      },
+    }));
+    expect(clearSocialRegistration).toHaveBeenCalled();
+  });
+
+  test('закрытие модалки на /register/social уводит на главную', async () => {
+    authApi.oauthRegistrationResume.mockReturnValue(new Promise(() => {}));
+    const { rerender } = render(<Home routeAuth="social" />);
+    rerender(<Home routeAuth="social" />);
+    await screen.findByText('Восстанавливаем регистрацию…');
+    fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+    expect(clearSocialRegistration).toHaveBeenCalled();
+    // Закрытая модалка возвращается в обычный режим — дождаться его загрузки.
+    await settled();
+  });
 });

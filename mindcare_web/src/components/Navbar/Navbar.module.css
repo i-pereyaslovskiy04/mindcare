@@ -28,6 +28,19 @@
   line-height: 1;
 }
 
+/* Логотип — ссылка на главную сайта: вид прежний, без подчёркивания. */
+a.navLogo {
+  text-decoration: none;
+  border-radius: 6px;
+}
+a.navLogo:hover .navLogoHighlight {
+  color: var(--espresso);
+}
+a.navLogo:focus-visible {
+  outline: 2.5px solid var(--coffee);
+  outline-offset: 4px;
+}
+
 .navLogoHighlight {
   color: var(--coffee);
   font-style: italic;

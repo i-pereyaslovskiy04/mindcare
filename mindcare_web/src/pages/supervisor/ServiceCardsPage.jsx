@@ -270,7 +270,7 @@ export default function ServiceCardsPage() {
 
           <div className={styles.formField}>
             <label className={styles.formLabel}>
-              Преимущества <span className={styles.formHint}>— по одному пункту на строку</span>
+              Преимущества <span className={styles.formHint}>- по одному пункту на строку</span>
             </label>
             <textarea
               className={styles.formTextarea}

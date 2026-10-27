@@ -44,7 +44,7 @@ def issued(monkeypatch):
     monkeypatch.setattr(service.storage, "complete_registration_atomic", _complete)
     monkeypatch.setattr(
         "app.services.email_service.send_registration_otp",
-        lambda to, code: calls["sent"].append((to, code)),
+        lambda to, code, **kw: calls["sent"].append((to, code, kw)),
     )
     return calls
 
@@ -105,7 +105,8 @@ def test_init_hashes_ticket_sends_to_ticket_email_and_masks(issued):
     masked = service.registration_init(TICKET)
     assert issued["issue"] == [hashlib.sha256(TICKET.encode()).hexdigest()]
     assert issued["issue"][0] != TICKET
-    assert issued["sent"] == [(EMAIL, "123456")]       # письмо — после storage
+    # письмо — после storage, со ссылкой продолжения /register/social
+    assert issued["sent"] == [(EMAIL, "123456", {"social_continuation": True})]
     assert masked == "i***@yandex.ru" and EMAIL not in masked
     assert issued["chosen"] == [None]                  # клиент email не выбирал
 
@@ -114,7 +115,7 @@ def test_init_with_chosen_email_is_normalized_and_sent_there(issued):
     """VK-1B: адрес, выбранный пользователем, нормализуется до storage."""
     masked = service.registration_init(TICKET, "  New.Address@DonNU.ru ")
     assert issued["chosen"] == ["new.address@donnu.ru"]
-    assert issued["sent"] == [("new.address@donnu.ru", "123456")]
+    assert issued["sent"] == [("new.address@donnu.ru", "123456", {"social_continuation": True})]
     assert masked == "n***@donnu.ru"
 
 
@@ -140,7 +141,7 @@ def test_empty_ticket_is_invalid_without_storage(issued, ticket):
 
 
 def test_email_delivery_failure_is_safe_error(issued, monkeypatch, caplog):
-    def _smtp_down(to, code):
+    def _smtp_down(to, code, **kw):
         raise RuntimeError("SMTP SECRET detail 123456")
 
     monkeypatch.setattr("app.services.email_service.send_registration_otp", _smtp_down)

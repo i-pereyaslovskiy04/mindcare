@@ -231,6 +231,23 @@
   text-align: center;
 }
 
+/* Переход на публичный сайт: между рабочей навигацией и footer, отделён
+   разделителем; вид пункта навигации, но спокойнее и без active-состояния. */
+.siteNav {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--nav-border);
+}
+.siteLink {
+  margin-bottom: 0;
+}
+.siteLink .navIcon {
+  color: var(--text-light);
+}
+.siteLink:hover .navIcon {
+  color: var(--espresso);
+}
+
 /* Footer */
 .foot {
   padding: 14px 16px;
@@ -345,6 +362,11 @@
     min-width: 16px;
     padding: 1px 4px;
     font-size: 10px;
+  }
+
+  /* «На сайт»: только иконка (подпись — aria-label/title) */
+  .sidebar .siteNav {
+    padding: 8px;
   }
 
   /* Footer: hide */

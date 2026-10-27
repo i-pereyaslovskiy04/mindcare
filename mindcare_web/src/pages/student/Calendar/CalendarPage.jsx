@@ -332,7 +332,7 @@ export default function CalendarPage() {
                 </div>
               ) : (
                 <span className={styles.slotHint}>
-                  {modality === 'online' ? 'Онлайн' : 'Очно'} — единственный доступный формат
+                  {modality === 'online' ? 'Онлайн' : 'Очно'} - единственный доступный формат
                 </span>
               )}
             </div>
