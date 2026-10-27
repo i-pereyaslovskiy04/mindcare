@@ -14,8 +14,10 @@
  *   - Незавершённая регистрация через внешний провайдер: одноразовый ticket
  *     регистрации, который `/auth/callback` передаёт главной с AuthModal.
  *   - ТОЛЬКО в памяти (React state): не в URL, router state, localStorage и
- *     sessionStorage. Перезагрузка страницы его теряет — пользователь начинает
- *     вход через провайдера заново.
+ *     sessionStorage. Перезагрузка страницы его теряет.
+ *   - Продолжение из письма (/register/social): ticket в JS нет вовсе — его
+ *     держит HttpOnly cookie браузера, прошедшего вход через провайдера;
+ *     состояние { ticket: null, resume: true } — шаг восстанавливает resume.
  *
  * Registration handoff (`registeredEmail`):
  *   - Регистрация подтверждена по ссылке из письма (/register/confirm#r=…),
@@ -49,7 +51,7 @@ const ACTIVE_ROLE_KEY = 'mindcare_active_role';
 const IMPERSONATOR_KEY = 'mindcare_impersonator';
 // Где может жить незавершённая регистрация через провайдера: технический
 // маршрут callback (передаёт её) и главная (AuthModal её продолжает).
-const SOCIAL_REGISTRATION_PATHS = Object.freeze(['/', '/auth/callback']);
+const SOCIAL_REGISTRATION_PATHS = Object.freeze(['/', '/auth/callback', '/register/social']);
 
 function getStoredToken() {
   return localStorage.getItem(SESSION_KEY);
@@ -248,6 +250,16 @@ export function AuthProvider({ children }) {
     }));
   }, []);
 
+  /**
+   * Продолжение регистрации из письма (/register/social): ticket — в HttpOnly
+   * cookie (JS его не видит), провайдер и шаг узнаёт сам поток через resume.
+   */
+  const resumeSocialRegistration = useCallback(() => {
+    setSocialRegistration(Object.freeze({
+      ticket: null, provider: null, emailStep: false, resume: true,
+    }));
+  }, []);
+
   /** «Начать заново», закрытие модалки, терминальная ошибка: ticket забыт. */
   const clearSocialRegistration = useCallback(() => setSocialRegistration(null), []);
 
@@ -428,6 +440,7 @@ export function AuthProvider({ children }) {
     completeOAuthRegistration,
     socialRegistration,
     beginSocialRegistration,
+    resumeSocialRegistration,
     clearSocialRegistration,
     registeredEmail,
     rememberRegisteredEmail,

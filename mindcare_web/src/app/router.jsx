@@ -118,6 +118,9 @@ export default function AppRouter() {
       <Route path="/login"    element={<LegacyAuthRedirect tab="login" />} />
       <Route path="/register" element={<LegacyAuthRedirect tab="register" />} />
       <Route path="/register/confirm" element={<GuestOnly><Home routeAuth="confirm" /></GuestOnly>} />
+      {/* Продолжение регистрации через Яндекс/VK из письма: ticket — в HttpOnly
+          cookie этого браузера, в адресе секретов нет. */}
+      <Route path="/register/social" element={<GuestOnly><Home routeAuth="social" /></GuestOnly>} />
       {/* Публичный: завершение входа через внешний провайдер (Stage Social Auth 3B) */}
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 

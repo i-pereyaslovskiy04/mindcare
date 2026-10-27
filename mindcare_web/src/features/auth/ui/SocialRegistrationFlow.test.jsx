@@ -19,6 +19,7 @@ jest.mock('../AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../../api/auth.api', () => ({
   oauthRegistrationInit: jest.fn(),
   oauthRegistrationPreview: jest.fn(),
+  oauthRegistrationResume: jest.fn(),
 }));
 // Шпионы над НАСТОЯЩИМИ шагами: считают монтирования, рендер не подменяется
 // (реализация восстанавливается в beforeEach — CRA resetMocks).
@@ -582,4 +583,91 @@ test('тексты шагов: без длинного тире и символ�
   submitManual();
   await codeStep();
   expect(container.textContent).not.toMatch(/[—–←→]/);
+});
+
+// ── продолжение из письма (/register/social): ticket в HttpOnly cookie ──────
+
+const RESUME = Object.freeze({ ticket: null, provider: null, emailStep: false, resume: true });
+const resumeData = (over = {}) => ({
+  provider: 'yandex', email_masked: MASKED, email_allowed: true, email_editable: false,
+  code_active: true, resend_in_seconds: 37, ...over,
+});
+
+test('resume: сразу шаг кода, без preview и без автоматической отправки кода', async () => {
+  authApi.oauthRegistrationResume.mockResolvedValue(resumeData());
+  renderFlow(RESUME, strict);
+  await codeStep();
+  expect(authApi.oauthRegistrationResume).toHaveBeenCalledTimes(1);
+  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+  expect(authApi.oauthRegistrationPreview).not.toHaveBeenCalled();
+  expect(screen.getByText(MASKED)).toBeInTheDocument();
+  // Остаток cooldown — с сервера.
+  expect(screen.getByText(/Отправить повторно через/)).toHaveTextContent('37');
+  expect(screen.getByRole('checkbox')).toBeInTheDocument();          // согласие MindCare
+  expect(onStepChange).toHaveBeenLastCalledWith(SOCIAL_STEP.OTP);
+});
+
+test('resume: код + согласие → confirm без ticket в JS (cookie), затем кабинет', async () => {
+  authApi.oauthRegistrationResume.mockResolvedValue(resumeData());
+  renderFlow(RESUME);
+  await codeStep();
+  fireEvent.click(screen.getByRole('checkbox'));
+  typeCode('482915');
+  await waitFor(() => expect(completeOAuthRegistration).toHaveBeenCalledWith(null, '482915', true));
+  expect(completeOAuthRegistration).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard'));
+});
+
+test('resume: код из письма больше не действует → подсказка и повторная отправка по cookie', async () => {
+  authApi.oauthRegistrationResume.mockResolvedValue(resumeData({ code_active: false, resend_in_seconds: 0 }));
+  renderFlow(RESUME);
+  await codeStep();
+  expect(screen.getByRole('alert')).toHaveTextContent('Код из письма больше не действует');
+  fireEvent.click(screen.getByRole('button', { name: 'Отправить повторно' }));
+  await waitFor(() => expect(authApi.oauthRegistrationInit).toHaveBeenCalledWith({ ticket: null }));
+});
+
+test('resume VK без адреса → шаг email; адрес уходит без ticket (cookie)', async () => {
+  authApi.oauthRegistrationResume.mockResolvedValue(resumeData({
+    provider: 'vk', email_masked: null, email_allowed: false, email_editable: true,
+    code_active: false, resend_in_seconds: 0,
+  }));
+  renderFlow(RESUME);
+  await screen.findByRole('heading', { name: 'Почта для регистрации' });
+  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+  submitManual();
+  await waitFor(() => expect(authApi.oauthRegistrationInit).toHaveBeenCalledWith({
+    ticket: null, email: NEW_EMAIL,
+  }));
+});
+
+test('resume VK с адресом: «Изменить email» доступно в том же браузере', async () => {
+  authApi.oauthRegistrationResume.mockResolvedValue(resumeData({ provider: 'vk', email_editable: true }));
+  renderFlow(RESUME);
+  await codeStep();
+  fireEvent.click(screen.getByRole('button', { name: 'Изменить email' }));
+  expect(await screen.findByRole('heading', { name: 'Почта для регистрации' })).toBeInTheDocument();
+});
+
+test('resume без cookie этого браузера → выход на вход с понятным сообщением', async () => {
+  authApi.oauthRegistrationResume.mockRejectedValue(Object.assign(
+    new Error('server text'), { status: 400, code: 'oauth_registration_not_found' },
+  ));
+  renderFlow(RESUME);
+  await waitFor(() => expect(onExit).toHaveBeenCalledWith({
+    tab: 'login',
+    message: 'Продолжить регистрацию можно только в браузере, где вы начинали вход через '
+      + 'Яндекс или VK. Начните заново.',
+    messageTone: 'error',
+  }));
+  expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
+});
+
+test('resume: истёкший ticket → терминальный выход «начните заново»', async () => {
+  authApi.oauthRegistrationResume.mockRejectedValue(Object.assign(
+    new Error('x'), { status: 400, code: 'oauth_ticket_invalid' },
+  ));
+  renderFlow(RESUME);
+  await waitFor(() => expect(onExit).toHaveBeenCalled());
+  expect(onExit.mock.calls[0][0].message).toMatch(/истекло/);
 });

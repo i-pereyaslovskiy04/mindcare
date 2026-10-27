@@ -61,6 +61,14 @@ STATE_COOKIE_NAME = "mindcare_oauth_state"
 STATE_COOKIE_PATH = "/api/auth/oauth"
 STATE_COOKIE_MAX_AGE = int(STATE_TTL.total_seconds())
 
+# Продолжение регистрации через провайдера из письма (/register/social):
+# raw registration-ticket живёт в HttpOnly cookie браузера, прошедшего OAuth.
+# В письме, URL, storage и JS ticket нет; без cookie (другой браузер или
+# устройство) продолжить нельзя — это и защита от pre-hijacking у VK
+# (чужое письмо с кодом без cookie не завершит привязку чужой identity).
+REGISTRATION_COOKIE_NAME = "mindcare_oauth_registration"
+REGISTRATION_COOKIE_PATH = "/api/auth/oauth/registration"
+
 # Фиксированные внешние коды callback (fragment). Текст провайдера наружу
 # никогда не попадает.
 RESULT_LOGIN = "login"
@@ -90,6 +98,10 @@ class CallbackOutcome:
     # auth_log.auth_method). None — провайдер не разрешён реестром; сырой
     # path-параметр сюда не попадает.
     provider: Optional[str] = None
+    # Новый registration-ticket (raw) и его срок — для HttpOnly cookie
+    # продолжения регистрации. Только у исхода result=registration.
+    registration_ticket: Optional[str] = field(default=None, repr=False)
+    registration_expires_at: Optional[datetime] = None
 
 
 @dataclass(frozen=True)
@@ -252,18 +264,22 @@ def handle_callback(
             suggested_name = _initial_name(identity.suggested_name, email)
             fragment_step = None
         ticket = generate_ticket()
+        expires_at = _now() + REGISTRATION_TICKET_TTL
         storage.create_registration_ticket(
             ticket_hash=sha256_hex(ticket),
             provider=name,
             subject=identity.subject,
             email=email,
             suggested_name=suggested_name,
-            expires_at=_now() + REGISTRATION_TICKET_TTL,
+            expires_at=expires_at,
         )
         fragment["ticket"] = ticket
         if fragment_step is not None:
             fragment["step"] = fragment_step
-        return CallbackOutcome(fragment, True, None, name)
+        return CallbackOutcome(
+            fragment, True, None, name,
+            registration_ticket=ticket, registration_expires_at=expires_at,
+        )
 
     user = found["user"]
     try:
@@ -411,6 +427,49 @@ def registration_preview(ticket: str) -> dict:
     }
 
 
+def registration_resume(ticket: str) -> dict:
+    """
+    Продолжение регистрации из письма (/register/social, ticket из HttpOnly
+    cookie): состояние для восстановления шага — без изменений. Ticket не
+    списывается и не продлевается, код не отправляется и не продлевается,
+    email не меняется.
+
+    Поля preview плюс состояние кода:
+      * code_active       — код для адреса ticket выдан, не истёк и попытки
+                            не исчерпаны (его можно ввести из письма);
+      * resend_in_seconds — сколько ждать до повторной отправки (cooldown).
+    """
+    if not ticket:
+        raise OAuthTicketInvalidError()
+    state = storage.get_registration_resume_state(sha256_hex(ticket))
+    policy = registration_policy(state["provider"])
+    if policy is None:
+        raise OAuthTicketInvalidError()
+    email = state["email"]
+    allowed = email is not None and (
+        not policy.enforce_allowlist or _email_allowed_now(email)
+    )
+    return {
+        "provider": state["provider"],
+        "email_masked": mask_email(email) if email else None,
+        "email_allowed": allowed,
+        "email_editable": policy.email_choice,
+        "code_active": state["code_active"],
+        "resend_in_seconds": state["resend_in_seconds"],
+    }
+
+
+def registration_ticket_alive(ticket: str) -> bool:
+    """Жив ли registration-ticket (для очистки бесполезной cookie)."""
+    if not ticket:
+        return False
+    try:
+        storage.get_registration_ticket(sha256_hex(ticket))
+    except OAuthTicketInvalidError:
+        return False
+    return True
+
+
 def registration_init(ticket: str, email: Optional[str] = None) -> str:
     """
     Отправка (и повторная отправка) кода регистрации.
@@ -441,7 +500,9 @@ def registration_init(ticket: str, email: Optional[str] = None) -> str:
     from app.services.email_service import send_registration_otp
     delivered = True
     try:
-        send_registration_otp(bound_email, code)
+        # Ссылка «Продолжить регистрацию →» — на /register/social без секретов:
+        # ticket остаётся в HttpOnly cookie этого браузера.
+        send_registration_otp(bound_email, code, social_continuation=True)
     except Exception as exc:   # noqa: BLE001 — без текста SMTP и без кода в логах
         delivered = False
         log.warning(

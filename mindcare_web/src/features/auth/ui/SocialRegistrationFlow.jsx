@@ -5,8 +5,11 @@ import { useAuth } from '../AuthContext';
 import RegistrationOtpStep, {
   EMPTY_CODE, OTP_STATUS, RESEND_COOLDOWN, useResendTimer,
 } from './RegistrationOtpStep';
+import { oauthRegistrationResume } from '../../../api/auth.api';
 import SocialEmailStep from './SocialEmailStep';
-import { isRegistrationTerminal, registrationErrorMessage } from '../lib/oauthCallback';
+import {
+  RESUME_CODE_INACTIVE_MESSAGE, isRegistrationTerminal, registrationErrorMessage, safeProvider,
+} from '../lib/oauthCallback';
 import styles from './AuthModal.module.css';
 
 /** Шаги регистрации через провайдера; AuthModal строит по ним свой режим. */
@@ -50,10 +53,19 @@ export const SOCIAL_STEP = Object.freeze({
  *      заново»), игнорируется.
  */
 export default function SocialRegistrationFlow({ registration, onStepChange, onExit }) {
-  const { ticket, provider, emailStep } = registration;
+  const { ticket, emailStep, resume } = registration;
   const navigate = useNavigate();
-  const [state, setState] = useState({ step: SOCIAL_STEP.LOADING, sending: !emailStep });
+  // resume — продолжение из письма (/register/social): ticket в HttpOnly cookie,
+  // провайдер и шаг приходят из resume; код автоматически НЕ отправляется
+  // (иначе код из письма перестал бы действовать).
+  const [provider, setProvider] = useState(registration.provider);
+  const [state, setState] = useState(() => (
+    resume
+      ? { step: SOCIAL_STEP.LOADING, sending: false, resuming: true }
+      : { step: SOCIAL_STEP.LOADING, sending: !emailStep }
+  ));
   const alive = useRef(false);
+  const resumeStarted = useRef(false);
   const previewStarted = useRef(false);
   const initStarted = useRef(false);
   const emailSubmitting = useRef(false);
@@ -86,9 +98,39 @@ export default function SocialRegistrationFlow({ registration, onStepChange, onE
     exitRef.current?.({ tab: 'register' });
   }, []);
 
+  // Продолжение из письма: один resume. Есть адрес — сразу шаг кода (с тем
+  // кодом, что в письме; если он больше не действует — подсказка и повторная
+  // отправка); адреса ещё нет (VK) — шаг email. Ничего не отправляется.
+  useEffect(() => {
+    if (!resume || resumeStarted.current) return;
+    resumeStarted.current = true;
+    oauthRegistrationResume()
+      .then((data) => {
+        if (!alive.current) return;
+        setProvider(safeProvider(data?.provider));
+        const maskedEmail = typeof data?.email_masked === 'string' ? data.email_masked : null;
+        if (!maskedEmail) {
+          setState({
+            step: SOCIAL_STEP.EMAIL, maskedEmail: null, emailAllowed: false,
+            error: '', submitting: false,
+          });
+          return;
+        }
+        setState({
+          step: SOCIAL_STEP.OTP,
+          maskedEmail,
+          emailEditable: data.email_editable === true,
+          resendIn: Number.isInteger(data.resend_in_seconds) ? data.resend_in_seconds : 0,
+          notice: data.code_active === true ? '' : RESUME_CODE_INACTIVE_MESSAGE,
+        });
+      })
+      .catch(fail);
+  }, [resume, fail]);
+
   // Выбор email (VK): ровно один preview; шаг email — только после его
   // успеха. Код здесь НЕ отправляется.
   useEffect(() => {
+    if (resume) return;
     if (state.step !== SOCIAL_STEP.LOADING || state.sending || previewStarted.current) return;
     previewStarted.current = true;
     oauthRegistrationPreview({ ticket })
@@ -108,11 +150,12 @@ export default function SocialRegistrationFlow({ registration, onStepChange, onE
         });
       })
       .catch(fail);
-  }, [state, ticket, fail]);
+  }, [state, ticket, fail, resume]);
 
   // Фиксированный email (Яндекс): ровно один автоматический init; шаг кода —
-  // только после успеха.
+  // только после успеха. В продолжении из письма не выполняется.
   useEffect(() => {
+    if (resume) return;
     if (state.step !== SOCIAL_STEP.LOADING || !state.sending || initStarted.current) return;
     initStarted.current = true;
     oauthRegistrationInit({ ticket })
@@ -125,7 +168,7 @@ export default function SocialRegistrationFlow({ registration, onStepChange, onE
         });
       })
       .catch(fail);
-  }, [state, ticket, fail]);
+  }, [state, ticket, fail, resume]);
 
   // Шаг email: пользователь подтвердил показанный адрес (email === null) или
   // указал свой. Один запрос за раз.
@@ -194,6 +237,8 @@ export default function SocialRegistrationFlow({ registration, onStepChange, onE
         ticket={ticket}
         provider={provider}
         initialMaskedEmail={state.maskedEmail}
+        initialResendIn={state.resendIn}
+        initialNotice={state.notice}
         emailEditable={state.emailEditable}
         onSuccess={handleRegistered}
         onRestart={handleRestart}
@@ -219,7 +264,8 @@ export default function SocialRegistrationFlow({ registration, onStepChange, onE
   return (
     <div className={`${styles.authPanel} ${styles.active}`}>
       <p className={styles.stepDesc} role="status">
-        {state.sending ? 'Отправляем код подтверждения…' : 'Готовим регистрацию…'}
+        {state.resuming && 'Восстанавливаем регистрацию…'}
+        {!state.resuming && (state.sending ? 'Отправляем код подтверждения…' : 'Готовим регистрацию…')}
       </p>
     </div>
   );
@@ -237,8 +283,8 @@ export default function SocialRegistrationFlow({ registration, onStepChange, onE
  * адрес фиксирован: «Начать заново».
  */
 function RegistrationOtpController({
-  ticket, provider, initialMaskedEmail, emailEditable, onSuccess, onRestart,
-  onChangeEmail, onTerminal,
+  ticket, provider, initialMaskedEmail, initialResendIn, initialNotice = '',
+  emailEditable, onSuccess, onRestart, onChangeEmail, onTerminal,
 }) {
   const { completeOAuthRegistration, loading: authLoading } = useAuth();
   // Один confirm за раз: двойной клик, авто-подтверждение + кнопка.
@@ -246,9 +292,12 @@ function RegistrationOtpController({
 
   const [maskedEmail, setMaskedEmail] = useState(initialMaskedEmail);
   const [otp, setOtp] = useState(EMPTY_CODE);
-  const [otpError, setOtpError] = useState('');
+  const [otpError, setOtpError] = useState(initialNotice);
   // Код уже отправлен до монтирования — отсчёт виден с первого кадра.
-  const [timer, restartTimer] = useResendTimer(RESEND_COOLDOWN);
+  // Продолжение из письма: остаток cooldown с сервера (resume).
+  const [timer, restartTimer] = useResendTimer(
+    Number.isInteger(initialResendIn) ? initialResendIn : RESEND_COOLDOWN,
+  );
   const [consent, setConsent] = useState(false);
   const [consentError, setConsentError] = useState(false);
   const [busy, setBusy] = useState(false);

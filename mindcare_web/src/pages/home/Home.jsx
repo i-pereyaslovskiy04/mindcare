@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import Navbar from '../../components/Navbar/Navbar';
@@ -9,7 +9,8 @@ import Footer from '../../components/Footer/Footer';
 import AuthModal, { REGISTRATION_CONFIRMED_MESSAGE } from '../../features/auth/ui/AuthModal';
 import CookieBanner from '../../components/CookieBanner/CookieBanner';
 import {
-  AUTH_CONFIRM, authEntryState, authRequestFrom, registrationReferenceFrom,
+  AUTH_CONFIRM, AUTH_SOCIAL_CONTINUE, authEntryState, authRequestFrom,
+  registrationReferenceFrom,
 } from '../../features/auth/lib/authEntry';
 
 // Router-state контракт ({ openAuth, message?, messageTone? }) и его
@@ -24,8 +25,9 @@ import {
 const CLOSED = { open: false, tab: 'login', message: '', messageTone: 'info' };
 
 // Шаги модалки, которые задаёт сам маршрут (адрес не меняется и переживает F5):
-// /register/confirm#r=<reference> → «Подтверждение регистрации» (ссылка из письма).
-const ROUTE_AUTH = new Set([AUTH_CONFIRM]);
+// /register/confirm#r=<reference> → «Подтверждение регистрации» (ссылка из письма);
+// /register/social → продолжение регистрации через Яндекс/VK (ticket в cookie).
+const ROUTE_AUTH = new Set([AUTH_CONFIRM, AUTH_SOCIAL_CONTINUE]);
 
 /**
  * routeAuth — шаг AuthModal, заданный маршрутом (`/register/confirm` →
@@ -41,19 +43,24 @@ export default function Home({ routeAuth = null }) {
   const location = useLocation();
   const {
     loading, isAuthenticated, socialRegistration, clearSocialRegistration,
+    resumeSocialRegistration,
     registeredEmail, rememberRegisteredEmail, clearRegisteredEmail,
   } = useAuth();
   const navigate = useNavigate();
 
   const request = authRequestFrom(location.state);
   const routeTab = ROUTE_AUTH.has(routeAuth) ? routeAuth : null;
-  const social = routeTab ? null : (socialRegistration ?? null);
+  const socialRoute = routeTab === AUTH_SOCIAL_CONTINUE;
+  // Ссылка обычной регистрации важнее незавершённой регистрации через провайдера.
+  const social = routeTab === AUTH_CONFIRM ? null : (socialRegistration ?? null);
   const registrationReference = routeTab === AUTH_CONFIRM
     ? registrationReferenceFrom(location.hash)
     : null;
 
   const [auth, setAuth] = useState(() => {
     if (request) return { open: true, ...request };
+    // /register/social: модалку открывает сам поток регистрации (social).
+    if (socialRoute) return CLOSED;
     if (routeTab) return { ...CLOSED, open: true, tab: routeTab };
     // Регистрация только что подтверждена по ссылке: вход с этим email.
     if (registeredEmail) {
@@ -64,6 +71,16 @@ export default function Home({ routeAuth = null }) {
     }
     return CLOSED;
   });
+
+  // /register/social: продолжение регистрации через провайдера из письма.
+  // Ticket — в HttpOnly cookie; шаг восстанавливает поток (resume) без отправки
+  // кода. Один запуск на монтирование (F5 — новое монтирование, снова resume).
+  const resumeStarted = useRef(false);
+  useEffect(() => {
+    if (!socialRoute || loading || isAuthenticated || resumeStarted.current) return;
+    resumeStarted.current = true;
+    resumeSocialRegistration();
+  }, [socialRoute, loading, isAuthenticated, resumeSocialRegistration]);
 
   // Email передан один раз: после применения на главной он не нужен.
   useEffect(() => {
@@ -111,10 +128,14 @@ export default function Home({ routeAuth = null }) {
   // обычном режиме на нужной вкладке (с сообщением, если оно есть).
   const handleSocialExit = (exit) => {
     clearSocialRegistration();
-    setAuth({
-      open: true,
-      ...authRequestFrom(authEntryState(exit?.tab, exit?.message, exit?.messageTone)),
-    });
+    const entry = authEntryState(exit?.tab, exit?.message, exit?.messageTone);
+    // С адреса продолжения из письма — на главную (вход с сообщением или
+    // «Регистрация»): /register/social без регистрации ничего не показывает.
+    if (socialRoute) {
+      navigate('/', { replace: true, state: entry });
+      return;
+    }
+    setAuth({ open: true, ...authRequestFrom(entry) });
   };
   // Ссылка из письма: регистрация подтверждена — адрес ссылки больше не нужен,
   // на главной откроется вход с этим email (передача только через память).

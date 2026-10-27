@@ -7,7 +7,11 @@
  * Public endpoints (no auth required): login, registerInit,
  * registerConfirm, passwordResetInit, passwordResetConfirm, oauthStart,
  * oauthComplete, oauthRegistrationPreview, oauthRegistrationInit,
- * oauthRegistrationConfirm.
+ * oauthRegistrationConfirm, oauthRegistrationResume.
+ *
+ * Регистрация через провайдера: ticket — из памяти вкладки (тело запроса) или,
+ * если его нет (null), из HttpOnly cookie продолжения, которую ставит callback
+ * (/register/social). Cookie браузер отправляет сам; JS её не видит.
  *
  * Protected endpoints (requires Bearer token in client): me, logout.
  */
@@ -152,10 +156,28 @@ export function oauthComplete(ticket) {
  * привязанный к ticket, и можно ли с ним продолжить. Ничего не меняет и код
  * не отправляет. Raw email backend не отдаёт.
  */
+/** Тело с ticket только из памяти вкладки; без него — ticket из cookie. */
+function withTicket(ticket, body = {}) {
+  return typeof ticket === 'string' && ticket ? { ticket, ...body } : body;
+}
+
 export function oauthRegistrationPreview({ ticket }) {
   return apiFetch(`${BASE}/oauth/registration/preview`, {
     method: 'POST',
-    body: JSON.stringify({ ticket }),
+    body: JSON.stringify(withTicket(ticket)),
+  });
+}
+
+/**
+ * POST /api/auth/oauth/registration/resume {} → { provider, email_masked,
+ * email_allowed, email_editable, code_active, resend_in_seconds }.
+ * Продолжение из письма (/register/social): ticket только из HttpOnly cookie.
+ * Ничего не меняет и код не отправляет.
+ */
+export function oauthRegistrationResume() {
+  return apiFetch(`${BASE}/oauth/registration/resume`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   });
 }
 
@@ -169,7 +191,7 @@ export function oauthRegistrationPreview({ ticket }) {
  * клиент не передаёт никогда.
  */
 export function oauthRegistrationInit({ ticket, email }) {
-  const body = { ticket };
+  const body = withTicket(ticket);
   if (typeof email === 'string' && email) body.email = email;
   return apiFetch(`${BASE}/oauth/registration/init`, {
     method: 'POST',
@@ -186,6 +208,6 @@ export function oauthRegistrationInit({ ticket, email }) {
 export function oauthRegistrationConfirm({ ticket, code, consentAccepted }) {
   return apiFetch(`${BASE}/oauth/registration/confirm`, {
     method: 'POST',
-    body: JSON.stringify({ ticket, code, consent_accepted: consentAccepted === true }),
+    body: JSON.stringify(withTicket(ticket, { code, consent_accepted: consentAccepted === true })),
   });
 }

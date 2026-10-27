@@ -10,7 +10,9 @@ import html
 from datetime import datetime, timezone
 from typing import Optional
 
-from app.core.public_urls import LOGIN_PATH, frontend_url, registration_continue_path
+from app.core.public_urls import (
+    LOGIN_PATH, SOCIAL_REGISTRATION_PATH, frontend_url, registration_continue_path,
+)
 from app.services._smtp import send_email
 from app.services.email_brand import (
     ACCENT,
@@ -250,16 +252,25 @@ LOGIN_NOTE = "Войдите с этим email и временным парол�
 
 def send_registration_otp(
     to_email: str, code: str, *, registration_reference: Optional[str] = None,
+    social_continuation: bool = False,
 ) -> None:
-    """registration_reference — регистрация по email и паролю: ссылка
-    «Продолжить регистрацию →» ведёт на /register/confirm#r=<reference> ЭТОГО
-    выпуска кода (там вводится только код, email не нужен). Регистрация через
-    Яндекс/VK зовёт без reference и без ссылки: её подтверждение требует
-    ticket из памяти вкладки, /register/confirm его не продолжит."""
-    continue_path = (
-        registration_continue_path(registration_reference)
-        if registration_reference is not None else None
-    )
+    """Ссылка «Продолжить регистрацию →» (одна из двух, не обе):
+
+      * registration_reference — регистрация по email и паролю:
+        /register/confirm#r=<reference> ЭТОГО выпуска кода (вводится только код);
+      * social_continuation — регистрация через Яндекс/VK: /register/social без
+        секретов (ticket в HttpOnly cookie браузера, прошедшего вход через
+        провайдера; в другом браузере продолжить нельзя).
+
+    Без обоих — письмо без ссылки."""
+    if registration_reference is not None and social_continuation:
+        raise ValueError("registration_reference and social_continuation are exclusive")
+    if registration_reference is not None:
+        continue_path = registration_continue_path(registration_reference)
+    elif social_continuation:
+        continue_path = SOCIAL_REGISTRATION_PATH
+    else:
+        continue_path = None
     _send_otp_email(
         to_email=to_email,
         code=code,

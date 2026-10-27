@@ -232,6 +232,15 @@ export function navigateToProvider(url) {
 
 export const REGISTRATION_GENERIC_MESSAGE =
   'Не удалось завершить регистрацию. Попробуйте ещё раз.';
+export const REGISTRATION_NOT_FOUND_MESSAGE =
+  'Продолжить регистрацию можно только в браузере, где вы начинали вход через Яндекс или VK. '
+  + 'Начните заново.';
+export const REGISTRATION_CONFLICT_MESSAGE =
+  'Регистрация через Яндекс или VK уже начата заново в другой вкладке. '
+  + 'Продолжите её там или начните заново.';
+/** Продолжение из письма: код из письма больше не действует (истёк, исчерпан). */
+export const RESUME_CODE_INACTIVE_MESSAGE =
+  'Код из письма больше не действует. Отправьте код повторно.';
 
 function buildRegistrationMessages(label) {
   return Object.freeze({
@@ -249,6 +258,10 @@ function buildRegistrationMessages(label) {
     email_invalid: 'Введите корректный адрес электронной почты.',
     email_not_changeable: 'Адрес электронной почты для этой регистрации изменить нельзя.',
     rate_limited: TOO_MANY_ATTEMPTS_MESSAGE,
+    // Продолжение из письма (/register/social) без cookie этого браузера:
+    // о самой регистрации ничего не сообщается.
+    oauth_registration_not_found: REGISTRATION_NOT_FOUND_MESSAGE,
+    oauth_registration_ticket_conflict: REGISTRATION_CONFLICT_MESSAGE,
   });
 }
 
@@ -268,6 +281,7 @@ const REGISTRATION_SERVER_TEXT_CODES = Object.freeze([
 /** Коды, после которых этот ticket уже не завершит регистрацию. */
 const REGISTRATION_TERMINAL_CODES = Object.freeze([
   'oauth_ticket_invalid', 'oauth_identity_already_linked',
+  'oauth_registration_not_found', 'oauth_registration_ticket_conflict',
 ]);
 
 /**
