@@ -209,7 +209,8 @@ Tag — это display-only `<span>`, не button.
 ошибке (`<id>-error`); без `error` новых атрибутов нет.
 
 **Optional `appearance="field"` (2026-10-15).** Вид TextField: подпись
-(11px uppercase), рамка `--outline`, фон `--surface-container`, фокус-кольцо, текст
+(13px/600, sentence case — без принудительного uppercase), рамка `--outline`, фон
+`--surface`, фокус-кольцо, текст
 ошибки 12.5px и общая коробка (`min-height` 40px вместо фиксированной высоты —
 контрол растёт, а не обрезает). По умолчанию (`appearance="default"`) вид прежний;
 выпадающий список не меняется.
@@ -308,7 +309,7 @@ Props: `tabs [{id,label}]`, `active`, `onChange`, `label` (aria-label списк
 
 ## TextField
 
-Путь: `components/UI/TextField/TextField.jsx` (`forwardRef`). Подписанное поле: `label` связан с `input` через `htmlFor`/`id`, `hint` и `error` — через `aria-describedby`, ошибка — `role="alert"` и `aria-invalid`. Остальные props (`type`, `value`, `onChange`, `maxLength`, `readOnly`, `inputMode`…) передаются в `<input>`. Prop `appearance="field"` включает коробку, общую со `Select appearance="field"` (border-box, рамка 1px, вертикальный padding 9px, `line-height` 1.4, `min-height` 40px): контролы одинаковой высоты, при увеличенном шрифте/межстрочном интервале растут и не обрезают текст. По умолчанию вид прежний.
+Путь: `components/UI/TextField/TextField.jsx` (`forwardRef`). Подписанное поле: `label` связан с `input` через `htmlFor`/`id`, `hint` и `error` — через `aria-describedby`, ошибка — `role="alert"` и `aria-invalid`. Остальные props (`type`, `value`, `onChange`, `maxLength`, `readOnly`, `inputMode`…) передаются в `<input>`. Prop `appearance="field"` включает коробку, общую со `Select appearance="field"` (border-box, рамка 1px, вертикальный padding 9px, `line-height` 1.4, `min-height` 40px): контролы одинаковой высоты, при увеличенном шрифте/межстрочном интервале растут и не обрезают текст. По умолчанию вид прежний. Подпись — sentence case (13px/600, `--on-surface`), как пишется в тексте («ФИО», «Email»), без принудительного uppercase (2026-10-27, страница настроек — единственный потребитель).
 
 ## Shared content utilities
 

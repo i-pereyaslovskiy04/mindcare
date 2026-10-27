@@ -155,7 +155,7 @@ describe('valueSpec', () => {
     expect(spec('email')).toMatchObject({
       label: 'Email', inputType: 'email', inputMode: 'email', placeholder: 'name@example.ru', hint: EMAIL_NOTE,
     });
-    expect(EMAIL_NOTE).toBe('Только для связи, не используется для входа.');
+    expect(EMAIL_NOTE).toBe('Только для связи, не используется для входа');
     expect(spec('website')).toMatchObject({ label: 'Адрес сайта', inputMode: 'url', hint: undefined });
     expect(spec('website').placeholder).toMatch(/example\.org/);
   });

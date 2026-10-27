@@ -72,6 +72,9 @@ const CONTACTS_EMPTY = {
 };
 
 const openTab = (name) => fireEvent.click(screen.getByRole('tab', { name }));
+// Кнопка сохранения формы карточки — «Сохранить»; контекст задаёт заголовок карточки.
+const saveIn = (card) => within(screen.getByRole('region', { name: card }))
+  .getByRole('button', { name: 'Сохранить' });
 
 test('pure student sees the deactivation card', async () => {
   useAuth.mockReturnValue(authState());
@@ -184,9 +187,7 @@ test('пояснение раздела — новый текст, без упо
   const hint = within(section).getByText(/Вы можете подтвердить, что являетесь студентом/);
   expect(hint.textContent.replace(/\s+/g, ' ').trim()).toBe(
     'Вы можете подтвердить, что являетесь студентом Донецкого государственного '
-    + 'университета. Выберите факультет и укажите номер студенческого билета. '
-    + 'После проверки здесь появится результат. Подтверждение не влияет '
-    + 'на доступ к тестам и консультациям.',
+    + 'университета. Подтверждение не влияет на доступ к тестам и консультациям.',
   );
   expect(section.textContent).not.toMatch(/супервизор/i);
 });
@@ -224,16 +225,51 @@ test('подача заявки отправляет код факультета
   expect(within(section).queryByRole('button', { name: 'Отправить на проверку' })).toBeNull();
 });
 
-test('без факультета форма не отправляется', async () => {
+test('без факультета: ошибка у поля «Факультет», фокус на нём, заявка не отправляется', async () => {
   useAuth.mockReturnValue(authState());
   render(<SettingsPage />);
   const section = await screen.findByRole('region', { name: 'Подтверждение студента ДонГУ' });
-  fireEvent.change(await within(section).findByLabelText('Номер студенческого билета'), {
-    target: { value: '123' },
-  });
+  await waitFor(() => expect(verificationApi.getFaculties).toHaveBeenCalled());
+  const ticket = await within(section).findByLabelText('Номер студенческого билета');
+  fireEvent.change(ticket, { target: { value: '123' } });
   fireEvent.click(within(section).getByRole('button', { name: 'Отправить на проверку' }));
+
+  const faculty = within(section).getByRole('button', { name: 'Факультет' });
   expect(await within(section).findByRole('alert')).toHaveTextContent('Выберите факультет');
+  expect(faculty).toHaveAttribute('aria-invalid', 'true');
+  expect(faculty).toHaveAccessibleDescription('Выберите факультет');
+  expect(faculty).toHaveFocus();
+  expect(ticket).not.toHaveAttribute('aria-invalid');
   expect(verificationApi.submitMyVerification).not.toHaveBeenCalled();
+
+  // Выбор факультета снимает ошибку поля.
+  fireEvent.click(faculty);
+  fireEvent.mouseDown(await screen.findByRole('option', { name: 'Юридический факультет' }));
+  expect(faculty).not.toHaveAttribute('aria-invalid');
+  expect(within(section).queryByRole('alert')).toBeNull();
+});
+
+test('без номера билета: ошибка у поля номера, фокус на нём, заявка не отправляется', async () => {
+  useAuth.mockReturnValue(authState());
+  render(<SettingsPage />);
+  const section = await screen.findByRole('region', { name: 'Подтверждение студента ДонГУ' });
+  await waitFor(() => expect(verificationApi.getFaculties).toHaveBeenCalled());
+  fireEvent.click(await within(section).findByRole('button', { name: 'Факультет' }));
+  fireEvent.mouseDown(await screen.findByRole('option', { name: 'Юридический факультет' }));
+  const ticket = within(section).getByLabelText('Номер студенческого билета');
+  fireEvent.change(ticket, { target: { value: '   ' } });
+  fireEvent.click(within(section).getByRole('button', { name: 'Отправить на проверку' }));
+
+  expect(await within(section).findByRole('alert'))
+    .toHaveTextContent('Укажите номер студенческого билета');
+  expect(ticket).toHaveAttribute('aria-invalid', 'true');
+  expect(ticket).toHaveAccessibleDescription('Укажите номер студенческого билета');
+  expect(ticket).toHaveFocus();
+  expect(within(section).getByRole('button', { name: 'Факультет' })).not.toHaveAttribute('aria-invalid');
+  expect(verificationApi.submitMyVerification).not.toHaveBeenCalled();
+
+  fireEvent.change(ticket, { target: { value: '000123' } });
+  expect(ticket).not.toHaveAttribute('aria-invalid');
 });
 
 test('отказ: показано пояснение и доступна повторная подача', async () => {
@@ -328,14 +364,14 @@ describe('разделы настроек', () => {
     }));
     render(<SettingsPage />);
     fireEvent.change(await screen.findByLabelText('ФИО'), { target: { value: 'Иван Иванов' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить ФИО' }));
+    fireEvent.click(saveIn('Профиль'));
     await waitFor(() => expect(authApi.updateProfile).toHaveBeenCalledWith({ full_name: 'Иван Иванов' }));
     expect(await screen.findByText('ФИО сохранено.')).toBeInTheDocument();
 
     openTab('Контакты');
     const phone = await screen.findByLabelText('Номер телефона');
     fireEvent.change(phone, { target: { value: '9491234567' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить телефон' }));
+    fireEvent.click(saveIn('Основной телефон'));
     await waitFor(() => expect(authApi.updateProfile).toHaveBeenLastCalledWith({ phone: '+7 (949) 123-45-67' }));
     expect(authApi.updateProfile).toHaveBeenCalledTimes(2);
     expect(await screen.findByText('Телефон сохранён.')).toBeInTheDocument();
@@ -351,7 +387,7 @@ describe('разделы настроек', () => {
     await screen.findByText('Профиль');
     openTab('Контакты');
     fireEvent.change(await screen.findByLabelText('Номер телефона'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить телефон' }));
+    fireEvent.click(saveIn('Основной телефон'));
     await waitFor(() => expect(authApi.updateProfile).toHaveBeenCalledWith({ phone: null }));
   });
 
@@ -361,7 +397,7 @@ describe('разделы настроек', () => {
     authApi.updateProfile.mockResolvedValue({ full_name: 'Иван', phone: '' });
     render(<SettingsPage />);
     fireEvent.change(await screen.findByLabelText('ФИО'), { target: { value: 'Иван' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить ФИО' }));
+    fireEvent.click(saveIn('Профиль'));
     expect(await screen.findByText('ФИО сохранено.')).toBeInTheDocument();
     expect(screen.queryByText('шапка')).toBeNull();
   });
@@ -433,7 +469,7 @@ describe('раздел «Контакты»', () => {
     const group = screen.getByRole('group', { name: 'Контакт 1' });
     const valueInputs = within(group).getAllByRole('textbox');
     fireEvent.change(valueInputs[0], { target: { value: '+79001234567' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить контакты' }));
+    fireEvent.click(saveIn('Дополнительные контакты'));
     await waitFor(() => expect(contactsApi.saveMyContacts).toHaveBeenCalledTimes(1));
     const [{ version, items }] = contactsApi.saveMyContacts.mock.calls[0];
     expect(version).toBe(0);
@@ -473,7 +509,7 @@ describe('раздел «Безопасность»', () => {
     await screen.findByText('Профиль');
     openTab('Безопасность');
     expect(screen.getByLabelText('Текущий пароль')).toBeInTheDocument();
-    expect(screen.queryByText('Пароль не задан')).toBeNull();
+    expect(screen.queryByText('Установка пароля')).toBeNull();
   });
 
   it('пароля нет — установка по email вместо смены', async () => {
@@ -484,7 +520,7 @@ describe('раздел «Безопасность»', () => {
     render(<SettingsPage />);
     await screen.findByText('Профиль');
     openTab('Безопасность');
-    expect(await screen.findByText('Пароль не задан')).toBeInTheDocument();
+    expect(await screen.findByText('Установка пароля')).toBeInTheDocument();
     expect(screen.queryByLabelText('Текущий пароль')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Установить пароль по email' }));
     expect(screen.getByTestId('fp-email')).toHaveTextContent('s@donnu.ru');
@@ -521,7 +557,7 @@ describe('раздел «Безопасность»', () => {
     openTab('Безопасность');
     fireEvent.change(screen.getByLabelText('Текущий пароль'), { target: { value: 'old-password' } });
     fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'new-password-1' } });
-    fireEvent.change(screen.getByLabelText('Подтверждение нового пароля'), { target: { value: 'new-password-1' } });
+    fireEvent.change(screen.getByLabelText('Повторите новый пароль'), { target: { value: 'new-password-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Изменить пароль' }));
     expect(await screen.findByText('Пароль изменён. Войдите снова.')).toBeInTheDocument();
     expect(authApi.changePassword).toHaveBeenCalledWith({
@@ -545,7 +581,7 @@ describe('раздел «Безопасность»', () => {
     openTab('Безопасность');
     fireEvent.change(screen.getByLabelText('Текущий пароль'), { target: { value: 'a' } });
     fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'bbbbbbbb' } });
-    fireEvent.change(screen.getByLabelText('Подтверждение нового пароля'), { target: { value: 'bbbbbbbb' } });
+    fireEvent.change(screen.getByLabelText('Повторите новый пароль'), { target: { value: 'bbbbbbbb' } });
     fireEvent.click(screen.getByRole('button', { name: 'Изменить пароль' }));
     await screen.findByText('Пароль изменён. Войдите снова.');
     unmount();
@@ -562,7 +598,7 @@ describe('раздел «Безопасность»', () => {
     openTab('Безопасность');
     fireEvent.change(screen.getByLabelText('Текущий пароль'), { target: { value: 'x' } });
     fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'yyyyyyyy' } });
-    fireEvent.change(screen.getByLabelText('Подтверждение нового пароля'), { target: { value: 'yyyyyyyy' } });
+    fireEvent.change(screen.getByLabelText('Повторите новый пароль'), { target: { value: 'yyyyyyyy' } });
     fireEvent.click(screen.getByRole('button', { name: 'Изменить пароль' }));
     expect(await screen.findByText('Неверный текущий пароль')).toBeInTheDocument();
     expect(state.clearSession).not.toHaveBeenCalled();
@@ -635,7 +671,7 @@ test('поля пароля имеют доступные имена и сохр
 
   const current = screen.getByLabelText('Текущий пароль');
   const next = screen.getByLabelText('Новый пароль');
-  const confirm = screen.getByLabelText('Подтверждение нового пароля');
+  const confirm = screen.getByLabelText('Повторите новый пароль');
 
   expect(current).toHaveAttribute('autocomplete', 'current-password');
   expect(next).toHaveAttribute('autocomplete', 'new-password');
@@ -652,12 +688,12 @@ test('ошибка смены пароля объявляется и описы�
 
   fireEvent.change(screen.getByLabelText('Текущий пароль'), { target: { value: 'old-pass-1' } });
   fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'new-pass-12' } });
-  fireEvent.change(screen.getByLabelText('Подтверждение нового пароля'), { target: { value: 'new-pass-12' } });
+  fireEvent.change(screen.getByLabelText('Повторите новый пароль'), { target: { value: 'new-pass-12' } });
   fireEvent.click(screen.getByRole('button', { name: 'Изменить пароль' }));
 
   const alert = await screen.findByRole('alert');
   expect(alert).toHaveTextContent('Неверный текущий пароль');
-  ['Текущий пароль', 'Новый пароль', 'Подтверждение нового пароля'].forEach((name) => {
+  ['Текущий пароль', 'Новый пароль', 'Повторите новый пароль'].forEach((name) => {
     expect(screen.getByLabelText(name)).toHaveAccessibleDescription('Неверный текущий пароль');
   });
 });
@@ -686,4 +722,55 @@ test('закрытая модалка отключения изолирован�
   fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(trigger).toHaveFocus();
+});
+
+// ── Единый стиль страницы: подписи полей и кнопки «Сохранить» ───────────────
+
+test('подписи полей во всех разделах — по тексту, как пишутся', async () => {
+  useAuth.mockReturnValue(authState());
+  await renderSettingsReady();
+  const section = screen.getByRole('region', { name: 'Подтверждение студента ДонГУ' });
+
+  expect(screen.getByLabelText('ФИО')).toBeInTheDocument();
+  const email = screen.getByLabelText('Email');
+  expect(email).toHaveAttribute('readonly');
+  expect(email).toHaveAccessibleDescription('Используется для входа, изменить нельзя');
+  expect(within(section).getByRole('button', { name: 'Факультет' })).toBeInTheDocument();
+  expect(within(section).getByLabelText('Номер студенческого билета')).toHaveAttribute('maxlength', '50');
+
+  openTab('Контакты');
+  await screen.findByText(/назначенному психологу и супервизору/);
+  expect(screen.getByLabelText('Номер телефона', { selector: '#settings-phone' })).toBeInTheDocument();
+
+  openTab('Безопасность');
+  ['Текущий пароль', 'Новый пароль', 'Повторите новый пароль'].forEach((name) => {
+    expect(screen.getByLabelText(name)).toBeInTheDocument();
+  });
+  expect(screen.queryByLabelText('Подтверждение нового пароля')).toBeNull();
+});
+
+test('в каждом разделе формы карточек сохраняются кнопкой «Сохранить»', async () => {
+  useAuth.mockReturnValue(authState());
+  await renderSettingsReady();
+
+  const personal = screen.getByRole('tabpanel', { name: 'Личные данные' });
+  expect(within(personal).getAllByRole('button', { name: 'Сохранить' })).toHaveLength(1);
+  expect(saveIn('Профиль')).toBeInTheDocument();
+
+  openTab('Контакты');
+  await screen.findByText(/назначенному психологу и супервизору/);
+  const contacts = screen.getByRole('tabpanel', { name: 'Контакты' });
+  // Две карточки — у каждой своя «Сохранить» внутри её региона.
+  expect(within(contacts).getAllByRole('button', { name: 'Сохранить' })).toHaveLength(2);
+  expect(saveIn('Основной телефон')).toBeInTheDocument();
+  expect(saveIn('Дополнительные контакты')).toBeInTheDocument();
+
+  openTab('Безопасность');
+  const security = screen.getByRole('tabpanel', { name: 'Безопасность' });
+  expect(within(security).queryByRole('button', { name: 'Сохранить' })).toBeNull();
+  expect(within(security).getByRole('button', { name: 'Изменить пароль' })).toBeInTheDocument();
+
+  ['Сохранить ФИО', 'Сохранить телефон', 'Сохранить контакты'].forEach((name) => {
+    expect(screen.queryByRole('button', { name, hidden: true })).toBeNull();
+  });
 });

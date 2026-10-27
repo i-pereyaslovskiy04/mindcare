@@ -72,7 +72,7 @@ function ChangePasswordCard({ endSession }) {
         <TextField
           id="settings-new-password-confirm"
           aria-describedby={error ? PASSWORD_ERROR_ID : undefined}
-          label="Подтверждение нового пароля"
+          label="Повторите новый пароль"
           type="password"
           value={form.new_password_confirm}
           onChange={set('new_password_confirm')}
@@ -98,8 +98,8 @@ function SetPasswordCard({ email, endSession }) {
   const [open, setOpen] = useState(false);
   return (
     <section className={styles.card} aria-labelledby="settings-set-password-title">
-      <h2 id="settings-set-password-title" className={styles.sectionTitle}>Пароль не задан</h2>
-      <p className={styles.dangerText}>
+      <h2 id="settings-set-password-title" className={styles.sectionTitle}>Установка пароля</h2>
+      <p className={styles.lead}>
         Вы входите через внешний сервис, поэтому пароля у аккаунта пока нет. Чтобы входить
         по email и паролю, установите пароль: мы отправим код подтверждения на {email || 'почту аккаунта'}.
         После установки пароля нужно будет войти заново.

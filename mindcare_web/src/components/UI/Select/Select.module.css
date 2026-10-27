@@ -211,12 +211,10 @@
    или межстрочном интервале контрол растёт, а не обрезает текст. */
 
 .labelField {
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 13px;
   line-height: 1.3;
-  color: var(--on-surface-variant);
-  text-transform: uppercase;
-  font-weight: 700;
+  color: var(--on-surface);
+  font-weight: 600;
 }
 
 .control.controlField {
