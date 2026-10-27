@@ -97,7 +97,7 @@ test.each([
   mockAuth({ roles: [role], activeRole: role });
   render(<CabinetLayout cabinetRole={role} navSections={[]} crumbLabels={{}} />);
 
-  const brand = screen.getByRole('link', { name: 'Психология ДонГУ, личный кабинет — на главную' });
+  const brand = screen.getByRole('link', { name: 'Психология ДонГУ, личный кабинет - на главную' });
   expect(brand).toHaveAttribute('href', home);
   expect(brand).toHaveTextContent('Личный кабинет');
 
@@ -159,7 +159,7 @@ test('mobile drawer: brand в drawer ведёт на главную кабине
   fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
   const drawer = screen.getByRole('dialog', { name: 'Меню кабинета' });
   const brand = within(drawer).getByRole('link', {
-    name: 'Психология ДонГУ, личный кабинет — на главную',
+    name: 'Психология ДонГУ, личный кабинет - на главную',
   });
   expect(brand).toHaveAttribute('href', '/psychologist');
 

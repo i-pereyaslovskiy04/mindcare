@@ -179,7 +179,7 @@ export default function AuditFilters({
                 onChange={(value) => setFilters({ eventType: value })}
               />
               <span className={styles.hint}>
-                Категория только сокращает список событий — сама по себе выдачу
+                Категория только сокращает список событий - сама по себе выдачу
                 не фильтрует.
               </span>
             </div>
@@ -321,7 +321,7 @@ export default function AuditFilters({
 
       <div className={styles.footer}>
         <span className={styles.range}>
-          Период: {formatDateOnly(filters.dateFrom)} — {formatDateOnly(filters.dateTo)}
+          Период: {formatDateOnly(filters.dateFrom)} - {formatDateOnly(filters.dateTo)}
         </span>
 
         {source === 'audit_log' && (

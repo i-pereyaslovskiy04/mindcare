@@ -94,7 +94,7 @@ export default function AdminLayout() {
       <Link
         to={ADMIN_HOME}
         className={styles.brand}
-        aria-label="Психология ДонГУ, панель управления — на главную"
+        aria-label="Психология ДонГУ, панель управления - на главную"
         title="На главную панели управления"
         onClick={closeMenu}
       >

@@ -52,7 +52,7 @@ export default function MaterialsPage() {
 
       <div className={`${styles.grid} ${styles.g4}`}>
         {visible.length === 0 && (
-          <p className={styles.emptyState}>Ничего не найдено — попробуйте изменить фильтры.</p>
+          <p className={styles.emptyState}>Ничего не найдено - попробуйте изменить фильтры.</p>
         )}
         {visible.map((article) => {
           const liked = favs.includes(article.id);

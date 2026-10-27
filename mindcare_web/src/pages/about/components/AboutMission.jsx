@@ -13,7 +13,7 @@ export default function AboutMission() {
         <div className={styles.head}>
           <h2 className={styles.title}>Наша миссия</h2>
           <p className={styles.sub}>
-            Поддержка, развитие и самореализация каждого человека —
+            Поддержка, развитие и самореализация каждого человека -
             на каждом этапе университетского пути.
           </p>
         </div>

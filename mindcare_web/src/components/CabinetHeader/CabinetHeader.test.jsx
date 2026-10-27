@@ -100,7 +100,7 @@ describe('CabinetHeader', () => {
 
   test('строгий порядок справа: поиск → уведомления → оформление → выход', async () => {
     await renderHeaderReady();
-    const search = screen.getByRole('searchbox', { name: 'Поиск — будет доступен позже' });
+    const search = screen.getByRole('searchbox', { name: 'Поиск - будет доступен позже' });
     const bell = screen.getByRole('button', { name: 'Уведомления' });
     const appearance = screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' });
     const logout = screen.getByRole('button', { name: 'Выйти' });
@@ -121,7 +121,7 @@ describe('CabinetHeader', () => {
 
   test('поиск — заглушка: поле выключено и не участвует в форме', () => {
     renderHeader();
-    const search = screen.getByRole('searchbox', { name: 'Поиск — будет доступен позже' });
+    const search = screen.getByRole('searchbox', { name: 'Поиск - будет доступен позже' });
     expect(search).toBeDisabled();
     expect(search).toHaveAttribute('placeholder', 'Поиск по материалам, записям…');
     expect(search.form).toBeNull();

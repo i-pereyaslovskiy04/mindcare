@@ -70,7 +70,7 @@ export default function TestPreviewModal({
       >
         <div className={styles.head}>
           <div>
-            <span className={styles.badge}>Предпросмотр — так тест видит студент</span>
+            <span className={styles.badge}>Предпросмотр - так тест видит студент</span>
             <h2 className={styles.title}>{title || 'Без названия'}</h2>
             {description && <p className={styles.sub}>{description}</p>}
           </div>
@@ -128,7 +128,7 @@ export default function TestPreviewModal({
                       <li key={s.scale_name}>
                         <b>{s.scale_name}</b>: {s.score}
                         {s.max_score != null && <> из {s.max_score}</>}
-                        {s.label && <> — {s.label}</>}
+                        {s.label && <> - {s.label}</>}
                       </li>
                     ))}
                   </ul>
@@ -138,7 +138,7 @@ export default function TestPreviewModal({
                 )}
                 {result.total_score != null && !result.recommendations && (
                   <p className={styles.warn}>
-                    Для этого балла нет подходящего порога — студент увидит
+                    Для этого балла нет подходящего порога - студент увидит
                     результат без расшифровки.
                   </p>
                 )}

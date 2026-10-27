@@ -125,7 +125,7 @@ test('brand «Панель управления» ведёт на /admin; ссы
   render(<AdminLayout />);
 
   const brand = screen.getByRole('link', {
-    name: 'Психология ДонГУ, панель управления — на главную',
+    name: 'Психология ДонГУ, панель управления - на главную',
   });
   expect(brand).toHaveAttribute('href', '/admin');
   expect(brand).toHaveTextContent('Панель управления');
@@ -151,7 +151,7 @@ test('admin использует общий CabinetHeader: крошки, пои�
   expect(within(nav).getByRole('link', { name: 'Главная' })).toHaveAttribute('href', '/admin');
   expect(within(nav).getByText('Пользователи')).toHaveAttribute('aria-current', 'page');
 
-  expect(screen.getByRole('searchbox', { name: 'Поиск — будет доступен позже' })).toBeDisabled();
+  expect(screen.getByRole('searchbox', { name: 'Поиск - будет доступен позже' })).toBeDisabled();
   // Колокольчик — только student/psychologist; заглушки «скоро» больше нет.
   expect(screen.queryByRole('button', { name: /Уведомления/ })).toBeNull();
   expect(screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' })).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe('mobile drawer админки (<=600px — та же модель, чт
     const drawer = openDrawer();
 
     const brand = within(drawer).getByRole('link', {
-      name: 'Психология ДонГУ, панель управления — на главную',
+      name: 'Психология ДонГУ, панель управления - на главную',
     });
     expect(brand).toHaveAttribute('href', '/admin');
     expect(brand).toHaveTextContent('Панель управления');
@@ -254,7 +254,7 @@ describe('mobile drawer админки (<=600px — та же модель, чт
     render(<AdminLayout />);
     const drawer = openDrawer();
     fireEvent.click(within(drawer).getByRole('link', {
-      name: 'Психология ДонГУ, панель управления — на главную',
+      name: 'Психология ДонГУ, панель управления - на главную',
     }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });

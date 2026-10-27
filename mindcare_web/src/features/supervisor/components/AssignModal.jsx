@@ -98,7 +98,7 @@ export default function AssignModal({ mode, student, onConfirm, onClose }) {
             ) : (
               <Select
                 label={mode === 'transfer' ? 'Новый психолог' : 'Психолог'}
-                placeholder="— Выберите психолога —"
+                placeholder="Выберите психолога"
                 value={selectedPsyId}
                 options={psychologists.map(p => ({
                   value: p.id,

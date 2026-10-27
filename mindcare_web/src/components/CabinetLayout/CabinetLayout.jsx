@@ -55,7 +55,7 @@ export default function CabinetLayout({ cabinetRole, navSections, crumbLabels, d
       <Link
         to={homePath}
         className={styles.brand}
-        aria-label="Психология ДонГУ, личный кабинет — на главную"
+        aria-label="Психология ДонГУ, личный кабинет - на главную"
         title="На главную кабинета"
         onClick={closeMenu}
       >

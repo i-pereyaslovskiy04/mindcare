@@ -54,7 +54,7 @@ export default function ContentPreview({
 
         {/* Плашка «Черновик» — видна только если дата публикации не задана */}
         {isDraft && (
-          <div className={styles.draftBadge}>Черновик — не опубликовано</div>
+          <div className={styles.draftBadge}>Черновик - не опубликовано</div>
         )}
 
         {/* Обложка — если загружена. object-fit: cover обрезает по пропорции */}

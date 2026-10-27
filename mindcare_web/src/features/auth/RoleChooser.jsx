@@ -33,7 +33,7 @@ export default function RoleChooser({ roles }) {
         <h1 className={styles.title}>Выберите кабинет</h1>
         <p className={styles.subtitle}>
           У вашей учётной записи несколько ролей. Выберите, в каком кабинете
-          продолжить — позже можно переключиться.
+          продолжить - позже можно переключиться.
         </p>
         <div className={styles.grid}>
           {list.map((role) => (

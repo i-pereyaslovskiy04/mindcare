@@ -40,7 +40,7 @@ export const VERIFICATION_ERROR_MESSAGES = {
   impersonation_forbidden:      'Недоступно при входе под именем пользователя.',
   verification_pending_exists:  'Заявка уже отправлена и находится на проверке.',
   already_verified:             'Статус студента ДонГУ уже подтверждён.',
-  account_inactive:             'Аккаунт пользователя отключён — подтвердить заявку нельзя.',
+  account_inactive:             'Аккаунт пользователя отключён - подтвердить заявку нельзя.',
   verification_not_found:       'Заявка не найдена.',
   self_review_forbidden:        'Нельзя проверять собственную заявку.',
   reviewer_not_allowed:         'Недостаточно прав для проверки заявок.',

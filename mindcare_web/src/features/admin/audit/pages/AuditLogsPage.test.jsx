@@ -153,7 +153,7 @@ describe('состав фильтров по вкладкам', () => {
 
   test('период показан текстом', async () => {
     await renderPage();
-    expect(screen.getByText(/^Период: \d{2}\.\d{2}\.\d{4} — \d{2}\.\d{2}\.\d{4}$/))
+    expect(screen.getByText(/^Период: \d{2}\.\d{2}\.\d{4} - \d{2}\.\d{2}\.\d{4}$/))
       .toBeInTheDocument();
   });
 });

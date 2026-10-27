@@ -135,7 +135,7 @@ export function parseRecordRef(raw) {
   }
   const text = String(raw).trim();
   if (!/^\d+$/.test(text)) {
-    return { value: null, error: 'Идентификатор — целое число' };
+    return { value: null, error: 'Идентификатор - целое число' };
   }
   const value = Number(text);
   if (value < MIN_RECORD_REF || value > MAX_RECORD_REF) {

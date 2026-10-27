@@ -110,7 +110,7 @@ export default function CabinetHeader({
             type="search"
             disabled
             placeholder="Поиск по материалам, записям…"
-            aria-label="Поиск — будет доступен позже"
+            aria-label="Поиск - будет доступен позже"
           />
         </div>
 

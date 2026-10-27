@@ -161,7 +161,7 @@ export function valueSpec(method) {
     return {
       ...base,
       label: 'Контакт или ссылка',
-      hint: 'Ссылка — только http:// или https://',
+      hint: 'Ссылка - только http:// или https://',
     };
   }
   // WhatsApp: сервер принимает номер (нормализуется как телефон), ссылку или

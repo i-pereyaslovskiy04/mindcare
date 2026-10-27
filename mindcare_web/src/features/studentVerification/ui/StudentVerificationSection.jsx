@@ -134,7 +134,7 @@ export default function StudentVerificationSection({
 
           {status === 'pending' && (
             <p className={styles.note}>
-              Заявка на проверке. Изменить её нельзя — дождитесь решения.
+              Заявка на проверке. Изменить её нельзя - дождитесь решения.
             </p>
           )}
           {status === 'approved' && (
