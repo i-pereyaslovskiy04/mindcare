@@ -259,6 +259,112 @@
   color: var(--text-muted);
 }
 
+/* ── Разрешённые домены (AllowedDomainsHint): подсказка, ошибка, панель ── */
+.domains {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.domainsHint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Вторичная info-кнопка: без фона и рамки, зона нажатия не меньше 24px. */
+.domainsInfo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.domainsInfo:hover,
+.domainsInfo[aria-expanded='true'] {
+  color: var(--coffee);
+  background: var(--cream);
+}
+
+.domainsInfo:focus-visible,
+.domainsLink:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
+@media (hover: none) {
+  .domainsInfo {
+    width: 32px;
+    height: 32px;
+    margin: -8px 0;
+  }
+}
+
+.domainError {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--error);
+}
+
+.domainsLink {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(var(--coffee-rgb), 0.3);
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--coffee);
+  cursor: pointer;
+}
+
+/* Панель в потоке формы (не поверх полей): display не задаётся — скрывает hidden. */
+.domainsPanel {
+  padding: 10px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.08);
+}
+
+.domainsTitle {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.domainsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.domainsList li {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--cream);
+  font-size: 12.5px;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
 .authForgot {
   display: flex;
   justify-content: flex-end;
