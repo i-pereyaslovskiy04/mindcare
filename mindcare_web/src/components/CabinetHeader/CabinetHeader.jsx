@@ -27,18 +27,13 @@ import { Link } from 'react-router-dom';
 import { useLogout } from '../../features/auth/AuthContext';
 import CabinetSwitcher from '../../features/auth/CabinetSwitcher';
 import ThemeToggle from '../../features/theme/ThemeToggle';
-import A11yToggle from '../../features/a11y/A11yToggle';
+import {
+  A11Y_APPEARANCE_SECTION, APPEARANCE_LABEL,
+} from '../../features/a11y/appearanceSection';
 import SystemBell from '../../features/bell/ui/SystemBell';
 import { hasBell } from '../../features/bell/lib/bellView';
 import Icon from '../Icon/Icon';
 import styles from './CabinetHeader.module.css';
-
-const A11Y_SECTION = {
-  title: 'Версия для слабовидящих',
-  // Переключение версии сразу меняет оформление всей страницы и открывает
-  // A11yPanel под шапкой — панель «Оформление» закрываем, фокус — на триггер.
-  render: ({ close }) => <A11yToggle block onToggle={close} />,
-};
 
 function Breadcrumbs({ items }) {
   return (
@@ -127,8 +122,8 @@ export default function CabinetHeader({
 
         <ThemeToggle
           compact
-          label="Оформление и версия для слабовидящих"
-          extraSection={A11Y_SECTION}
+          label={APPEARANCE_LABEL}
+          extraSection={A11Y_APPEARANCE_SECTION}
         />
 
         <button
