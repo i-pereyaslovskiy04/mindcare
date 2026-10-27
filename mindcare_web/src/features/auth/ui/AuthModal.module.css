@@ -259,27 +259,34 @@
   color: var(--text-muted);
 }
 
-/* ── Разрешённые домены (AllowedDomainsHint): подсказка, ошибка, панель ── */
+/* ── Разрешённые домены (AllowedDomainsHint): строка под Email + tooltip ── */
 .domains {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
+/* Одна строка: info-кнопка слева (место не меняется при смене текста), затем
+   подсказка или ошибка домена. */
 .domainsHint {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-/* Вторичная info-кнопка: без фона и рамки, зона нажатия не меньше 24px. */
+.domainsHintError {
+  color: var(--error);
+}
+
+/* Вторичная info-кнопка: без фона и рамки, зона нажатия не меньше 24px;
+   отрицательный margin — строка не выше обычной подсказки. */
 .domainsInfo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin: -4px 0;
+  margin: -4px 0 -4px -5px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -289,14 +296,17 @@
   flex-shrink: 0;
 }
 
+.domainsHintError .domainsInfo {
+  color: var(--error);
+}
+
 .domainsInfo:hover,
 .domainsInfo[aria-expanded='true'] {
   color: var(--coffee);
   background: var(--cream);
 }
 
-.domainsInfo:focus-visible,
-.domainsLink:focus-visible {
+.domainsInfo:focus-visible {
   outline: 2px solid var(--coffee);
   outline-offset: 2px;
 }
@@ -305,63 +315,38 @@
   .domainsInfo {
     width: 32px;
     height: 32px;
-    margin: -8px 0;
+    margin: -8px 0 -8px -9px;
   }
 }
 
-.domainError {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--error);
-}
-
-.domainsLink {
-  padding: 0;
-  border: 0;
-  border-bottom: 1px solid rgba(var(--coffee-rgb), 0.3);
-  border-radius: 0;
-  background: none;
-  font: inherit;
-  font-weight: 600;
-  color: var(--coffee);
-  cursor: pointer;
-}
-
-/* Панель в потоке формы (не поверх полей): display не задаётся — скрывает hidden. */
-.domainsPanel {
-  padding: 10px 12px;
+/* Floating tooltip: портал в body, position: fixed поверх AuthModal — в потоке
+   формы его нет. display не задаётся: закрытый скрывает атрибут hidden.
+   top/left/z-index — inline (вычисляются от кнопки). */
+.domainsTooltip {
+  position: fixed;
+  box-sizing: border-box;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 10px;
   border: 1px solid var(--nav-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--warm-white);
-  box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.08);
+  box-shadow: 0 6px 18px rgba(var(--shadow-rgb), 0.16);
+  font-family: 'Nunito', sans-serif;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  text-align: left;
 }
 
 .domainsTitle {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-main);
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 700;
 }
 
 .domainsList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.domainsList li {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--cream);
-  font-size: 12.5px;
-  color: var(--text-main);
+  display: block;
+  color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 

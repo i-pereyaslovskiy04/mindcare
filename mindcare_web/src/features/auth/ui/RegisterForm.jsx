@@ -67,7 +67,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
   const [apiError, setApiError] = useState('');
 
   // Разрешённые домены — ТОЛЬКО из ответа backend (GET /api/public/email-domains):
-  // короткая подсказка под полем Email, сам список — по кнопке (AllowedDomainsHint).
+  // короткая подсказка под полем Email, сам список — в tooltip (AllowedDomainsHint).
   // Допуск решает backend (init и confirm); список его не заменяет и форму не
   // блокирует: ошибка домена — только подсказка. Тексты отказов приходят с
   // backend как есть.
@@ -78,8 +78,8 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
     && isDomainUnsupported(email, allowedDomains);
   const emailDescribedBy = [
     errors.email ? 'r-email-hint' : null,
-    domainError ? DOMAIN_ERROR_ID : null,
-    allowedDomains.length ? DOMAINS_HINT_ID : null,
+    // Строка под полем — подсказка или (при неподдерживаемом домене) ошибка.
+    allowedDomains.length ? (domainError ? DOMAIN_ERROR_ID : DOMAINS_HINT_ID) : null,
   ].filter(Boolean).join(' ') || undefined;
 
   // Родитель узнаёт о шаге в том же обновлении, что и сама форма — без кадра,

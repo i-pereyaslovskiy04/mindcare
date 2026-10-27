@@ -32,7 +32,7 @@ const EMAIL = 'student@a.example';
 // выводит их как есть. Домены здесь — синтетические, в коде формы их нет.
 const SERVER_MESSAGE =
   'Для регистрации по электронной почте используйте адрес с одним из разрешённых доменов: @b.example.';
-const SHORT_HINT = 'Используйте почту разрешённого домена';
+const SHORT_HINT = 'Почта должна быть на разрешённом домене';
 const INFO = 'Показать разрешённые домены';
 const DOMAIN_ERROR = 'Этот домен не поддерживается.';
 const rejected = (message, status = 422) => Object.assign(new Error(message), { status });
@@ -48,13 +48,16 @@ beforeEach(() => {
 
 const emailInput = () => screen.getByLabelText('Email');
 const infoButton = () => screen.getByRole('button', { name: INFO });
-const domainsPanel = () => screen.queryByRole('group', { name: 'Разрешённые домены' });
+const tooltip = () => screen.queryByRole('tooltip');
+// Домены в tooltip — текстом через «·» (без отдельных плашек).
+const domainsOf = (tip) => tip.textContent.replace('Разрешённые домены', '')
+  .split('·').map((part) => part.replace(/\s+/g, ' ').trim()).filter(Boolean);
 
-/** Открывает список кнопкой-info и возвращает домены, как их видит пользователь. */
+/** Открывает tooltip кнопкой-info (click/tap) и возвращает домены, как их видит пользователь. */
 async function listedDomains() {
-  await screen.findByText(SHORT_HINT);
-  if (!domainsPanel()) fireEvent.click(infoButton());
-  return within(domainsPanel()).getAllByRole('listitem').map((li) => li.textContent);
+  const info = await screen.findByRole('button', { name: INFO });
+  if (!tooltip()) fireEvent.click(info);
+  return domainsOf(tooltip());
 }
 
 function fillAndSubmit(email = EMAIL) {
@@ -85,54 +88,141 @@ test('под полем Email — короткая подсказка; полн�
   const hint = await screen.findByText(SHORT_HINT);
   expect(hint).toHaveAttribute('id', 'r-email-domains');
   expect(emailInput()).toHaveAttribute('aria-describedby', 'r-email-domains');
-  expect(domainsPanel()).toBeNull();
-  expect(screen.queryByText('@a.example')).not.toBeVisible();
+  expect(tooltip()).toBeNull();
+  expect(screen.getByText(/@a\.example/)).not.toBeVisible();
   expect(screen.queryByText(/Разрешённые домены:/)).toBeNull();
 });
 
-test('info-кнопка: доступное имя, aria-expanded/aria-controls; клик открывает список из ответа backend', async () => {
+test('tooltip — портал поверх интерфейса, не в потоке формы; список из ответа backend', async () => {
+  const { container } = render(<RegisterForm onSuccess={jest.fn()} />);
+  await screen.findByText(SHORT_HINT);
+  fireEvent.mouseEnter(infoButton());
+
+  const tip = tooltip();
+  expect(tip).toBeVisible();
+  expect(container).not.toContainElement(tip);
+  expect(document.body).toContainElement(tip);
+  expect(tip).toHaveStyle({ zIndex: '2100' });
+  expect(tip).toHaveTextContent('Разрешённые домены');
+  expect(domainsOf(tip)).toEqual(['@a.example', '@b.example']);
+  // Без отдельных плашек: обычный текст, не список элементов.
+  expect(within(tip).queryAllByRole('listitem')).toHaveLength(0);
+});
+
+test('info-кнопка: доступное имя, aria-expanded/aria-controls/aria-describedby на tooltip', async () => {
   render(<RegisterForm onSuccess={jest.fn()} />);
   await screen.findByText(SHORT_HINT);
 
   const info = infoButton();
   expect(info).toHaveAttribute('type', 'button');
   expect(info).toHaveAttribute('aria-expanded', 'false');
-  const panelId = info.getAttribute('aria-controls');
-  expect(panelId).toBeTruthy();
+  const tipId = info.getAttribute('aria-controls');
+  expect(tipId).toBeTruthy();
+  expect(info).toHaveAttribute('aria-describedby', tipId);
+  // Список доступен скринридеру и при закрытом tooltip — как описание кнопки.
+  expect(info).toHaveAccessibleDescription(/@a\.example.*@b\.example/);
 
   fireEvent.click(info);
   expect(info).toHaveAttribute('aria-expanded', 'true');
-  const panel = domainsPanel();
-  expect(panel).toHaveAttribute('id', panelId);
-  expect(panel).toBeVisible();
-  expect(within(panel).getByText('Разрешённые домены')).toBeInTheDocument();
-  expect(within(panel).getAllByRole('listitem').map((li) => li.textContent))
-    .toEqual(['@a.example', '@b.example']);
-
-  // Повторный клик закрывает.
-  fireEvent.click(info);
-  expect(info).toHaveAttribute('aria-expanded', 'false');
-  expect(domainsPanel()).toBeNull();
+  expect(tooltip()).toHaveAttribute('id', tipId);
 });
 
-test('Escape закрывает список, не доходит до обработчика модалки и возвращает фокус на кнопку', async () => {
+test('hover открывает tooltip, уход мыши закрывает', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await screen.findByText(SHORT_HINT);
+  const info = infoButton();
+
+  fireEvent.mouseEnter(info);
+  expect(tooltip()).toBeVisible();
+  expect(info).toHaveAttribute('aria-expanded', 'true');
+
+  fireEvent.mouseLeave(info);
+  await waitFor(() => expect(tooltip()).toBeNull());
+  expect(info).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('указатель можно перевести с кнопки на tooltip — он не закрывается', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await screen.findByText(SHORT_HINT);
+  const info = infoButton();
+
+  fireEvent.mouseEnter(info);
+  fireEvent.mouseLeave(info);
+  fireEvent.mouseEnter(tooltip());
+  await act(async () => { await new Promise((resolve) => { setTimeout(resolve, 200); }); });
+  expect(tooltip()).toBeVisible();
+
+  fireEvent.mouseLeave(tooltip());
+  await waitFor(() => expect(tooltip()).toBeNull());
+});
+
+test('фокус с клавиатуры открывает tooltip, blur закрывает', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await screen.findByText(SHORT_HINT);
+  const info = infoButton();
+
+  fireEvent.focus(info);
+  expect(tooltip()).toBeVisible();
+  fireEvent.blur(info);
+  expect(tooltip()).toBeNull();
+});
+
+test('tap/click открывает и закрепляет tooltip, повторный — закрывает', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await screen.findByText(SHORT_HINT);
+  const info = infoButton();
+
+  // Первый tap: эмулированный mouseenter, mousedown (фокус не клавиатурный), click.
+  fireEvent.mouseEnter(info);
+  fireEvent.mouseDown(info);
+  fireEvent.focus(info);
+  fireEvent.click(info);
+  expect(tooltip()).toBeVisible();
+  // Закреплён: уход мыши его не закрывает.
+  fireEvent.mouseLeave(info);
+  await act(async () => { await new Promise((resolve) => { setTimeout(resolve, 200); }); });
+  expect(tooltip()).toBeVisible();
+
+  // Второй tap.
+  fireEvent.mouseDown(info);
+  fireEvent.click(info);
+  expect(tooltip()).toBeNull();
+  expect(info).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('клик или tap снаружи закрывает tooltip, нажатие внутри — нет', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await screen.findByText(SHORT_HINT);
+  fireEvent.click(infoButton());
+
+  fireEvent.mouseDown(tooltip());
+  expect(tooltip()).toBeVisible();
+
+  fireEvent.mouseDown(screen.getByLabelText('Пароль'));
+  expect(tooltip()).toBeNull();
+
+  fireEvent.click(infoButton());
+  fireEvent.touchStart(screen.getByLabelText('Пароль'));
+  expect(tooltip()).toBeNull();
+});
+
+test('Escape закрывает tooltip, не доходит до обработчика модалки, фокус остаётся на кнопке', async () => {
   const modalEscape = jest.fn();
   document.addEventListener('keydown', modalEscape);
   try {
     render(<RegisterForm onSuccess={jest.fn()} />);
     await screen.findByText(SHORT_HINT);
     const info = infoButton();
-    info.focus();
-    fireEvent.click(info);
-    expect(domainsPanel()).not.toBeNull();
+    act(() => { info.focus(); });                       // фокус с клавиатуры
+    expect(tooltip()).toBeVisible();
 
     fireEvent.keyDown(info, { key: 'Escape' });
-    expect(domainsPanel()).toBeNull();
+    expect(tooltip()).toBeNull();
     expect(info).toHaveAttribute('aria-expanded', 'false');
     expect(info).toHaveFocus();
     expect(modalEscape).not.toHaveBeenCalled();
 
-    // Закрытый список Escape не перехватывает — его получает модалка.
+    // Закрытый tooltip Escape не перехватывает — его получает модалка.
     fireEvent.keyDown(info, { key: 'Escape' });
     expect(modalEscape).toHaveBeenCalledTimes(1);
   } finally {
@@ -140,22 +230,10 @@ test('Escape закрывает список, не доходит до обра�
   }
 });
 
-test('клик снаружи закрывает список, клик внутри — нет', async () => {
+test('неподдерживаемый домен: короткая ошибка в той же строке и тот же tooltip', async () => {
   render(<RegisterForm onSuccess={jest.fn()} />);
   await screen.findByText(SHORT_HINT);
-  fireEvent.click(infoButton());
-
-  fireEvent.mouseDown(within(domainsPanel()).getByText('@a.example'));
-  expect(domainsPanel()).not.toBeNull();
-
-  fireEvent.mouseDown(screen.getByLabelText('Пароль'));
-  expect(domainsPanel()).toBeNull();
-  expect(infoButton()).toHaveAttribute('aria-expanded', 'false');
-});
-
-test('неподдерживаемый домен: ошибка у поля и действие, открывающее тот же список', async () => {
-  render(<RegisterForm onSuccess={jest.fn()} />);
-  await screen.findByText(SHORT_HINT);
+  const info = infoButton();
 
   fireEvent.change(emailInput(), { target: { value: 'someone@gmail.example' } });
   expect(screen.queryByText(DOMAIN_ERROR)).toBeNull();      // не во время ввода
@@ -164,22 +242,20 @@ test('неподдерживаемый домен: ошибка у поля и �
   const error = screen.getByText(DOMAIN_ERROR);
   expect(error).toHaveAttribute('role', 'alert');
   expect(error).toHaveAttribute('id', 'r-email-domain-error');
+  expect(screen.queryByText(SHORT_HINT)).toBeNull();        // ошибка вместо подсказки
   expect(emailInput()).toHaveAttribute('aria-invalid', 'true');
-  // Формат корректен: описание — ошибка домена и подсказка, без r-email-hint.
-  expect(emailInput()).toHaveAttribute('aria-describedby', 'r-email-domain-error r-email-domains');
+  expect(emailInput()).toHaveAttribute('aria-describedby', 'r-email-domain-error');
+  // Отдельного раскрывающегося блока и второй кнопки нет — та же info-кнопка.
+  expect(screen.getAllByRole('button', { name: INFO })).toHaveLength(1);
+  expect(infoButton()).toBe(info);
 
-  const action = screen.getByRole('button', { name: 'Посмотреть разрешённые домены' });
-  expect(action).toHaveAttribute('aria-expanded', 'false');
-  expect(action.getAttribute('aria-controls')).toBe(infoButton().getAttribute('aria-controls'));
-  fireEvent.click(action);
-  expect(action).toHaveAttribute('aria-expanded', 'true');
-  expect(infoButton()).toHaveAttribute('aria-expanded', 'true');
-  expect(within(domainsPanel()).getAllByRole('listitem').map((li) => li.textContent))
-    .toEqual(['@a.example', '@b.example']);
+  fireEvent.click(info);
+  expect(domainsOf(tooltip())).toEqual(['@a.example', '@b.example']);
 
   // Правка адреса снимает ошибку до следующей проверки.
   fireEvent.change(emailInput(), { target: { value: 'someone@a.example' } });
   expect(screen.queryByText(DOMAIN_ERROR)).toBeNull();
+  expect(screen.getByText(SHORT_HINT)).toBeInTheDocument();
   expect(emailInput()).not.toHaveAttribute('aria-invalid');
 });
 
@@ -189,7 +265,7 @@ test('разрешённый домен (без учёта регистра и �
   fireEvent.change(emailInput(), { target: { value: '  Student@A.Example ' } });
   fireEvent.blur(emailInput());
   expect(screen.queryByText(DOMAIN_ERROR)).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Посмотреть разрешённые домены' })).toBeNull();
+  expect(screen.getByText(SHORT_HINT)).toBeInTheDocument();
 });
 
 test('нейтральный placeholder; ни одного домена в форме, которого не прислал backend', async () => {
