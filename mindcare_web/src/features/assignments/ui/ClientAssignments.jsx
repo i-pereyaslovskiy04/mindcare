@@ -93,7 +93,7 @@ export default function ClientAssignments({ studentUuid }) {
         <div className={styles.errorBox} role="alert">
           <p className={styles.error}>
             {status === 'auditUnavailable'
-              ? 'Не удалось зафиксировать просмотр заданий — список не показан. Повторите попытку.'
+              ? 'Не удалось зафиксировать просмотр заданий - список не показан. Повторите попытку.'
               : 'Не удалось загрузить задания.'}
           </p>
           <Button type="button" size="sm" variant="secondary" onClick={reload}>
@@ -123,7 +123,7 @@ export default function ClientAssignments({ studentUuid }) {
       {list.loadMoreError && (
         <p className={styles.error} role="alert">
           {list.loadMoreError.status === 503
-            ? 'Не удалось зафиксировать просмотр следующих заданий — они не показаны. Повторите попытку.'
+            ? 'Не удалось зафиксировать просмотр следующих заданий - они не показаны. Повторите попытку.'
             : 'Не удалось загрузить следующие задания. Проверьте соединение и нажмите «Показать ещё».'}
         </p>
       )}

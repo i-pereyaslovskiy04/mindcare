@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { addFavorite, getFavoriteIds, removeFavorite } from '../../../api/materialFavorites.api';
 
-const LIMIT_TEXT = 'В избранном уже максимум материалов — уберите ненужные.';
-const UNAVAILABLE_TEXT = 'Материал недоступен — его сняли с публикации.';
+const LIMIT_TEXT = 'В избранном уже максимум материалов - уберите ненужные.';
+const UNAVAILABLE_TEXT = 'Материал недоступен - его сняли с публикации.';
 const FALLBACK_TEXT = 'Не удалось сохранить избранное. Проверьте соединение и повторите попытку.';
 
 /**

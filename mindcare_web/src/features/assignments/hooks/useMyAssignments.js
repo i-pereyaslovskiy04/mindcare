@@ -10,7 +10,7 @@ export const SUMMARY_POLL_MS = 30000;
 
 const COMPLETE_ERRORS = {
   assignment_engagement_inactive:
-    'Сопровождение завершено — задание доступно только для просмотра.',
+    'Сопровождение завершено - задание доступно только для просмотра.',
   assignment_finalized: 'Задание уже отменено психологом.',
   assignment_not_available: 'Задание недоступно.',
 };

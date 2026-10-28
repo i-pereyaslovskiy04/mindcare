@@ -68,7 +68,7 @@ export default function useClientAssignments(studentUuid, { pageSize = CLIENT_AS
       return true;
     } catch (err) {
       if (err?.status === 409) {
-        setActionError({ uuid, message: 'Задание уже выполнено клиентом — отменить нельзя.' });
+        setActionError({ uuid, message: 'Задание уже выполнено клиентом - отменить нельзя.' });
         reload();
       } else if (err?.status === 404) {
         setActionError({ uuid, message: 'Задание недоступно: сопровождение завершено или передано.' });

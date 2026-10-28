@@ -21,7 +21,7 @@ def published_text(title: str) -> str:
 def returned_text(title: str) -> str:
     return (
         f"Материал «{title}» возвращён на доработку. "
-        f"Комментарий проверяющего — в разделе {MY_MATERIALS_LINK}"
+        f"Комментарий проверяющего - в разделе {MY_MATERIALS_LINK}"
     )
 
 

@@ -22,7 +22,7 @@ export default function QuickAssignDialog({ student, onClose, onCreated }) {
       <div className={styles.body}>
         <h2 className={styles.title}>{title}</h2>
         <p className={styles.text}>
-          Задание появится у клиента в разделе «Задания психолога». Список и статусы — в карточке клиента.
+          Задание появится у клиента в разделе «Задания психолога». Список и статусы - в карточке клиента.
         </p>
         <AssignmentForm
           onCreate={create}

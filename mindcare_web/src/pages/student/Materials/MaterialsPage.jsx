@@ -14,7 +14,7 @@ export default function MaterialsPage() {
       </h1>
       <p className={styles.pageSub}>
         Опубликованные материалы психологической службы: статьи, практики и упражнения.
-        Сохраняйте важное в избранное — отметки доступны на любом устройстве.
+        Сохраняйте важное в избранное - отметки доступны на любом устройстве.
       </p>
 
       <MaterialsLibrary variant="compact" withFavorites={!isImpersonating} getItemPath={studentMaterialPath} />

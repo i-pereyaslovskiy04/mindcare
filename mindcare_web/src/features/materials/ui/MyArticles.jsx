@@ -123,7 +123,7 @@ export default function MyArticles({ role = 'psychologist' }) {
                   </p>
                 )}
                 {st === 'in_review' && (
-                  <p className={styles.meta}>Материал на проверке — до решения его нельзя изменить.</p>
+                  <p className={styles.meta}>Материал на проверке - до решения его нельзя изменить.</p>
                 )}
                 <div className={styles.foot}>
                   <span className={styles.meta}>
@@ -188,7 +188,7 @@ export default function MyArticles({ role = 'psychologist' }) {
         open={warnEdit !== null}
         title="Редактировать опубликованный материал?"
         description={warnEdit
-          ? `«${warnEdit.title}» сейчас опубликован. После сохранения он снимется с публикации и перейдёт в черновик — ${selfPublish ? 'после правки опубликуйте его снова' : 'потребуется повторно отправить его на проверку'}.`
+          ? `«${warnEdit.title}» сейчас опубликован. После сохранения он снимется с публикации и перейдёт в черновик - ${selfPublish ? 'после правки опубликуйте его снова' : 'потребуется повторно отправить его на проверку'}.`
           : ''}
         confirmLabel="Редактировать"
         onConfirm={() => { const item = warnEdit; setWarnEdit(null); openEdit(item); }}
