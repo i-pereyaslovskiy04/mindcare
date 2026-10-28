@@ -44,8 +44,7 @@ mindcare_web/
     │       └── utils.js       ← getInitials() и другие общие утилиты
     │
     ├── data/                  ← dev/mock data only
-    │   ├── news.mock.js
-    │   └── materials.mock.js
+    │   └── news.mock.js
     │
     ├── hooks/                 ← app-wide reusable hooks
     │   ├── useDebounce.js
@@ -219,10 +218,10 @@ mindcare_web/
     │   │       ├── NewsGrid.jsx
     │   │       └── Pagination.jsx
     │   ├── materials/
-    │   │   ├── MaterialsPage.jsx + .module.css
-    │   │   ├── MaterialsItemPage.jsx + .module.css
-    │   │   └── components/
-    │   │       └── (SearchBar, FiltersDropdown, FilterSheet, MaterialsGrid, MaterialCard)
+    │   │   ├── MaterialsPage.jsx            ← Navbar/Hero/Footer + features/materials/ui/MaterialsLibrary
+    │   │   └── MaterialsItemPage.jsx + .module.css ← Navbar/Footer + features/materials/ui/MaterialView
+    │   │       (SearchBar, FiltersDropdown, FilterSheet, MaterialsGrid, MaterialCard —
+    │   │        в features/materials/components/, общие с кабинетами)
     │   ├── health/
     │   │   └── HealthPage.jsx
     │   ├── not-found/
@@ -355,7 +354,6 @@ Pages используют **только hooks**, никогда не дела�
 ```
 src/data/
   news.mock.js
-  materials.mock.js
 ```
 
 Импортируются исключительно из `api/*.api.js`. Все остальные слои работают через API.
@@ -385,6 +383,7 @@ src/data/
 | `/student/diary` | `DiaryPage` | — (наследует от `/student`) |
 | `/student/tests` | `TestsPage` | — |
 | `/student/materials` | `StudentMaterialsPage` | — |
+| `/student/materials/:id` | `StudentMaterialItemPage` | — (чтение опубликованного материала внутри кабинета) |
 | `/student/tasks` | `TasksPage` | — |
 | `/student/chat` | `ChatPage` | — |
 | `/student/calendar` | `CalendarPage` | — |
@@ -395,6 +394,8 @@ src/data/
 | `/psychologist/students/:studentId` | `PsychologistStudentCardPage` | — |
 | `/psychologist/appointments` | `PsychologistAppointmentsPage` | — |
 | `/psychologist/chat` | `PsychologistChatPage` | — |
+| `/psychologist/materials` | `PsychologistMaterialsPage` | — (только чтение публичной библиотеки) |
+| `/psychologist/materials/:id` | `PsychologistMaterialItemPage` | — |
 | `/psychologist/settings` | `CabinetSettingsPage` | — |
 | `/supervisor` | `SupervisorLayout` (Outlet) | Auth + role membership: supervisor |
 | `/supervisor/engagements` | `EngagementsPage` | — |
@@ -1242,7 +1243,7 @@ const Home = lazy(() => import('../pages/home/Home'));
 | Hook | camelCase, префикс `use` | `useStudents.js` |
 | API модуль | camelCase, суффикс `.api.js` | `supervisor.api.js` |
 | CSS Module | camelCase, совпадает с компонентом | `AssignModal.module.css` |
-| Mock данные | camelCase, суффикс `.mock.js` | `materials.mock.js` |
+| Mock данные | camelCase, суффикс `.mock.js` | `news.mock.js` |
 | Утилиты | camelCase | `utils.js` |
 
 ### Hook контракт

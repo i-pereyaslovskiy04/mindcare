@@ -33,6 +33,9 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
    student вне режима «под именем»; supervisor-раздел /supervisor/student-verifications
    в режиме «под именем» запросов не делает
 ✅ Контакты пользователя (ADR-032): HTTP только через `api/contacts.api.js`; владелец — `features/contacts/hooks/useMyContacts` + `ui/ContactsEditor` (введённое не теряется при ошибке и конфликте версий, `id` строки — UUID, создаётся один раз), сотрудник — только чтение (`useUserContacts` + `ui/ContactsReadOnly`/`UserContactsDialog`; данные привязаны к uuid). Значения контактов не логировать; `err.body` целиком не выводить. Ссылкой значение становится только через `lib/href.contactHref` (https/http, mailto, tel; `rel="noopener noreferrer nofollow"`)
+✅ Библиотека материалов: общий слой `features/materials/` (`useMaterialsLibrary` — только серверные поиск, один `category_id` и страницы; `useMaterial`; `ui/MaterialsLibrary`, `ui/MaterialView` с DOMPurify) для `/materials` и кабинетов, путь чтения — через `getItemPath`. Не имитировать на клиенте сортировку/фильтры, которых нет в API.
+✅ Задания (ADR-033): HTTP только через `api/assignments.api.js`; клиент — `features/assignments/hooks/useMyAssignments` (keyset `open`/`history`, сброс обоих списков после действия, 409/404 и смены сводки; без оптимистичного успеха), бейдж — `useActiveAssignmentsCount`; психолог — `useClientAssignments` + `ui/ClientAssignments` (ключ — uuid клиента). Тексты заданий не логировать. Создание задания — общий `useAssignmentCreate` + `ui/AssignmentForm` (карточка клиента и быстрый `QuickAssignDialog` в «Мои студенты»); выбор материала — встроенная панель, не вложенная модалка.
+✅ ADR-034: избранное — `api/materialFavorites.api.js` + `useMaterialFavorites` (без оптимистичного успеха), только в компактной библиотеке кабинетов (`MaterialsLibrary variant="compact" withFavorites`); статьи психолога — `features/materials/{hooks/useMyArticles, ui/MyArticles}` и `ArticleFormModal mode="author"`; модерация — `useArticleReview` + `ui/ArticleReview` (`/admin/materials-review`; у супервизора — вкладка «На проверке» в `SupervisorMaterialsPage`, рядом «Мои материалы» с `MyArticles role="supervisor"`, публикует сам); бейджи очередей — `features/moderation/hooks/useReviewQueueCounts` + шина `reviewQueueEvents` (после решения вызвать `notifyReviewQueueChanged()`); внутренние ссылки system-сообщений — только из allowlist `features/chat/lib/internalLinks.js`. Подтверждения — `features/assignments/ui/ConfirmDialog` (стиль `UserLifecycleDialog`).
 ✅ Вкладки — только `components/UI/Tabs` (`AuditTabs` — тонкая обёртка); поле формы с подписью — `components/UI/TextField` (label↔input, hint/error через aria-describedby). Неактивные панели вкладок держать смонтированными с атрибутом `hidden` (без `display` на обёртке и без подстрок `grid/cards/columns` в именах классов — режим ГОСТ принудительно делает их `display:block`)
 ✅ Настройки аккаунта: страница `pages/student/Settings` — только композиция; логика в `features/accountSettings` (ФИО и телефон сохраняются раздельно, PATCH несёт только свой ключ). После смены/установки пароля: navigate → `clearSession()`, без `logout`
 ✅ LinkifiedText: внутренние ссылки — ТОЛЬКО для system-сообщений
@@ -189,12 +192,10 @@ Feature-specific UI разрешён только с обоснованием в
 - CabinetHeader .iconBtn (36×36, геометрия триггера ThemeToggle compact)
 - SearchBar count overlay
 - SearchBar removable chips
-- TaskItem badges
 - Chat controls
 - DiaryEntryForm emotion chips
 - FeaturedNews newsTagOverlay
 - ContentPreview category/tag
-- Student MaterialsPage articleTopic
 - StudentHome period chips
 - StudentHome dark-card buttons
 - MultiSelect selected tags внутри shared MultiSelect
