@@ -5,10 +5,11 @@ export const tabButtonId = (prefix, id) => `${prefix}-tab-${id}`;
 export const tabPanelId = (prefix, id) => `${prefix}-panel-${id}`;
 
 /**
- * Вкладки (shared; поднят из features/admin/audit/AuditTabs — см.
- * docs/UI_TECH_DEBT.md). Стандартный tablist с автоматической активацией:
- * стрелки и Home/End переносят фокус и сразу переключают вкладку, невыбранные
- * кнопки выведены из Tab-обхода (roving tabIndex).
+ * Вкладки — единственная реализация навигационных вкладок проекта (shared;
+ * настройки всех кабинетов, материалы, сессии психолога, журнал аудита).
+ * Стандартный tablist с автоматической активацией: стрелки и Home/End
+ * переносят фокус и сразу переключают вкладку, невыбранные кнопки выведены из
+ * Tab-обхода (roving tabIndex); Enter/Space — нативный click кнопки.
  *
  * Props:
  *   tabs     — [{ id, label }]
@@ -17,16 +18,16 @@ export const tabPanelId = (prefix, id) => `${prefix}-panel-${id}`;
  *   label    — aria-label списка вкладок
  *   idPrefix — префикс id (кнопка `${p}-tab-${id}`, панель `${p}-panel-${id}`);
  *              панели рисует потребитель: role="tabpanel", id=tabPanelId(...),
- *              aria-labelledby=tabButtonId(...). Неактивные панели можно держать
+ *              aria-labelledby=tabButtonId(...). Неактивные панели держать
  *              смонтированными с атрибутом hidden (черновики не теряются).
- *   fill     — равные колонки на всю ширину без min-width (узкие экраны)
- *   indicator — вид выбранной вкладки: 'underline' (по умолчанию: заливка + подчёркивание)
- *              или 'fill' (сегменты: выбранная — фон поверхности, рамка и тень,
- *              без акцентной заливки; в режиме для слабовидящих выбранная
- *              инвертируется и получает внутреннюю рамку)
+ *   fill     — равные колонки на всю ширину контейнера (по умолчанию ширина
+ *              по содержимому; на узком экране — равные колонки всегда)
+ *   className — внешняя раскладка (отступы, max-width): своих внешних
+ *              отступов у компонента нет
  *
- * Активная вкладка отмечается НЕ только цветом (жирность + подчёркивание):
- * режим для слабовидящих принудительно перекрашивает все button.
+ * Вид один: сегменты на подложке; выбранная — поверхность, рамка, тень и
+ * жирное начертание (отмечена НЕ только цветом: режим для слабовидящих
+ * принудительно перекрашивает все button — там выбранная инвертируется).
  */
 export default function Tabs({
   tabs,
@@ -35,7 +36,6 @@ export default function Tabs({
   label,
   idPrefix = 'tabs',
   fill = false,
-  indicator = 'underline',
   className,
 }) {
   const listRef = useRef(null);
@@ -76,12 +76,7 @@ export default function Tabs({
   return (
     <div
       ref={listRef}
-      className={[
-        styles.tabs,
-        fill && styles.fill,
-        indicator === 'fill' && styles.indicatorFill,
-        className,
-      ].filter(Boolean).join(' ')}
+      className={[styles.tabs, fill && styles.fill, className].filter(Boolean).join(' ')}
       role="tablist"
       aria-label={label}
       onKeyDown={handleKeyDown}

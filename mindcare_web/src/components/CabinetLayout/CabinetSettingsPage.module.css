@@ -29,18 +29,16 @@
   max-width: 600px;
 }
 
-/* ---- two-column grid ---- */
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  align-items: flex-start;
+/* ---- разделы: вкладки и панели (раскладка как в настройках студента) ---- */
+.tabs {
+  max-width: 760px;
+  margin-bottom: 18px;
 }
-.leftCol,
-.rightCol {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+
+/* Панель только прячется атрибутом hidden: display здесь не задаётся. */
+.panel {
+  max-width: 760px;
+  min-width: 0;
 }
 
 /* ---- card base ---- */
@@ -170,11 +168,4 @@
   padding: 9px 12px;
   margin-bottom: 10px;
   line-height: 1.5;
-}
-
-/* ---- responsive ---- */
-@media (max-width: 980px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
 }

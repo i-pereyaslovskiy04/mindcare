@@ -204,7 +204,7 @@
 ## Audit tabs (журнал действий)
 
 - **Где:** `features/admin/audit/components/AuditTabs.jsx`
-- **Статус (2026-10-14):** `AuditTabs` поднят в `components/UI/Tabs` (вторая страница со вкладками — `/student/settings`); сам файл — тонкая обёртка с прежними id/экспортами. **Осталось:** `pages/psychologist/Appointments/AppointmentsPage.jsx` со своими inline-вкладками — мигрировать на shared Tabs.
+- **Статус (2026-10-14):** `AuditTabs` поднят в `components/UI/Tabs` (вторая страница со вкладками — `/student/settings`); сам файл — тонкая обёртка с прежними id/экспортами. **Статус (2026-10-28):** закрыто — `AppointmentsPage` переведён на shared Tabs; у компонента один вид (вариант `indicator` удалён), настройки психолога и супервизора разложены по вкладкам.
 - **Похоже на:** shared Tabs (теперь существует)
 - **Почему оставлено:** shared Tabs в проекте нет. Ближайший аналог — inline-разметка вкладок в `pages/psychologist/Appointments/AppointmentsPage.jsx`: без `aria-controls`, без клавиатурной навигации и без roving tabIndex, переиспользовать там нечего. Реализация в audit — полный tablist (`role="tablist"/"tab"/"tabpanel"`, `aria-selected`, `aria-controls`, стрелки, Home/End).
 - **Что делать дальше:** при появлении второй страницы со вкладками — поднять `AuditTabs` в `components/UI/Tabs` и мигрировать на него разметку AppointmentsPage.

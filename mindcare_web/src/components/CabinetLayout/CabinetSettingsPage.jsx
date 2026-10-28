@@ -6,6 +6,7 @@ import Toggle from '../UI/Toggle/Toggle';
 import { getInitials } from '../../shared/lib/utils';
 import { ROLE_LABELS } from '../../shared/lib/roles';
 import Select from '../UI/Select/Select';
+import Tabs, { tabButtonId, tabPanelId } from '../UI/Tabs/Tabs';
 import * as authApi from '../../api/auth.api';
 import styles from './CabinetSettingsPage.module.css';
 
@@ -14,6 +15,28 @@ const TIMEZONE_OPTIONS = [
   { value: 'ekb', label: 'Екатеринбург (UTC+5)' },
   { value: 'nsk', label: 'Новосибирск (UTC+7)' },
 ];
+
+const TABS_PREFIX = 'cabinet-settings';
+const SECTIONS = [
+  { id: 'profile', label: 'Профиль' },
+  { id: 'notifications', label: 'Уведомления' },
+  { id: 'security', label: 'Безопасность' },
+];
+
+/** Панель раздела: смонтирована всегда, неактивная скрыта (черновики форм живут). */
+function Panel({ id, active, children }) {
+  return (
+    <div
+      role="tabpanel"
+      id={tabPanelId(TABS_PREFIX, id)}
+      aria-labelledby={tabButtonId(TABS_PREFIX, id)}
+      hidden={active !== id}
+      className={styles.panel}
+    >
+      {children}
+    </div>
+  );
+}
 
 function NotifRow({ label, desc, on, onToggle }) {
   return (
@@ -60,6 +83,7 @@ export default function CabinetSettingsPage({ cabinetRole }) {
   }
 
   const [timezone, setTimezone] = useState('msk');
+  const [section, setSection] = useState('profile');
 
   const [notif, setNotif] = useState({
     sessions: true,
@@ -83,134 +107,140 @@ export default function CabinetSettingsPage({ cabinetRole }) {
         Личные данные, уведомления и конфиденциальность.
       </p>
 
-      <div className={styles.grid}>
-        {/* LEFT — Profile */}
-        <div className={styles.leftCol}>
-          <div className={styles.card}>
-            <h2 className={styles.sectionTitle}>Профиль</h2>
+      <Tabs
+        tabs={SECTIONS}
+        active={section}
+        onChange={setSection}
+        label="Разделы настроек"
+        idPrefix={TABS_PREFIX}
+        fill
+        className={styles.tabs}
+      />
 
-            <div className={styles.profileHead}>
-              <div className={styles.avatar}>{getInitials(user?.name)}</div>
-              <div>
-                <div className={styles.profileName}>{user?.name ?? '—'}</div>
-                <div className={styles.profileRole}>{roleLabel}</div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  style={{ marginTop: 8 }}
-                >
-                  Изменить фото
-                </Button>
-              </div>
-            </div>
+      <Panel id="profile" active={section}>
+        <div className={styles.card}>
+          <h2 className={styles.sectionTitle}>Профиль</h2>
 
-            <div className={styles.field}>
-              <label>Имя</label>
-              <input className={styles.input} defaultValue={user?.name ?? ''} />
+          <div className={styles.profileHead}>
+            <div className={styles.avatar}>{getInitials(user?.name)}</div>
+            <div>
+              <div className={styles.profileName}>{user?.name ?? '—'}</div>
+              <div className={styles.profileRole}>{roleLabel}</div>
+              <Button
+                variant="ghost"
+                size="sm"
+                style={{ marginTop: 8 }}
+              >
+                Изменить фото
+              </Button>
             </div>
+          </div>
+
+          <div className={styles.field}>
+            <label>Имя</label>
+            <input className={styles.input} defaultValue={user?.name ?? ''} />
+          </div>
+          <div className={styles.field}>
+            <label>Email</label>
+            <input className={styles.input} type="email" defaultValue={user?.email ?? ''} readOnly />
+          </div>
+          <div className={styles.field}>
+            <label>Номер телефона</label>
+            <input className={styles.input} type="tel" placeholder="+7 (___) ___-__-__" />
+          </div>
+          <div className={styles.field}>
+            <label>Часовой пояс</label>
+            <Select
+              value={timezone}
+              options={TIMEZONE_OPTIONS}
+              onChange={setTimezone}
+            />
+          </div>
+
+          <Button variant="primary" style={{ marginTop: 6 }}>
+            Сохранить изменения
+          </Button>
+        </div>
+      </Panel>
+
+      <Panel id="notifications" active={section}>
+        <div className={styles.card}>
+          <h2 className={styles.sectionTitle} style={{ marginBottom: 14 }}>Уведомления</h2>
+          <NotifRow
+            label="Напоминания о сессиях"
+            desc="За день и за час до встречи"
+            on={notif.sessions}
+            onToggle={() => toggleNotif('sessions')}
+          />
+          <NotifRow
+            label="Новые сообщения"
+            desc="Когда приходит новое сообщение"
+            on={notif.messages}
+            onToggle={() => toggleNotif('messages')}
+          />
+          <NotifRow
+            label="Еженедельный итог"
+            desc="Сводка за неделю по понедельникам"
+            on={notif.weekly}
+            onToggle={() => toggleNotif('weekly')}
+          />
+        </div>
+      </Panel>
+
+      <Panel id="security" active={section}>
+        <div className={styles.card}>
+          <h2 className={styles.sectionTitle}>Безопасность</h2>
+          <form onSubmit={handleChangePassword}>
             <div className={styles.field}>
-              <label>Email</label>
-              <input className={styles.input} type="email" defaultValue={user?.email ?? ''} readOnly />
-            </div>
-            <div className={styles.field}>
-              <label>Номер телефона</label>
-              <input className={styles.input} type="tel" placeholder="+7 (___) ___-__-__" />
-            </div>
-            <div className={styles.field}>
-              <label>Часовой пояс</label>
-              <Select
-                value={timezone}
-                options={TIMEZONE_OPTIONS}
-                onChange={setTimezone}
+              <label>Текущий пароль</label>
+              <input
+                className={styles.input}
+                type="password"
+                value={pwForm.current_password}
+                onChange={(e) => setPwForm(f => ({ ...f, current_password: e.target.value }))}
+                required
+                disabled={pwLoading || pwSuccess}
+                autoComplete="current-password"
               />
             </div>
-
-            <Button variant="primary" style={{ marginTop: 6 }}>
-              Сохранить изменения
+            <div className={styles.field}>
+              <label>Новый пароль</label>
+              <input
+                className={styles.input}
+                type="password"
+                value={pwForm.new_password}
+                onChange={(e) => setPwForm(f => ({ ...f, new_password: e.target.value }))}
+                required
+                disabled={pwLoading || pwSuccess}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className={styles.field}>
+              <label>Подтверждение нового пароля</label>
+              <input
+                className={styles.input}
+                type="password"
+                value={pwForm.new_password_confirm}
+                onChange={(e) => setPwForm(f => ({ ...f, new_password_confirm: e.target.value }))}
+                required
+                disabled={pwLoading || pwSuccess}
+                autoComplete="new-password"
+              />
+            </div>
+            {pwError && <div className={styles.formError}>{pwError}</div>}
+            {pwSuccess && <div className={styles.formSuccess}>Пароль изменён. Войдите снова.</div>}
+            <Button
+              type="submit"
+              variant="primary"
+              style={{ marginTop: 6 }}
+              loading={pwLoading}
+              disabled={pwSuccess}
+            >
+              Изменить пароль
             </Button>
-          </div>
-
-          {/* Security */}
-          <div className={styles.card}>
-            <h2 className={styles.sectionTitle}>Безопасность</h2>
-            <form onSubmit={handleChangePassword}>
-              <div className={styles.field}>
-                <label>Текущий пароль</label>
-                <input
-                  className={styles.input}
-                  type="password"
-                  value={pwForm.current_password}
-                  onChange={(e) => setPwForm(f => ({ ...f, current_password: e.target.value }))}
-                  required
-                  disabled={pwLoading || pwSuccess}
-                  autoComplete="current-password"
-                />
-              </div>
-              <div className={styles.field}>
-                <label>Новый пароль</label>
-                <input
-                  className={styles.input}
-                  type="password"
-                  value={pwForm.new_password}
-                  onChange={(e) => setPwForm(f => ({ ...f, new_password: e.target.value }))}
-                  required
-                  disabled={pwLoading || pwSuccess}
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className={styles.field}>
-                <label>Подтверждение нового пароля</label>
-                <input
-                  className={styles.input}
-                  type="password"
-                  value={pwForm.new_password_confirm}
-                  onChange={(e) => setPwForm(f => ({ ...f, new_password_confirm: e.target.value }))}
-                  required
-                  disabled={pwLoading || pwSuccess}
-                  autoComplete="new-password"
-                />
-              </div>
-              {pwError && <div className={styles.formError}>{pwError}</div>}
-              {pwSuccess && <div className={styles.formSuccess}>Пароль изменён. Войдите снова.</div>}
-              <Button
-                type="submit"
-                variant="primary"
-                style={{ marginTop: 6 }}
-                loading={pwLoading}
-                disabled={pwSuccess}
-              >
-                Изменить пароль
-              </Button>
-            </form>
-          </div>
+          </form>
         </div>
-
-        {/* RIGHT — Notifications */}
-        <div className={styles.rightCol}>
-          <div className={styles.card}>
-            <h2 className={styles.sectionTitle} style={{ marginBottom: 14 }}>Уведомления</h2>
-            <NotifRow
-              label="Напоминания о сессиях"
-              desc="За день и за час до встречи"
-              on={notif.sessions}
-              onToggle={() => toggleNotif('sessions')}
-            />
-            <NotifRow
-              label="Новые сообщения"
-              desc="Когда приходит новое сообщение"
-              on={notif.messages}
-              onToggle={() => toggleNotif('messages')}
-            />
-            <NotifRow
-              label="Еженедельный итог"
-              desc="Сводка за неделю по понедельникам"
-              on={notif.weekly}
-              onToggle={() => toggleNotif('weekly')}
-            />
-          </div>
-
-        </div>
-      </div>
+      </Panel>
     </div>
   );
 }

@@ -10,7 +10,9 @@ export const tabPanelId = (id) => sharedPanelId(PREFIX, id);
  * (`audit-tab-*`, `audit-panel-*`), подпись по умолчанию и экспорты сохранены
  * для AuditLogsPage.
  */
-export default function AuditTabs({ tabs, active, onChange, label = 'Журналы аудита' }) {
+export default function AuditTabs({
+  tabs, active, onChange, label = 'Журналы аудита', className,
+}) {
   return (
     <Tabs
       tabs={tabs}
@@ -18,6 +20,7 @@ export default function AuditTabs({ tabs, active, onChange, label = 'Журна�
       onChange={onChange}
       label={label}
       idPrefix={PREFIX}
+      className={className}
     />
   );
 }

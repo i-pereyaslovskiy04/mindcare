@@ -3,6 +3,7 @@ import Icon from '../../../components/Icon/Icon';
 import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
 import Modal from '../../../components/Modal/Modal';
+import Tabs, { tabButtonId, tabPanelId } from '../../../components/UI/Tabs/Tabs';
 import { usePsychologistAppointments } from '../../../features/psychologist/hooks/usePsychologistAppointments';
 import { usePsychologistCalendarMonth } from '../../../features/psychologist/hooks/usePsychologistCalendarRange';
 import { confirmAppointment, declineAppointment } from '../../../api/appointments.api';
@@ -11,6 +12,31 @@ import PsychologistCalendar from './PsychologistCalendar';
 import GroupSessionsPanel from './GroupSessionsPanel';
 import ScheduleTab from './ScheduleTab';
 import styles from './AppointmentsPage.module.css';
+
+const TABS_PREFIX = 'psych-sessions';
+// Мягкий перенос (U+00AD): на узком экране вкладки — равные колонки, и длинное
+// слово переносится по слогу с дефисом («Индивиду-альные»), а не рвётся
+// посередине; на широком экране невидим.
+const TABS = [
+  { id: 'individual', label: 'Индивиду\u00adальные' },
+  { id: 'group', label: 'Групповые' },
+  { id: 'schedule', label: 'Моё расписание' },
+];
+
+/** Панель вкладки: всегда в DOM (aria-controls), содержимое — только у активной. */
+function TabPanel({ id, active, children }) {
+  return (
+    <div
+      role="tabpanel"
+      id={tabPanelId(TABS_PREFIX, id)}
+      aria-labelledby={tabButtonId(TABS_PREFIX, id)}
+      hidden={active !== id}
+      className={styles.tabPanel}
+    >
+      {active === id && children}
+    </div>
+  );
+}
 
 // Все даты/время показываем в московском времени через Intl (не ручной +3).
 const _dayDateFmt = new Intl.DateTimeFormat('ru-RU', {
@@ -170,43 +196,23 @@ export default function PsychologistAppointmentsPage() {
         </div>
       </div>
 
-      {/* Tabs: individual / group */}
-      <div className={styles.tabs} role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'individual'}
-          className={tab === 'individual' ? `${styles.tab} ${styles.tabActive}` : styles.tab}
-          onClick={() => setTab('individual')}
-        >
-          Индивидуальные
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'group'}
-          className={tab === 'group' ? `${styles.tab} ${styles.tabActive}` : styles.tab}
-          onClick={() => setTab('group')}
-        >
-          Групповые
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'schedule'}
-          className={tab === 'schedule' ? `${styles.tab} ${styles.tabActive}` : styles.tab}
-          onClick={() => setTab('schedule')}
-        >
-          Моё расписание
-        </button>
-      </div>
+      <Tabs
+        tabs={TABS}
+        active={tab}
+        onChange={setTab}
+        label="Разделы сессий"
+        idPrefix={TABS_PREFIX}
+      />
 
-      {tab === 'group' && <GroupSessionsPanel />}
+      <TabPanel id="group" active={tab}>
+        <GroupSessionsPanel />
+      </TabPanel>
 
-      {tab === 'schedule' && <ScheduleTab />}
+      <TabPanel id="schedule" active={tab}>
+        <ScheduleTab />
+      </TabPanel>
 
-      {tab === 'individual' && (
-      <>
+      <TabPanel id="individual" active={tab}>
       {/* Status filter chips */}
       <div className={styles.filters}>
         {STATUS_FILTERS.map(f => (
@@ -361,8 +367,7 @@ export default function PsychologistAppointmentsPage() {
           <div className={styles.totalHint}>Всего записей: {total}</div>
         </>
       )}
-      </>
-      )}
+      </TabPanel>
 
       {/* Decline modal */}
       <Modal

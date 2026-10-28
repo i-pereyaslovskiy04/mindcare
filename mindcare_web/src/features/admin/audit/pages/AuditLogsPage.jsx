@@ -77,7 +77,7 @@ export default function AuditLogsPage() {
         перехода по страницам.
       </p>
 
-      <AuditTabs tabs={TABS} active={source} onChange={setSource} />
+      <AuditTabs tabs={TABS} active={source} onChange={setSource} className={styles.tabs} />
 
       <div
         role="tabpanel"

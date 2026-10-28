@@ -3,6 +3,11 @@
   flex-direction: column;
 }
 
+/* Отступ под вкладками журналов (у shared Tabs своих внешних отступов нет). */
+.tabs {
+  margin-bottom: 18px;
+}
+
 .header {
   display: flex;
   flex-wrap: wrap;
