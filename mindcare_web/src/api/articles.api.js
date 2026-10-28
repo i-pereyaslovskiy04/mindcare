@@ -2,11 +2,17 @@ import { apiFetch } from './client';
 
 // ── Public ────────────────────────────────────────────────────────────────────
 
-export function getArticles({ page = 1, size = 10, search, category_id } = {}) {
+export function getArticles({ page = 1, size = 10, search, category_id, tag_uuid } = {}) {
   const params = new URLSearchParams({ page, size });
   if (search)      params.set('search', search);
   if (category_id) params.set('category_id', category_id);
+  if (tag_uuid)    params.set('tag_uuid', tag_uuid);
   return apiFetch(`/api/articles?${params}`);
+}
+
+/** Темы опубликованных статей — варианты фильтра «Тема» библиотеки. */
+export function getArticleTags() {
+  return apiFetch('/api/articles/tags');
 }
 
 export function getArticleById(uuid) {

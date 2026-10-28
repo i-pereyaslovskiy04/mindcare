@@ -24,11 +24,16 @@ def list_articles_public(
     size: int,
     search: Optional[str],
     category_id: Optional[int],
+    tag_uuid=None,
 ) -> tuple[list[dict], int]:
     return storage.find_articles(
         page=page, size=size, search=search,
-        category_id=category_id, public_only=True,
+        category_id=category_id, public_only=True, tag_uuid=tag_uuid,
     )
+
+
+def get_public_article_tags() -> list[dict]:
+    return storage.public_article_tags()
 
 
 def get_article(uuid: str) -> Optional[dict]:

@@ -1,4 +1,4 @@
-import FilterChip from '../../../components/UI/FilterChip/FilterChip';
+import FilterSections from './FilterSections';
 import styles from './FiltersDropdown.module.css';
 
 const XIcon = () => (
@@ -7,25 +7,12 @@ const XIcon = () => (
   </svg>
 );
 
-const CheckIcon = () => (
-  <svg width="9" height="8" viewBox="0 0 9 8" fill="none" aria-hidden="true">
-    <path d="M1 4l2.5 2.5L8 1" stroke="currentColor" strokeWidth="1.5"
-      strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 export default function FiltersDropdown({
   onClose,
-  category,
-  onCategoryChange,
-  categoryOptions,
   onClear,
+  ...filters
 }) {
-  // Один выбор: API статей принимает ровно один category_id.
-  const toggleCategory = (value) =>
-    onCategoryChange(category === value ? null : value);
-
-  const hasActiveFilters = category != null;
+  const hasActiveFilters = filters.category != null || filters.tag != null;
 
   return (
     <div className={styles.panel}>
@@ -37,24 +24,7 @@ export default function FiltersDropdown({
         </button>
       </div>
 
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Тип материала</h3>
-        <div className={styles.tagGrid}>
-          {categoryOptions.map((opt) => {
-            const active = category === opt.value;
-            return (
-              <FilterChip
-                key={opt.value}
-                active={active}
-                onClick={() => toggleCategory(opt.value)}
-                icon={active ? <CheckIcon /> : null}
-              >
-                {opt.label}
-              </FilterChip>
-            );
-          })}
-        </div>
-      </section>
+      <FilterSections {...filters} classes={styles} />
 
       {hasActiveFilters && (
         <div className={styles.clearSection}>

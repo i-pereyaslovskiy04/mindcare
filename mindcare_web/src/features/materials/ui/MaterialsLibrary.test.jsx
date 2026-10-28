@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import MaterialsLibrary from './MaterialsLibrary';
-import { getArticles, getPublicCategories } from '../../../api/articles.api';
+import { getArticles, getArticleTags, getPublicCategories } from '../../../api/articles.api';
 
 jest.mock('../../../api/articles.api');
 jest.mock('react-router-dom', () => ({
@@ -24,6 +24,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mobile = false;
   getPublicCategories.mockResolvedValue([{ id: 3, name: 'Статья' }, { id: 4, name: 'Гид' }]);
+  getArticleTags.mockResolvedValue([]);
 });
 
 async function flush() {
@@ -118,5 +119,58 @@ describe('MaterialsLibrary — мобильная панель фильтров 
     expect(getArticles).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: 3, page: 1 }));
     expect(chip).toHaveFocus();
     expect(screen.getByRole('dialog', { name: 'Фильтры' })).toContainElement(chip);
+  });
+});
+
+describe('MaterialsLibrary — фильтр «Тема»', () => {
+  beforeEach(() => {
+    getArticles.mockResolvedValue({ items: [article(1)], total: 1 });
+    getArticleTags.mockResolvedValue([{ uuid: 't1', name: 'Тревога' }, { uuid: 't2', name: 'Сон' }]);
+  });
+
+  it('раздел «Тема» рядом с «Тип материала»; выбор темы — на сервер и чипом', async () => {
+    render(<MaterialsLibrary getItemPath={id => `/m/${id}`} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Фильтры' }));
+    const themes = await screen.findByRole('group', { name: 'Тема' });
+    expect(screen.getByRole('group', { name: 'Тип материала' })).toBeInTheDocument();
+    fireEvent.click(within(themes).getByRole('button', { name: 'Сон' }));
+    await flush();
+    expect(getArticles).toHaveBeenLastCalledWith(expect.objectContaining({ tag_uuid: 't2', page: 1 }));
+
+    // тип + тема вместе; на кнопке фильтров — число выбранных
+    fireEvent.click(within(screen.getByRole('group', { name: 'Тип материала' }))
+      .getByRole('button', { name: 'Гид' }));
+    await flush();
+    expect(getArticles).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tag_uuid: 't2', category_id: 4 }),
+    );
+    expect(screen.getByRole('button', { name: 'Фильтры, выбрано: 2' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Убрать фильтр «Сон»' }));
+    await flush();
+    expect(getArticles).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tag_uuid: undefined, category_id: 4 }),
+    );
+  });
+
+  it('«Очистить фильтры» снимает и тип, и тему', async () => {
+    render(<MaterialsLibrary getItemPath={id => `/m/${id}`} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Фильтры' }));
+    fireEvent.click(within(await screen.findByRole('group', { name: 'Тема' }))
+      .getByRole('button', { name: 'Тревога' }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Очистить фильтры' }));
+    await flush();
+    expect(getArticles).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tag_uuid: undefined, category_id: undefined }),
+    );
+  });
+
+  it('без категорий, но с темами — кнопка фильтров есть, только раздел «Тема»', async () => {
+    getPublicCategories.mockResolvedValue([]);
+    render(<MaterialsLibrary getItemPath={id => `/m/${id}`} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Фильтры' }));
+    expect(await screen.findByRole('group', { name: 'Тема' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Тип материала' })).toBeNull();
   });
 });

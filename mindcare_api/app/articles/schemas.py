@@ -16,6 +16,12 @@ class CategoryRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ArticleTagOption(BaseModel):
+    """GET /api/articles/tags: тема опубликованных статей (фильтр «Тема»)."""
+    uuid: str
+    name: str
+
+
 class ArticleCreate(BaseModel):
     title:            str           = Field(min_length=1, max_length=255)
     excerpt:          Optional[str] = None

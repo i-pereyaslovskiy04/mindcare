@@ -7,7 +7,7 @@ id не передаётся). Вне impersonation (403 до бизнес-оп�
 кеша. Отдельных аудит-событий нет (ADR-034).
 
   GET    /api/materials/favorites/ids            → {uuids, count}
-  GET    /api/materials/favorites?page&size&search&category_id
+  GET    /api/materials/favorites?page&size&search&category_id&tag_uuid
                                                  → PaginatedArticlesResponse
   PUT    /api/materials/favorites/{article_uuid} → 204 (повтор — no-op);
                                                    404 — материал недоступен;
@@ -58,11 +58,13 @@ def list_favorites(
     size: int = Query(default=10, ge=1, le=100),
     search: Optional[str] = Query(default=None, max_length=200),
     category_id: Optional[int] = Query(default=None),
+    tag_uuid: Optional[UUID] = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     response.headers["Cache-Control"] = NO_STORE
     return service.list_favorites(
-        int(current_user["id"]), page=page, size=size, search=search, category_id=category_id,
+        int(current_user["id"]), page=page, size=size, search=search,
+        category_id=category_id, tag_uuid=tag_uuid,
     )
 
 

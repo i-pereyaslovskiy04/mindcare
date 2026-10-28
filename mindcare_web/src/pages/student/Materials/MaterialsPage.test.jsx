@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MaterialsPage from './MaterialsPage';
-import { getArticles, getPublicCategories } from '../../../api/articles.api';
+import { getArticles, getArticleTags, getPublicCategories } from '../../../api/articles.api';
 import {
   addFavorite, getFavoriteIds, getFavoriteMaterials, removeFavorite,
 } from '../../../api/materialFavorites.api';
@@ -35,6 +35,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useAuth.mockReturnValue({ isImpersonating: false });
   getPublicCategories.mockResolvedValue([{ id: 3, name: 'Статья' }]);
+  getArticleTags.mockResolvedValue([{ uuid: 't1', name: 'Сон' }]);
   getFavoriteIds.mockResolvedValue({ uuids: ['uuid-2'], count: 1 });
 });
 

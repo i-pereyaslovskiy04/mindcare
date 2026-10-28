@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getArticles, getPublicCategories } from '../../../api/articles.api';
+import { getArticles, getArticleTags, getPublicCategories } from '../../../api/articles.api';
 import { getFavoriteMaterials } from '../../../api/materialFavorites.api';
 import { normalizeArticle } from '../lib/normalizeArticle';
 
@@ -9,8 +9,9 @@ export const MATERIALS_PAGE_SIZE = 6;
  * Библиотека опубликованных материалов (публичный API /api/articles).
  *
  * Только то, что поддерживает серверный контракт: поиск по названию, один
- * category_id и постраничная выдача (новые сначала — порядок задаёт сервер).
- * Сортировки и фильтра по темам здесь нет: API их не принимает, а имитация на
+ * category_id, одна тема (tag_uuid; варианты — /api/articles/tags, только
+ * темы опубликованных статей) и постраничная выдача (новые сначала — порядок
+ * задаёт сервер). Сортировки здесь нет: API её не принимает, а имитация на
  * загруженной части списка вводила бы в заблуждение.
  *
  * favoritesOnly — та же выдача, но только из серверного избранного
@@ -25,6 +26,8 @@ export function useMaterialsLibrary({ pageSize = MATERIALS_PAGE_SIZE } = {}) {
   const [query, setQueryRaw]    = useState('');   // уже после trim
   const [category, setCategoryRaw] = useState(null);   // id категории или null
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [tag, setTagRaw]        = useState(null);   // uuid темы или null
+  const [tagOptions, setTagOptions] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -44,6 +47,15 @@ export function useMaterialsLibrary({ pageSize = MATERIALS_PAGE_SIZE } = {}) {
       // Без категорий фильтр просто не показывается; список материалов от этого
       // не зависит, поэтому отдельной ошибки нет.
       .catch(() => { if (alive) setCategoryOptions([]); });
+    getArticleTags()
+      .then(tags => {
+        if (!alive) return;
+        setTagOptions(
+          (Array.isArray(tags) ? tags : []).map(t => ({ value: t.uuid, label: t.name })),
+        );
+      })
+      // Как с категориями: без вариантов раздел «Тема» не показывается.
+      .catch(() => { if (alive) setTagOptions([]); });
     return () => { alive = false; };
   }, []);
 
@@ -57,6 +69,7 @@ export function useMaterialsLibrary({ pageSize = MATERIALS_PAGE_SIZE } = {}) {
       size:        pageSize,
       search:      query || undefined,
       category_id: category ?? undefined,
+      tag_uuid:    tag ?? undefined,
     })
       .then(data => {
         if (id !== reqId.current) return;
@@ -71,11 +84,12 @@ export function useMaterialsLibrary({ pageSize = MATERIALS_PAGE_SIZE } = {}) {
       .finally(() => {
         if (id === reqId.current) setLoading(false);
       });
-  }, [page, query, category, pageSize, reloadKey, favoritesOnly]);
+  }, [page, query, category, tag, pageSize, reloadKey, favoritesOnly]);
 
   // Текущие параметры выборки — для сравнения без лишних замыканий.
   const queryRef = useRef('');
   const categoryRef = useRef(null);
+  const tagRef = useRef(null);
 
   // Тот же запрос (после trim) или та же категория — no-op: список не
   // очищается. Иначе очистка без загрузки: эффект не перезапустился бы, потому
@@ -94,6 +108,15 @@ export function useMaterialsLibrary({ pageSize = MATERIALS_PAGE_SIZE } = {}) {
     if (next === categoryRef.current) return;
     categoryRef.current = next;
     setCategoryRaw(next);
+    setPage(1);
+    setItems([]);
+  }, []);
+
+  const setTag = useCallback((value) => {
+    const next = value ?? null;
+    if (next === tagRef.current) return;
+    tagRef.current = next;
+    setTagRaw(next);
     setPage(1);
     setItems([]);
   }, []);
@@ -130,6 +153,9 @@ export function useMaterialsLibrary({ pageSize = MATERIALS_PAGE_SIZE } = {}) {
     category,
     setCategory,
     categoryOptions,
+    tag,
+    setTag,
+    tagOptions,
     hasMore: items.length < total,
     loadMore,
     refetch,
