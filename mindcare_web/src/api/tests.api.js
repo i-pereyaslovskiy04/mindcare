@@ -112,6 +112,11 @@ export function deleteTest(uuid) {
 
 // ── Moderation workflow (Этап F) ────────────────────────────────────────────
 
+/** Только число тестов на модерации — бейдж меню проверяющего. */
+export function getTestsPendingCount() {
+  return apiFetch('/api/admin/tests/pending-count');
+}
+
 /** admin/supervisor публикуют тест (из draft/in_review/needs_changes). */
 export function publishTest(uuid) {
   return apiFetch(`/api/admin/tests/${uuid}/publish`, { method: 'POST' });

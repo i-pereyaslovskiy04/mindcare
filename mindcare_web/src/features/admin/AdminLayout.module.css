@@ -219,6 +219,24 @@
   white-space: nowrap;
 }
 
+/* Бейдж очереди модерации — как .badge в CabinetLayout. */
+.badge {
+  margin-left: auto;
+  background: var(--coffee);
+  color: var(--milk);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.navItem.active .badge {
+  background: var(--latte);
+  color: var(--espresso);
+}
+
 .navItemDisabled {
   display: flex;
   align-items: center;
@@ -385,6 +403,19 @@
 
   .sidebar .navLabel {
     display: none;
+  }
+
+  .sidebar .navItem {
+    position: relative;
+  }
+
+  .sidebar .badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 16px;
+    padding: 1px 4px;
+    font-size: 10px;
   }
 
   .sidebar .navItemDisabled {

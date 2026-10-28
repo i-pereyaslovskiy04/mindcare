@@ -58,10 +58,32 @@ def test_test_duplicated_widened_to_psychologist_stage_f2_2():
 
 
 def test_content_events_stay_admin_only():
-    for base in ("category", "article", "news", "tag"):
+    for base in ("category", "news", "tag"):
         for op in ("created", "updated", "deleted"):
             name = f"{base}_{op}"
             assert REGISTRY[name].allowed_actor_roles == frozenset({"admin"}), name
+
+
+def test_article_events_allow_psychologist_authoring():
+    # ADR-034: психолог пишет СВОИ статьи через модерацию; Дополнение 2026-10-28 —
+    # supervisor тоже автор своих статей (чужие статьи CRUD'ом не правит).
+    for op in ("created", "updated", "deleted"):
+        name = f"article_{op}"
+        assert REGISTRY[name].allowed_actor_roles == frozenset(
+            {"admin", "psychologist", "supervisor"}), name
+
+
+def test_article_moderation_events_contract():
+    assert REGISTRY["article_submitted_for_review"].allowed_actor_roles == frozenset({"psychologist"})
+    assert REGISTRY["article_unpublished_for_edit"].allowed_actor_roles == frozenset(
+        {"psychologist", "supervisor"})
+    for name in ("article_published", "article_returned_for_changes"):
+        assert REGISTRY[name].allowed_actor_roles == frozenset({"admin", "supervisor"}), name
+    for name in ("article_submitted_for_review", "article_unpublished_for_edit",
+                 "article_published", "article_returned_for_changes"):
+        spec = REGISTRY[name]
+        assert spec.entity_type == "article" and not spec.metadata_schema, name
+        assert spec.tx_mode.name == "ATOMIC" and spec.failure_policy.name == "RAISE", name
 
 
 def test_student_events_stay_student_only():
@@ -71,7 +93,7 @@ def test_student_events_stay_student_only():
 
 def test_registry_total_count_unchanged():
     # Актуальный счётчик registry: 7 auth + 87 audit = 94.
-    assert len(REGISTRY) == 123
+    assert len(REGISTRY) == 135
 
 
 def test_content_test_consent_events_entity_types():

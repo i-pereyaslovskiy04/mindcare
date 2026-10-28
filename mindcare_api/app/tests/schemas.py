@@ -241,6 +241,11 @@ class PaginatedTestsResponse(BaseModel):
 
 # ── moderation workflow (Этап F) ──────────────────────────────────────────────
 
+class TestPendingCountOut(BaseModel):
+    """GET /api/admin/tests/pending-count: только число (бейдж меню)."""
+    count: int
+
+
 class TestReturnIn(BaseModel):
     """Возврат теста на доработку (in_review → needs_changes). reason необязателен —
     свободный текст в response не логируется (audit metadata пустая)."""

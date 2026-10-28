@@ -1,0 +1,42 @@
+.library {
+  display: flex;
+  flex-direction: column;
+}
+
+.errorBox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  background: var(--warm-white);
+}
+
+.errorText {
+  margin: 0;
+  flex: 1 1 240px;
+  color: var(--error);
+  font-size: var(--fs-ui);
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding-top: clamp(32px, 4vw, 52px);
+}
+
+.favsRow {
+  display: flex;
+  justify-content: flex-end;
+  margin: -6px 0 16px;
+}
+
+.favError {
+  margin: -8px 0 14px;
+  text-align: right;
+  font-size: var(--fs-ui);
+  color: var(--error);
+}

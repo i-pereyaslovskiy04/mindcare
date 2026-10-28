@@ -2,7 +2,28 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальные handoff'ы — два параллельных этапа, объединённых merge
+Актуальный handoff (ветка `mindcare_alex`):
+`docs/HANDOFFS/2026-10-26-cabinet-materials-assignments.md` — реальная библиотека
+материалов в кабинетах студента и психолога (общий слой `features/materials/`,
+публичная `/materials` без нерабочих сортировки и «Темы») и базовые задания
+психолога клиенту (**ADR-033**, миграция `eb1460dc4954`): текст (`enc:v1:`),
+необязательные срок и опубликованный материал, active → completed | cancelled,
+доступ — строгое активное сопровождение / только свои задания, impersonation
+закрыт, fail-closed `assignment_content_read` по заданиям страницы, keyset-
+пагинация, `Cache-Control: no-store`. REGISTRY 123 → 131. Доработка 2026-10-27
+(**ADR-034**, раздел 9 того же handoff, миграции `ffd5e761b87b` → `d0ee44dc2527`):
+серверное избранное материалов, статьи психолога с модерацией супервизора/админа
+(`articles.status`, «Мои материалы», «Модерация материалов»), уведомление
+психолога о выполнении задания, быстрая выдача задания из «Мои студенты»,
+компактные карточки кабинетов. REGISTRY 131 → 135. Дополнение 2026-10-28
+(раздел 10, без миграций, REGISTRY 135): бейджи очередей модерации материалов и
+тестов в меню супервизора/админа (`pending-count`), system-сообщения автору о
+решении по статье/тесту и клиенту о новом/отменённом задании, супервизор —
+автор своих статей (`/api/supervisor/articles`, публикует сам; вкладки
+«На проверке» / «Мои материалы»). **Перед запуском API применить
+`alembic upgrade head`.**
+
+Предыдущие handoff'ы — два параллельных этапа, объединённых merge
 `mindcare_alex` → `mindcare_igor`:
 
 1. `docs/HANDOFFS/2026-10-14-user-contacts-settings.md` (ветка `mindcare_alex`) —
@@ -553,7 +574,8 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
-- `/student/tasks` — hardcoded mock-данные, осознанная демо-витрина до отдельного этапа
+- `/student/tasks` — на real API заданий (ADR-033, модуль `app/assignments/`);
+  `/student/materials`, `/psychologist/materials` — на публичном `/api/articles`
 - `/student/diary`, `/student/calendar`, `/student/chat`, `/psychologist/chat` —
   уже на real API, мок-данные удалены (подробности — в `docs/BACKLOG.md`)
 - **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,

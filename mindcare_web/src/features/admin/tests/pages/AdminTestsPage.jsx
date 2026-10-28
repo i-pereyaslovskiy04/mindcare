@@ -5,6 +5,7 @@ import TestsTable from '../components/TestsTable';
 import TestPreviewModal from '../components/TestPreviewModal';
 import { fromBackendQuestion } from '../lib/testShape';
 import { deleteTest, getAdminTest, publishTest, returnTest, updateTest } from '../../../../api/tests.api';
+import { notifyReviewQueueChanged } from '../../../moderation/lib/reviewQueueEvents';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
 import styles from './AdminTestsPage.module.css';
@@ -119,6 +120,7 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
     try {
       await publishTest(item.uuid);
       refetch();
+      notifyReviewQueueChanged();
     } catch (err) {
       setActionError(err.message || 'Не удалось опубликовать тест');
     } finally {
@@ -154,6 +156,7 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
       await returnTest(returnTarget.uuid, returnReason.trim() || undefined);
       setReturnTarget(null);
       refetch();
+      notifyReviewQueueChanged();
     } catch (err) {
       setReturnError(err.message || 'Не удалось вернуть тест на доработку');
     } finally {

@@ -1,0 +1,28 @@
+.page {
+  min-width: 0;
+}
+
+.pageTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--espresso);
+  margin: 0 0 6px;
+}
+
+.pageSub {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 0 24px;
+  max-width: 600px;
+}
+
+@media (max-width: 600px) {
+  .pageTitle { font-size: 28px; }
+}
+
+.tabs {
+  margin-bottom: 20px;
+}

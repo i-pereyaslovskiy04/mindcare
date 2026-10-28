@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useParams } from 'react-router-dom';
 import { getStudentTestResults } from '../../api/tests.api';
+import { getClientAssignments } from '../../api/assignments.api';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
 import useUserContacts from '../../features/contacts/hooks/useUserContacts';
 import PsychologistStudentCardPage from './PsychologistStudentCardPage';
@@ -10,6 +11,8 @@ jest.mock('../../features/psychologist/hooks/useStudentCard');
 jest.mock('../../features/contacts/hooks/useUserContacts');
 // StudentTestResults сам ходит в API: синтетический ответ, реальных запросов нет.
 jest.mock('../../api/tests.api');
+// Раздел «Задания» сам ходит в API: синтетический пустой ответ.
+jest.mock('../../api/assignments.api');
 jest.mock('react-router-dom', () => ({
   Link: ({ to, children, ...props }) => (
     <a
@@ -36,11 +39,13 @@ function renderPage() {
 async function renderLoadedPage() {
   const view = renderPage();
   await screen.findByText('Пройденных тестов нет.');
+  await screen.findByText('Заданий пока нет.');
   return view;
 }
 
 beforeEach(() => {
   getStudentTestResults.mockResolvedValue({ items: [] });
+  getClientAssignments.mockResolvedValue({ items: [], has_more: false, next_cursor: null, total: 0 });
   useUserContacts.mockReturnValue({
     status: 'ready',
     data: { primary_phone: '+79001234567', items: [], catalog: null },
@@ -116,4 +121,20 @@ test('пока карточка не загружена, результаты т
   renderPage();
 
   expect(getStudentTestResults).not.toHaveBeenCalled();
+});
+
+test('секция «Задания» запрашивает задания по uuid студента; заглушки назначения материалов нет', async () => {
+  await renderLoadedPage();
+
+  expect(screen.getByRole('heading', { name: 'Задания' })).toBeInTheDocument();
+  expect(getClientAssignments).toHaveBeenCalledWith('student-uuid-7', expect.objectContaining({ before: undefined }));
+  expect(screen.getByRole('button', { name: 'Выбрать из библиотеки' })).toBeInTheDocument();
+  expect(screen.queryByText('Материалы и тесты')).toBeNull();
+});
+
+test('пока карточка не загружена, задания не запрашиваются', () => {
+  useStudentCard.mockReturnValue({ student: null, loading: true, error: null, refetch: jest.fn() });
+  renderPage();
+
+  expect(getClientAssignments).not.toHaveBeenCalled();
 });

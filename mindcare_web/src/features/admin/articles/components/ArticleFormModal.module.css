@@ -103,3 +103,14 @@
   border-radius: 8px;
   background: var(--fog);
 }
+
+/* Режим автора (ADR-034): предупреждение о снятии с публикации. */
+.notice {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 13px;
+  line-height: 1.45;
+}

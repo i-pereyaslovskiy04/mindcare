@@ -1,0 +1,131 @@
+/* Прежний компактный вид карточки студенческой библиотеки. */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 4px 12px rgba(var(--shadow-rgb), 0.05);
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.15s;
+}
+
+.card:hover,
+.card:focus-within {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(var(--shadow-rgb), 0.08), 0 12px 24px rgba(var(--shadow-rgb), 0.1);
+  border-color: var(--latte);
+}
+
+.img {
+  height: 130px;
+  background: linear-gradient(135deg, var(--sand), var(--milk));
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--coffee);
+}
+
+.cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.fav {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;                 /* поверх растянутой ссылки */
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--overlay-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--coffee);
+  transition: background 0.15s;
+}
+
+.fav:hover {
+  background: var(--warm-white);
+}
+
+.fav:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+}
+
+.fav:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.favOn {
+  color: var(--error);
+}
+
+/* Touch: визуально 28×28, область нажатия ~44×44. */
+@media (hover: none) {
+  .fav::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
+
+.body {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.topic {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--coffee);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--espresso);
+  line-height: 1.35;
+  flex: 1;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+/* Растянутая ссылка: вся карточка ведёт к чтению. */
+.title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-light);
+  margin-top: 10px;
+}

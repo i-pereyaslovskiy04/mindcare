@@ -2,6 +2,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import SupervisorLayout from './SupervisorLayout';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getPendingVerificationsCount } from '../../api/studentVerification.api';
+import { getReviewArticlesPendingCount } from '../../api/articles.api';
+import { getTestsPendingCount } from '../../api/tests.api';
+import { notifyReviewQueueChanged } from '../../features/moderation/lib/reviewQueueEvents';
 
 // react-router-dom (v7) не резолвится jest-резолвером — мокаем виртуально,
 // как в CabinetLayout.test.jsx; NavLink пробрасывает доступное имя.
@@ -23,6 +26,12 @@ jest.mock('../../features/auth/AuthContext', () => ({
 jest.mock('../../api/studentVerification.api', () => ({
   getPendingVerificationsCount: jest.fn(),
 }));
+jest.mock('../../api/articles.api', () => ({
+  getReviewArticlesPendingCount: jest.fn(),
+}));
+jest.mock('../../api/tests.api', () => ({
+  getTestsPendingCount: jest.fn(),
+}));
 
 function mockAuth({ roles = ['supervisor', 'student'], isImpersonating = false } = {}) {
   useAuth.mockReturnValue({
@@ -35,6 +44,8 @@ function mockAuth({ roles = ['supervisor', 'student'], isImpersonating = false }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  getReviewArticlesPendingCount.mockResolvedValue({ count: 0 });
+  getTestsPendingCount.mockResolvedValue({ count: 0 });
 });
 
 test('бейдж ожидающих заявок и понятное доступное имя пункта меню', async () => {
@@ -86,4 +97,34 @@ test('в режиме «под именем» и без роли supervisor сч
   render(<SupervisorLayout />);
   await new Promise((r) => setTimeout(r, 0));
   expect(getPendingVerificationsCount).not.toHaveBeenCalled();
+  expect(getReviewArticlesPendingCount).not.toHaveBeenCalled();
+  expect(getTestsPendingCount).not.toHaveBeenCalled();
+});
+
+test('бейджи очередей модерации у «Материалы» и «Тесты»', async () => {
+  mockAuth();
+  getPendingVerificationsCount.mockResolvedValue({ count: 0 });
+  getReviewArticlesPendingCount.mockResolvedValue({ count: 2 });
+  getTestsPendingCount.mockResolvedValue({ count: 5 });
+  render(<SupervisorLayout />);
+  const materials = await screen.findByRole('link', { name: 'Материалы, ожидают проверки: 2' });
+  expect(materials).toHaveAttribute('href', '/supervisor/materials');
+  expect(materials).toHaveTextContent('2');
+  expect(await screen.findByRole('link', { name: 'Тесты, ожидают проверки: 5' }))
+    .toHaveAttribute('href', '/supervisor/tests');
+});
+
+test('решение на странице модерации сразу перечитывает счётчики; ошибка одного не мешает другому', async () => {
+  mockAuth();
+  getPendingVerificationsCount.mockResolvedValue({ count: 0 });
+  getReviewArticlesPendingCount.mockResolvedValueOnce({ count: 1 }).mockResolvedValue({ count: 0 });
+  getTestsPendingCount.mockRejectedValue(new Error('network'));
+  render(<SupervisorLayout />);
+  await screen.findByRole('link', { name: 'Материалы, ожидают проверки: 1' });
+  expect(screen.getByRole('link', { name: 'Тесты' })).not.toHaveAttribute('aria-label');
+
+  notifyReviewQueueChanged();
+  await waitFor(() => expect(screen.getByRole('link', { name: 'Материалы' }))
+    .not.toHaveAttribute('aria-label'));
+  expect(getReviewArticlesPendingCount).toHaveBeenCalledTimes(2);
 });

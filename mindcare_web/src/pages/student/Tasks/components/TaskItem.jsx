@@ -1,46 +1,88 @@
+import { Link } from 'react-router-dom';
+import Badge from '../../../../components/UI/Badge/Badge';
+import Button from '../../../../components/UI/Button/Button';
 import Icon from '../../../../components/Icon/Icon';
+import {
+  STATUS_LABELS, STATUS_TONES, formatDueDate, formatMoment,
+} from '../../../../features/assignments/lib/assignmentFormat';
 import styles from './TaskItem.module.css';
 
-const BADGE = {
-  done:     { label: 'Выполнено', cls: styles.badgeDone },
-  urgent:   { label: 'Срочно',    cls: styles.badgeUrgent },
-  progress: { label: 'В работе',  cls: styles.badgeProgress },
-};
+export const UNAVAILABLE_NOTE =
+  'Сопровождение завершено. Если его возобновят с этим же психологом, задание снова станет доступно.';
 
-export default function TaskItem({ task, onToggle }) {
-  const badge = task.done ? BADGE.done : task.urgent ? BADGE.urgent : BADGE.progress;
+/**
+ * Задание клиента. Отметка выполнения — кнопка (действие необратимо,
+ * подтверждение — на странице); статус меняется только по ответу сервера.
+ */
+export default function TaskItem({ task, onComplete, pending = false, error = null }) {
+  const unavailable = task.status === 'active' && !task.engagement_active;
+  const errorId = `task-error-${task.uuid}`;
+  const finished = task.status !== 'active';
 
   return (
-    <div className={`${styles.item} ${task.done ? styles.done : ''}`}>
-      <button
-        className={`${styles.checkbox} ${task.done ? styles.checkboxOn : ''}`}
-        onClick={() => onToggle(task.id)}
-        aria-label={task.done ? 'Снять отметку' : 'Отметить выполненным'}
-      />
-
-      <div className={styles.body}>
-        <div className={styles.head}>
-          <div className={styles.title}>{task.title}</div>
-          <span className={`${styles.badge} ${badge.cls}`}>{badge.label}</span>
+    <article
+      className={`${styles.item} ${finished ? styles.done : ''}`}
+      aria-label={`Задание от ${formatMoment(task.created_at) || 'психолога'}`}
+    >
+      <div className={styles.head}>
+        <div className={styles.badges}>
+          {unavailable
+            ? <Badge tone="neutral">Недоступно</Badge>
+            : <Badge tone={STATUS_TONES[task.status]}>{STATUS_LABELS[task.status]}</Badge>}
+          {task.is_overdue && <Badge tone="warning">Просрочено</Badge>}
         </div>
+        <span className={styles.author}>{task.psychologist_name}</span>
+      </div>
 
-        <p className={styles.desc}>{task.desc}</p>
+      <p className={styles.text}>{task.text}</p>
 
-        {task.comment && (
-          <div className={styles.comment}>
-            <b>Мария Ковалёва:</b> {task.comment}
-          </div>
-        )}
+      {task.material && (
+        <p className={styles.material}>
+          <Icon name="articles" size={12} stroke={1.6} />
+          <Link to={`/student/materials/${task.material.uuid}`} className={styles.materialLink}>
+            {task.material.title}
+          </Link>
+        </p>
+      )}
+      {task.material_unavailable && (
+        <p className={styles.materialMuted}>Прикреплённый материал больше недоступен.</p>
+      )}
 
-        <div className={styles.foot}>
+      {unavailable && <p className={styles.note}>{UNAVAILABLE_NOTE}</p>}
+
+      <div className={styles.foot}>
+        {task.due_date && (
           <span className={styles.footItem}>
             <Icon name="calendar" size={11} stroke={1.6} />
-            {task.due}
+            Срок: {formatDueDate(task.due_date)}
           </span>
-          <span className={styles.dot}>·</span>
-          <span className={styles.footItem}>{task.tag}</span>
-        </div>
+        )}
+        {task.completed_at && (
+          <span className={styles.footItem}>Выполнено {formatMoment(task.completed_at)}</span>
+        )}
+        {task.cancelled_at && (
+          <span className={styles.footItem}>Отменено {formatMoment(task.cancelled_at)}</span>
+        )}
+        {!task.completed_at && !task.cancelled_at && (
+          <span className={styles.footItem}>Выдано {formatMoment(task.created_at)}</span>
+        )}
       </div>
-    </div>
+
+      {task.can_complete && (
+        <div className={styles.actions}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            loading={pending}
+            onClick={() => onComplete(task)}
+            aria-describedby={error ? errorId : undefined}
+          >
+            {pending ? 'Сохраняем…' : 'Отметить выполненным'}
+          </Button>
+        </div>
+      )}
+      {error && <p id={errorId} className={styles.error} role="alert">{error}</p>}
+    </article>
   );
 }

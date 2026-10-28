@@ -1,53 +1,13 @@
 import { useState } from 'react';
+import Button from '../../../components/UI/Button/Button';
+import ConfirmDialog from '../../../features/assignments/ui/ConfirmDialog';
+import useMyAssignments from '../../../features/assignments/hooks/useMyAssignments';
 import TaskItem from './components/TaskItem';
 import styles from './TasksPage.module.css';
 
-const INITIAL_TASKS = [
-  {
-    id: 1,
-    title: 'Дневник эмоций - 5 дней подряд',
-    desc: 'Минимум одна запись в день, можно короткую. Цель - расширить словарь чувств.',
-    done: false,
-    urgent: false,
-    due: 'до пятницы',
-    tag: 'Самонаблюдение',
-    comment: 'Хорошо идёте - не торопитесь и не ругайте себя за пропуски.',
-  },
-  {
-    id: 2,
-    title: 'Дыхательная практика 4-7-8 перед сном',
-    desc: '5 циклов вечером. Замечать, как меняются ощущения в теле и качество засыпания.',
-    done: false,
-    urgent: true,
-    due: 'каждый день',
-    tag: 'Тело и сон',
-    comment: null,
-  },
-  {
-    id: 3,
-    title: 'Написать три вещи, за которые благодарны',
-    desc: 'Раз в день, в любое время. Можно мелкие - кофе, тишина, чужая улыбка.',
-    done: true,
-    urgent: false,
-    due: 'ежедневно',
-    tag: 'Практика благодарности',
-    comment: null,
-  },
-  {
-    id: 4,
-    title: 'Прочитать главу «Внутренний критик»',
-    desc: 'Из подборки материалов. После - записать одну мысль, которую заметили.',
-    done: true,
-    urgent: false,
-    due: 'до 25 апреля',
-    tag: 'Когнитивная работа',
-    comment: null,
-  },
-];
-
 function StatTile({ label, value, sub }) {
   return (
-    <div className={styles.statTile}>
+    <div className={styles.statTile} role="group" aria-label={label}>
       <div className={styles.statLabel}>{label}</div>
       <div className={styles.statNum}>
         {value}
@@ -57,32 +17,80 @@ function StatTile({ label, value, sub }) {
   );
 }
 
-function TaskGroup({ title, count, tasks, onToggle }) {
-  if (tasks.length === 0) return null;
+function TaskSection({
+  id, title, list, emptyText, onComplete, pendingUuid, actionError, onRetry,
+}) {
+  const headingId = `${id}-title`;
+  const firstLoad = list.loading && list.items.length === 0;
+
   return (
-    <div className={styles.group}>
-      <h2 className={styles.groupTitle}>
+    <section className={styles.group} aria-labelledby={headingId}>
+      <h2 id={headingId} className={styles.groupTitle}>
         {title}
-        <span className={styles.groupCount}>· {count}</span>
+        {!firstLoad && !list.error && <span className={styles.groupCount}>· {list.total}</span>}
       </h2>
-      {tasks.map((task) => (
-        <TaskItem key={task.id} task={task} onToggle={onToggle} />
+
+      {firstLoad && <p className={styles.stateText} role="status">Загружаем задания…</p>}
+
+      {list.error && (
+        <div className={styles.errorBox} role="alert">
+          <p className={styles.errorText}>Не удалось загрузить задания.</p>
+          <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
+            Повторить
+          </Button>
+        </div>
+      )}
+
+      {!firstLoad && !list.error && list.items.length === 0 && (
+        <p className={styles.stateText}>{emptyText}</p>
+      )}
+
+      {list.items.map((task) => (
+        <TaskItem
+          key={task.uuid}
+          task={task}
+          onComplete={onComplete}
+          pending={pendingUuid === task.uuid}
+          error={actionError?.uuid === task.uuid ? actionError.message : null}
+        />
       ))}
-    </div>
+
+      {list.loadMoreError && (
+        <p className={styles.errorText} role="alert">Не удалось загрузить следующие задания.</p>
+      )}
+      {list.hasMore && !list.error && (
+        <div className={styles.loadMore}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={list.loadMore}
+            loading={list.loadingMore}
+          >
+            Показать ещё
+          </Button>
+        </div>
+      )}
+    </section>
   );
 }
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const {
+    open, history, summary, refetch, complete, pendingUuid, actionError,
+  } = useMyAssignments();
+  const [confirmTask, setConfirmTask] = useState(null);
 
-  function toggle(id) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
-    );
+  async function confirmComplete() {
+    if (!confirmTask) return;
+    await complete(confirmTask.uuid);
+    setConfirmTask(null);
   }
 
-  const active = tasks.filter((t) => !t.done);
-  const done   = tasks.filter((t) => t.done);
+  // Ошибка задания, исчезнувшего из «Активных» после перезагрузки (например,
+  // сопровождение закрыли), показывается над списком, а не теряется.
+  const orphanError = actionError && !open.items.some(t => t.uuid === actionError.uuid)
+    && !history.items.some(t => t.uuid === actionError.uuid)
+    ? actionError.message : null;
 
   return (
     <div className={styles.page}>
@@ -90,26 +98,47 @@ export default function TasksPage() {
         Задания от <em>психолога</em>
       </h1>
       <p className={styles.pageSub}>
-        Небольшие практики между сессиями. Отмечайте по мере выполнения - специалист видит ваш прогресс.
+        Задания между сессиями. Отметка «выполнено» сохраняется и видна вашему психологу.
       </p>
 
-      <div className={styles.stats}>
-        <StatTile label="Активных заданий"    value={active.length} sub=" задач" />
-        <StatTile label="Выполнено"           value={done.length}   sub={` из ${tasks.length}`} />
-        <StatTile label="До следующей сессии" value="2"             sub=" дня" />
-      </div>
+      {summary && (
+        <div className={styles.stats}>
+          <StatTile label="Активных заданий" value={summary.open_count} />
+          <StatTile label="Выполнено" value={summary.completed_count} sub={` из ${summary.total_count}`} />
+        </div>
+      )}
 
-      <TaskGroup
-        title="В процессе"
-        count={active.length}
-        tasks={active}
-        onToggle={toggle}
+      {orphanError && <p className={styles.errorText} role="alert">{orphanError}</p>}
+
+      <TaskSection
+        id="tasks-open"
+        title="Активные"
+        list={open}
+        emptyText="Активных заданий нет."
+        onComplete={setConfirmTask}
+        pendingUuid={pendingUuid}
+        actionError={actionError}
+        onRetry={refetch}
       />
-      <TaskGroup
-        title="Выполнено"
-        count={done.length}
-        tasks={done}
-        onToggle={toggle}
+      <TaskSection
+        id="tasks-history"
+        title="История"
+        list={history}
+        emptyText="Выполненных и завершённых заданий пока нет."
+        onComplete={setConfirmTask}
+        pendingUuid={pendingUuid}
+        actionError={actionError}
+        onRetry={refetch}
+      />
+
+      <ConfirmDialog
+        open={confirmTask !== null}
+        title="Отметить задание выполненным?"
+        description="Отметку нельзя будет снять. Психолог увидит, что задание выполнено."
+        confirmLabel="Да, выполнено"
+        loading={confirmTask !== null && pendingUuid === confirmTask.uuid}
+        onConfirm={confirmComplete}
+        onClose={() => setConfirmTask(null)}
       />
     </div>
   );
