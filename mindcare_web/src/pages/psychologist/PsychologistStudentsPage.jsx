@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Icon from '../../components/Icon/Icon';
 import Badge from '../../components/UI/Badge/Badge';
 import Button from '../../components/UI/Button/Button';
@@ -5,6 +6,7 @@ import ButtonLink from '../../components/UI/Button/ButtonLink';
 import { getInitials } from '../../shared/lib/utils';
 import { useMyStudents } from '../../features/psychologist/hooks/useMyStudents';
 import { getPsychologistStudentChatPath } from '../../features/psychologist/chatLinks';
+import QuickAssignDialog from '../../features/assignments/ui/QuickAssignDialog';
 import styles from './PsychologistStudentsPage.module.css';
 
 function formatDate(iso) {
@@ -19,6 +21,9 @@ export default function PsychologistStudentsPage() {
     useMyStudents();
 
   const totalPages = Math.max(1, Math.ceil(total / 20));
+  // Быстрая выдача задания без перехода в карточку.
+  const [assignTo, setAssignTo] = useState(null);
+  const [assigned, setAssigned] = useState(null);   // ФИО последнего получателя
 
   return (
     <div className={styles.page}>
@@ -72,6 +77,10 @@ export default function PsychologistStudentsPage() {
           <Button variant="secondary" onClick={refetch}>Повторить</Button>
         </div>
       )}
+
+      <p className={styles.assignedStatus} role="status" aria-live="polite">
+        {assigned ? `Задание выдано: ${assigned}.` : ''}
+      </p>
 
       {/* Loaded */}
       {!loading && !error && (
@@ -165,6 +174,16 @@ export default function PsychologistStudentsPage() {
                         <span>Расписание</span>
                         <span className={styles.soonTag}>скоро</span>
                       </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setAssigned(null); setAssignTo(student); }}
+                        aria-label={`Выдать задание: ${student.full_name}`}
+                      >
+                        <Icon name="tasks" size={13} />
+                        <span>Выдать задание</span>
+                      </Button>
                       <ButtonLink
                         to={`/psychologist/students/${student.student_id}`}
                         variant="secondary"
@@ -209,6 +228,13 @@ export default function PsychologistStudentsPage() {
             </>
           )}
         </>
+      )}
+      {assignTo && (
+        <QuickAssignDialog
+          student={assignTo}
+          onClose={() => setAssignTo(null)}
+          onCreated={(st) => { setAssignTo(null); setAssigned(st.full_name); }}
+        />
       )}
     </div>
   );

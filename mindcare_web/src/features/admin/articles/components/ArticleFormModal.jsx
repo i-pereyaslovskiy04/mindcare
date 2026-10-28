@@ -9,7 +9,10 @@ import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import DateInput, { isoToDateOnly, dateOnlyToPublishedAtIso } from '../../../../components/UI/DateInput';
 import { publishCheckboxLabel, submitButtonLabel } from '../../publishLabels';
 import { getTagsPublic } from '../../../../api/tags.api';
-import { getAdminCategories, createArticle, updateArticle } from '../../../../api/articles.api';
+import {
+  getAdminCategories, getPublicCategories, createArticle, updateArticle,
+  createMyArticle, updateMyArticle,
+} from '../../../../api/articles.api';
 import styles from './ArticleFormModal.module.css';
 
 const EMPTY = {
@@ -23,8 +26,36 @@ const EMPTY = {
   publishedAt: '',
 };
 
-export default function ArticleFormModal({ open, article, onClose, onSaved }) {
+// mode: 'admin' — полная форма администратора (публикация, дата);
+// 'author' — своя статья автора (ADR-034): только содержание, сохраняется
+// черновиком; публичные категории (админский endpoint автору недоступен).
+// authorRole: 'psychologist' — публикует проверяющий после отправки;
+// 'supervisor' — публикует сам из списка (Дополнение 2026-10-28).
+const MODES = {
+  admin:  { loadCategories: getAdminCategories, create: createArticle, update: updateArticle, publishing: true },
+  author: { loadCategories: getPublicCategories, create: createMyArticle, update: updateMyArticle, publishing: false },
+};
+
+const AUTHOR_HINTS = {
+  psychologist: {
+    draft: 'Материал сохранится черновиком. Чтобы опубликовать, отправьте его на проверку супервизору.',
+    published: 'Материал опубликован. Сохранение снимет его с публикации — после правки отправьте его на проверку снова.',
+  },
+  supervisor: {
+    draft: 'Материал сохранится черновиком. Опубликовать его можно кнопкой «Опубликовать» в списке.',
+    published: 'Материал опубликован. Сохранение снимет его с публикации — после правки опубликуйте его снова.',
+  },
+};
+
+export default function ArticleFormModal({
+  open, article, onClose, onSaved, mode = 'admin', authorRole = 'psychologist',
+}) {
   const isEdit = Boolean(article);
+  const cfg = MODES[mode] || MODES.admin;
+  const hints = AUTHOR_HINTS[authorRole] || AUTHOR_HINTS.psychologist;
+  // API автора выбирается ролью; админские вызовы — с прежними аргументами.
+  const authorArgs = mode === 'author' ? [authorRole] : [];
+  const editingPublished = mode === 'author' && isEdit && article?.status === 'published';
   const [form, setForm]                 = useState(EMPTY);
   const [tagOptions, setTagOptions]     = useState([]);
   const [catOptions, setCatOptions]     = useState([]);
@@ -37,14 +68,14 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
   const [formReady, setFormReady]       = useState(false);
 
   useEffect(() => {
-    Promise.all([getTagsPublic(), getAdminCategories()])
+    Promise.all([getTagsPublic(), cfg.loadCategories()])
       .then(([tags, cats]) => {
         setTagOptions((tags || []).map(t => ({ value: t.uuid, label: t.name })));
         setCatOptions((cats || []).map(c => ({ value: c.id, label: c.name })));
         setCatLoadError('');
       })
       .catch(() => setCatLoadError('Не удалось загрузить типы материалов'));
-  }, []);
+  }, [cfg]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,12 +122,14 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
         cover_image_uuid: form.cover?.uuid || null,
         category_ids:     form.categoryIds,
         tag_uuids:        form.tagUuids,
-        is_published:     form.isPublished,
-        published_at:     dateOnlyToPublishedAtIso(form.publishedAt),
+        ...(cfg.publishing ? {
+          is_published: form.isPublished,
+          published_at: dateOnlyToPublishedAtIso(form.publishedAt),
+        } : {}),
       };
       const saved = isEdit
-        ? await updateArticle(article.uuid, payload)
-        : await createArticle(payload);
+        ? await cfg.update(article.uuid, payload, ...authorArgs)
+        : await cfg.create(payload, ...authorArgs);
       onSaved(saved);
     } catch (err) {
       setErrors({ _form: err.message });
@@ -110,6 +143,11 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
       <Modal open={open} onClose={onClose} wide>
         <form onSubmit={handleSubmit} className={styles.form}>
           <h2 className={styles.modalTitle}>{isEdit ? 'Редактировать материал' : 'Новый материал'}</h2>
+          {mode === 'author' && (
+            <p className={editingPublished ? styles.notice : styles.hint}>
+              {editingPublished ? hints.published : hints.draft}
+            </p>
+          )}
 
           <div className={styles.field}>
             <label className={styles.label}>Заголовок *</label>
@@ -174,6 +212,7 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
             </div>
           </div>
 
+          {cfg.publishing && (
           <div className={styles.row}>
             <div className={styles.field}>
               <DateInput
@@ -190,6 +229,7 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
               />
             </div>
           </div>
+          )}
 
           {errors._form && (
             <div className={styles.formError} role="alert">{errors._form}</div>
@@ -203,7 +243,9 @@ export default function ArticleFormModal({ open, article, onClose, onSaved }) {
               Предпросмотр
             </Button>
             <Button variant="primary" type="submit" disabled={submitting}>
-              {submitButtonLabel({ isEdit, isPublished: form.isPublished, submitting })}
+              {cfg.publishing
+                ? submitButtonLabel({ isEdit, isPublished: form.isPublished, submitting })
+                : (submitting ? 'Сохранение…' : 'Сохранить черновик')}
             </Button>
           </div>
         </form>

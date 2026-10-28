@@ -6,6 +6,7 @@ import { getInitials } from '../../shared/lib/utils';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
 import { getPsychologistStudentChatPath } from '../../features/psychologist/chatLinks';
 import StudentTestResults from '../../features/tests/ui/StudentTestResults';
+import ClientAssignments from '../../features/assignments/ui/ClientAssignments';
 import useUserContacts from '../../features/contacts/hooks/useUserContacts';
 import UserContactsSection from '../../features/contacts/ui/ContactsReadOnly';
 import styles from './PsychologistStudentCardPage.module.css';
@@ -29,13 +30,13 @@ function getDuration(iso) {
 const ACTIONS = [
   { icon: 'calendar', label: 'Расписание',        title: 'Расписание будет доступно позже' },
   { icon: 'diary',    label: 'Заметки',           title: 'Рабочие заметки будут добавлены позже' },
-  { icon: 'articles', label: 'Материалы и тесты', title: 'Назначение материалов появится позже' },
+  { icon: 'tests',    label: 'Назначение тестов', title: 'Назначение тестов появится позже' },
 ];
 
 const FUTURE_ITEMS = [
   'История консультаций и сессий',
   'Рабочие заметки психолога',
-  'Назначенные материалы и тесты',
+  'Назначение тестов',
   'Запрос супервизии',
 ];
 
@@ -201,6 +202,12 @@ export default function PsychologistStudentCardPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Задания клиенту (ADR-033) */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Задания</h3>
+            <ClientAssignments key={student.student_uuid} studentUuid={student.student_uuid} />
           </div>
 
           {/* Контакты студента (ADR-032) */}

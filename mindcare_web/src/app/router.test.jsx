@@ -234,3 +234,50 @@ test('/login и /register — совместимые редиректы, отд�
   expect(fs.existsSync(path.join(pagesDir, 'LoginPage.jsx'))).toBe(false);
   expect(fs.existsSync(path.join(pagesDir, 'RegisterPage.jsx'))).toBe(false);
 });
+
+// ── Библиотека материалов в кабинетах ────────────────────────────────────────
+
+/** Блок role-Route кабинета: от `path="/<cabinet>"` до его закрывающего `</Route>`. */
+function cabinetRouteBlock(cabinet) {
+  const start = ROUTER_SOURCE.indexOf(`path="/${cabinet}"`);
+  expect(start).toBeGreaterThan(-1);
+  const end = ROUTER_SOURCE.indexOf('</Route>', start);
+  expect(end).toBeGreaterThan(start);
+  return ROUTER_SOURCE.slice(start, end);
+}
+
+test('материалы студента: список и чтение внутри student-кабинета', () => {
+  const block = cabinetRouteBlock('student');
+  expect(block).toMatch(/element=\{<RoleRoute roles=\{\['student'\]\}>/);
+  expect(block).toMatch(/path="materials"\s+element=\{<StudentMaterialsPage \/>\}/);
+  expect(block).toMatch(/path="materials\/:id"\s+element=\{<StudentMaterialItemPage \/>\}/);
+});
+
+test('материалы психолога: список и чтение внутри psychologist-кабинета', () => {
+  const block = cabinetRouteBlock('psychologist');
+  expect(block).toMatch(/element=\{<RoleRoute roles=\{\['psychologist'\]\}>/);
+  expect(block).toMatch(/path="materials"\s+element=\{<PsychologistMaterialsPage \/>\}/);
+  expect(block).toMatch(/path="materials\/:id"\s+element=\{<PsychologistMaterialItemPage \/>\}/);
+});
+
+test('публичная библиотека сохраняет свои маршруты', () => {
+  expect(ROUTER_SOURCE).toMatch(/<Route path="\/materials"\s+element=\{<MaterialsPage \/>\} \/>/);
+  expect(ROUTER_SOURCE).toMatch(/<Route path="\/materials\/:id" element=\{<MaterialsItemPage \/>\} \/>/);
+});
+
+// ── Модерация материалов психологов (ADR-034) ────────────────────────────────
+
+test('модерация материалов: админ — очередь, супервизор — очередь и свои материалы', () => {
+  expect(ROUTER_SOURCE).toMatch(
+    /import\s+MaterialsReviewPage\s+from\s+'\.\.\/features\/materials\/pages\/MaterialsReviewPage';/,
+  );
+  expect(ROUTER_SOURCE).toMatch(
+    /import\s+SupervisorMaterialsPage\s+from\s+'\.\.\/features\/materials\/pages\/SupervisorMaterialsPage';/,
+  );
+  const supervisor = cabinetRouteBlock('supervisor');
+  expect(supervisor).toMatch(/path="materials"\s+element=\{<SupervisorMaterialsPage \/>\}/);
+  expect(adminRouteBlock()).toMatch(/path="materials-review" element=\{<MaterialsReviewPage \/>\}/);
+  // психолог страницу модерации не получает
+  expect(cabinetRouteBlock('psychologist')).not.toContain('MaterialsReviewPage');
+  expect(cabinetRouteBlock('psychologist')).not.toContain('SupervisorMaterialsPage');
+});

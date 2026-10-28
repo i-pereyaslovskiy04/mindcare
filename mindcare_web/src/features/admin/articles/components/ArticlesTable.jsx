@@ -1,6 +1,9 @@
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Badge from '../../../../components/UI/Badge/Badge';
+import {
+  ARTICLE_STATUS_LABELS, ARTICLE_STATUS_TONES, articleStatus,
+} from '../../../materials/lib/articleStatus';
 import Tag from '../../../../components/UI/Tag/Tag';
 import styles from './ArticlesTable.module.css';
 
@@ -86,8 +89,8 @@ export default function ArticlesTable({ items, loading, error, onEdit, onDelete,
                 </div>
               </td>
               <td>
-                <Badge tone={item.is_published ? 'success' : 'warning'}>
-                  {item.is_published ? 'Опубликовано' : 'Черновик'}
+                <Badge tone={ARTICLE_STATUS_TONES[articleStatus(item)]}>
+                  {ARTICLE_STATUS_LABELS[articleStatus(item)]}
                 </Badge>
               </td>
               <td className={styles.date}>

@@ -1,0 +1,129 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  background: var(--warm-white);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--espresso);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+.excerpt {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.state {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--text-muted);
+}
+
+.errorBox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--error);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}
+
+/* Диалог возврата — поля в стиле UserLifecycleDialog. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.textarea {
+  min-height: 96px;
+  padding: 10px 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.textarea:focus {
+  border-color: var(--coffee);
+}
+
+.counter {
+  align-self: flex-end;
+  font-size: 12px;
+  color: var(--text-light);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .actions :global(button) {
+    flex: 1 1 100%;
+  }
+}

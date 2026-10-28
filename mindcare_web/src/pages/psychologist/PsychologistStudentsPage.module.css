@@ -413,3 +413,15 @@
 
 
 }
+
+/* Подтверждение быстрой выдачи задания (aria-live). */
+.assignedStatus {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--success);
+  min-height: 0;
+}
+
+.assignedStatus:empty {
+  display: none;
+}

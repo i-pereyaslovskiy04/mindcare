@@ -3,6 +3,8 @@ import AdminLayout from './AdminLayout';
 import { ThemeProvider } from '../theme/ThemeContext';
 import { A11yProvider } from '../a11y/A11yContext';
 import * as AuthContext from '../auth/AuthContext';
+import { getReviewArticlesPendingCount } from '../../api/articles.api';
+import { getTestsPendingCount } from '../../api/tests.api';
 
 let mockPathname = '/admin/users';
 
@@ -36,6 +38,8 @@ jest.mock('react-router-dom', () => ({
     </a>
   ),
 }), { virtual: true });
+jest.mock('../../api/articles.api', () => ({ getReviewArticlesPendingCount: jest.fn() }));
+jest.mock('../../api/tests.api', () => ({ getTestsPendingCount: jest.fn() }));
 const mockLogout = jest.fn();
 jest.mock('../auth/AuthContext', () => ({
   useAuth: jest.fn(),
@@ -44,17 +48,21 @@ jest.mock('../auth/AuthContext', () => ({
 
 const setActiveRole = jest.fn();
 
-function mockAuth({ roles, activeRole }) {
+function mockAuth({ roles, activeRole, isImpersonating = false }) {
   AuthContext.useAuth.mockReturnValue({
     user: { roles },
     activeRole,
     setActiveRole,
+    isImpersonating,
   });
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockPathname = '/admin/users';
+  // Без очереди по умолчанию: бейджей нет, доступные имена пунктов — как раньше.
+  getReviewArticlesPendingCount.mockReturnValue(new Promise(() => {}));
+  getTestsPendingCount.mockReturnValue(new Promise(() => {}));
 });
 
 test('direct entry into /admin syncs activeRole to admin', () => {
@@ -258,4 +266,27 @@ describe('mobile drawer админки (<=600px — та же модель, чт
     }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+});
+
+test('бейджи очередей модерации у «Модерация материалов» и «Тесты»', async () => {
+  getReviewArticlesPendingCount.mockResolvedValue({ count: 4 });
+  getTestsPendingCount.mockResolvedValue({ count: 120 });
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(
+    <ThemeProvider><A11yProvider><AdminLayout /></A11yProvider></ThemeProvider>,
+  );
+  const [review] = await screen.findAllByRole('link', { name: 'Модерация материалов, ожидают проверки: 4' });
+  expect(review).toHaveAttribute('href', '/admin/materials-review');
+  expect(review).toHaveTextContent('4');
+  const [tests] = await screen.findAllByRole('link', { name: 'Тесты, ожидают проверки: 120' });
+  expect(tests).toHaveTextContent('99+');
+});
+
+test('в режиме «под именем» счётчики очередей не запрашиваются', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin', isImpersonating: true });
+  render(
+    <ThemeProvider><A11yProvider><AdminLayout /></A11yProvider></ThemeProvider>,
+  );
+  expect(getReviewArticlesPendingCount).not.toHaveBeenCalled();
+  expect(getTestsPendingCount).not.toHaveBeenCalled();
 });

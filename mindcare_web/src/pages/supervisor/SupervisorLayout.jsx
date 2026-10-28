@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import CabinetLayout from '../../components/CabinetLayout/CabinetLayout';
 import { useAuth } from '../../features/auth/AuthContext';
 import usePendingVerificationsCount from '../../features/studentVerification/hooks/usePendingVerificationsCount';
+import useReviewQueueCounts, { reviewBadge } from '../../features/moderation/hooks/useReviewQueueCounts';
 import { normalizeRoles } from '../../shared/lib/roles';
 
 /** Бейдж: число (99+ при большом), доступная подпись — точное число. */
@@ -13,7 +14,7 @@ function pendingBadge(count) {
   };
 }
 
-function buildNavSections(pendingCount) {
+function buildNavSections(pendingCount, reviewCounts) {
   return [
     {
       label: 'Супервизия',
@@ -23,7 +24,10 @@ function buildNavSections(pendingCount) {
         { key: 'meeting-types', label: 'Типы встреч',          icon: 'calendar', to: '/supervisor/meeting-types',      end: true,  disabled: false },
         { key: 'banner-slides', label: 'Баннер',               icon: 'image',    to: '/supervisor/banner-slides',      end: true,  disabled: false },
         { key: 'service-cards', label: 'Карточки услуг',       icon: 'image',    to: '/supervisor/service-cards',      end: true,  disabled: false },
-        { key: 'tests',         label: 'Тесты',                icon: 'tests',    to: '/supervisor/tests',                          disabled: false },
+        { key: 'tests',         label: 'Тесты',                icon: 'tests',    to: '/supervisor/tests',                          disabled: false,
+          ...reviewBadge(reviewCounts.tests) },
+        { key: 'materials',     label: 'Материалы',            icon: 'articles', to: '/supervisor/materials',        end: true,  disabled: false,
+          ...reviewBadge(reviewCounts.articles) },
         { key: 'schedule',      label: 'Расписание',           icon: 'calendar', to: '/supervisor/schedule',           end: true,  disabled: false },
         { key: 'booking',       label: 'Запись',               icon: 'calendar', to: '/supervisor/booking',            end: true,  disabled: false },
         { key: 'group-sessions',label: 'Групповые занятия',    icon: 'users',    to: '/supervisor/group-sessions',     end: true,  disabled: false },
@@ -49,6 +53,7 @@ const CRUMB_LABELS = {
   '/supervisor/banner-slides':    'Баннер',
   '/supervisor/service-cards':    'Карточки услуг',
   '/supervisor/tests':            'Тесты',
+  '/supervisor/materials':        'Материалы',
   '/supervisor/schedule':         'Расписание',
   '/supervisor/booking':          'Запись',
   '/supervisor/group-sessions':   'Групповые занятия',
@@ -67,7 +72,11 @@ export default function SupervisorLayout() {
   // «под именем»): счётчик не запрашивается вне этих условий.
   const canReview = !isImpersonating && normalizeRoles(user).includes('supervisor');
   const pendingCount = usePendingVerificationsCount(canReview, user?.id ?? null);
-  const navSections = useMemo(() => buildNavSections(pendingCount), [pendingCount]);
+  // Очереди модерации материалов и тестов (бейджи «Материалы» и «Тесты»).
+  const reviewCounts = useReviewQueueCounts(canReview, user?.id ?? null);
+  const navSections = useMemo(
+    () => buildNavSections(pendingCount, reviewCounts), [pendingCount, reviewCounts],
+  );
   return (
     <CabinetLayout
       cabinetRole="supervisor"

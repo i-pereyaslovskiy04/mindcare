@@ -21,6 +21,18 @@ describe('internalLinks', () => {
     expect(replaceInternalLinks(text)).toBe(text);
   });
 
+  test('ссылки уведомлений о заданиях и модерации', () => {
+    expect(replaceInternalLinks('Новое задание от психолога Иванова И. /student/tasks'))
+      .toBe('Новое задание от психолога Иванова И. Задания');
+    expect(replaceInternalLinks('Комментарий — в разделе /psychologist/materials#my-materials'))
+      .toBe('Комментарий — в разделе Мои материалы');
+    expect(replaceInternalLinks('Тест «A» опубликован. /psychologist/tests'))
+      .toBe('Тест «A» опубликован. Мои тесты');
+    // вложенные пути и иные хэши — текст
+    const text = '/psychologist/tests/abc /student/tasks2 /psychologist/materials#x';
+    expect(replaceInternalLinks(text)).toBe(text);
+  });
+
   test('пустой текст', () => {
     expect(replaceInternalLinks('')).toBe('');
     expect(replaceInternalLinks(null)).toBe('');

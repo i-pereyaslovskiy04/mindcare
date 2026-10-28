@@ -42,6 +42,8 @@ import UsersPage      from '../features/admin/users/pages/UsersPage';
 import TagsPage       from '../features/admin/tags/pages/TagsPage';
 import AdminNewsPage  from '../features/admin/news/pages/NewsPage';
 import AdminArticlesPage   from '../features/admin/articles/pages/ArticlesPage';
+import MaterialsReviewPage from '../features/materials/pages/MaterialsReviewPage';
+import SupervisorMaterialsPage from '../features/materials/pages/SupervisorMaterialsPage';
 import AdminCategoriesPage from '../features/admin/categories/pages/CategoriesPage';
 import AdminTestsPage      from '../features/admin/tests/pages/AdminTestsPage';
 import TestFormPage        from '../features/admin/tests/pages/TestFormPage';
@@ -60,6 +62,7 @@ import TestTakePage         from '../pages/student/Tests/TestTakePage';
 import ResultsHistoryPage   from '../pages/student/Tests/ResultsHistoryPage';
 import ResultDetailPage     from '../pages/student/Tests/ResultDetailPage';
 import StudentMaterialsPage from '../pages/student/Materials/MaterialsPage';
+import StudentMaterialItemPage from '../pages/student/Materials/StudentMaterialItemPage';
 import TasksPage            from '../pages/student/Tasks/TasksPage';
 import ChatPage             from '../pages/student/Chat/ChatPage';
 import CalendarPage              from '../pages/student/Calendar/CalendarPage';
@@ -75,6 +78,8 @@ import PsychologistChatPage         from '../pages/psychologist/Chat/Psychologis
 import PsychologistAppointmentsPage from '../pages/psychologist/Appointments/AppointmentsPage';
 import PsychologistTestsPage        from '../pages/psychologist/Tests/PsychologistTestsPage';
 import PsychologistTestFormPage     from '../pages/psychologist/Tests/PsychologistTestFormPage';
+import PsychologistMaterialsPage    from '../pages/psychologist/Materials/PsychologistMaterialsPage';
+import PsychologistMaterialItemPage from '../pages/psychologist/Materials/PsychologistMaterialItemPage';
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
 import SupervisorLayout    from '../pages/supervisor/SupervisorLayout';
@@ -133,6 +138,7 @@ export default function AppRouter() {
         <Route path="tests/results"            element={<ResultsHistoryPage />} />
         <Route path="tests/results/:uuid"      element={<ResultDetailPage />} />
         <Route path="materials"     element={<StudentMaterialsPage />} />
+        <Route path="materials/:id" element={<StudentMaterialItemPage />} />
         <Route path="tasks"         element={<TasksPage />} />
         <Route path="chat"          element={<ChatPage />} />
         <Route path="calendar"        element={<CalendarPage />} />
@@ -153,6 +159,8 @@ export default function AppRouter() {
         <Route path="tests/new"             element={<PsychologistTestFormPage />} />
         <Route path="tests/:uuid"           element={<PsychologistTestFormPage />} />
         <Route path="chat"                  element={<PsychologistChatPage />} />
+        <Route path="materials"             element={<PsychologistMaterialsPage />} />
+        <Route path="materials/:id"         element={<PsychologistMaterialItemPage />} />
         <Route path="settings"              element={<CabinetSettingsPage cabinetRole="psychologist" />} />
       </Route>
 
@@ -167,6 +175,7 @@ export default function AppRouter() {
         <Route path="banner-slides"         element={<BannerSlidesPage />} />
         <Route path="service-cards"         element={<ServiceCardsPage />} />
         <Route path="tests"                 element={<AdminTestsPage cabinetRole="supervisor" />} />
+        <Route path="materials"             element={<SupervisorMaterialsPage />} />
         <Route path="tests/new"             element={<TestFormPage cabinetRole="supervisor" />} />
         <Route path="tests/:uuid"           element={<TestFormPage cabinetRole="supervisor" />} />
         <Route path="schedule"              element={<SchedulePage />} />
@@ -186,6 +195,7 @@ export default function AppRouter() {
         <Route path="tags"       element={<TagsPage />} />
         <Route path="news"       element={<AdminNewsPage />} />
         <Route path="articles"   element={<AdminArticlesPage />} />
+        <Route path="materials-review" element={<MaterialsReviewPage />} />
         <Route path="categories" element={<AdminCategoriesPage />} />
         <Route path="tests"        element={<AdminTestsPage />} />
         <Route path="tests/new"    element={<TestFormPage />} />
