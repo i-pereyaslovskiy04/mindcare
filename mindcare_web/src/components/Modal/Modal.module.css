@@ -93,6 +93,15 @@
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s, border-color 0.15s;
+  position: relative;
+}
+
+/* Зона нажатия 44×44 вокруг видимого круга 30×30: вид кнопки не меняется.
+   inset считается от padding-box: 27px внутри рамки 1.5px + 2×8.5px = 44px. */
+.closeBtn::before {
+  content: '';
+  position: absolute;
+  inset: -8.5px;
 }
 
 .closeBtn:hover {

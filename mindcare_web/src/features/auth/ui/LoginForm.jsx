@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
-import SocialButtons from './SocialButtons';
 
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
@@ -58,9 +57,6 @@ export default function LoginForm({ onSuccess, onForgotPassword, initialEmail = 
 
   return (
     <form className={`${styles.authPanel} ${styles.active}`} onSubmit={handleSubmit} noValidate>
-      {/* VK (заглушка) + Яндекс — та же логика, что на соседней вкладке. */}
-      <SocialButtons />
-
       <div className={`${styles.authField} ${errors.email ? styles.hasErr : ''}`}>
         <label htmlFor="l-email">Email</label>
         <input
@@ -104,7 +100,16 @@ export default function LoginForm({ onSuccess, onForgotPassword, initialEmail = 
       )}
 
       <div className={styles.authForgot}>
-        <button type="button" className={styles.authForgotBtn} onClick={onForgotPassword}>
+        {/* mousedown не уводит фокус из поля: иначе blur-проверка email/пароля
+            вставляет ошибку выше, ссылка сдвигается между нажатием и
+            отпусканием, и клик теряется. Тач даёт тот же совместимый mousedown;
+            Enter/Space кнопка обрабатывает сама. */}
+        <button
+          type="button"
+          className={styles.authForgotBtn}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onForgotPassword}
+        >
           Забыли пароль?
         </button>
       </div>

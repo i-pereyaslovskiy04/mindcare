@@ -3,7 +3,9 @@
  * ('login' | 'register') открывает модалку на нужной вкладке — так приходят
  * guards, истечение сессии, совместимые `/login` и `/register` и OAuth callback.
  */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act, fireEvent, render, screen, waitFor, within,
+} from '@testing-library/react';
 import Home from './Home';
 import * as AuthContext from '../../features/auth/AuthContext';
 import * as configApi from '../../api/config.api';
@@ -61,10 +63,16 @@ const dialog = () => screen.queryByRole('dialog', { name: 'Вход и реги�
 const selectedTab = () => screen.getByRole('tab', { selected: true });
 
 async function settled() {
-  // Дождаться списка провайдеров (SocialButtons), чтобы не было act-предупреждений.
-  await waitFor(() => expect(configApi.getPublicConfig).toHaveBeenCalled());
-  // Закрытая модалка — aria-hidden, поэтому ищем и среди скрытых узлов.
-  await screen.findAllByRole('button', { name: /Яндекс/, hidden: true });
+  // Модалка (в том числе закрытая — aria-hidden) отрисована.
+  await screen.findByTestId('auth-modal-body');
+  // Обычный режим: дождаться списка провайдеров (общий SocialButtons), чтобы не
+  // было act-предупреждений. На шаге по ссылке блока VK/Яндекс нет — конфиг не
+  // запрашивается; ждём только отложенные обновления форм.
+  const social = screen.queryAllByRole('button', { name: /Яндекс/, hidden: true });
+  await waitFor(() => expect(
+    social.length === 0 || configApi.getPublicConfig.mock.calls.length > 0,
+  ).toBe(true));
+  await act(async () => { await new Promise((resolve) => { setTimeout(resolve, 0); }); });
 }
 
 test('openAuth=login → модалка открыта на вкладке «Вход», router state очищен', async () => {
@@ -83,7 +91,7 @@ test('openAuth=register → модалка открыта на вкладке «
   await settled();
   expect(dialog()).toBeInTheDocument();
   expect(selectedTab()).toHaveTextContent('Регистрация');
-  expect(within(screen.getByRole('tabpanel', { name: 'Регистрация' })).getByLabelText('Имя'))
+  expect(within(screen.getByRole('tabpanel', { name: 'Регистрация' })).getByLabelText('ФИО'))
     .toBeInTheDocument();
 });
 
@@ -259,7 +267,7 @@ describe('регистрация через провайдера внутри Au
   });
 
   const emailTitle = () => screen.findByRole('heading', { name: 'Почта для регистрации' });
-  const entryReady = () => screen.findByRole('button', { name: 'Войти через Яндекс' });
+  const entryReady = () => screen.findByRole('button', { name: 'Продолжить через Яндекс' });
 
   test('новая VK identity: модалка открыта без router state, шаг email внутри неё, вкладок нет', async () => {
     render(<Home />);                                 // router state пуст (at(null))

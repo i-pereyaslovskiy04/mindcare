@@ -160,7 +160,7 @@ test('«Начать заново» вызывает onRestart в обоих р�
 
 test('нет полей имени, пароля, кода и вкладок', () => {
   setup();
-  expect(screen.queryByLabelText('Имя')).toBeNull();
+  expect(screen.queryByLabelText('ФИО')).toBeNull();
   expect(screen.queryByLabelText(/Пароль/)).toBeNull();
   expect(screen.queryByRole('group', { name: 'Код подтверждения' })).toBeNull();
   expect(screen.queryByRole('tablist')).toBeNull();

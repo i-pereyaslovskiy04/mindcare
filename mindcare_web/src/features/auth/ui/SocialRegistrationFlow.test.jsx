@@ -162,7 +162,7 @@ describe('Яндекс (email фиксирован)', () => {
     renderFlow(YANDEX);
     await codeStep();
 
-    expect(screen.queryByLabelText('Имя')).toBeNull();
+    expect(screen.queryByLabelText('ФИО')).toBeNull();
     expect(screen.queryByLabelText(/почта|Email/i)).toBeNull();
     expect(screen.queryByLabelText(/Пароль/)).toBeNull();
     expect(screen.queryAllByRole('textbox').filter(

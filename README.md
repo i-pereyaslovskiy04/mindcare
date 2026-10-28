@@ -329,6 +329,18 @@ npm start
 > Proxy в `mindcare_web/package.json` перенаправляет все `/api/*` запросы на `localhost:8000`.
 > Для full-stack разработки нужны оба сервера.
 
+### Playwright MCP (браузер для Claude Code)
+
+Инструмент разработки, не зависимость приложения. Сервер описан в `.mcp.json`
+(версия `@playwright/mcp` зафиксирована): при первом запуске Claude Code в проекте
+`npx` сам загрузит пакет — ставить его вручную не нужно. Claude Code спросит
+разрешение на project-scoped сервер `playwright`.
+
+- Нужен **Node.js 20+**.
+- Браузер — встроенный Chromium Playwright (не зависит от системного браузера);
+  один раз скачать: `npx @playwright/mcp@0.0.83 install-browser chromium`.
+- Скриншоты и снимки страниц пишутся в `.playwright-mcp/` (в `.gitignore`).
+
 ---
 
 ## База данных

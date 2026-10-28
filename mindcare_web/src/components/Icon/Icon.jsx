@@ -46,6 +46,14 @@ export default function Icon({ name, size = 18, stroke = 1.5 }) {
           <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
         </svg>
       );
+    case 'info':
+      // Справка по требованиям поля (например, разрешённые домены email).
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5M12 8h.01" />
+        </svg>
+      );
     case 'arrow-right':
       return <svg {...props}><path d="M5 12h14M13 5l7 7-7 7" /></svg>;
     case 'heart':

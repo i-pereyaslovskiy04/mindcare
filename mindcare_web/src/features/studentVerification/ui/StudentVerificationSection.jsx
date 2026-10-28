@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
 import Select from '../../../components/UI/Select/Select';
+import TextField from '../../../components/UI/TextField/TextField';
 import { submitMyVerification } from '../../../api/studentVerification.api';
 import useFaculties from '../hooks/useFaculties';
 import {
@@ -23,6 +24,9 @@ const TICKET_MAX_LEN = 50;
  * факультетов — с backend. Форма видна, только когда backend разрешает подачу
  * (`can_submit`): до первой заявки и после отказа. Pending неизменяема,
  * одобрение финально. Номер билета не логируется и после отправки очищается.
+ * Поля — shared Select/TextField (appearance="field"): ошибка проверки
+ * показывается у своего поля (aria-invalid, aria-describedby), фокус уходит
+ * на первое ошибочное поле; общий блок — только для ответа сервера.
  *
  * Якорь `#student-verification` — цель ссылки из system-сообщения: после
  * загрузки раздел прокручивается в видимую область и получает фокус.
@@ -37,6 +41,9 @@ export default function StudentVerificationSection({
   const location = useLocation();
   const headingId = useId();
   const sectionRef = useRef(null);
+  const ticketRef = useRef(null);
+  const facultyId = `${headingId}-faculty`;
+  const ticketId = `${headingId}-ticket`;
   const canSubmit = Boolean(verification?.can_submit);
   const faculties = useFaculties(canSubmit);
 
@@ -44,6 +51,7 @@ export default function StudentVerificationSection({
   const [ticket, setTicket] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
@@ -60,13 +68,17 @@ export default function StudentVerificationSection({
     setSuccess(false);
     const ticketNumber = ticket.trim();
     if (!faculty) {
-      setFormError('Выберите факультет');
+      setFieldErrors({ faculty: 'Выберите факультет' });
+      // Select не пробрасывает ref: цель фокуса — кнопка-контрол по её id.
+      document.getElementById(facultyId)?.focus();
       return;
     }
     if (!ticketNumber) {
-      setFormError('Укажите номер студенческого билета');
+      setFieldErrors({ ticket: 'Укажите номер студенческого билета' });
+      ticketRef.current?.focus();
       return;
     }
+    setFieldErrors({});
     setSubmitting(true);
     try {
       const updated = await submitMyVerification({
@@ -100,11 +112,9 @@ export default function StudentVerificationSection({
           <Badge tone={verificationStatusTone(status)}>{verificationStatusLabel(status)}</Badge>
         )}
       </div>
-      <p className={styles.hint}>
+      <p className={styles.lead}>
         Вы можете подтвердить, что являетесь студентом Донецкого государственного
-        университета. Выберите факультет и укажите номер студенческого билета.
-        После проверки здесь появится результат. Подтверждение не влияет
-        на доступ к тестам и консультациям.
+        университета. Подтверждение не влияет на доступ к тестам и консультациям.
       </p>
 
       {loading ? (
@@ -156,36 +166,44 @@ export default function StudentVerificationSection({
               {status === 'rejected' && (
                 <p className={styles.note}>Исправьте данные и отправьте заявку повторно.</p>
               )}
-              <div className={styles.field}>
-                <Select
-                  label="Факультет"
-                  placeholder={faculties.loading ? 'Загрузка…' : 'Выберите факультет'}
-                  value={faculty}
-                  options={faculties.data}
-                  onChange={(value) => { setFaculty(value); setFormError(''); }}
-                  disabled={submitting || faculties.loading}
-                  error={faculties.error || undefined}
-                />
-              </div>
-              <div className={styles.field}>
-                <label htmlFor={`${headingId}-ticket`} className={styles.label}>
-                  Номер студенческого билета
-                </label>
-                <input
-                  id={`${headingId}-ticket`}
-                  className={styles.input}
-                  value={ticket}
-                  onChange={(e) => { setTicket(e.target.value); setFormError(''); }}
-                  maxLength={TICKET_MAX_LEN}
-                  autoComplete="off"
-                  spellCheck={false}
-                  disabled={submitting}
-                />
-              </div>
+              <Select
+                id={facultyId}
+                appearance="field"
+                label="Факультет"
+                placeholder={faculties.loading ? 'Загрузка…' : 'Выберите факультет'}
+                value={faculty}
+                options={faculties.data}
+                onChange={(value) => {
+                  setFaculty(value);
+                  setFormError('');
+                  setFieldErrors((errs) => ({ ...errs, faculty: undefined }));
+                }}
+                disabled={submitting || faculties.loading}
+                error={fieldErrors.faculty || faculties.error || undefined}
+              />
+              <TextField
+                ref={ticketRef}
+                id={ticketId}
+                appearance="field"
+                label="Номер студенческого билета"
+                value={ticket}
+                onChange={(e) => {
+                  setTicket(e.target.value);
+                  setFormError('');
+                  setFieldErrors((errs) => ({ ...errs, ticket: undefined }));
+                }}
+                maxLength={TICKET_MAX_LEN}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={submitting}
+                error={fieldErrors.ticket}
+              />
               {formError && <div className={styles.error} role="alert">{formError}</div>}
-              <Button type="submit" variant="primary" loading={submitting}>
-                Отправить на проверку
-              </Button>
+              <div className={styles.actions}>
+                <Button type="submit" variant="primary" loading={submitting}>
+                  Отправить на проверку
+                </Button>
+              </div>
             </form>
           )}
         </>

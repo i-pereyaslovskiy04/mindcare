@@ -257,7 +257,7 @@ export default function ContactsEditor({ contacts, audienceNote, idPrefix = 'con
 
         <div className={styles.actions}>
           <Button type="submit" variant="primary" loading={saving} disabled={!dirty || saveState === 'conflict'}>
-            Сохранить контакты
+            Сохранить
           </Button>
           <Button type="button" variant="secondary" onClick={revert} disabled={!dirty || saving}>
             Отменить изменения

@@ -320,7 +320,7 @@ describe('VK ID: новая identity', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Начать заново' }));
 
     await waitFor(() => expect(memory).toBeNull());                     // ticket забыт
-    await screen.findByRole('button', { name: 'Войти через ВКонтакте' });
+    await screen.findByRole('button', { name: 'Продолжить через VK' });
     expect(dialog()).toBeInTheDocument();
     expect(screen.getByRole('tablist')).toBeInTheDocument();
     expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Регистрация');
@@ -341,7 +341,7 @@ describe('VK ID: новая identity', () => {
     await waitFor(() => expect(memory).toBeNull());
     expect(dialog()).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'NAVBAR-ВОЙТИ' }));
-    await screen.findByRole('button', { name: 'Войти через ВКонтакте' });
+    await screen.findByRole('button', { name: 'Продолжить через VK' });
     expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Вход');
     expect(screen.queryByRole('heading', { name: 'Почта для регистрации' })).toBeNull();
     expect(callsTo(PATH.preview)).toHaveLength(1);
@@ -356,7 +356,7 @@ describe('VK ID: новая identity', () => {
 
     openApp('/');                                                       // F5: тот же адрес, новая память
     // Дождаться загрузки главной (кнопки провайдеров в закрытой модалке).
-    await screen.findAllByRole('button', { name: /ВКонтакте/, hidden: true });
+    await screen.findAllByRole('button', { name: 'Продолжить через VK', hidden: true });
     await settle();
 
     expect(memory).toBeNull();

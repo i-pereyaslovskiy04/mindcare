@@ -19,20 +19,23 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
+/* Метрики h2 карточек настроек (.sectionTitle в AccountSettings.module.css);
+   отступ до содержимого — у .head (рядом с заголовком стоит бейдж статуса). */
 .title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 20px;
-  font-weight: 700;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 500;
   color: var(--espresso);
   margin: 0;
 }
 
-.hint {
+/* Вводный текст — метрики .lead настроек (AccountSettings.module.css). */
+.lead {
   margin: 0 0 14px;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.55;
   color: var(--text-muted);
 }
@@ -100,46 +103,22 @@
   overflow-wrap: anywhere;
 }
 
+/* Ритм формы — как у остальных форм настроек: поля и кнопка через gap 14px. */
 .form {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  gap: 14px;
 }
 
-.field {
+.form .note,
+.form .error {
+  margin: 0;
+}
+
+.actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.label {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  font-weight: 700;
-}
-
-.input {
-  border: 1px solid var(--nav-border);
-  background: var(--cream);
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 13.5px;
-  color: var(--text-main);
-  outline: none;
-  width: 100%;
-  font-family: 'Nunito', sans-serif;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.input:focus {
-  border-color: var(--coffee);
-  background: var(--warm-white);
-  box-shadow: 0 0 0 3px rgba(var(--coffee-rgb), 0.08);
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .error {

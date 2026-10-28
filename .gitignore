@@ -76,3 +76,6 @@ mindcare_api/logs/
 
 # --- Приватная папка проекта ---
 private/
+
+# Screenshots/snapshots Playwright MCP (.mcp.json --output-dir)
+.playwright-mcp/
