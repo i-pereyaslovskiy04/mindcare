@@ -1,4 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import {
+  act, createEvent, render, screen, fireEvent, waitFor,
+} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import * as AuthContext from '../AuthContext';
@@ -87,4 +90,75 @@ test('обычная форма регистрации по email не изме�
   render(<RegisterForm onSuccess={jest.fn()} />);
   expect(await screen.findByLabelText('Пароль')).toBeInTheDocument();
   expect(screen.getByLabelText('Повторите пароль')).toBeInTheDocument();
+});
+
+// ── «Забыли пароль?»: blur-проверка поля не отменяет клик ───────────────────
+//
+// Регрессия: фокус в пустом Email → нажатие на ссылку → blur вставлял ошибку
+// выше ссылки, ссылка сдвигалась между mousedown и mouseup, и клик терялся.
+// В jsdom нет раскладки, поэтому проверяется механизм: mousedown по ссылке не
+// уводит фокус из поля, blur и ошибка не появляются до активации.
+
+function renderLoginWithForgot() {
+  const onForgotPassword = jest.fn();
+  render(<LoginForm onSuccess={jest.fn()} onForgotPassword={onForgotPassword} />);
+  return { onForgotPassword, forgot: screen.getByRole('button', { name: 'Забыли пароль?' }) };
+}
+
+describe('«Забыли пароль?»', () => {
+  test('нажатие мыши не уводит фокус из пустого Email: одна активация, без ошибки', () => {
+    const { onForgotPassword, forgot } = renderLoginWithForgot();
+    const email = screen.getByLabelText('Email');
+    email.focus();
+
+    const mouseDown = createEvent.mouseDown(forgot);
+    fireEvent(forgot, mouseDown);
+    expect(mouseDown.defaultPrevented).toBe(true);
+    expect(email).toHaveFocus();
+
+    userEvent.click(forgot);                         // mousedown → mouseup → click
+    expect(onForgotPassword).toHaveBeenCalledTimes(1);
+    expect(email).toHaveFocus();                     // blur не было
+    expect(email).not.toHaveAttribute('aria-invalid');
+  });
+
+  test('невалидный Email и уже показанная ошибка — ссылка срабатывает с первого клика', () => {
+    const { onForgotPassword, forgot } = renderLoginWithForgot();
+    const email = screen.getByLabelText('Email');
+    userEvent.type(email, 'abc');
+    userEvent.click(forgot);
+    expect(onForgotPassword).toHaveBeenCalledTimes(1);
+
+    fireEvent.blur(email);                           // ошибка уже видна
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    act(() => { screen.getByLabelText('Пароль').focus(); });   // blur Email — внутри act
+    userEvent.click(forgot);
+    expect(onForgotPassword).toHaveBeenCalledTimes(2);
+  });
+
+  test('клавиатура: Enter и Space на кнопке открывают восстановление', () => {
+    const { onForgotPassword, forgot } = renderLoginWithForgot();
+    expect(forgot).toHaveAttribute('type', 'button');
+    forgot.focus();
+    userEvent.type(forgot, '{enter}', { skipClick: true });
+    expect(onForgotPassword).toHaveBeenCalledTimes(1);
+    userEvent.type(forgot, '{space}', { skipClick: true });
+    expect(onForgotPassword).toHaveBeenCalledTimes(2);
+  });
+
+  test('blur-проверка Email осталась: уход из пустого поля показывает ошибку', () => {
+    renderLoginWithForgot();
+    const email = screen.getByLabelText('Email');
+    email.focus();
+    userEvent.tab();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAccessibleDescription('Введите корректный email');
+  });
+
+  test('ссылка не отправляет форму входа', () => {
+    const { forgot } = renderLoginWithForgot();
+    userEvent.click(forgot);
+    expect(login).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });

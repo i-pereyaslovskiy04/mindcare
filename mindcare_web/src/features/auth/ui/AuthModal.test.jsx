@@ -3,6 +3,7 @@ import path from 'path';
 import {
   act, fireEvent, render, screen, waitFor, within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import AuthModal, { AUTH_MODAL_MODE } from './AuthModal';
 import * as AuthContext from '../AuthContext';
 import * as authApi from '../../../api/auth.api';
@@ -30,7 +31,10 @@ jest.mock('../../../api/domains.api', () => ({
   ...jest.requireActual('../../../api/domains.api'),
   getPublicEmailDomains: () => Promise.resolve({ domains: [] }),
 }));
-jest.mock('../forgot-password/ForgotPasswordModal', () => () => null);
+// Открытая модалка восстановления — маркер-диалог (закрытая не рендерится).
+jest.mock('../forgot-password/ForgotPasswordModal', () => function ForgotStub({ open }) {
+  return open ? <div role="dialog" aria-label="Восстановление пароля" /> : null;
+});
 
 let completeOAuthRegistration;
 
@@ -786,4 +790,21 @@ test('CSS: на ≤480px подписи VK/Яндекс не скрываютс�
   expect(rule('socBtn')).toMatch(/flex\s*:\s*1 1 0/);
   expect(rule('socBtn')).toMatch(/min-height\s*:\s*44px/);
   expect(rule('socialBtns')).toMatch(/flex-wrap\s*:\s*nowrap/);
+});
+
+// ── «Забыли пароль?»: окно восстановления с первого действия ────────────────
+
+test('фокус в пустом Email → «Забыли пароль?»: восстановление открывается с первого клика', async () => {
+  const onClose = jest.fn();
+  render(<AuthModal isOpen onClose={onClose} />);
+  await entryReady();
+  const loginPanel = screen.getByRole('tabpanel', { name: 'Вход' });
+  const email = within(loginPanel).getByLabelText('Email');
+  email.focus();
+
+  userEvent.click(within(loginPanel).getByRole('button', { name: 'Забыли пароль?' }));
+
+  expect(screen.getByRole('dialog', { name: 'Восстановление пароля' })).toBeInTheDocument();
+  expect(onClose).toHaveBeenCalledTimes(1);           // окно входа уступает место
+  expect(email).not.toHaveAttribute('aria-invalid');  // blur не успел вставить ошибку
 });

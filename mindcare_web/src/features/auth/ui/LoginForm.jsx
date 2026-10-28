@@ -100,7 +100,16 @@ export default function LoginForm({ onSuccess, onForgotPassword, initialEmail = 
       )}
 
       <div className={styles.authForgot}>
-        <button type="button" className={styles.authForgotBtn} onClick={onForgotPassword}>
+        {/* mousedown не уводит фокус из поля: иначе blur-проверка email/пароля
+            вставляет ошибку выше, ссылка сдвигается между нажатием и
+            отпусканием, и клик теряется. Тач даёт тот же совместимый mousedown;
+            Enter/Space кнопка обрабатывает сама. */}
+        <button
+          type="button"
+          className={styles.authForgotBtn}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onForgotPassword}
+        >
           Забыли пароль?
         </button>
       </div>
