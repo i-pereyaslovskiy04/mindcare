@@ -167,6 +167,12 @@ from app.student_verification.routes import catalog_router as student_verificati
 from app.student_verification.routes_supervisor import router as supervisor_student_verification_router  # noqa: E402
 from app.user_contacts.routes import router as user_contacts_router        # noqa: E402
 from app.user_contacts.routes_staff import router as staff_user_contacts_router  # noqa: E402
+from app.assignments.routes import router as assignments_router            # noqa: E402
+from app.assignments.routes_psych import router as psych_assignments_router  # noqa: E402
+from app.material_favorites.routes import router as material_favorites_router  # noqa: E402
+from app.articles.routes_author import router as author_articles_router    # noqa: E402
+from app.articles.routes_author import supervisor_router as supervisor_articles_router  # noqa: E402
+from app.articles.routes_review import router as review_articles_router    # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(oauth_router,              prefix="/api")
@@ -208,6 +214,12 @@ app.include_router(student_verification_router,             prefix="/api")
 app.include_router(supervisor_student_verification_router,  prefix="/api")
 app.include_router(user_contacts_router,                    prefix="/api")
 app.include_router(staff_user_contacts_router,              prefix="/api")
+app.include_router(assignments_router,                      prefix="/api")
+app.include_router(psych_assignments_router,                prefix="/api")
+app.include_router(material_favorites_router,               prefix="/api")
+app.include_router(author_articles_router,                  prefix="/api")
+app.include_router(supervisor_articles_router,              prefix="/api")
+app.include_router(review_articles_router,                  prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────

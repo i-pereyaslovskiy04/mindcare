@@ -10,7 +10,7 @@ from typing import Optional
 
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
-from app.tests import storage, scoring
+from app.tests import notifications, storage, scoring
 from app.tests.storage import TestHasResults  # noqa: F401  (ре-экспорт для routes)
 
 _CHOICE_TYPES = {"single_choice", "multiple_choice"}
@@ -425,6 +425,7 @@ def _apply_transition(
     uuid: str, target: str,
     *,
     actor_id: int, actor_role: str,
+    reason: Optional[str] = None,
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
     found = storage.get_status_and_author(uuid)
@@ -443,7 +444,18 @@ def _apply_transition(
     )
     if result is None:
         raise ValueError("Тест не найден")
+    # Решение по тесту, отправленному на проверку, — автору system-сообщением
+    # (post-commit, soft-fail; см. app/tests/notifications.py).
+    if found["status"] == "in_review" and target in ("published", "needs_changes"):
+        notifications.notify_author(
+            "published" if target == "published" else "returned",
+            author_id=found["created_by"], actor_id=actor_id, test=result, reason=reason,
+        )
     return result
+
+
+def pending_review_count() -> int:
+    return storage.pending_review_count()
 
 
 def submit_for_review(
@@ -470,12 +482,15 @@ def publish_test(
 
 def return_for_changes(
     uuid: str, *, actor_id: int, actor_role: str,
+    reason: Optional[str] = None,
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
-    """admin/supervisor возвращают тест на доработку (только из in_review)."""
+    """admin/supervisor возвращают тест на доработку (только из in_review).
+    reason — только в system-сообщение автору (не хранится и не логируется)."""
     return _apply_transition(
         uuid, "needs_changes",
-        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+        actor_id=actor_id, actor_role=actor_role, reason=reason,
+        ip=ip, user_agent=user_agent,
     )
 
 

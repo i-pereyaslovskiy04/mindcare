@@ -15,6 +15,7 @@ from app.tests.schemas import (
     TestPreviewScoreIn,
     TestPreviewScoreRead,
     TestReturnIn,
+    TestPendingCountOut,
     PaginatedTestsResponse,
 )
 
@@ -85,6 +86,15 @@ def preview_score(
     Объявлен ДО `/{uuid}`-маршрутов намеренно (см. analyze_test).
     """
     return service.preview_score(body.model_dump())
+
+
+# Литерал — ДО `/{uuid}` (иначе «pending-count» попал бы в get_test).
+@router.get("/pending-count", response_model=TestPendingCountOut)
+def pending_review_count(
+    current_user: dict = Depends(require_role("admin", "supervisor")),
+):
+    """Число тестов на модерации — бейдж меню проверяющего (без аудита)."""
+    return {"count": service.pending_review_count()}
 
 
 @router.get("/{uuid}", response_model=TestRead)
@@ -239,13 +249,15 @@ def return_test(
     current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
     """admin/supervisor возвращают тест на доработку (только из in_review).
-    body.reason не логируется (audit metadata пустая — свободный текст)."""
+    body.reason не логируется (audit metadata пустая — свободный текст); он
+    передаётся автору только в зашифрованном system-сообщении."""
     ip, ua = _client(request)
     try:
         return service.return_for_changes(
             uuid,
             actor_id=int(current_user["id"]),
             actor_role=_acting_role(current_user),
+            reason=body.reason,
             ip=ip, user_agent=ua,
         )
     except TestTransitionForbidden as exc:

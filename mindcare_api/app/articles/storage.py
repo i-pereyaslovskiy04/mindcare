@@ -7,7 +7,7 @@ from sqlalchemy import desc
 from app.db.session import SessionLocal
 from app.db.models import (
     Article, ArticleCategory, ArticleTag,
-    Category, Tag, User, MediaFile,
+    Category, Tag, User, MediaFile, MaterialFavorite,
 )
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
@@ -54,6 +54,7 @@ def _article_to_dict(article: Article, db) -> dict:
         ],
         "tags": [{"uuid": str(t.uuid), "name": t.name} for t in tags],
         "is_published":    article.is_published,
+        "status":          article.status,
         "published_at":    article.published_at,
         "created_at":      article.created_at,
         "updated_at":      article.updated_at,
@@ -104,9 +105,16 @@ def find_articles(
     is_published: Optional[bool] = None,
     category_id: Optional[int] = None,
     public_only: bool = False,
+    favorite_user_id: Optional[int] = None,
 ) -> tuple[list[dict], int]:
+    """favorite_user_id — только статьи из избранного этого пользователя (ADR-034)."""
     with SessionLocal() as db:
         q = db.query(Article).filter(Article.deleted_at.is_(None))
+
+        if favorite_user_id is not None:
+            q = q.join(MaterialFavorite, MaterialFavorite.article_id == Article.id).filter(
+                MaterialFavorite.user_id == int(favorite_user_id)
+            )
 
         if public_only:
             q = q.filter(Article.is_published.is_(True))
@@ -184,6 +192,8 @@ def create_article(
             content=content,
             cover_image=cover_id,
             is_published=is_published,
+            # ADR-034: статус согласован с публичностью (CHECK).
+            status="published" if is_published else "draft",
             published_at=auto_published_at,
             created_by=created_by,
         )
@@ -232,9 +242,10 @@ def update_article(
         return None
 
     with SessionLocal() as db:
+        # FOR UPDATE: правка админа сериализована с модерацией (ADR-034).
         article = db.query(Article).filter(
             Article.uuid == uuid_obj, Article.deleted_at.is_(None)
-        ).first()
+        ).with_for_update().populate_existing().first()
         if not article:
             return None
 
@@ -250,6 +261,14 @@ def update_article(
             article.is_published = data["is_published"]
             if data["is_published"] and not article.published_at and "published_at" not in data:
                 article.published_at = datetime.now(timezone.utc)
+            # ADR-034: админ публикует напрямую (любой статус → published,
+            # комментарий проверки снимается); снятие с публикации → draft,
+            # статус модерации неопубликованной статьи не меняется.
+            if data["is_published"]:
+                article.status = "published"
+                article.review_comment_enc = None
+            elif article.status == "published":
+                article.status = "draft"
         if "published_at" in data:
             article.published_at = data["published_at"]
         if "category_ids" in data and data["category_ids"] is not None:

@@ -98,6 +98,14 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "student_verification_rejected", "student_verification_content_read",
     "student_verification_submit_failed", "student_verification_review_failed",
     "user_contacts_content_read", "user_contacts_read_failed",
+    # ADR-033: задания психолога клиенту.
+    "assignment_created", "assignment_completed", "assignment_cancelled",
+    "assignment_content_read", "assignment_create_failed",
+    "assignment_complete_failed", "assignment_cancel_failed",
+    "assignment_read_failed",
+    # ADR-034: модерация статей психолога.
+    "article_submitted_for_review", "article_published",
+    "article_returned_for_changes", "article_unpublished_for_edit",
 })
 
 
@@ -112,8 +120,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 116
-    assert len(REGISTRY) == 123
+    assert len(audit_names) == 128
+    assert len(REGISTRY) == 135
 
 
 def test_unknown_event_rejected():
@@ -205,7 +213,12 @@ def test_registry_total_count_stage_5c3():
     # user_self_deactivate_failed: +4 → 108 audit = 115.
     # ADR-029 (подтверждение студента ДонГУ): submitted/approved/rejected/
     # content_read + submit_failed/review_failed: +6 → 114 audit = 121; контакты (ADR-032) +2 → 116 audit = 123.
-    assert len(REGISTRY) == 123
+    # ADR-033 (задания психолога клиенту): created/completed/cancelled/
+    # content_read + create_failed/complete_failed/cancel_failed/read_failed:
+    # +8 → 124 audit = 131.
+    # ADR-034 (модерация статей психолога): submitted_for_review/published/
+    # returned_for_changes/unpublished_for_edit: +4 → 128 audit = 135.
+    assert len(REGISTRY) == 135
 
 
 def test_role_metadata_enum_excludes_system():

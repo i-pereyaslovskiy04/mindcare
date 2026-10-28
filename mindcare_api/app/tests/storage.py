@@ -730,6 +730,14 @@ def get_status_and_author(uuid_str: str) -> Optional[dict]:
         return {"status": test.status, "created_by": test.created_by}
 
 
+def pending_review_count() -> int:
+    """Число тестов на модерации (in_review) — бейдж меню проверяющего, без аудита."""
+    with SessionLocal() as db:
+        return db.query(Test).filter(
+            Test.deleted_at.is_(None), Test.status == "in_review",
+        ).count()
+
+
 def set_status(
     uuid_str: str,
     new_status: str,
