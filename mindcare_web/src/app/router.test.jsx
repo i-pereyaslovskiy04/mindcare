@@ -321,3 +321,9 @@ test('модерация материалов: админ — очередь, с
   expect(cabinetRouteBlock('psychologist')).not.toContain('MaterialsReviewPage');
   expect(cabinetRouteBlock('psychologist')).not.toContain('SupervisorMaterialsPage');
 });
+
+test('новости: супервизор ведёт их той же страницей, что и админ', () => {
+  expect(cabinetRouteBlock('supervisor')).toMatch(/path="news"\s+element=\{<AdminNewsPage \/>\}/);
+  expect(adminRouteBlock()).toMatch(/path="news"\s+element=\{<AdminNewsPage \/>\}/);
+  expect(cabinetRouteBlock('psychologist')).not.toContain('AdminNewsPage');
+});

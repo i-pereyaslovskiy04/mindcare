@@ -58,10 +58,17 @@ def test_test_duplicated_widened_to_psychologist_stage_f2_2():
 
 
 def test_content_events_stay_admin_only():
-    for base in ("category", "news", "tag"):
+    for base in ("category", "tag"):
         for op in ("created", "updated", "deleted"):
             name = f"{base}_{op}"
             assert REGISTRY[name].allowed_actor_roles == frozenset({"admin"}), name
+
+
+def test_news_events_allow_supervisor():
+    # Дополнение 2026-10-28 к ADR-034: supervisor ведёт новости, как admin.
+    for op in ("created", "updated", "deleted"):
+        name = f"news_{op}"
+        assert REGISTRY[name].allowed_actor_roles == frozenset({"admin", "supervisor"}), name
 
 
 def test_article_events_allow_psychologist_authoring():

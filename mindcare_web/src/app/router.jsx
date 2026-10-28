@@ -185,6 +185,7 @@ export default function AppRouter() {
         <Route path="service-cards"         element={<ServiceCardsPage />} />
         <Route path="tests"                 element={<AdminTestsPage cabinetRole="supervisor" />} />
         <Route path="materials"             element={<SupervisorMaterialsPage />} />
+        <Route path="news"                  element={<AdminNewsPage />} />
         <Route path="tests/new"             element={<TestFormPage cabinetRole="supervisor" />} />
         <Route path="tests/:uuid"           element={<TestFormPage cabinetRole="supervisor" />} />
         <Route path="schedule"              element={<SchedulePage />} />
