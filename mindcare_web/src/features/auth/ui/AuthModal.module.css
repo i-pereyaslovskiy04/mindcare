@@ -7,7 +7,7 @@
   background: var(--cream);
   border-radius: 12px;
   padding: 4px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   position: relative;
 }
 
@@ -49,9 +49,10 @@
   font-weight: 600;
 }
 
-/* Social section */
+/* Social section — над вкладками; отступ до разделителя задаёт .authDivider
+   (без сложения двух отступов). */
 .socialSection {
-  margin-bottom: 18px;
+  margin: 0;
 }
 
 .socialLabel {
@@ -131,12 +132,12 @@
   font-size: 13px;
 }
 
-/* Divider */
+/* Divider: кнопки → разделитель → вкладки — один интервал 16px. */
 .authDivider {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 18px 0 16px;
+  margin: 16px 0;
 }
 
 .authDividerLine {
@@ -452,24 +453,16 @@
 }
 
 @media (max-width: 480px) {
-  .socBtn {
-    flex: 0 0 auto;
-    padding: 10px;
-    min-width: unset;
-  }
-
-  .socBtnLabel {
-    display: none;
-  }
-
-  .socBtnIcon {
-    width: 26px;
-    height: 26px;
-  }
-
+  /* VK и Яндекс — подписанные кнопки в две равные колонки (не icon-only):
+     на 320–390px обе помещаются в строку. */
   .socialBtns {
-    justify-content: center;
-    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .socBtn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
   }
 
   .authBody {

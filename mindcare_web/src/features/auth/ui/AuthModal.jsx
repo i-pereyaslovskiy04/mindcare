@@ -4,6 +4,7 @@ import Modal from '../../../components/Modal/Modal';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import RegistrationConfirmForm from './RegistrationConfirmForm';
+import SocialButtons from './SocialButtons';
 import SocialRegistrationFlow, { SOCIAL_STEP } from './SocialRegistrationFlow';
 import ForgotPasswordModal from '../forgot-password/ForgotPasswordModal';
 import { AUTH_CONFIRM, AUTH_TABS, safeMessageTone } from '../lib/authEntry';
@@ -115,6 +116,12 @@ export default function AuthModal({
   const confirming = confirmStep || (activeTab === 'register' && registerStep === 'code');
   const loginMessage = confirmed ? REGISTRATION_CONFIRMED_MESSAGE : message;
   const loginTone = confirmed ? 'info' : tone;
+  // Сообщение — над общим social-блоком. Информационное («Сессия истекла»,
+  // «Регистрация завершена…») относится ко входу — только на вкладке «Вход»;
+  // ошибка (терминальная ошибка входа или регистрации через провайдера) не
+  // прячется при переключении вкладки.
+  const showMessage = Boolean(loginMessage)
+    && (activeTab === 'login' || loginTone === 'error');
   const prefillEmail = confirmed?.email ?? loginEmail ?? '';
 
   const handleConfirmed = useCallback((email) => {
@@ -149,6 +156,18 @@ export default function AuthModal({
             />
           ) : (
             <>
+              {/* Сообщение, VK/Яндекс и вкладки — там же, где раньше были вкладки:
+                  не на шаге кода и не на шаге по ссылке. Один SocialButtons на
+                  обе вкладки: вкладка в OAuth-поток не передаётся. */}
+              {!confirming && showMessage && (
+                <div
+                  className={loginTone === 'error' ? styles.errorMessage : styles.infoMessage}
+                  role={loginTone === 'error' ? 'alert' : 'status'}
+                >
+                  {loginMessage}
+                </div>
+              )}
+              {!confirming && <SocialButtons />}
               {!confirming && (
                 <div
                   className={`${styles.authTabs} ${activeTab === 'register' ? styles.onRegister : ''}`}
@@ -188,14 +207,6 @@ export default function AuthModal({
                   aria-labelledby="tab-login"
                   hidden={activeTab !== 'login'}
                 >
-                  {loginMessage && (
-                    <div
-                      className={loginTone === 'error' ? styles.errorMessage : styles.infoMessage}
-                      role={loginTone === 'error' ? 'alert' : 'status'}
-                    >
-                      {loginMessage}
-                    </div>
-                  )}
                   <LoginForm
                     key={prefillEmail ? `prefill:${prefillEmail}` : 'login'}
                     initialEmail={prefillEmail}

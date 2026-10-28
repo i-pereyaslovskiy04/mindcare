@@ -50,7 +50,7 @@ beforeEach(() => {
 
 // Дождаться списка провайдеров (SocialButtons) до действий пользователя.
 async function entryReady() {
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Войти через Яндекс' })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Продолжить через Яндекс' })).toBeEnabled());
 }
 
 async function openRegisterTab() {
@@ -330,12 +330,11 @@ describe('юридические ссылки открываются в ново
 const confirmEmail = 'student@donnu.ru';
 const REF = '8a62d590-71a1-4b17-90f7-4a5ff0c9d782';
 
-// На шаге confirm панели «Вход» и «Регистрация» скрыты, но смонтированы и
-// загружают список провайдеров — дожидаемся его (без act-предупреждений).
+// На шаге confirm панели «Вход» и «Регистрация» скрыты, но смонтированы; общий
+// блок VK/Яндекс (как и вкладки) не рендерится — провайдеры не запрашиваются.
 async function hiddenProvidersReady() {
   await waitFor(() => {
-    const buttons = screen.getAllByRole('button', { name: 'Войти через Яндекс', hidden: true });
-    buttons.forEach((b) => expect(b).toBeEnabled());
+    expect(screen.queryByRole('button', { name: /Продолжить через/, hidden: true })).toBeNull();
   });
 }
 
@@ -617,4 +616,174 @@ test('поздняя ошибка запроса A после перехода �
   expect(screen.queryByText(REF_INVALID_TEXT)).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
   expect(within(confirmBody()).getByRole('group', { name: 'Код подтверждения' })).toBeInTheDocument();
+});
+
+// ── общий блок VK/Яндекс: один на всю модалку, над вкладками ────────────────
+
+const socialButtons = () => screen.getAllByRole('button', { name: /^Продолжить через (VK|Яндекс)$/ });
+
+test('ровно одна VK и одна Яндекс, вне tabpanel и перед tablist; конфиг — один запрос', async () => {
+  render(<AuthModal isOpen onClose={jest.fn()} />);
+  await entryReady();
+
+  expect(screen.getAllByRole('button', { name: 'Продолжить через VK', hidden: true })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Продолжить через Яндекс', hidden: true })).toHaveLength(1);
+  const tablist = screen.getByRole('tablist');
+  screen.getAllByRole('tabpanel', { hidden: true }).forEach((panel) => {
+    socialButtons().forEach((button) => expect(panel).not.toContainElement(button));
+  });
+  socialButtons().forEach((button) => {
+    // eslint-disable-next-line no-bitwise
+    expect(button.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  expect(screen.getByText('или по email')).toBeInTheDocument();
+  expect(configApi.getPublicConfig).toHaveBeenCalledTimes(1);
+});
+
+test('порядок клавиатуры: VK → Яндекс → «Вход» → «Регистрация» → поля формы', async () => {
+  configApi.getPublicConfig.mockResolvedValue({ social_providers: ['vk', 'yandex'] });
+  render(<AuthModal isOpen onClose={jest.fn()} />);
+  await entryReady();
+  const order = [
+    screen.getByRole('button', { name: 'Продолжить через VK' }),
+    screen.getByRole('button', { name: 'Продолжить через Яндекс' }),
+    screen.getByRole('tab', { name: 'Вход' }),
+    screen.getByRole('tab', { name: 'Регистрация' }),
+    within(screen.getByRole('tabpanel', { name: 'Вход' })).getByLabelText('Email'),
+  ];
+  order.slice(1).forEach((el, i) => {
+    // eslint-disable-next-line no-bitwise
+    expect(order[i].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  order.forEach((el) => expect(el).not.toHaveAttribute('tabindex', '-1'));
+});
+
+test('переключение вкладок меняет только форму; кнопки VK/Яндекс — те же элементы', async () => {
+  render(<AuthModal isOpen onClose={jest.fn()} />);
+  await entryReady();
+  const [vk, yandex] = socialButtons();
+  const loginTab = screen.getByRole('tab', { name: 'Вход' });
+  const registerTab = screen.getByRole('tab', { name: 'Регистрация' });
+
+  expect(loginTab).toHaveAttribute('aria-selected', 'true');
+  expect(loginTab).toHaveAttribute('aria-controls', 'panel-login');
+  expect(registerTab).toHaveAttribute('aria-controls', 'panel-register');
+  expect(screen.getByRole('tabpanel', { name: 'Вход' })).toHaveAttribute('id', 'panel-login');
+
+  fireEvent.click(registerTab);
+  expect(registerTab).toHaveAttribute('aria-selected', 'true');
+  expect(loginTab).toHaveAttribute('aria-selected', 'false');
+  expect(screen.getByRole('tabpanel', { name: 'Регистрация' })).toHaveAttribute('aria-labelledby', 'tab-register');
+  expect(within(registerPanel()).getByLabelText('Имя')).toBeInTheDocument();
+  expect(screen.queryByRole('tabpanel', { name: 'Вход' })).toBeNull();      // скрыта
+  const [vkAfter, yandexAfter] = socialButtons();
+  expect(vkAfter).toBe(vk);
+  expect(yandexAfter).toBe(yandex);
+
+  fireEvent.click(loginTab);
+  expect(socialButtons()[1]).toBe(yandex);
+  expect(configApi.getPublicConfig).toHaveBeenCalledTimes(1);
+});
+
+test.each(['login', 'register'])('вкладка %s: Яндекс запускает ровно oauthStart("yandex")', async (tab) => {
+  authApi.oauthStart.mockReturnValue(new Promise(() => {}));   // переход не нужен
+  render(<AuthModal isOpen onClose={jest.fn()} initialTab={tab} />);
+  await entryReady();
+  fireEvent.click(screen.getByRole('button', { name: 'Продолжить через Яндекс' }));
+  expect(authApi.oauthStart).toHaveBeenCalledTimes(1);
+  expect(authApi.oauthStart.mock.calls[0]).toEqual(['yandex']);   // без вкладки и намерения
+  expect(screen.getByRole('button', { name: 'Продолжить через Яндекс' })).toHaveTextContent('Переход…');
+});
+
+test.each(['login', 'register'])('вкладка %s: VK запускает ровно oauthStart("vk")', async (tab) => {
+  configApi.getPublicConfig.mockResolvedValue({ social_providers: ['vk', 'yandex'] });
+  authApi.oauthStart.mockReturnValue(new Promise(() => {}));
+  render(<AuthModal isOpen onClose={jest.fn()} initialTab={tab} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Продолжить через VK' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Продолжить через VK' }));
+  expect(authApi.oauthStart.mock.calls).toEqual([['vk']]);
+});
+
+test('ошибка старта провайдера не прячется при переключении вкладки', async () => {
+  authApi.oauthStart.mockRejectedValue(Object.assign(new Error('x'), { status: 500 }));
+  render(<AuthModal isOpen onClose={jest.fn()} />);
+  await entryReady();
+  fireEvent.click(screen.getByRole('button', { name: 'Продолжить через Яндекс' }));
+  const error = await screen.findByText('Не удалось начать вход через Яндекс. Попробуйте ещё раз.');
+  fireEvent.click(screen.getByRole('tab', { name: 'Регистрация' }));
+  expect(error).toBeVisible();
+  expect(screen.getAllByRole('alert')).toContain(error);
+});
+
+test('сообщение над social-блоком: ошибка видна на обеих вкладках, информация — только на «Входе»', async () => {
+  const errorText = 'Не удалось войти через Яндекс.';
+  const { rerender } = render(
+    <AuthModal isOpen onClose={jest.fn()} message={errorText} messageTone="error" />,
+  );
+  await entryReady();
+  const error = screen.getByText(errorText);
+  expect(error).toHaveAttribute('role', 'alert');
+  // eslint-disable-next-line no-bitwise
+  expect(error.compareDocumentPosition(socialButtons()[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Регистрация' }));
+  expect(screen.getByText(errorText)).toBeVisible();
+
+  const infoText = 'Сессия истекла. Войдите снова.';
+  rerender(<AuthModal isOpen onClose={jest.fn()} message={infoText} messageTone="info" />);
+  expect(screen.queryByText(infoText)).toBeNull();                     // на «Регистрации» — нет
+  fireEvent.click(screen.getByRole('tab', { name: 'Вход' }));
+  expect(screen.getByText(infoText)).toHaveAttribute('role', 'status');
+});
+
+test('шаг кода регистрации: VK/Яндекс нет; «Изменить данные» возвращает блок', async () => {
+  await openRegisterTab();
+  fillAndSubmit();
+  await screen.findByRole('group', { name: 'Код подтверждения' });
+  expect(screen.queryByRole('button', { name: /Продолжить через/, hidden: true })).toBeNull();
+  expect(screen.queryByText('или по email')).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: '← Изменить данные' }));
+  await entryReady();
+  expect(socialButtons()).toHaveLength(2);
+});
+
+test('шаг по ссылке /register/confirm: VK/Яндекс нет', async () => {
+  render(<AuthModal isOpen onClose={jest.fn()} initialTab="confirm" registrationReference={REF} />);
+  await screen.findByRole('group', { name: 'Код подтверждения' });
+  await hiddenProvidersReady();
+  expect(screen.queryByText('Продолжить через')).toBeNull();
+  expect(configApi.getPublicConfig).not.toHaveBeenCalled();
+});
+
+test('SocialRegistrationFlow: VK/Яндекс нет', async () => {
+  render(<AuthModal isOpen onClose={jest.fn()} social={VK} onSocialExit={jest.fn()} />);
+  await emailTitle();
+  expect(screen.queryByRole('button', { name: /Продолжить через/, hidden: true })).toBeNull();
+  expect(screen.queryByText('Продолжить через')).toBeNull();
+  expect(configApi.getPublicConfig).not.toHaveBeenCalled();
+});
+
+// ── mobile: подписанные кнопки, не icon-only (CSS-модули RTL не видит) ──────
+
+test('CSS: на ≤480px подписи VK/Яндекс не скрываются, кнопки — две равные колонки ≥44px', () => {
+  const css = fs.readFileSync(path.join(UI_DIR, 'AuthModal.module.css'), 'utf8');
+  const start = css.indexOf('@media (max-width: 480px)');
+  expect(start).toBeGreaterThanOrEqual(0);
+  // Тело блока @media — до парной закрывающей скобки.
+  let depth = 0;
+  let end = css.indexOf('{', start);
+  for (let i = end; i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    if (css[i] === '}') { depth -= 1; if (depth === 0) { end = i; break; } }
+  }
+  const mobile = css.slice(start, end);
+  const rule = (selector) => {
+    const m = mobile.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`));
+    return m ? m[1] : '';
+  };
+  expect(rule('socBtnLabel')).not.toMatch(/display\s*:\s*none/);
+  expect(mobile).not.toMatch(/\.socBtnLabel\s*\{[^}]*display\s*:\s*none/);
+  expect(rule('socBtn')).toMatch(/flex\s*:\s*1 1 0/);
+  expect(rule('socBtn')).toMatch(/min-height\s*:\s*44px/);
+  expect(rule('socialBtns')).toMatch(/flex-wrap\s*:\s*nowrap/);
 });

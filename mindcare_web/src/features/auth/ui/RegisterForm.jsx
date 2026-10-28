@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
 import { registerInit, registerConfirm } from '../../../api/auth.api';
-import SocialButtons from './SocialButtons';
 import RegistrationOtpStep, {
   EMPTY_CODE, OTP_STATUS, useResendTimer,
 } from './RegistrationOtpStep';
@@ -229,9 +228,6 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
   // ── STEP 1: форма регистрации ──────────────────────────────────────────────
   return (
     <form className={`${styles.authPanel} ${styles.active}`} onSubmit={handleFormSubmit} noValidate>
-      {/* VK (заглушка) + Яндекс — та же логика, что на соседней вкладке. */}
-      <SocialButtons />
-
       <div className={`${styles.authField} ${errors.name ? styles.hasErr : ''}`}>
         <label htmlFor="r-name">Имя</label>
         <input

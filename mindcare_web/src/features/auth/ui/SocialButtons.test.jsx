@@ -20,8 +20,8 @@ const PROVIDER_KEY = 'mindcare_oauth_provider';
 // Собирается из частей: литерал script-URL в исходнике запрещён линтером.
 const SCRIPT_URL = ['javascript', 'alert(1)'].join(':');
 
-const yandexButton = () => screen.getByRole('button', { name: 'Войти через Яндекс' });
-const vkButton = () => screen.getByRole('button', { name: /ВКонтакте/ });
+const yandexButton = () => screen.getByRole('button', { name: 'Продолжить через Яндекс' });
+const vkButton = () => screen.getByRole('button', { name: 'Продолжить через VK' });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -48,7 +48,18 @@ test('ровно две кнопки — VK и Яндекс; Telegram нет', a
   expect(vkButton()).toBeInTheDocument();
   expect(yandexButton()).toBeInTheDocument();
   expect(screen.queryByText(/Telegram/i)).toBeNull();
-  expect(screen.getByText('или продолжить с email')).toBeInTheDocument();
+  expect(screen.getByText('Продолжить через')).toBeInTheDocument();
+  expect(screen.getByText('или по email')).toBeInTheDocument();
+  expect(screen.queryByText(/Быстрая авторизация/i)).toBeNull();
+});
+
+test('доступное имя содержит видимую подпись (Label in Name) и не обещает «Войти»', async () => {
+  await showWithYandex();
+  expect(vkButton()).toHaveTextContent('VK');
+  expect(vkButton()).toHaveAccessibleName('Продолжить через VK');
+  expect(yandexButton()).toHaveTextContent('Яндекс');
+  expect(yandexButton()).toHaveAccessibleName('Продолжить через Яндекс');
+  expect(screen.queryByRole('button', { name: /Войти через/ })).toBeNull();
 });
 
 test('VK без адаптера на backend: видна, но disabled и без единого запроса', async () => {
