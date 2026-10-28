@@ -229,12 +229,12 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
   return (
     <form className={`${styles.authPanel} ${styles.active}`} onSubmit={handleFormSubmit} noValidate>
       <div className={`${styles.authField} ${errors.name ? styles.hasErr : ''}`}>
-        <label htmlFor="r-name">Имя</label>
+        <label htmlFor="r-name">ФИО</label>
         <input
           type="text"
           id="r-name"
-          placeholder="Ваше имя"
-          autoComplete="given-name"
+          placeholder="Введите ФИО"
+          autoComplete="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => setErrors((p) => ({ ...p, name: !validateName() }))}
@@ -243,7 +243,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
           aria-describedby={errors.name ? 'r-name-hint' : undefined}
         />
         <span className={styles.authHint} id="r-name-hint" role="alert">
-          Введите имя (минимум 2 символа)
+          Введите ФИО (минимум 2 символа)
         </span>
       </div>
 
@@ -287,23 +287,27 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
           aria-invalid={errors.password ? 'true' : undefined}
           aria-describedby="r-pass-hint r-pass-strength"
         />
-        <div className={styles.psBars} aria-hidden="true">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={`${styles.psBar} ${
-                i <= passwordStrength ? styles[STRENGTH_CLASSES[passwordStrength]] : ''
-              }`}
-            />
-          ))}
-        </div>
-        <div
-          id="r-pass-strength"
-          className={styles.psLbl}
-          style={{ color: STRENGTH_COLORS[passwordStrength] }}
-          aria-live="polite"
-        >
-          {STRENGTH_LABELS[passwordStrength]}
+        {/* Полоски и подпись силы — одна строка: под полем нет отдельного
+            ряда, который держал бы место, пока пароль не введён. */}
+        <div className={styles.psRow}>
+          <div className={styles.psBars} aria-hidden="true">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`${styles.psBar} ${
+                  i <= passwordStrength ? styles[STRENGTH_CLASSES[passwordStrength]] : ''
+                }`}
+              />
+            ))}
+          </div>
+          <div
+            id="r-pass-strength"
+            className={styles.psLbl}
+            style={{ color: STRENGTH_COLORS[passwordStrength] }}
+            aria-live="polite"
+          >
+            {STRENGTH_LABELS[passwordStrength]}
+          </div>
         </div>
         <span className={styles.authHint} id="r-pass-hint" role="alert">
           Минимум 8 символов
@@ -359,6 +363,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
         }
         error={errors.consent}
         ariaDescribedBy={errors.consent ? 'r-consent-hint' : undefined}
+        className={styles.consentField}
       />
       {errors.consent && (
         <span className={styles.consentHint} id="r-consent-hint" role="alert">
@@ -370,7 +375,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
         <div className={styles.apiError} role="alert">{apiError}</div>
       )}
 
-      <button type="submit" className={styles.authBtn} disabled={isLoading}>
+      <button type="submit" className={`${styles.authBtn} ${styles.registerSubmit}`} disabled={isLoading}>
         {isLoading ? 'Отправляем код…' : 'Продолжить'}
       </button>
     </form>

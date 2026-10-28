@@ -410,10 +410,21 @@
 }
 
 /* Password strength */
+/* Строка силы пароля: полоски + подпись справа. Высота строки — одна строка
+   подписи и при пустой подписи (полоски видны всегда), поэтому ввод пароля не
+   сдвигает поля ниже; отдельного пустого ряда под полосками нет. */
+.psRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 15px;
+  margin-top: 2px;
+}
+
 .psBars {
+  flex: 1;
   display: flex;
   gap: 4px;
-  margin-top: 4px;
 }
 
 .psBar {
@@ -436,13 +447,25 @@
   background: var(--success);
 }
 
+/* Ширина — под самую длинную подпись («Надёжный»): полоски не прыгают. */
 .psLbl {
+  flex: 0 0 auto;
+  min-width: 5em;
   font-size: 11px;
+  line-height: 15px;
   color: var(--text-light);
   text-align: right;
-  min-height: 14px;
-  margin-top: 2px;
   transition: color 0.2s;
+}
+
+/* Низ формы регистрации: повтор пароля → согласие ≈15px, согласие → кнопка
+   ≈19px (gap формы 13px + отступы ниже), без изменения общего gap полей. */
+.consentField {
+  margin-top: 2px;
+}
+
+.registerSubmit {
+  margin-top: 6px;
 }
 
 /* Consent */

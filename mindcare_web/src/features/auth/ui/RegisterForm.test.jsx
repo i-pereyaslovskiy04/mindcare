@@ -61,7 +61,7 @@ async function listedDomains() {
 }
 
 function fillAndSubmit(email = EMAIL) {
-  fireEvent.change(screen.getByLabelText('Имя'), { target: { value: 'Иван Тестов' } });
+  fireEvent.change(screen.getByLabelText('ФИО'), { target: { value: 'Иван Тестов' } });
   fireEvent.change(emailInput(), { target: { value: email } });
   fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'SecurePass42!' } });
   fireEvent.change(screen.getByLabelText('Повторите пароль'), { target: { value: 'SecurePass42!' } });
@@ -468,4 +468,74 @@ test('повторная отправка кода после таймера —
   } finally {
     jest.useRealTimers();
   }
+});
+
+// ── ФИО и ритм формы: подпись другая, проверка прежняя ──────────────────────
+
+test('поле ФИО: подпись, placeholder и autocomplete="name"', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await settled();
+  const fio = screen.getByLabelText('ФИО');
+  expect(fio).toHaveAttribute('placeholder', 'Введите ФИО');
+  expect(fio).toHaveAttribute('autocomplete', 'name');
+  expect(screen.queryByLabelText('Имя')).toBeNull();
+});
+
+test('проверка ФИО прежняя: не короче 2 символов, без требований к числу слов', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await settled();
+  const fio = screen.getByLabelText('ФИО');
+
+  fireEvent.change(fio, { target: { value: ' И ' } });
+  fireEvent.blur(fio);
+  expect(fio).toHaveAttribute('aria-invalid', 'true');
+  expect(fio).toHaveAccessibleDescription('Введите ФИО (минимум 2 символа)');
+
+  // Одно слово — допустимо: фамилия и отчество не обязательны.
+  fireEvent.change(fio, { target: { value: 'Иван' } });
+  fireEvent.blur(fio);
+  expect(fio).not.toHaveAttribute('aria-invalid');
+
+  fireEvent.change(fio, { target: { value: 'Иван' } });
+  fireEvent.change(emailInput(), { target: { value: EMAIL } });
+  fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'SecurePass42!' } });
+  fireEvent.change(screen.getByLabelText('Повторите пароль'), { target: { value: 'SecurePass42!' } });
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Продолжить' }));
+  await screen.findByRole('group', { name: 'Код подтверждения' });
+  expect(authApi.registerInit).toHaveBeenCalledWith({
+    name: 'Иван', email: EMAIL, password: 'SecurePass42!',
+  });
+});
+
+test('сила пароля и подсказка работают как прежде', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await settled();
+  const pass = screen.getByLabelText('Пароль');
+  expect(pass).toHaveAttribute('aria-describedby', 'r-pass-hint r-pass-strength');
+  const strength = document.getElementById('r-pass-strength');   // eslint-disable-line testing-library/no-node-access
+  expect(strength).toHaveAttribute('aria-live', 'polite');
+  expect(strength).toHaveTextContent('');
+
+  fireEvent.change(pass, { target: { value: 'abc12' } });
+  expect(strength).toHaveTextContent('Слабый');
+  fireEvent.blur(pass);
+  expect(pass).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByText('Минимум 8 символов', { selector: '#r-pass-hint' })).toBeInTheDocument();
+
+  fireEvent.change(pass, { target: { value: 'SecurePass42!' } });
+  expect(strength).toHaveTextContent('Надёжный');
+});
+
+test('без согласия заявка не отправляется (поток согласия прежний)', async () => {
+  render(<RegisterForm onSuccess={jest.fn()} />);
+  await settled();
+  fireEvent.change(screen.getByLabelText('ФИО'), { target: { value: 'Иван Тестов' } });
+  fireEvent.change(emailInput(), { target: { value: EMAIL } });
+  fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'SecurePass42!' } });
+  fireEvent.change(screen.getByLabelText('Повторите пароль'), { target: { value: 'SecurePass42!' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Продолжить' }));
+  expect(await screen.findByText('Необходимо принять политику персональных данных'))
+    .toHaveAttribute('role', 'alert');
+  expect(authApi.registerInit).not.toHaveBeenCalled();
 });

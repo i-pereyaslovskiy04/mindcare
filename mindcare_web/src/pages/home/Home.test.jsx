@@ -91,7 +91,7 @@ test('openAuth=register → модалка открыта на вкладке «
   await settled();
   expect(dialog()).toBeInTheDocument();
   expect(selectedTab()).toHaveTextContent('Регистрация');
-  expect(within(screen.getByRole('tabpanel', { name: 'Регистрация' })).getByLabelText('Имя'))
+  expect(within(screen.getByRole('tabpanel', { name: 'Регистрация' })).getByLabelText('ФИО'))
     .toBeInTheDocument();
 });
 

@@ -64,7 +64,7 @@ const registerPanel = () => screen.getByRole('tabpanel', { name: 'Регистр
 
 function fillAndSubmit() {
   const value = (text) => ({ target: { value: text } });
-  fireEvent.change(within(registerPanel()).getByLabelText('Имя'), value('Иван Студентов'));
+  fireEvent.change(within(registerPanel()).getByLabelText('ФИО'), value('Иван Студентов'));
   fireEvent.change(within(registerPanel()).getByLabelText('Email'), value('student@donnu.ru'));
   fireEvent.change(within(registerPanel()).getByLabelText('Пароль'), value('SecurePass42!'));
   fireEvent.change(within(registerPanel()).getByLabelText('Повторите пароль'), value('SecurePass42!'));
@@ -76,7 +76,7 @@ test('основная форма: вкладки «Вход | Регистра�
   await openRegisterTab();
   expect(screen.getByRole('tablist')).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'Вход' })).toBeInTheDocument();
-  expect(within(registerPanel()).getByLabelText('Имя')).toBeInTheDocument();
+  expect(within(registerPanel()).getByLabelText('ФИО')).toBeInTheDocument();
 });
 
 test('шаг кода обычной регистрации: общий шаг без вкладок, «Изменить данные» возвращает их', async () => {
@@ -92,7 +92,7 @@ test('шаг кода обычной регистрации: общий шаг �
 
   fireEvent.click(screen.getByRole('button', { name: '← Изменить данные' }));
   expect(screen.getByRole('tablist')).toBeInTheDocument();
-  expect(within(registerPanel()).getByLabelText('Имя')).toHaveValue('Иван Студентов');
+  expect(within(registerPanel()).getByLabelText('ФИО')).toHaveValue('Иван Студентов');
   // Форма смонтирована заново — дождаться её списка провайдеров.
   await entryReady();
 });
@@ -113,7 +113,7 @@ function expectNoEntryUi() {
   expect(screen.queryByRole('tabpanel', { hidden: true })).toBeNull();
   // Формы входа и регистрации не смонтированы вовсе (даже скрытыми).
   expect(screen.queryByLabelText('Пароль')).toBeNull();
-  expect(screen.queryByLabelText('Имя')).toBeNull();
+  expect(screen.queryByLabelText('ФИО')).toBeNull();
   expect(screen.queryByLabelText('Email')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Войти' })).toBeNull();
   expect(screen.queryByRole('button', { name: /Яндекс/ })).toBeNull();
@@ -204,7 +204,7 @@ test('«Начать заново» → onSocialExit; без social модалк
   expect(modeOf()).toBe(AUTH_MODAL_MODE.ENTRY);
   expect(screen.getByRole('tablist')).toBeInTheDocument();
   expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Регистрация');
-  expect(within(registerPanel()).getByLabelText('Имя')).toHaveValue('');
+  expect(within(registerPanel()).getByLabelText('ФИО')).toHaveValue('');
   expect(screen.queryByRole('heading', { name: 'Почта для регистрации' })).toBeNull();
   expect(authApi.oauthRegistrationInit).not.toHaveBeenCalled();
 });
@@ -453,7 +453,7 @@ test('«Начать регистрацию заново» без владель
   fireEvent.click(screen.getByRole('button', { name: 'Начать регистрацию заново' }));
   await entryReady();
   expect(screen.getByRole('tab', { name: 'Регистрация' })).toHaveAttribute('aria-selected', 'true');
-  expect(within(registerPanel()).getByLabelText('Имя')).toHaveValue('');
+  expect(within(registerPanel()).getByLabelText('ФИО')).toHaveValue('');
   expect(authApi.registerInit).not.toHaveBeenCalled();
 });
 
@@ -674,7 +674,7 @@ test('переключение вкладок меняет только форм
   expect(registerTab).toHaveAttribute('aria-selected', 'true');
   expect(loginTab).toHaveAttribute('aria-selected', 'false');
   expect(screen.getByRole('tabpanel', { name: 'Регистрация' })).toHaveAttribute('aria-labelledby', 'tab-register');
-  expect(within(registerPanel()).getByLabelText('Имя')).toBeInTheDocument();
+  expect(within(registerPanel()).getByLabelText('ФИО')).toBeInTheDocument();
   expect(screen.queryByRole('tabpanel', { name: 'Вход' })).toBeNull();      // скрыта
   const [vkAfter, yandexAfter] = socialButtons();
   expect(vkAfter).toBe(vk);
