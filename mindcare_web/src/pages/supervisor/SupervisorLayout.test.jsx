@@ -121,10 +121,12 @@ test('решение на странице модерации сразу пер�
   getTestsPendingCount.mockRejectedValue(new Error('network'));
   render(<SupervisorLayout />);
   await screen.findByRole('link', { name: 'Материалы, ожидают проверки: 1' });
-  expect(screen.getByRole('link', { name: 'Тесты' })).not.toHaveAttribute('aria-label');
+  // Без бейджа доступное имя — сама подпись пункта (aria-label есть у каждого
+  // пункта: в icon-rail подпись скрыта), без «, ожидают проверки: N».
+  expect(screen.getByRole('link', { name: 'Тесты' })).toHaveAttribute('aria-label', 'Тесты');
 
   notifyReviewQueueChanged();
   await waitFor(() => expect(screen.getByRole('link', { name: 'Материалы' }))
-    .not.toHaveAttribute('aria-label'));
+    .toHaveAttribute('aria-label', 'Материалы'));
   expect(getReviewArticlesPendingCount).toHaveBeenCalledTimes(2);
 });
