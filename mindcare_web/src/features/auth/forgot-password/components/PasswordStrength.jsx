@@ -15,13 +15,17 @@ function calcLevel(v) {
   return s <= 1 ? 0 : s <= 2 ? 1 : 2;
 }
 
+/**
+ * Сила пароля: полоски и подпись — одна строка (раскладка как в регистрации).
+ * Алгоритм прежний. Подпись — aria-live, полоски декоративные.
+ */
 export default function PasswordStrength({ value }) {
   const lvl = value ? calcLevel(value) : null;
   const meta = lvl !== null ? LEVELS[lvl] : null;
 
   return (
     <div className={styles.strength}>
-      <div className={styles.strengthBars}>
+      <div className={styles.strengthBars} aria-hidden="true">
         {[0, 1, 2].map(i => (
           <div
             key={i}
@@ -29,7 +33,7 @@ export default function PasswordStrength({ value }) {
           />
         ))}
       </div>
-      <div className={`${styles.strengthLabel} ${meta ? meta.labelCls : ''}`}>
+      <div className={`${styles.strengthLabel} ${meta ? meta.labelCls : ''}`} aria-live="polite">
         {meta ? meta.label : ''}
       </div>
     </div>

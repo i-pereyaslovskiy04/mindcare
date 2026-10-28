@@ -1,9 +1,15 @@
 import styles from '../styles/forgot-password.module.css';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ERROR_ID = 'fp-email-error';
 
+/**
+ * Шаг 1: email. Форма — Enter в поле отправляет только этот шаг.
+ * fieldRef — поле email (фокус при открытии шага и после ошибки проверки).
+ * onSubmit() возвращает имя поля при ошибке клиентской проверки.
+ */
 export default function StepEmail({
-  email, setEmail, errors, setErrors, loading, onSubmit, readOnly = false,
+  email, setEmail, errors, setErrors, loading, onSubmit, readOnly = false, fieldRef,
 }) {
   const handleChange = (e) => {
     setEmail(e.target.value);
@@ -16,24 +22,28 @@ export default function StepEmail({
     }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (await onSubmit()) fieldRef?.current?.focus();
+  };
+
   return (
-    <div className={styles.panel}>
+    <form className={styles.panel} onSubmit={handleSubmit} noValidate>
       <div>
-        <h1 className={styles.heading}>
-          Восстановление<br /><span className={styles.headingEm}>пароля</span>
-        </h1>
-        <p className={styles.body} style={{ marginTop: 6 }}>
+        <h2 className={styles.heading}>
+          Восстановление <span className={styles.headingEm}>пароля</span>
+        </h2>
+        <p className={styles.lead}>
           Введите почту, указанную при регистрации. Мы пришлём код подтверждения.
         </p>
       </div>
-
-      <div className={styles.divider} />
 
       <div className={styles.field}>
         <label className={styles.label} htmlFor="fp-email">
           Электронная почта
         </label>
         <input
+          ref={fieldRef}
           className={`${styles.input} ${errors.email ? styles.inputError : ''}`}
           type="email"
           id="fp-email"
@@ -43,26 +53,21 @@ export default function StepEmail({
           onChange={handleChange}
           onBlur={handleBlur}
           readOnly={readOnly}
-          aria-invalid={!!errors.email}
-          aria-describedby="fp-email-hint"
+          aria-invalid={errors.email ? 'true' : undefined}
+          aria-describedby={errors.email ? ERROR_ID : undefined}
         />
-        <span
-          id="fp-email-hint"
-          className={`${styles.hint} ${errors.email ? styles.hintError : styles.hintHidden}`}
-          role="alert"
-        >
-          {errors.email || (readOnly ? 'Код придёт на почту вашего аккаунта' : 'Введите почту, привязанную к аккаунту')}
-        </span>
+        {errors.email && (
+          <span id={ERROR_ID} className={styles.hint} role="alert">{errors.email}</span>
+        )}
       </div>
 
       <button
         className={`${styles.btn} ${styles.btnPrimary} ${loading ? styles.btnLoading : ''}`}
-        type="button"
-        onClick={onSubmit}
+        type="submit"
         disabled={loading}
       >
         {loading ? <span className={styles.spinner} /> : 'Отправить код'}
       </button>
-    </div>
+    </form>
   );
 }
