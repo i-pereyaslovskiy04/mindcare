@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useMaterialsLibrary } from './useMaterialsLibrary';
-import { getArticles, getPublicCategories } from '../../../api/articles.api';
+import { getArticles, getArticleTags, getPublicCategories } from '../../../api/articles.api';
 
 jest.mock('../../../api/articles.api');
 
@@ -25,6 +25,7 @@ function deferred() {
 beforeEach(() => {
   jest.clearAllMocks();
   getPublicCategories.mockResolvedValue([{ id: 3, name: 'Статья' }, { id: 4, name: 'Гид' }]);
+  getArticleTags.mockResolvedValue([{ uuid: 't1', name: 'Тревога' }, { uuid: 't2', name: 'Сон' }]);
 });
 
 describe('useMaterialsLibrary', () => {
@@ -34,7 +35,7 @@ describe('useMaterialsLibrary', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(getArticles).toHaveBeenCalledWith({
-      page: 1, size: 2, search: undefined, category_id: undefined,
+      page: 1, size: 2, search: undefined, category_id: undefined, tag_uuid: undefined,
     });
     expect(result.current.items).toEqual([{
       id: 'uuid-1',
@@ -65,13 +66,13 @@ describe('useMaterialsLibrary', () => {
 
     act(() => result.current.setQuery('  сон '));
     await waitFor(() => expect(getArticles).toHaveBeenLastCalledWith({
-      page: 1, size: 2, search: 'сон', category_id: undefined,
+      page: 1, size: 2, search: 'сон', category_id: undefined, tag_uuid: undefined,
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => result.current.setCategory(4));
     await waitFor(() => expect(getArticles).toHaveBeenLastCalledWith({
-      page: 1, size: 2, search: 'сон', category_id: 4,
+      page: 1, size: 2, search: 'сон', category_id: 4, tag_uuid: undefined,
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.category).toBe(4);
@@ -154,3 +155,35 @@ describe('useMaterialsLibrary', () => {
   });
 });
 
+describe('useMaterialsLibrary — тема', () => {
+  it('варианты тем с сервера; выбор темы уходит на сервер и сбрасывает страницу', async () => {
+    getArticles.mockResolvedValue({ items: [article(1), article(2)], total: 4 });
+    const { result } = renderHook(() => useMaterialsLibrary({ pageSize: 2 }));
+    await waitFor(() => expect(result.current.tagOptions).toEqual([
+      { value: 't1', label: 'Тревога' }, { value: 't2', label: 'Сон' },
+    ]));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.items).toHaveLength(4));
+
+    act(() => result.current.setTag('t2'));
+    await waitFor(() => expect(getArticles).toHaveBeenLastCalledWith({
+      page: 1, size: 2, search: undefined, category_id: undefined, tag_uuid: 't2',
+    }));
+    expect(result.current.tag).toBe('t2');
+    const calls = getArticles.mock.calls.length;
+    act(() => result.current.setTag('t2'));            // та же тема — no-op
+    expect(getArticles).toHaveBeenCalledTimes(calls);
+    act(() => result.current.setTag(null));
+    await waitFor(() => expect(getArticles).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 1, tag_uuid: undefined }),
+    ));
+  });
+
+  it('ошибка загрузки тем — раздел просто не показывается', async () => {
+    getArticles.mockResolvedValue({ items: [], total: 0 });
+    getArticleTags.mockRejectedValue(new Error('x'));
+    const { result } = renderHook(() => useMaterialsLibrary());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.tagOptions).toEqual([]);
+  });
+});

@@ -25,14 +25,18 @@ const XTinyIcon = () => (
 
 /**
  * Поиск и фильтр библиотеки материалов. Только то, что принимает API статей:
- * текст поиска (debounce 300 мс) и одна категория («Тип материала»).
- * Без категорий кнопка фильтров не показывается.
+ * текст поиска (debounce 300 мс), одна категория («Тип материала») и одна тема
+ * («Тема»; варианты — темы опубликованных статей). Без вариантов обоих
+ * фильтров кнопка фильтров не показывается.
  */
 export default function SearchBar({
   onQueryChange,
   category,
   onCategoryChange,
   categoryOptions = [],
+  tag = null,
+  onTagChange = () => {},
+  tagOptions = [],
 }) {
   const [inputValue,    setInputValue]    = useState('');
   const [isFilterOpen,  setIsFilterOpen]  = useState(false);
@@ -97,16 +101,24 @@ export default function SearchBar({
     onQueryChange('');
   };
 
-  const selectedOption = categoryOptions.find((o) => o.value === category) || null;
-  const activeFilterCount = selectedOption ? 1 : 0;
-  const hasFilters = categoryOptions.length > 0;
+  const selectedCategory = categoryOptions.find((o) => o.value === category) || null;
+  const selectedTag = tagOptions.find((o) => o.value === tag) || null;
+  const activeChips = [
+    selectedCategory && { key: 'category', label: selectedCategory.label, remove: () => onCategoryChange(null) },
+    selectedTag && { key: 'tag', label: selectedTag.label, remove: () => onTagChange(null) },
+  ].filter(Boolean);
+  const activeFilterCount = activeChips.length;
+  const hasFilters = categoryOptions.length > 0 || tagOptions.length > 0;
 
   const sharedProps = {
     onClose: () => setIsFilterOpen(false),
     category,
     onCategoryChange,
     categoryOptions,
-    onClear: () => onCategoryChange(null),
+    tag,
+    onTagChange,
+    tagOptions,
+    onClear: () => { onCategoryChange(null); onTagChange(null); },
   };
 
   return (
@@ -167,20 +179,22 @@ export default function SearchBar({
 
       </div>
 
-      {/* ── Selected category chip ── */}
-      {selectedOption && (
+      {/* ── Selected filter chips ── */}
+      {activeChips.length > 0 && (
         <div className={styles.chipsRow} aria-label="Активные фильтры">
-          <span className={styles.chip}>
-            {selectedOption.label}
-            <button
-              type="button"
-              className={styles.chipRemove}
-              onClick={() => onCategoryChange(null)}
-              aria-label={`Убрать фильтр «${selectedOption.label}»`}
-            >
-              <XTinyIcon />
-            </button>
-          </span>
+          {activeChips.map((chip) => (
+            <span key={chip.key} className={styles.chip}>
+              {chip.label}
+              <button
+                type="button"
+                className={styles.chipRemove}
+                onClick={chip.remove}
+                aria-label={`Убрать фильтр «${chip.label}»`}
+              >
+                <XTinyIcon />
+              </button>
+            </span>
+          ))}
         </div>
       )}
 

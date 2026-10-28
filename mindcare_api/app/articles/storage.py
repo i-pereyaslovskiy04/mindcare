@@ -106,8 +106,10 @@ def find_articles(
     category_id: Optional[int] = None,
     public_only: bool = False,
     favorite_user_id: Optional[int] = None,
+    tag_uuid: Optional[_uuid.UUID] = None,
 ) -> tuple[list[dict], int]:
-    """favorite_user_id — только статьи из избранного этого пользователя (ADR-034)."""
+    """favorite_user_id — только статьи из избранного этого пользователя (ADR-034);
+    tag_uuid — только статьи с этой темой (фильтр «Тема» библиотеки)."""
     with SessionLocal() as db:
         q = db.query(Article).filter(Article.deleted_at.is_(None))
 
@@ -129,6 +131,13 @@ def find_articles(
                 ArticleCategory.category_id == category_id
             )
 
+        if tag_uuid is not None:
+            q = q.filter(Article.id.in_(
+                db.query(ArticleTag.article_id)
+                .join(Tag, Tag.id == ArticleTag.tag_id)
+                .filter(Tag.uuid == tag_uuid)
+            ))
+
         total = q.count()
         articles = (
             q.order_by(desc(Article.created_at))
@@ -139,6 +148,22 @@ def find_articles(
         items = [_article_to_dict(a, db) for a in articles]
 
     return items, total
+
+
+def public_article_tags() -> list[dict]:
+    """Темы, у которых есть хотя бы одна опубликованная неудалённая статья, —
+    варианты фильтра «Тема» библиотеки (темы только новостей/тестов не видны)."""
+    with SessionLocal() as db:
+        rows = (
+            db.query(Tag.uuid, Tag.name)
+            .join(ArticleTag, ArticleTag.tag_id == Tag.id)
+            .join(Article, Article.id == ArticleTag.article_id)
+            .filter(Article.is_published.is_(True), Article.deleted_at.is_(None))
+            .distinct()
+            .order_by(Tag.name)
+            .all()
+        )
+        return [{"uuid": str(r.uuid), "name": r.name} for r in rows]
 
 
 def get_article_by_uuid(uuid_str: str, public_only: bool = False) -> Optional[dict]:

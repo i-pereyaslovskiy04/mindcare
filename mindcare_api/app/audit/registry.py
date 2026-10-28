@@ -290,9 +290,13 @@ _ALL += [
 ]
 
 # ── AUDIT_LOG: контент CRUD (ATOMIC/RAISE) ───────────────────────────────────
-for _base in ("news", "tag", "category"):
+for _base in ("tag", "category"):
     for _op in ("created", "updated", "deleted"):
         _ALL.append(_audit_ok(f"{_base}_{_op}", {"admin"}, _base))
+# Новости ведут admin и supervisor (/api/admin/news, Дополнение 2026-10-28 к
+# ADR-034) — роль добавлена, count не меняется.
+for _op in ("created", "updated", "deleted"):
+    _ALL.append(_audit_ok(f"news_{_op}", {"admin", "supervisor"}, "news"))
 # ADR-034: psychologist создаёт, правит и удаляет СВОИ статьи (модерация) через те
 # же storage-функции и те же события — роль добавлена, count не меняется.
 # Дополнение 2026-10-28: supervisor — тоже автор своих статей (/api/supervisor/articles).

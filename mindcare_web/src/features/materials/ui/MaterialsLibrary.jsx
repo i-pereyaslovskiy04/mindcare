@@ -27,6 +27,7 @@ export default function MaterialsLibrary({ getItemPath, variant = 'card', withFa
     items, total, loading, error,
     query, setQuery,
     category, setCategory, categoryOptions,
+    tag, setTag, tagOptions,
     hasMore, loadMore, refetch,
     favoritesOnly, setFavoritesOnly, reload,
   } = useMaterialsLibrary(compact ? { pageSize: COMPACT_PAGE_SIZE } : undefined);
@@ -38,13 +39,13 @@ export default function MaterialsLibrary({ getItemPath, variant = 'card', withFa
     onChanged: () => { if (favoritesOnly) reload(); },
   });
 
-  const filtered  = Boolean(query.trim()) || category != null;
+  const filtered  = Boolean(query.trim()) || category != null || tag != null;
   const emptyText = favoritesOnly
     ? (filtered
       ? 'В избранном ничего не найдено по этому запросу.'
       : 'В избранном пока ничего нет. Отметьте материал сердечком, чтобы вернуться к нему позже.')
     : filtered
-      ? 'По вашему запросу ничего не найдено. Попробуйте изменить поиск или тип материала.'
+      ? 'По вашему запросу ничего не найдено. Попробуйте изменить поиск, тип материала или тему.'
       : 'Опубликованных материалов пока нет.';
   const showGrid  = !(error && items.length === 0);
 
@@ -55,6 +56,9 @@ export default function MaterialsLibrary({ getItemPath, variant = 'card', withFa
         category={category}
         onCategoryChange={setCategory}
         categoryOptions={categoryOptions}
+        tag={tag}
+        onTagChange={setTag}
+        tagOptions={tagOptions}
       />
 
       {favoritesEnabled && (

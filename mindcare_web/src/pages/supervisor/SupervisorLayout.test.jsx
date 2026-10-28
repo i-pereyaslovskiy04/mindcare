@@ -130,3 +130,11 @@ test('решение на странице модерации сразу пер�
     .toHaveAttribute('aria-label', 'Материалы'));
   expect(getReviewArticlesPendingCount).toHaveBeenCalledTimes(2);
 });
+
+test('пункт «Новости» ведёт в раздел новостей супервизора', async () => {
+  mockAuth();
+  getPendingVerificationsCount.mockResolvedValue({ count: 0 });
+  render(<SupervisorLayout />);
+  expect(await screen.findByRole('link', { name: 'Новости' }))
+    .toHaveAttribute('href', '/supervisor/news');
+});

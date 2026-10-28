@@ -1,18 +1,11 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import FilterChip from '../../../components/UI/FilterChip/FilterChip';
+import FilterSections from './FilterSections';
 import styles from './FilterSheet.module.css';
 
 const XIcon = () => (
   <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
     <path d="M2 2l9 9M11 2L2 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="9" height="8" viewBox="0 0 9 8" fill="none" aria-hidden="true">
-    <path d="M1 4l2.5 2.5L8 1" stroke="currentColor" strokeWidth="1.5"
-      strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -32,16 +25,10 @@ function focusables(root) {
 export default function FilterSheet({
   sheetRef,
   onClose,
-  category,
-  onCategoryChange,
-  categoryOptions,
   onClear,
+  ...filters
 }) {
-  // Один выбор: API статей принимает ровно один category_id.
-  const toggleCategory = (value) =>
-    onCategoryChange(category === value ? null : value);
-
-  const hasActiveFilters = category != null;
+  const hasActiveFilters = filters.category != null || filters.tag != null;
 
   useEffect(() => {
     focusables(sheetRef.current)[0]?.focus();
@@ -84,25 +71,7 @@ export default function FilterSheet({
           </button>
         </div>
 
-        <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>Тип материала</h3>
-          <div className={styles.tagGrid}>
-            {categoryOptions.map((opt) => {
-              const active = category === opt.value;
-              return (
-                <FilterChip
-                  key={opt.value}
-                  active={active}
-                  size="md"
-                  onClick={() => toggleCategory(opt.value)}
-                  icon={active ? <CheckIcon /> : null}
-                >
-                  {opt.label}
-                </FilterChip>
-              );
-            })}
-          </div>
-        </section>
+        <FilterSections {...filters} size="md" classes={styles} />
 
         {hasActiveFilters && (
           <div className={styles.clearSection}>

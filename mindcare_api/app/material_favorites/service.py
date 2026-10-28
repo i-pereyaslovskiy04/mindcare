@@ -18,11 +18,11 @@ def favorite_ids(user_id: int) -> dict:
 
 def list_favorites(
     user_id: int, *, page: int, size: int,
-    search: Optional[str] = None, category_id: Optional[int] = None,
+    search: Optional[str] = None, category_id: Optional[int] = None, tag_uuid=None,
 ) -> dict:
     items, total = articles_storage.find_articles(
         page=page, size=size, search=search, category_id=category_id,
-        public_only=True, favorite_user_id=user_id,
+        public_only=True, favorite_user_id=user_id, tag_uuid=tag_uuid,
     )
     return {"items": items, "total": total, "page": page, "size": size}
 

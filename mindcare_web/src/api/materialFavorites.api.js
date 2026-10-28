@@ -16,10 +16,11 @@ export function getFavoriteIds() {
   return apiFetch(`${BASE}/ids`);
 }
 
-export function getFavoriteMaterials({ page = 1, size = 10, search, category_id } = {}) {
+export function getFavoriteMaterials({ page = 1, size = 10, search, category_id, tag_uuid } = {}) {
   const q = new URLSearchParams({ page, size });
   if (search) q.set('search', search);
   if (category_id != null) q.set('category_id', category_id);
+  if (tag_uuid) q.set('tag_uuid', tag_uuid);
   return apiFetch(`${BASE}?${q}`);
 }
 
