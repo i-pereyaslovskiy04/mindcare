@@ -1,4 +1,13 @@
-.page { display: flex; flex-direction: column; gap: 20px; }
+/* Страница-мастер: узкая колонка по центру content-area, заголовок и форма
+   с общим краем. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: var(--cabinet-narrow-max);
+  margin-inline: auto;
+}
 
 .header {
   display: flex;
@@ -27,7 +36,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 680px;
 }
 
 .section {

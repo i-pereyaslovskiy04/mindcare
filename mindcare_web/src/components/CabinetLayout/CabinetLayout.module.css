@@ -290,7 +290,7 @@
 }
 .contentInner {
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--cabinet-content-max);
   margin: 0 auto;
 }
 

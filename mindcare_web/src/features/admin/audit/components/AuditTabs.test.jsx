@@ -18,6 +18,8 @@ describe('семантика вкладок', () => {
     setup();
     const tablist = screen.getByRole('tablist');
     expect(tablist).toBeInTheDocument();
+    // Вкладки разделов страницы — на всю ширину колонки.
+    expect(tablist.className).toMatch(/fill/);
 
     const tabs = screen.getAllByRole('tab');
     expect(tabs).toHaveLength(3);

@@ -26,7 +26,7 @@ jest.mock('./ScheduleTab', () => function ScheduleStub() {
 
 test('вкладки сессий — shared Tabs: подпись, три раздела, по умолчанию «Индивидуальные»', () => {
   render(<PsychologistAppointmentsPage />);
-  expect(screen.getByRole('tablist', { name: 'Разделы сессий' })).toBeInTheDocument();
+  expect(screen.getByRole('tablist', { name: 'Разделы сессий' }).className).toMatch(/fill/);
   expect(labels()).toEqual(['Индивидуальные', 'Групповые', 'Моё расписание']);
   const individual = screen.getByRole('tab', { name: INDIVIDUAL });
   expect(individual).toHaveAttribute('aria-selected', 'true');

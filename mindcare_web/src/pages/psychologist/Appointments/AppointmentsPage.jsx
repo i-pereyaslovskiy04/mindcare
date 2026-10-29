@@ -202,6 +202,7 @@ export default function PsychologistAppointmentsPage() {
         onChange={setTab}
         label="Разделы сессий"
         idPrefix={TABS_PREFIX}
+        fill
       />
 
       <TabPanel id="group" active={tab}>

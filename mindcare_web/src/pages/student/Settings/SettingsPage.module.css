@@ -3,11 +3,16 @@
   to   { opacity: 1; transform: none; }
 }
 
+/* Страница-форма: одна узкая колонка по центру content-area кабинета —
+   заголовок, вкладки и панели имеют общий левый и правый край. */
 .page {
   animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   display: flex;
   flex-direction: column;
   gap: 18px;
+  width: 100%;
+  max-width: var(--cabinet-narrow-max);
+  margin-inline: auto;
 }
 
 /* ---- header ---- */
@@ -33,11 +38,6 @@
   margin: -12px 0 0;
   max-width: 600px;
 }
-
-.tabs {
-  max-width: 760px;
-}
-
 
 /* Панель только прячется атрибутом hidden: display здесь не задаётся,
    раскладка — на внутреннем контейнере раздела. */

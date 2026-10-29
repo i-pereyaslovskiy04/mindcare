@@ -3,8 +3,13 @@
   to   { opacity: 1; transform: none; }
 }
 
+/* Страница-форма: одна узкая колонка по центру content-area кабинета
+   (как настройки студента) — общий левый и правый край у всех блоков. */
 .page {
   animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  width: 100%;
+  max-width: var(--cabinet-narrow-max);
+  margin-inline: auto;
 }
 
 /* ---- header ---- */
@@ -31,13 +36,11 @@
 
 /* ---- разделы: вкладки и панели (раскладка как в настройках студента) ---- */
 .tabs {
-  max-width: 760px;
   margin-bottom: 18px;
 }
 
 /* Панель только прячется атрибутом hidden: display здесь не задаётся. */
 .panel {
-  max-width: 760px;
   min-width: 0;
 }
 

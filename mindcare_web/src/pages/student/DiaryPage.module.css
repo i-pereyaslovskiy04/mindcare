@@ -42,7 +42,7 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 20px;
   align-items: start;
 }
@@ -57,9 +57,11 @@
   min-width: 0;
 }
 
-@media (max-width: 980px) {
+/* Две колонки — только когда форме остаётся достаточно места рядом с
+   историей (sidebar кабинета занимает часть viewport до 980px). */
+@media (max-width: 1180px) {
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

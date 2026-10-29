@@ -3,10 +3,12 @@
   to   { opacity: 1; transform: none; }
 }
 
+/* Страница-форма: узкая колонка по центру content-area. */
 .page {
   animation: fadeIn 0.25s ease-out;
-  max-width: 760px;
   width: 100%;
+  max-width: var(--cabinet-narrow-max);
+  margin-inline: auto;
 }
 
 .pageTitle {

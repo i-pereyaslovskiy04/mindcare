@@ -14,6 +14,8 @@ test('вкладки «На проверке» и «Мои материалы» 
   useAuth.mockReturnValue({ isImpersonating: false });
   render(<SupervisorMaterialsPage />);
   expect(screen.getByRole('heading', { name: 'Материалы' })).toBeInTheDocument();
+  // Вкладки разделов страницы — на всю ширину колонки.
+  expect(screen.getByRole('tablist', { name: 'Разделы материалов' }).className).toMatch(/fill/);
   expect(screen.getByRole('tab', { name: 'На проверке' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.getByText('Очередь модерации')).toBeInTheDocument();
 
