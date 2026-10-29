@@ -3,15 +3,40 @@
   50%       { opacity: 0.75; }
 }
 
-/* Колонки по содержимому, «Пользователь» забирает остаток; длинные ФИО и
-   email переносятся, поэтому таблица не шире своей карточки. */
+/* «Пользователь» забирает остаток (ширину распределяет table layout по
+   содержимому); длинные ФИО и email переносятся, поэтому таблица не шире
+   своей карточки. */
 .userCol {
-  width: 100%;
+  min-width: 12rem;
+}
+
+/* Роли и статус: ширина задана, чтобы «Пользователь» + «Активен» стояли в
+   одну строку, а не столбиком. */
+.badgesCol {
+  width: 16rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
 }
 
 .actionsCol,
 .actionsCell {
   width: 1%;
+}
+
+/* Плотнее базовой геометрии TableShell: строка — 2 строки текста + поля. */
+.table tbody td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.table thead th {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .row:hover td {
@@ -46,15 +71,18 @@
 /* ── Пользователь ── */
 .name {
   display: block;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--espresso);
   overflow-wrap: anywhere;
 }
 
 .email {
   display: block;
-  margin-top: 2px;
+  margin-top: 1px;
   font-size: 12.5px;
+  line-height: 1.4;
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
@@ -64,9 +92,10 @@
   display: grid;
   grid-template-columns: auto auto;
   column-gap: 8px;
-  row-gap: 2px;
+  row-gap: 1px;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 1.5;
   white-space: nowrap;
 }
 

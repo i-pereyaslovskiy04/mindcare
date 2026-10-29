@@ -3,7 +3,7 @@ import { RoleBadges, StatusBadge, UserRowActions, formatDate } from './UserCells
 import styles from './UsersTable.module.css';
 
 const SKELETON_ROWS = 7;
-const COLS = 5; // Пользователь, Роли, Статус, Активность, Действия
+const COLS = 4; // Пользователь, Роли и статус, Активность, Действия
 
 function SkeletonRow() {
   return (
@@ -18,7 +18,8 @@ function SkeletonRow() {
 /**
  * Широкое представление /admin/users — семантическая таблица. ФИО и email —
  * одна колонка «Пользователь» (длинные значения переносятся, а не растягивают
- * таблицу), даты — одна колонка «Активность». Действия — основное кнопкой,
+ * таблицу), роли и статус — одна колонка бейджей, даты — одна колонка
+ * «Активность». Действия — основное кнопкой,
  * остальные в меню (UserRowActions). На узкой колонке UsersDataView
  * показывает UsersCompactList с теми же данными и обработчиками.
  */
@@ -28,8 +29,7 @@ export default function UsersTable({ items, loading, error, actionContext }) {
       <thead>
         <tr>
           <th scope="col" className={styles.userCol}>Пользователь</th>
-          <th scope="col">Роли</th>
-          <th scope="col">Статус</th>
+          <th scope="col" className={styles.badgesCol}>Роли и статус</th>
           <th scope="col">Активность</th>
           <th scope="col" className={styles.actionsCol}>
             <span className="visually-hidden">Действия</span>
@@ -61,8 +61,12 @@ export default function UsersTable({ items, loading, error, actionContext }) {
               <span className={styles.name}>{item.full_name}</span>
               <span className={styles.email}>{item.email}</span>
             </td>
-            <td><RoleBadges item={item} /></td>
-            <td><StatusBadge item={item} /></td>
+            <td>
+              <div className={styles.badges}>
+                <RoleBadges item={item} />
+                <StatusBadge item={item} />
+              </div>
+            </td>
             <td>
               <dl className={styles.dates}>
                 <dt>Регистрация</dt>

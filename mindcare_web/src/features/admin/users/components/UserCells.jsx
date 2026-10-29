@@ -46,23 +46,41 @@ export function StatusBadge({ item }) {
   return <Badge tone="success">Активен</Badge>;
 }
 
-/** Основное действие кнопкой + остальные в меню «⋮» (матрица — userActions). */
+/** Основное действие строки кнопкой (матрица — userActions). */
+export function UserPrimaryAction({ item, actionContext, className }) {
+  const { primary } = getUserActions(item, actionContext);
+  if (!primary) return null;
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      className={[styles.primary, className].filter(Boolean).join(' ')}
+      onClick={primary.onSelect}
+      aria-label={primary.ariaLabel}
+    >
+      {primary.label}
+    </Button>
+  );
+}
+
+/** Остальные действия строки — меню «⋮»; нет действий — нет кнопки. */
+export function UserMoreActions({ item, actionContext, className }) {
+  const { menu } = getUserActions(item, actionContext);
+  return (
+    <ActionsMenu
+      triggerLabel={`Другие действия: ${item.full_name}`}
+      items={menu}
+      className={className}
+    />
+  );
+}
+
+/** Основное действие + меню рядом (таблица и строка компактного списка). */
 export function UserRowActions({ item, actionContext, className }) {
-  const { primary, menu } = getUserActions(item, actionContext);
   return (
     <div className={[styles.actions, className].filter(Boolean).join(' ')}>
-      {primary && (
-        <Button
-          variant="secondary"
-          size="sm"
-          className={styles.primary}
-          onClick={primary.onSelect}
-          aria-label={primary.ariaLabel}
-        >
-          {primary.label}
-        </Button>
-      )}
-      <ActionsMenu triggerLabel={`Другие действия: ${item.full_name}`} items={menu} />
+      <UserPrimaryAction item={item} actionContext={actionContext} />
+      <UserMoreActions item={item} actionContext={actionContext} />
     </div>
   );
 }

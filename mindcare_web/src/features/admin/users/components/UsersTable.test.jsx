@@ -33,13 +33,15 @@ const openMenu = (name) => fireEvent.click(
   within(row(name)).getByRole('button', { name: `Другие действия: ${name}` }),
 );
 
-test('семантическая таблица: пользователь (ФИО + email), роли, статус, активность', () => {
+test('семантическая таблица: пользователь (ФИО + email), роли и статус, активность', () => {
   renderTable();
   const table = screen.getByRole('table', { name: 'Пользователи' });
   expect(within(table).getAllByRole('columnheader').map((th) => th.textContent))
-    .toEqual(['Пользователь', 'Роли', 'Статус', 'Активность', 'Действия']);
+    .toEqual(['Пользователь', 'Роли и статус', 'Активность', 'Действия']);
   const active = row('Активный Психолог');
   expect(within(active).getByText('x@donnu.ru')).toBeInTheDocument();
+  expect(within(active).getByText('Психолог')).toBeInTheDocument();
+  expect(within(active).getByText('Активен')).toBeInTheDocument();
   expect(within(active).getByText('Регистрация')).toBeInTheDocument();
   expect(within(active).getByText('01.01.2026')).toBeInTheDocument();
 });
@@ -92,7 +94,7 @@ test('состояния: ошибка и пусто — строкой на в�
   const { unmount } = render(
     <UsersTable items={[]} loading={false} error="Сбой" actionContext={{}} />,
   );
-  expect(screen.getByRole('cell', { name: 'Ошибка загрузки: Сбой' })).toHaveAttribute('colspan', '5');
+  expect(screen.getByRole('cell', { name: 'Ошибка загрузки: Сбой' })).toHaveAttribute('colspan', '4');
   unmount();
   render(<UsersTable items={[]} loading={false} error={null} actionContext={{}} />);
   expect(screen.getByRole('cell', { name: 'Пользователи не найдены' })).toBeInTheDocument();

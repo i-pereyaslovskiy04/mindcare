@@ -30,14 +30,25 @@ test('обе раскладки показывают одни и те же за�
   expect(inTable).toEqual(inList);
 });
 
-test('компактная запись: заголовок, email, метаданные списком «подпись — значение»', () => {
+test('строка списка: ФИО (заголовок), email, роли и статус, даты «подпись — значение», действия', () => {
   setup();
   const item = within(list()).getAllByRole('listitem')[0];
   expect(within(item).getByRole('heading', { name: 'Активный Психолог' })).toBeInTheDocument();
   expect(within(item).getByText('psy@donnu.ru')).toBeInTheDocument();
-  expect(within(item).getAllByRole('term').map((t) => t.textContent))
-    .toEqual(['Роли', 'Статус', 'Регистрация', 'Последний вход']);
   expect(within(item).getByText('Психолог')).toBeInTheDocument();
+  expect(within(item).getByText('Активен')).toBeInTheDocument();
+  expect(within(item).getAllByRole('term').map((t) => t.textContent))
+    .toEqual(['Регистрация', 'Последний вход']);
+  expect(within(item).getByRole('button', { name: 'Редактировать Активный Психолог' })).toBeInTheDocument();
+  expect(within(item).getByRole('button', { name: 'Другие действия: Активный Психолог' })).toBeInTheDocument();
+});
+
+test('у удалённого ранее в строке только «Восстановить», меню нет', () => {
+  setup();
+  const deleted = within(list()).getAllByRole('listitem')[1];
+  expect(within(deleted).getByRole('button', { name: 'Восстановить Удалён Ранее' })).toBeInTheDocument();
+  expect(within(deleted).queryByRole('button', { name: /Другие действия/ })).toBeNull();
+  expect(within(deleted).queryByRole('button', { name: /Редактировать/ })).toBeNull();
 });
 
 test('действия обеих раскладок вызывают один и тот же обработчик страницы', () => {

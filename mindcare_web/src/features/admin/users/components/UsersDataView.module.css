@@ -1,10 +1,12 @@
 /* Представление выбирается по ширине колонки контента, а не viewport.
-   Базовый вариант (и fallback без container queries) — компактный список;
-   таблица — когда колонке хватает ширины для всех колонок без скролла.
-   58rem (928px) — по замеру Playwright: таблица переполняется ниже ~850px,
-   а ниже ~930px колонка «Пользователь» уже 200px и длинное ФИО вытягивает
-   строку; колонка admin-кабинета на 1280px — 944px (таблица), на 1024px —
-   688px (список). */
+   Три режима: wide — таблица (здесь), compact и mobile — раскладки списка
+   (UsersCompactList.module.css, граница 40rem). Базовый вариант (и fallback
+   без container queries) — mobile-раскладка списка; таблица — когда колонке
+   хватает ширины для всех колонок без скролла.
+   56rem (896px) — по замеру Playwright: от ~900px колонка «Пользователь» не
+   уже ~270px и типичная строка — 58px; у́же имена переносятся (строки 77px+),
+   и строки compact-списка удобнее. Колонка admin-кабинета на 1280px — 936px
+   (таблица), на 1024px — 680px (compact). */
 .view {
   container-type: inline-size;
   container-name: users-view;
@@ -15,7 +17,7 @@
   display: none;
 }
 
-@container users-view (min-width: 58rem) {
+@container users-view (min-width: 56rem) {
   .wide {
     display: block;
   }

@@ -1,20 +1,27 @@
-import { RoleBadges, StatusBadge, UserRowActions, formatDate } from './UserCells';
+import {
+  RoleBadges, StatusBadge, UserMoreActions, UserPrimaryAction, formatDate,
+} from './UserCells';
 import styles from './UsersCompactList.module.css';
 
-const SKELETON_ITEMS = 3;
+const SKELETON_ITEMS = 4;
 
 /**
- * Компактное представление /admin/users для узкой колонки: список записей
- * (не таблица, переложенная в карточки). ФИО и email переносятся целиком,
- * метаданные — список «подпись — значение», действия — под ними и всегда в
- * ширине экрана. Данные, состояния и действия — те же, что у UsersTable.
+ * Список пользователей для колонки, где таблица не помещается: строки данных
+ * в одной карточке с разделителями, не карточки профиля. Одна разметка —
+ * две раскладки по ширине колонки (container query в CSS):
+ *   compact — строка: пользователь | роли и статус | действие ⋮,
+ *             под ней даты вторичной строкой;
+ *   mobile  — пользователь и ⋮, ниже роли и статус, даты, основное действие.
+ * Части записи: primary (ФИО), secondary (email), meta (роли, статус),
+ * actions (основное + меню), details (даты). Данные, состояния и действия —
+ * те же, что у UsersTable.
  */
 export default function UsersCompactList({ items, loading, error, actionContext }) {
   if (loading) {
     return (
       <ul className={styles.list} aria-busy="true" aria-label="Пользователи">
         {Array.from({ length: SKELETON_ITEMS }, (_, i) => (
-          <li key={i} className={styles.item}>
+          <li key={i} className={styles.skeletonItem}>
             <span className={styles.skeletonLine} />
             <span className={`${styles.skeletonLine} ${styles.skeletonShort}`} />
           </li>
@@ -35,31 +42,29 @@ export default function UsersCompactList({ items, loading, error, actionContext 
     <ul className={styles.list} aria-label="Пользователи">
       {items.map((item) => (
         <li key={item.uuid} className={`${styles.item}${item.deleted_at ? ` ${styles.itemDeleted}` : ''}`}>
-          <div className={styles.head}>
+          <div className={styles.who}>
             <h2 className={styles.name}>{item.full_name}</h2>
             <span className={styles.email}>{item.email}</span>
           </div>
 
-          <dl className={styles.meta}>
-            <div className={styles.metaRow}>
-              <dt>Роли</dt>
-              <dd><RoleBadges item={item} /></dd>
-            </div>
-            <div className={styles.metaRow}>
-              <dt>Статус</dt>
-              <dd><StatusBadge item={item} /></dd>
-            </div>
-            <div className={styles.metaRow}>
+          <div className={styles.badges}>
+            <RoleBadges item={item} />
+            <StatusBadge item={item} />
+          </div>
+
+          <dl className={styles.dates}>
+            <div className={styles.date}>
               <dt>Регистрация</dt>
               <dd>{formatDate(item.created_at)}</dd>
             </div>
-            <div className={styles.metaRow}>
+            <div className={styles.date}>
               <dt>Последний вход</dt>
               <dd>{formatDate(item.last_login)}</dd>
             </div>
           </dl>
 
-          <UserRowActions item={item} actionContext={actionContext} />
+          <UserPrimaryAction item={item} actionContext={actionContext} className={styles.primary} />
+          <UserMoreActions item={item} actionContext={actionContext} className={styles.more} />
         </li>
       ))}
     </ul>
