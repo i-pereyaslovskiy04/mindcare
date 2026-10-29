@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../auth/AuthContext';
 import { useAdminUsers } from '../hooks/useAdminUsers';
 import UsersFilters from '../components/UsersFilters';
-import UsersTable from '../components/UsersTable';
+import UsersDataView from '../components/UsersDataView';
 import UserCreateModal from '../components/UserCreateModal';
 import UserEditModal from '../components/UserEditModal';
 import UserLifecycleDialog from '../components/UserLifecycleDialog';
@@ -99,15 +99,20 @@ export default function UsersPage() {
         </p>
       )}
 
-      <UsersTable
+      {/* Одни данные и одни обработчики для таблицы и компактного списка;
+          диалоги ниже монтируются один раз. */}
+      <UsersDataView
         items={items}
         loading={loading}
         error={error}
-        currentUserId={user ? Number(user.id) : null}
-        onEdit={(u) => setEditTarget(u)}
-        onDeactivate={(u) => setLifecycleTarget({ user: u, mode: 'deactivate' })}
-        onRestore={(u) => setLifecycleTarget({ user: u, mode: 'restore' })}
-        onImpersonate={handleImpersonate}
+        actionContext={{
+          currentUserId: user ? Number(user.id) : null,
+          pendingImpersonation: Boolean(impersonating),
+          onEdit: (u) => setEditTarget(u),
+          onDeactivate: (u) => setLifecycleTarget({ user: u, mode: 'deactivate' }),
+          onRestore: (u) => setLifecycleTarget({ user: u, mode: 'restore' }),
+          onImpersonate: handleImpersonate,
+        }}
       />
 
       <Pagination

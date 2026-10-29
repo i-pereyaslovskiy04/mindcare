@@ -1,0 +1,119 @@
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50%       { opacity: 0.75; }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  background: var(--warm-white);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--espresso);
+  overflow-wrap: anywhere;
+}
+
+.email {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Подпись — значение: две колонки, на очень узкой ширине значение под подписью. */
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.metaRow {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: center;
+}
+
+.metaRow dt {
+  color: var(--text-light);
+}
+
+.metaRow dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-main);
+}
+
+@media (max-width: 359px) {
+  .metaRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.itemDeleted .name {
+  text-decoration: line-through;
+  color: var(--text-light);
+}
+
+.itemDeleted .head,
+.itemDeleted .meta {
+  opacity: 0.6;
+}
+
+/* ── States ── */
+.state {
+  margin: 0;
+  padding: 32px 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  background: var(--warm-white);
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-light);
+}
+
+.error {
+  color: var(--error);
+}
+
+.skeletonLine {
+  display: block;
+  height: 14px;
+  width: 70%;
+  border-radius: 4px;
+  background: var(--fog);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.skeletonShort {
+  width: 45%;
+}

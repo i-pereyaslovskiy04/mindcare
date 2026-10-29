@@ -3,44 +3,15 @@
   50%       { opacity: 0.75; }
 }
 
-.wrapper {
-  overflow-x: auto;
-  border-radius: 16px;
-  border: 1px solid var(--nav-border);
-  background: var(--warm-white);
-  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
-}
-
-.table {
+/* Колонки по содержимому, «Пользователь» забирает остаток; длинные ФИО и
+   email переносятся, поэтому таблица не шире своей карточки. */
+.userCol {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 13.5px;
 }
 
-.table thead tr {
-  border-bottom: 1px solid var(--nav-border);
-}
-
-.table th {
-  text-align: left;
-  padding: 11px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-light);
-  white-space: nowrap;
-}
-
-.table td {
-  padding: 12px 16px;
-  color: var(--text-main);
-  border-bottom: 1px solid var(--nav-border);
-  vertical-align: middle;
-}
-
-.table tbody tr:last-child td {
-  border-bottom: none;
+.actionsCol,
+.actionsCell {
+  width: 1%;
 }
 
 .row:hover td {
@@ -72,62 +43,54 @@
   font-size: 13.5px;
 }
 
-/* ── Cell variants ── */
+/* ── Пользователь ── */
 .name {
+  display: block;
   font-weight: 500;
   color: var(--espresso);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .email {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
-.roles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+/* ── Активность: подписи и даты двумя строками ── */
+.dates {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  margin: 0;
+  font-size: 12.5px;
+  white-space: nowrap;
 }
 
-.date {
+.dates dt {
   color: var(--text-light);
-  white-space: nowrap;
 }
 
-/* ── Row actions ── */
-.actionsCell {
-  text-align: right;
-  white-space: nowrap;
-  width: 1%;
+.dates dd {
+  margin: 0;
+  color: var(--text-main);
 }
 
+/* ── Действия: от левого края ячейки — основные кнопки строк стоят в одну
+   вертикаль, даже если у строки нет меню «⋮». ── */
 .actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  justify-content: flex-start;
 }
 
-/* ── Deleted rows ── */
-.rowDeleted td {
+/* ── Удалённые ранее: приглушены данные, но не действие «Восстановить» ── */
+.rowDeleted td:not(.actionsCell) {
   opacity: 0.5;
 }
 
 .rowDeleted .name {
   text-decoration: line-through;
   color: var(--text-light);
-}
-
-/* ── Статус lifecycle (ADR-028) ── */
-.status {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.statusNote {
-  font-size: 11.5px;
-  color: var(--text-light);
-  line-height: 1.3;
 }

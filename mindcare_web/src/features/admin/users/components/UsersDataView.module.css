@@ -1,0 +1,26 @@
+/* Представление выбирается по ширине колонки контента, а не viewport.
+   Базовый вариант (и fallback без container queries) — компактный список;
+   таблица — когда колонке хватает ширины для всех колонок без скролла.
+   58rem (928px) — по замеру Playwright: таблица переполняется ниже ~850px,
+   а ниже ~930px колонка «Пользователь» уже 200px и длинное ФИО вытягивает
+   строку; колонка admin-кабинета на 1280px — 944px (таблица), на 1024px —
+   688px (список). */
+.view {
+  container-type: inline-size;
+  container-name: users-view;
+  min-width: 0;
+}
+
+.wide {
+  display: none;
+}
+
+@container users-view (min-width: 58rem) {
+  .wide {
+    display: block;
+  }
+
+  .compact {
+    display: none;
+  }
+}
