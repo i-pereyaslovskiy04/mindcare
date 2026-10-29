@@ -131,7 +131,7 @@ function RecordList({
   if (items.length === 0) return <p className={styles.state}>{emptyText}</p>;
 
   return (
-    <ul className={styles.records} aria-label={label}>
+    <ul className={`${styles.records}${actions.menu ? '' : ` ${styles.noMenu}`}`} aria-label={label}>
       {items.map((item) => {
         const rows = meta ? meta(item) : [];
         return (

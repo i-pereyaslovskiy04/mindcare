@@ -52,6 +52,12 @@ function error(code, message = 'Ошибка') {
   return err;
 }
 
+// jsdom не применяет CSS: ResponsiveTable держит в DOM обе раскладки очереди
+// (таблицу и список). Строки ищем в таблице; отсутствие проверяем по всему DOM.
+const QUEUE = 'Заявки на подтверждение статуса студента';
+const queue = () => within(screen.getByRole('table', { name: QUEUE }));
+const findQueue = async () => within(await screen.findByRole('table', { name: QUEUE }));
+
 let changedEvents = 0;
 const onChanged = () => { changedEvents += 1; };
 
@@ -72,7 +78,7 @@ afterEach(() => {
 
 async function openCard() {
   render(<StudentVerificationsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: /Открыть заявку: Иван Тестов/ }));
+  fireEvent.click((await findQueue()).getByRole('button', { name: /Открыть заявку: Иван Тестов/ }));
   return screen.findByRole('dialog', { name: 'Заявка на подтверждение студента' });
 }
 
@@ -80,7 +86,7 @@ async function openCard() {
 
 test('очередь: только pending без поиска, фильтров и строки поиска нет, номера нет', async () => {
   render(<StudentVerificationsPage />);
-  expect(await screen.findByText('Иван Тестов')).toBeInTheDocument();
+  expect((await findQueue()).getByText('Иван Тестов')).toBeInTheDocument();
   expect(api.getStudentVerifications).toHaveBeenCalledWith({ page: 1, size: 20, status: 'pending' });
   expect(screen.queryByRole('searchbox')).toBeNull();
   expect(screen.queryByRole('group', { name: 'Статус заявки' })).toBeNull();
@@ -131,7 +137,7 @@ test('опустевшая последняя страница после реш
     page === 3 ? { items: [], total: 40 } : { items: many(20, 20), total: 40 },
   ));
   api.getStudentVerification.mockResolvedValue({ ...CARD, uuid: many(1, 40)[0].uuid });
-  fireEvent.click(screen.getByRole('button', { name: /Открыть заявку: Пользователь 40/ }));
+  fireEvent.click(queue().getByRole('button', { name: /Открыть заявку: Пользователь 40/ }));
   const dialog = await screen.findByRole('dialog');
   fireEvent.click(await within(dialog).findByRole('button', { name: 'Подтвердить' }));
   expect(await screen.findByText('21–40 из 40')).toBeInTheDocument();
@@ -142,7 +148,7 @@ test('опустевшая последняя страница после реш
 test('все записи исчезли на странице > 1 (total=0) → страница 1', async () => {
   await goToPage3(41);
   api.getStudentVerifications.mockResolvedValue({ items: [], total: 0 });
-  fireEvent.click(screen.getByRole('button', { name: /Открыть заявку: Пользователь 40/ }));
+  fireEvent.click(queue().getByRole('button', { name: /Открыть заявку: Пользователь 40/ }));
   const dialog = await screen.findByRole('dialog');
   fireEvent.click(await within(dialog).findByRole('button', { name: 'Подтвердить' }));
   expect(await screen.findByText('Заявок на проверке нет')).toBeInTheDocument();
@@ -329,7 +335,7 @@ const openButtons = () => screen.queryAllByRole('button', { name: /Открыт�
 function expectNoStaleView(oldRange, oldRow) {
   expect(screen.getByRole('status')).toHaveTextContent('Загрузка заявок…');
   expect(screen.queryByText(oldRange)).toBeNull();
-  expect(screen.queryByText(oldRow)).toBeNull();
+  expect(screen.queryAllByText(oldRow)).toHaveLength(0);
   expect(screen.queryByText(/Ожидают проверки:/)).toBeNull();
   expect(openButtons()).toHaveLength(0);               // открыть старую заявку нельзя
   expect(next()).toBeDisabled();
@@ -346,7 +352,7 @@ async function loadFirstPage(calls, total = 45) {
 test('«Далее»: пока страница 2 грузится, строки и диапазон страницы 1 недоступны', async () => {
   const calls = deferredServer();
   await loadFirstPage(calls);
-  expect(screen.getByRole('button', { name: 'Открыть заявку: Пользователь 0' })).toBeInTheDocument();
+  expect(queue().getByRole('button', { name: 'Открыть заявку: Пользователь 0' })).toBeInTheDocument();
 
   fireEvent.click(next());
   await waitFor(() => expect(calls).toHaveLength(2));
@@ -357,9 +363,9 @@ test('«Далее»: пока страница 2 грузится, строки
   await calls[1].respond(many(20, 20), 45);
   expect(await screen.findByText('21–40 из 45')).toBeInTheDocument();
   expect(screen.getByText('Страница 2 из 3')).toBeInTheDocument();
-  expect(screen.getByText('Пользователь 20')).toBeInTheDocument();
-  expect(screen.queryByText('Пользователь 0')).toBeNull();
-  expect(openButtons()).toHaveLength(20);
+  expect(queue().getByText('Пользователь 20')).toBeInTheDocument();
+  expect(screen.queryAllByText('Пользователь 0')).toHaveLength(0);
+  expect(queue().getAllByRole('button', { name: /Открыть заявку/ })).toHaveLength(20);
   expect(screen.queryByRole('status')).toBeNull();
   expect(next()).toBeEnabled();
   expect(prev()).toBeEnabled();
@@ -380,8 +386,8 @@ test('«Назад»: старые строки скрыты до ответа, 
 
   await calls[2].respond(many(20), 45);
   expect(await screen.findByText('1–20 из 45')).toBeInTheDocument();
-  expect(screen.getByText('Пользователь 0')).toBeInTheDocument();
-  expect(screen.queryByText('Пользователь 20')).toBeNull();
+  expect(queue().getByText('Пользователь 0')).toBeInTheDocument();
+  expect(screen.queryAllByText('Пользователь 20')).toHaveLength(0);
 });
 
 test('ошибка загрузки новой страницы: ошибка вместо старых строк, вернуться «Назад» можно', async () => {
@@ -392,7 +398,7 @@ test('ошибка загрузки новой страницы: ошибка в
   await calls[1].fail(new Error('Сервер недоступен'));
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Сервер недоступен');
-  expect(screen.queryByText('Пользователь 0')).toBeNull();
+  expect(screen.queryAllByText('Пользователь 0')).toHaveLength(0);
   expect(openButtons()).toHaveLength(0);
   expect(prev()).toBeEnabled();
 
@@ -417,7 +423,7 @@ async function reachPage3(calls) {
 
 async function decideRow40() {
   api.getStudentVerification.mockResolvedValue({ ...CARD, uuid: many(1, 40)[0].uuid });
-  fireEvent.click(screen.getByRole('button', { name: 'Открыть заявку: Пользователь 40' }));
+  fireEvent.click(queue().getByRole('button', { name: 'Открыть заявку: Пользователь 40' }));
   const dialog = await screen.findByRole('dialog');
   fireEvent.click(await within(dialog).findByRole('button', { name: 'Подтвердить' }));
   await waitFor(() => expect(api.approveStudentVerification).toHaveBeenCalled());
@@ -451,11 +457,58 @@ test('все заявки исчезли (total=0) на странице 3: за
   await waitFor(() => expect(calls).toHaveLength(5));
   expect(calls[4].page).toBe(1);
   expect(screen.getByRole('status')).toHaveTextContent('Загрузка заявок…');
-  expect(screen.queryByText('Пользователь 40')).toBeNull();
+  expect(screen.queryAllByText('Пользователь 40')).toHaveLength(0);
   expect(screen.queryByText('Заявок на проверке нет')).toBeNull();
 
   await calls[4].respond([], 0);
   expect(await screen.findByText('Заявок на проверке нет')).toBeInTheDocument();
   expect(screen.getByText(/Ожидают проверки:/)).toHaveTextContent('Ожидают проверки: 0');
   expect(screen.queryByRole('status')).toBeNull();
+});
+
+// ── раскладка очереди: shared ResponsiveTable ────────────────────────────────
+
+test('очередь на ResponsiveTable: колонки Пользователь, Факультет, Подана; одно действие «Открыть», без меню', async () => {
+  render(<StudentVerificationsPage />);
+  await findQueue();
+  expect(queue().getAllByRole('columnheader').map((th) => th.textContent))
+    .toEqual(['Пользователь', 'Факультет', 'Подана', 'Действия']);
+  expect(queue().getByText('ivan@donnu.ru')).toBeInTheDocument();
+  expect(queue().getByText('Юридический факультет')).toBeInTheDocument();
+
+  const record = within(screen.getByRole('list', { name: QUEUE })).getByRole('listitem');
+  expect(within(record).getByRole('heading', { name: 'Иван Тестов' })).toBeInTheDocument();
+  expect(within(record).getByText('Юридический факультет')).toBeInTheDocument();
+  expect(within(record).getByRole('term')).toHaveTextContent('Подана');
+  expect(within(record).getByRole('button', { name: 'Открыть заявку: Иван Тестов' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Другие действия/ })).toBeNull();
+});
+
+test('«Открыть» из списка открывает ту же карточку (чтение — только при открытии)', async () => {
+  render(<StudentVerificationsPage />);
+  const list = within(await screen.findByRole('list', { name: QUEUE }));
+  expect(api.getStudentVerification).not.toHaveBeenCalled();
+  fireEvent.click(list.getByRole('button', { name: 'Открыть заявку: Иван Тестов' }));
+  expect(await screen.findByRole('dialog', { name: 'Заявка на подтверждение студента' })).toBeInTheDocument();
+  expect(api.getStudentVerification).toHaveBeenCalledTimes(1);
+});
+
+test('отключённый аккаунт помечен в обеих раскладках', async () => {
+  api.getStudentVerifications.mockResolvedValue({
+    items: [{ ...ITEM, student: { ...ITEM.student, is_active: false } }], total: 1,
+  });
+  render(<StudentVerificationsPage />);
+  await findQueue();
+  expect(screen.getAllByText('Аккаунт отключён')).toHaveLength(2);
+});
+
+test('своей responsive-механики у очереди нет — только ResponsiveTable', () => {
+  const fs = jest.requireActual('fs');
+  const path = jest.requireActual('path');
+  const dir = path.join(__dirname, '../../features/studentVerification/ui');
+  const css = fs.readFileSync(path.join(dir, 'VerificationsTable.module.css'), 'utf8');
+  expect(css).not.toMatch(/@container|@media|container-type|<table|\.table\b/);
+  const jsx = fs.readFileSync(path.join(dir, 'VerificationsTable.jsx'), 'utf8');
+  expect(jsx).toMatch(/components\/UI\/ResponsiveTable\/ResponsiveTable/);
+  expect(jsx).not.toMatch(/<table/);
 });

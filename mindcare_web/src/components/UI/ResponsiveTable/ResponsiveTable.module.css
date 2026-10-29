@@ -158,6 +158,11 @@
   }
 }
 
+/* Меню у таблицы нет (actions.menu не передан) — слот не резервируется. */
+.records.noMenu {
+  --menu-slot: 0px;
+}
+
 .record + .record,
 .skeletonRecord + .skeletonRecord {
   border-top: 1px solid var(--nav-border);

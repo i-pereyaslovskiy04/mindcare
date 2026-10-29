@@ -61,6 +61,15 @@ test('isMuted помечает строку таблицы и запись сп�
   expect(within(list()).getAllByRole('listitem')[0]).not.toHaveClass('muted');
 });
 
+test('без меню (actions.menu не передан) слот «⋮» в записях не резервируется', () => {
+  const { unmount } = renderTable();
+  expect(list()).not.toHaveClass('noMenu');
+  unmount();
+  renderTable({ actions: { primary: (i) => <button type="button">Открыть {i.title}</button> } });
+  expect(list()).toHaveClass('noMenu');
+  expect(screen.queryByRole('button', { name: /^Меню/ })).toBeNull();
+});
+
 test('без status, columns и actions — только колонка identity', () => {
   renderTable({ status: undefined, columns: [], actions: {} });
   expect(within(table()).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Запись']);
