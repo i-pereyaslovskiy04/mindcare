@@ -6,6 +6,8 @@ import Checkbox from '../../components/UI/Checkbox/Checkbox';
 import ImageUpload from '../../components/UI/ImageUpload/ImageUpload';
 import Select from '../../components/UI/Select/Select';
 import Modal from '../../components/Modal/Modal';
+import ResponsiveTable from '../../components/UI/ResponsiveTable/ResponsiveTable';
+import ActionsMenu from '../../components/UI/ActionsMenu/ActionsMenu';
 import {
   getSupervisorBannerSlides,
   createBannerSlide,
@@ -42,6 +44,11 @@ function byPlacement(a, b) {
   return a.display_order - b.display_order;
 }
 
+// Битая ссылка на картинку: вместо значка браузера — плашка media.
+function hideBrokenImage(e) {
+  e.currentTarget.style.visibility = 'hidden';
+}
+
 function useBannerSlides(placement) {
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(false);
@@ -76,7 +83,6 @@ const EMPTY_FORM = {
   is_active: true,
 };
 
-const COLS = 6;
 
 export default function BannerSlidesPage() {
   const [placementFilter, setPlacementFilter] = useState('');
@@ -194,97 +200,80 @@ export default function BannerSlidesPage() {
         />
       </div>
 
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.thCenter}>Порядок</th>
-              <th aria-label="Картинка" />
-              <th>Заголовок</th>
-              <th>Страница</th>
-              <th>Статус</th>
-              <th aria-label="Действия" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={COLS} className={styles.empty}>Загрузка…</td></tr>
-            )}
-
-            {!loading && error && (
-              <tr>
-                <td colSpan={COLS} className={styles.errorCell}>
-                  Ошибка загрузки: {error}{' '}
-                  <Button variant="secondary" size="sm" onClick={refetch}>
-                    Повторить
-                  </Button>
-                </td>
-              </tr>
-            )}
-
-            {!loading && !error && items.length === 0 && (
-              <tr>
-                <td colSpan={COLS} className={styles.empty}>
-                  Нет слайдов. На соответствующей странице показывается стандартный баннер.
-                </td>
-              </tr>
-            )}
-
-            {!loading && !error && items.map(item => (
-              <tr key={item.id} className={styles.row}>
-                <td className={styles.count}>{item.display_order}</td>
-                <td>
-                  {item.image_url
-                    ? <img src={item.image_url} alt="" className={styles.thumb} />
-                    : <span className={styles.thumbEmpty}><Icon name="image" size={16} /></span>}
-                </td>
-                <td>
-                  <span className={styles.name}>{item.title}</span>
-                  {item.highlight && <span className={styles.nameSub}>{item.highlight}</span>}
-                </td>
-                <td>
-                  <Badge tone="neutral">{PLACEMENT_LABELS[item.placement] || item.placement}</Badge>
-                </td>
-                <td>
-                  <Badge tone={item.is_active ? 'success' : 'neutral'}>
-                    {item.is_active ? 'Активен' : 'Отключён'}
-                  </Badge>
-                </td>
-                <td className={styles.actionsCell}>
-                  <div className={styles.actions}>
-                    <Button
-                      variant="icon"
-                      size="sm"
-                      onClick={() => openEdit(item)}
-                      aria-label={`Изменить слайд «${item.title}»`}
-                      title="Изменить"
-                    >
-                      <Icon name="edit" size={15} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleActive(item)}
-                    >
-                      {item.is_active ? 'Отключить' : 'Включить'}
-                    </Button>
-                    <Button
-                      variant="icon"
-                      size="sm"
-                      tone="danger"
-                      onClick={() => { setDeleteTarget(item); setDeleteError(''); }}
-                      aria-label={`Удалить слайд «${item.title}»`}
-                      title="Удалить"
-                    >
-                      <Icon name="trash" size={15} />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Ошибка с «Повторить» — снаружи таблицы, как у Engagements; загрузку,
+          пусто и записи показывает shared ResponsiveTable. */}
+      {!loading && error ? (
+        <div className={styles.stateBox}>
+          <div className={styles.errorText}>Ошибка загрузки: {error}</div>
+          <Button variant="secondary" size="sm" onClick={refetch}>Повторить</Button>
+        </div>
+      ) : (
+        <ResponsiveTable
+          label="Слайды баннера"
+          items={items}
+          getKey={(item) => item.id}
+          loading={loading}
+          emptyText="Нет слайдов. На соответствующей странице показывается стандартный баннер."
+          identity={{
+            header: 'Слайд',
+            media: (item) => (item.image_url
+              ? <img src={item.image_url} alt="" onError={hideBrokenImage} />
+              : null),
+            primary: (item) => item.title,
+            secondary: (item) => item.highlight || null,
+          }}
+          status={{
+            header: 'Статус',
+            render: (item) => (
+              <Badge tone={item.is_active ? 'success' : 'neutral'}>
+                {item.is_active ? 'Активен' : 'Отключён'}
+              </Badge>
+            ),
+          }}
+          columns={[
+            {
+              key: 'placement',
+              header: 'Страница и порядок',
+              render: (item) => (
+                <span className={styles.params}>
+                  {PLACEMENT_LABELS[item.placement] || item.placement}
+                  <span aria-hidden="true"> · </span>
+                  <span className={styles.nowrap}>порядок {item.display_order}</span>
+                </span>
+              ),
+            },
+          ]}
+          meta={(item) => [
+            { label: 'Страница', value: PLACEMENT_LABELS[item.placement] || item.placement },
+            { label: 'Порядок', value: item.display_order },
+          ]}
+          actions={{
+            primary: (item) => (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => openEdit(item)}
+                aria-label={`Изменить слайд «${item.title}»`}
+              >
+                Изменить
+              </Button>
+            ),
+            menu: (item) => (
+              <ActionsMenu
+                triggerLabel={`Другие действия: слайд «${item.title}»`}
+                items={[
+                  item.is_active
+                    ? { id: 'toggle', label: 'Отключить', onSelect: () => toggleActive(item) }
+                    : { id: 'toggle', label: 'Включить', tone: 'success', onSelect: () => toggleActive(item) },
+                  { id: 'delete', label: 'Удалить', tone: 'danger',
+                    onSelect: () => { setDeleteTarget(item); setDeleteError(''); } },
+                ]}
+              />
+            ),
+          }}
+        />
+      )}
 
       <Modal
         open={!!modal}
