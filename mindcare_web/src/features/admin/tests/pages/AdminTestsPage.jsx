@@ -207,6 +207,8 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
         items={items}
         loading={loading}
         error={error}
+        context="moderator"
+        pending={{ preview: previewLoadingUuid, publish: publishingUuid, toggle: togglingUuid }}
         onPreview={handlePreview}
         onEdit={(item) => navigate(`${basePath}/${item.uuid}`)}
         onDelete={(item) => { setDeleteTarget(item); setDeleteError(''); }}
