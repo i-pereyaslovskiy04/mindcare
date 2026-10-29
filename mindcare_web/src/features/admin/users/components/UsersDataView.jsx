@@ -1,25 +1,50 @@
-import UsersTable from './UsersTable';
-import UsersCompactList from './UsersCompactList';
-import styles from './UsersDataView.module.css';
+import ResponsiveTable from '../../../../components/UI/ResponsiveTable/ResponsiveTable';
+import {
+  RoleBadges, StatusBadge, UserActivity, UserMoreActions, UserName, UserPrimaryAction, formatDate,
+} from './UserCells';
 
 /**
- * Данные текущей страницы /admin/users в двух представлениях: таблица
- * (широкая колонка) и компактный список (узкая). Оба получают одни и те же
- * items/состояния и один actionContext (обработчики страницы), поэтому смена
- * ширины не делает запросов и ничего не сбрасывает. Какое представление видно,
- * решает CSS по ширине самой колонки (container query); без поддержки
- * container queries остаётся компактный список — он работает на любой ширине.
+ * /admin/users на shared ResponsiveTable: здесь только содержимое (что
+ * показать), раскладка wide / compact / mobile — в ResponsiveTable. Все
+ * режимы получают одни items и один actionContext (обработчики страницы);
+ * диалоги монтирует UsersPage.
  */
 export default function UsersDataView({ items, loading, error, actionContext }) {
-  const props = { items, loading, error, actionContext };
   return (
-    <div className={styles.view}>
-      <div className={styles.wide}>
-        <UsersTable {...props} />
-      </div>
-      <div className={styles.compact}>
-        <UsersCompactList {...props} />
-      </div>
-    </div>
+    <ResponsiveTable
+      label="Пользователи"
+      items={items}
+      getKey={(item) => item.uuid}
+      loading={loading}
+      error={error ? `Ошибка загрузки: ${error}` : null}
+      emptyText="Пользователи не найдены"
+      isMuted={(item) => Boolean(item.deleted_at)}
+      identity={{
+        header: 'Пользователь',
+        primary: (item) => <UserName item={item} />,
+        secondary: (item) => item.email,
+      }}
+      status={{
+        header: 'Роли и статус',
+        width: '16rem',
+        render: (item) => (
+          <>
+            <RoleBadges item={item} />
+            <StatusBadge item={item} />
+          </>
+        ),
+      }}
+      columns={[
+        { key: 'activity', header: 'Активность', render: (item) => <UserActivity item={item} /> },
+      ]}
+      meta={(item) => [
+        { label: 'Регистрация', value: formatDate(item.created_at) },
+        { label: 'Последний вход', value: formatDate(item.last_login) },
+      ]}
+      actions={{
+        primary: (item) => <UserPrimaryAction item={item} actionContext={actionContext} />,
+        menu: (item) => <UserMoreActions item={item} actionContext={actionContext} />,
+      }}
+    />
   );
 }

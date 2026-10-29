@@ -93,3 +93,15 @@ test('role="tablist" — только в shared Tabs (локальных вкл�
   walk(SRC);
   expect(found.sort()).toEqual(['components/UI/Tabs/Tabs.jsx', ...OWN_TABLIST_ALLOWED].sort());
 });
+
+// Режимы wide / compact / mobile задаёт shared ResponsiveTable; фичи на нём
+// своих container queries для таблиц не пишут.
+test('/admin/users: своей responsive-механики таблицы нет — только ResponsiveTable', () => {
+  const dir = path.join(SRC, 'features/admin/users/components');
+  fs.readdirSync(dir).filter((f) => f.endsWith('.css')).forEach((file) => {
+    const css = fs.readFileSync(path.join(dir, file), 'utf8');
+    expect(css).not.toMatch(/@container|container-type/);
+  });
+  expect(read('features/admin/users/components/UsersDataView.jsx'))
+    .toMatch(/components\/UI\/ResponsiveTable\/ResponsiveTable/);
+});

@@ -1,0 +1,274 @@
+/*
+ * ResponsiveTable — режимы по ширине самого компонента (container query):
+ *
+ *   wide    ≥ 56rem (896px)  таблица;
+ *   compact ≥ 39rem (624px)  строки списка;
+ *   mobile  < 39rem          вертикальные строки списка (и fallback без
+ *                            container queries — работает на любой ширине).
+ *
+ * Границы — единый стандарт таблиц, по замеру Playwright на /admin/users:
+ * от ~900px колонка «основное» не уже ~270px и типичная строка таблицы 58px;
+ * у́же ~620px основная колонка строки упирается в 11rem, метки уходят в 3
+ * строки. 39rem, а не 40: колонка admin-кабинета сразу за 980px — 637px.
+ * Значения (56rem, 39rem) задаются ТОЛЬКО здесь; страницы своих media/
+ * container queries для таблиц не пишут. Другой набор границ — осознанное
+ * расширение API этого компонента.
+ */
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50%       { opacity: 0.75; }
+}
+
+.root {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.wide {
+  display: none;
+}
+
+@container (min-width: 56rem) {
+  .wide { display: block; }
+  .list { display: none; }
+}
+
+/* ══ wide: таблица ══ */
+
+/* Плотнее базовой геометрии TableShell: строка — 2 строки текста + поля. */
+.table thead th,
+.table tbody td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* «Основное» забирает остаток (ширину распределяет table layout по
+   содержимому); длинные значения переносятся — таблица не шире карточки. */
+.identityCol {
+  min-width: 12rem;
+}
+
+.actionsCol,
+.actionsCell {
+  width: 1%;
+}
+
+.row:hover td {
+  background: var(--cream);
+}
+
+.muted td:not(.actionsCell) {
+  opacity: 0.5;
+}
+
+.skeletonCell {
+  display: block;
+  height: 14px;
+  width: 80%;
+  border-radius: 4px;
+  background: var(--fog);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.table tbody .stateCell {
+  padding: 40px 16px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-light);
+}
+
+/* ══ общее для таблицы и списка ══ */
+
+.primary {
+  display: block;
+  margin: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--espresso);
+  overflow-wrap: anywhere;
+}
+
+.secondary {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Метки (бейджи) переносятся строками. */
+.statusContent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+/* Основное действие + меню; от левого края ячейки — основные действия
+   строк стоят в одну вертикаль, даже если у строки нет меню. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.actionPrimary > *,
+.recordPrimary > * {
+  white-space: nowrap;
+}
+
+/* Touch: основное действие не ниже 44px — как кнопка меню. */
+@media (hover: none) {
+  .actionPrimary > *,
+  .recordPrimary > * {
+    min-height: 44px;
+  }
+}
+
+/* ══ список (compact / mobile) ══ */
+
+/* Одна карточка, записи разделены линией — строки данных, не карточки. */
+.records {
+  --menu-slot: 36px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  background: var(--warm-white);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.04), 0 6px 18px rgba(var(--shadow-rgb), 0.06);
+  overflow: hidden;
+}
+
+/* Слот «⋮» фиксированной ширины: у записи без меню основное действие стоит
+   там же, где у соседних (сетка у каждой записи своя). */
+@media (hover: none) {
+  .records {
+    --menu-slot: 44px;
+  }
+}
+
+.record + .record,
+.skeletonRecord + .skeletonRecord {
+  border-top: 1px solid var(--nav-border);
+}
+
+/* mobile (база): основное и ⋮, ниже статус, затем детали и действие. */
+.record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto var(--menu-slot);
+  grid-template-areas:
+    'identity identity menu'
+    'status   status   status'
+    'meta     action   action';
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.identity      { grid-area: identity; min-width: 0; align-self: start; }
+.statusArea    { grid-area: status; }
+.meta          { grid-area: meta; min-width: 0; }
+.recordPrimary { grid-area: action; justify-self: end; align-self: end; }
+.recordMenu    { grid-area: menu; align-self: start; justify-self: end; }
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+
+.metaRow dt {
+  color: var(--text-light);
+}
+
+.metaRow dd {
+  margin: 0;
+  color: var(--text-main);
+}
+
+/* compact: основное | статус | действие ⋮, детали — вторичной строкой.
+   Основная колонка не уже 11rem; метки переносятся внутри своей колонки. */
+@container (min-width: 39rem) {
+  .record {
+    grid-template-columns: minmax(11rem, 1fr) auto auto var(--menu-slot);
+    grid-template-areas:
+      'identity status action menu'
+      'meta     meta   meta   meta';
+    gap: 6px 12px;
+  }
+
+  .identity,
+  .recordMenu,
+  .recordPrimary {
+    align-self: center;
+  }
+
+  .statusArea {
+    justify-content: flex-end;
+  }
+
+  .meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0 20px;
+  }
+}
+
+/* Приглушённая запись: данные, но не действия. */
+.record.muted .identity,
+.record.muted .statusArea,
+.record.muted .meta {
+  opacity: 0.55;
+}
+
+/* ── состояния списка ── */
+.state {
+  margin: 0;
+  padding: 32px 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 16px;
+  background: var(--warm-white);
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-light);
+}
+
+.table tbody .errorText,
+.state.errorText {
+  color: var(--error);
+}
+
+.skeletonRecord {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.skeletonLine {
+  display: block;
+  height: 13px;
+  width: 60%;
+  border-radius: 4px;
+  background: var(--fog);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.skeletonShort {
+  width: 35%;
+}

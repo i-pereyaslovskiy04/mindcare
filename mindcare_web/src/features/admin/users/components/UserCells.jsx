@@ -7,12 +7,21 @@ import { getUserActions } from '../userActions';
 import styles from './UserCells.module.css';
 
 /**
- * Общие части строки пользователя — одинаковы в таблице и компактном списке.
+ * Доменное содержимое строки пользователя для ResponsiveTable: имя, роли,
+ * статус, даты и действия. Раскладку (таблица / строки списка) задаёт
+ * shared ResponsiveTable.
  */
 
 export function formatDate(dateStr) {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('ru-RU');
+}
+
+/** ФИО; удалённый ранее — зачёркнут. */
+export function UserName({ item }) {
+  return item.deleted_at
+    ? <span className={styles.deletedName}>{item.full_name}</span>
+    : item.full_name;
 }
 
 /** Роль student неявно выдана всем staff — в перечне её не показываем (шум).
@@ -46,41 +55,31 @@ export function StatusBadge({ item }) {
   return <Badge tone="success">Активен</Badge>;
 }
 
+/** Колонка «Активность» таблицы: регистрация и вход двумя строками. */
+export function UserActivity({ item }) {
+  return (
+    <dl className={styles.activity}>
+      <dt>Регистрация</dt>
+      <dd>{formatDate(item.created_at)}</dd>
+      <dt>Вход</dt>
+      <dd>{formatDate(item.last_login)}</dd>
+    </dl>
+  );
+}
+
 /** Основное действие строки кнопкой (матрица — userActions). */
-export function UserPrimaryAction({ item, actionContext, className }) {
+export function UserPrimaryAction({ item, actionContext }) {
   const { primary } = getUserActions(item, actionContext);
   if (!primary) return null;
   return (
-    <Button
-      variant="secondary"
-      size="sm"
-      className={[styles.primary, className].filter(Boolean).join(' ')}
-      onClick={primary.onSelect}
-      aria-label={primary.ariaLabel}
-    >
+    <Button variant="secondary" size="sm" onClick={primary.onSelect} aria-label={primary.ariaLabel}>
       {primary.label}
     </Button>
   );
 }
 
 /** Остальные действия строки — меню «⋮»; нет действий — нет кнопки. */
-export function UserMoreActions({ item, actionContext, className }) {
+export function UserMoreActions({ item, actionContext }) {
   const { menu } = getUserActions(item, actionContext);
-  return (
-    <ActionsMenu
-      triggerLabel={`Другие действия: ${item.full_name}`}
-      items={menu}
-      className={className}
-    />
-  );
-}
-
-/** Основное действие + меню рядом (таблица и строка компактного списка). */
-export function UserRowActions({ item, actionContext, className }) {
-  return (
-    <div className={[styles.actions, className].filter(Boolean).join(' ')}>
-      <UserPrimaryAction item={item} actionContext={actionContext} />
-      <UserMoreActions item={item} actionContext={actionContext} />
-    </div>
-  );
+  return <ActionsMenu triggerLabel={`Другие действия: ${item.full_name}`} items={menu} />;
 }
