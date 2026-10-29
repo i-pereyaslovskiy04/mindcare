@@ -116,93 +116,33 @@
 .errorText { color: var(--error); text-align: center; }
 .emptyText { color: var(--text-muted); }
 
-/* Table */
-.tableWrap {
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid var(--nav-border);
-  background: var(--warm-white);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.88rem;
-}
-
-.table thead th {
-  padding: 13px 16px;
-  text-align: left;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-  background: var(--cream);
-  border-bottom: 1px solid var(--nav-border);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.table tbody tr {
-  border-bottom: 1px solid var(--nav-border);
-  transition: background 0.12s;
-}
-
-.table tbody tr:last-child { border-bottom: none; }
-
-.table tbody tr:hover { background: var(--cream); }
-
-.table td {
-  padding: 14px 16px;
-  vertical-align: middle;
-}
-
-.actionsCol { width: 180px; }
-.actionsCell { white-space: nowrap; }
-
-/* Name cell */
-.nameCell {
+/* Связь в таблице: психолог (ФИО и email) и статус. Раскладку строк и
+   колонок задаёт shared ResponsiveTable. */
+.psy {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--coffee), var(--mocha));
-  color: var(--milk);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.85rem;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.fullName {
+.psyName {
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--espresso);
+  overflow-wrap: anywhere;
 }
 
-.email {
-  font-size: 0.78rem;
+.psyEmail {
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--text-muted);
-  margin-top: 1px;
+  overflow-wrap: anywhere;
 }
 
 .noPsy {
   font-size: 0.82rem;
   color: var(--text-muted);
   font-style: italic;
-}
-
-/* Action buttons */
-.btnGroup {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 /* Pagination */
@@ -234,9 +174,6 @@
   .header { flex-direction: column; }
 
   .searchWrap { min-width: unset; width: 100%; }
-
-  .table thead th:nth-child(3),
-  .table tbody td:nth-child(3) { display: none; }
 }
 
 /* ── Модалка результатов психодиагностики (Этап E) ── */

@@ -2,7 +2,10 @@ import { useState } from 'react';
 import Icon from '../../components/Icon/Icon';
 import Button from '../../components/UI/Button/Button';
 import Badge from '../../components/UI/Badge/Badge';
+import ResponsiveTable from '../../components/UI/ResponsiveTable/ResponsiveTable';
+import ActionsMenu from '../../components/UI/ActionsMenu/ActionsMenu';
 import { useStudents } from '../../features/supervisor/hooks/useStudents';
+import { getEngagementActions } from '../../features/supervisor/engagementActions';
 import AssignModal from '../../features/supervisor/components/AssignModal';
 import StudentTestResults from '../../features/tests/ui/StudentTestResults';
 import UserContactsDialog from '../../features/contacts/ui/UserContactsDialog';
@@ -24,6 +27,26 @@ const STATUS_TONES = {
   completed:   'neutral',
   transferred: 'warning',
 };
+
+/** Связь студента: текущий психолог и статус (или «Не назначен»). */
+function EngagementLink({ student }) {
+  const eng = student.current_engagement;
+  const psy = eng?.psychologist;
+  if (!eng) return <span className={styles.noPsy}>Не назначен</span>;
+  return (
+    <>
+      {psy && (
+        <span className={styles.psy}>
+          <span className={styles.psyName}>{psy.full_name}</span>
+          <span className={styles.psyEmail}>{psy.email}</span>
+        </span>
+      )}
+      <Badge tone={STATUS_TONES[eng.status] || 'neutral'}>
+        {STATUS_LABELS[eng.status] || eng.status}
+      </Badge>
+    </>
+  );
+}
 
 export default function EngagementsPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, refetch } =
@@ -74,6 +97,15 @@ export default function EngagementsPage() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / 20));
+
+  // Одни обработчики для всех раскладок таблицы; диалоги — ниже, по одному.
+  const actionHandlers = {
+    onAssign: (s) => openModal('assign', s),
+    onTransfer: (s) => openModal('transfer', s),
+    onClose: (s) => openModal('close', s),
+    onResults: (s) => setResultsFor(s),
+    onContacts: (s) => setContactsFor(s),
+  };
 
   return (
     <div className={styles.page}>
@@ -127,113 +159,43 @@ export default function EngagementsPage() {
 
       {!loading && !error && items.length > 0 && (
         <>
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Студент</th>
-                  <th>Текущий психолог</th>
-                  <th>Статус</th>
-                  <th className={styles.actionsCol}>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(student => {
-                  const eng = student.current_engagement;
-                  const psy = eng?.psychologist;
-                  return (
-                    <tr key={student.id}>
-                      {/* Student */}
-                      <td>
-                        <div className={styles.nameCell}>
-                          <div className={styles.avatar}>
-                            {student.full_name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className={styles.fullName}>{student.full_name}</div>
-                            <div className={styles.email}>{student.email}</div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Psychologist */}
-                      <td>
-                        {psy ? (
-                          <div>
-                            <div className={styles.fullName}>{psy.full_name}</div>
-                            <div className={styles.email}>{psy.email}</div>
-                          </div>
-                        ) : (
-                          <span className={styles.noPsy}>Не назначен</span>
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td>
-                        {eng ? (
-                          <Badge tone={STATUS_TONES[eng.status] || 'neutral'}>
-                            {STATUS_LABELS[eng.status] || eng.status}
-                          </Badge>
-                        ) : (
-                          <Badge tone="neutral">—</Badge>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className={styles.actionsCell}>
-                        <div className={styles.btnGroup}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setResultsFor(student)}
-                          >
-                            Результаты
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setContactsFor(student)}
-                            aria-label={`Контакты: ${student.full_name}`}
-                          >
-                            Контакты
-                          </Button>
-                          {!eng ? (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => openModal('assign', student)}
-                            >
-                              Назначить
-                            </Button>
-                          ) : (
-                            <>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => openModal('transfer', student)}
-                              >
-                                Переназначить
-                              </Button>
-                              <Button
-                                variant="icon"
-                                size="sm"
-                                tone="danger"
-                                onClick={() => openModal('close', student)}
-                                title="Закрыть связь"
-                                aria-label="Закрыть связь"
-                              >
-                                <Icon name="trash" size={15} />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* Раскладка wide / compact / mobile — shared ResponsiveTable;
+              загрузка, ошибка с повтором и пусто — выше, как прежде. */}
+          <ResponsiveTable
+            label="Студенты и назначенные психологи"
+            items={items}
+            getKey={(s) => s.id}
+            identity={{
+              header: 'Студент',
+              primary: (s) => s.full_name,
+              secondary: (s) => s.email,
+            }}
+            status={{
+              header: 'Психолог и статус',
+              render: (s) => <EngagementLink student={s} />,
+            }}
+            actions={{
+              primary: (s) => {
+                const { primary } = getEngagementActions(s, actionHandlers);
+                return (
+                  <Button
+                    variant={primary.variant || 'secondary'}
+                    size="sm"
+                    onClick={primary.onSelect}
+                    aria-label={primary.ariaLabel}
+                  >
+                    {primary.label}
+                  </Button>
+                );
+              },
+              menu: (s) => (
+                <ActionsMenu
+                  triggerLabel={`Другие действия: ${s.full_name}`}
+                  items={getEngagementActions(s, actionHandlers).menu}
+                />
+              ),
+            }}
+          />
 
           {/* Pagination */}
           {totalPages > 1 && (
