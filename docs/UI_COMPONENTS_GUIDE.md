@@ -170,7 +170,7 @@ Badge — это display-only `<span>`, не button.
 **Использовать для:**
 - тема материала (MaterialCard, MaterialsItemPage)
 - тег новости (NewsItemPage; в NewsTable — через `TagList`)
-- категория статьи (ArticlesTable)
+- тип материала (категория) в ArticlesTable — через `TagList variant="category"`
 - словарный тег в TagsTable
 
 Tag — это display-only `<span>`, не button.
@@ -187,7 +187,7 @@ Tag — это display-only `<span>`, не button.
 
 ## TagList
 
-**Путь:** `src/components/UI/TagList/TagList.jsx` (2026-10-29, первый потребитель — `NewsTable`).
+**Путь:** `src/components/UI/TagList/TagList.jsx` (2026-10-29). Потребители: `NewsTable` (темы), `ArticlesTable` (темы и тип материала — второй `TagList` с `variant="category"`), без изменения API.
 
 Presentation-примитив для набора display-only тегов (`Tag`): раскладка с переносом, лимит видимых и кнопка «+N». API: `items [{ key, label }]`, `maxVisible?` (по умолчанию — все), `label` (`aria-label` списка, например «Темы»), `variant?` (вариант `Tag`, по умолчанию `admin`). Что показать, в каком порядке и сколько — решает фича; компонент данные не загружает, не фильтрует и о сущностях (новости, статьи) не знает.
 
@@ -326,7 +326,7 @@ Popover сам выбирает направление (вниз/вверх) и 
 
 ## ResponsiveTable
 
-Путь: `components/UI/ResponsiveTable/ResponsiveTable.jsx` (2026-10-29, извлечён из одобренного `/admin/users`). Потребители — три management-экрана, все без расширения API: `features/admin/users/components/UsersDataView.jsx`, `pages/supervisor/EngagementsPage.jsx` (связь «психолог + статус» — в слоте `status`), `features/studentVerification/ui/VerificationsTable.jsx` (одно действие без меню; состояния очереди — `pageLoading`, ошибка, пусто — страница держит снаружи, как и Engagements); первая content-таблица — `features/admin/news/components/NewsTable.jsx` (admin и supervisor, обложка — `identity.media`, темы — `TagList` в колонке wide и в `meta` списка, чтобы не сжимать заголовок). Бизнес-действия — доменные (`userActions.js`, `features/supervisor/engagementActions.js`). Слот `status` рассчитан на короткие метки и бейджи (ширина по содержимому); длинный текст — в `identity`, `meta` или `columns`. Без `actions.menu` слот «⋮» в записях не резервируется. Стандарт таблиц MindCare: страница описывает **содержимое**, компонент — **раскладку**. Своих `UsersTable + UsersCompactList`-пар с отдельной responsive-разметкой и CSS в фичах не заводить.
+Путь: `components/UI/ResponsiveTable/ResponsiveTable.jsx` (2026-10-29, извлечён из одобренного `/admin/users`). Потребители — три management-экрана, все без расширения API: `features/admin/users/components/UsersDataView.jsx`, `pages/supervisor/EngagementsPage.jsx` (связь «психолог + статус» — в слоте `status`), `features/studentVerification/ui/VerificationsTable.jsx` (одно действие без меню; состояния очереди — `pageLoading`, ошибка, пусто — страница держит снаружи, как и Engagements); content-таблицы — `features/admin/news/components/NewsTable.jsx` (admin и supervisor, обложка — `identity.media`, темы — `TagList` в колонке wide и в `meta` списка, чтобы не сжимать заголовок) и `features/admin/articles/components/ArticlesTable.jsx` (тот же стандарт без изменения API: `identity.media`, статус модерации в `status`, тип и темы — два `TagList` в одной колонке wide «Тип и темы» и двумя строками `meta` в списке). Бизнес-действия — доменные (`userActions.js`, `features/supervisor/engagementActions.js`). Слот `status` рассчитан на короткие метки и бейджи (ширина по содержимому); длинный текст — в `identity`, `meta` или `columns`. Без `actions.menu` слот «⋮» в записях не резервируется. Стандарт таблиц MindCare: страница описывает **содержимое**, компонент — **раскладку**. Своих `UsersTable + UsersCompactList`-пар с отдельной responsive-разметкой и CSS в фичах не заводить.
 
 Три режима по ширине самого компонента (container query, `container-type: inline-size`; не viewport): **wide** ≥ 56rem — семантическая таблица на `TableShell` (`caption`, `thead`, `th scope="col"`); **compact** ≥ 39rem — список строк в одной карточке, записи разделены линией: «основное + вторичное | статус | основное действие ⋮», детали одной вторичной строкой; **mobile** < 39rem — та же запись вертикальнее: основное и ⋮ сверху, статус, затем детали и основное действие. Mobile — также fallback без container queries. Границы заданы только в `ResponsiveTable.module.css` (по замеру Playwright на Users); страницы своих media/container queries для таблиц не пишут — другой набор границ вводится осознанным расширением API компонента.
 
