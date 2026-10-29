@@ -87,6 +87,7 @@ export default function AuditLogsPage() {
       >
         <AuditFilters
           source={source}
+          defaultRangeDays={options?.limits?.default_range_days}
           filters={filters}
           setFilters={setFilters}
           resetFilters={resetFilters}

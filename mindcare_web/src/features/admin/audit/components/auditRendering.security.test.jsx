@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import AuditDetailsModal from './AuditDetailsModal';
 import AuditEventsTable from './AuditEventsTable';
 import AuthEventsTable from './AuthEventsTable';
@@ -153,8 +153,9 @@ describe('таблицы игнорируют неожиданные поля о
       />,
     );
 
-    // Легитимные поля на месте — проверка не «пустая».
-    expect(screen.getByText('Тестовый Пользователь')).toBeInTheDocument();
+    // Легитимные поля на месте — проверка не «пустая». Утечки проверяются по
+    // всему DOM: и в таблице, и в списке узкой раскладки.
+    expect(within(screen.getByRole('table')).getByText('Тестовый Пользователь')).toBeInTheDocument();
     expectNoLeak(container);
   });
 });
@@ -193,7 +194,7 @@ describe('сквозной путь таблица → модалка', () => {
     }
 
     const { baseElement } = render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: /Подробнее/ }));
+    fireEvent.click(within(screen.getByRole('table')).getByRole('button', { name: /Подробнее/ }));
 
     expect(screen.getByText('Запись журнала')).toBeInTheDocument();
     expectNoLeak(baseElement);

@@ -5,6 +5,7 @@ import {
   SOURCE_DEFAULTS,
   buildQuery,
   computePagination,
+  countActiveFilters,
   defaultBySource,
   defaultCommon,
   isEntityRefAllowed,
@@ -334,5 +335,38 @@ describe('способ входа auth_log (Stage Social Auth 3B)', () => {
       });
       expect(query).not.toHaveProperty('auth_method');
     }
+  });
+});
+
+describe('countActiveFilters — «Фильтры · N»', () => {
+  const OPTS = { ...OPTIONS, auth_methods: ['password', 'yandex', 'vk'] };
+  const filtersOf = (source, over = {}) => ({
+    ...defaultCommon(7), ...SOURCE_DEFAULTS[source], ...over,
+  });
+  const count = (source, over) => countActiveFilters({
+    source, filters: filtersOf(source, over), options: OPTS, defaultRangeDays: 7,
+  });
+
+  test('умолчания журнала — 0 (пустые поля, стандартный период, порядок)', () => {
+    SOURCES.forEach((source) => expect(count(source)).toBe(0));
+    expect(count('audit_log', { order: 'asc' })).toBe(0);
+  });
+
+  test('каждое реально применённое значение — +1; период — один фильтр', () => {
+    expect(count('audit_log', { outcome: 'failure' })).toBe(1);
+    expect(count('audit_log', { outcome: 'failure', actorRole: 'admin', includeAccessEvents: true })).toBe(3);
+    expect(count('audit_log', { dateFrom: '2026-01-01' })).toBe(1);
+    expect(count('audit_log', { dateFrom: '2026-01-01', dateTo: '2026-01-05' })).toBe(1);
+    expect(count('audit_log', { actorUuid: '11111111-1111-4111-8111-111111111111' })).toBe(1);
+    expect(count('auth_log', { success: false, authMethod: 'vk' })).toBe(2);
+    expect(count('data_change_log', { tableName: 'meeting_types', recordId: '12' })).toBe(2);
+  });
+
+  test('не считаются: категория, непринятый идентификатор и значения вне справочника', () => {
+    expect(count('audit_log', { category: 'users' })).toBe(0);
+    expect(count('audit_log', { entityType: 'user', entityId: '5' })).toBe(1);
+    expect(count('audit_log', { entityType: 'appointment', entityId: 'abc' })).toBe(1);
+    expect(count('auth_log', { authMethod: 'telegram_raw' })).toBe(0);
+    expect(count('audit_log', { actorKind: 'anonymous' })).toBe(0);
   });
 });

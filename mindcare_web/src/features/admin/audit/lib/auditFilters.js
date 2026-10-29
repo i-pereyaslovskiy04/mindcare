@@ -264,3 +264,38 @@ export function buildQuery({ source, common, slice, page, size, options }) {
     record_id: ref.error ? null : ref.value,
   };
 }
+
+/** Значения, которые не фильтруют выдачу: страница, размер, порядок, период (считается отдельно). */
+const NOT_COUNTED_QUERY_KEYS = ['page', 'size', 'order', 'date_from', 'date_to'];
+
+/**
+ * Сколько фильтров реально применено к текущему журналу — для подписи
+ * свёрнутой панели («Фильтры · N»). Считается по тому, что УЙДЁТ в запрос
+ * (`buildQuery`), в сравнении с умолчаниями журнала: пустые и дефолтные
+ * значения, `category` (только группирует список событий), порядок сортировки
+ * и непринятые значения (идентификатор с ошибкой, класс участника вне
+ * справочника) не считаются. Период — один фильтр, если отличается от
+ * стандартного окна.
+ */
+export function countActiveFilters({ source, filters, options, defaultRangeDays }) {
+  const pick = (keys) => Object.fromEntries(keys.map((key) => [key, filters?.[key]]));
+  const sliceKeys = Object.keys(SOURCE_DEFAULTS[source] ?? {});
+  const actual = buildQuery({
+    source, common: pick(COMMON_KEYS), slice: pick(sliceKeys), page: 1, size: 1, options,
+  });
+  const base = buildQuery({
+    source,
+    common: defaultCommon(defaultRangeDays ?? FALLBACK_LIMITS.default_range_days),
+    slice: SOURCE_DEFAULTS[source] ?? {},
+    page: 1,
+    size: 1,
+    options,
+  });
+
+  let count = actual.date_from !== base.date_from || actual.date_to !== base.date_to ? 1 : 0;
+  Object.keys(actual).forEach((key) => {
+    if (NOT_COUNTED_QUERY_KEYS.includes(key)) return;
+    if ((actual[key] ?? null) !== (base[key] ?? null)) count += 1;
+  });
+  return count;
+}
