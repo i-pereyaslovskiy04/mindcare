@@ -18,6 +18,7 @@
 | Интерактивный фильтр-чип | `FilterChip` |
 | Статус / роль / состояние сущности | `Badge` |
 | Display-only тег контента | `Tag` |
+| Набор display-only тегов с лимитом «+N» | `TagList` |
 | Выпадающий список | `Select` |
 | Множественный выбор | `MultiSelect` |
 | Выбор даты (только дата) | `DateInput` |
@@ -168,7 +169,7 @@ Badge — это display-only `<span>`, не button.
 
 **Использовать для:**
 - тема материала (MaterialCard, MaterialsItemPage)
-- тег новости (NewsItemPage, NewsTable)
+- тег новости (NewsItemPage; в NewsTable — через `TagList`)
 - категория статьи (ArticlesTable)
 - словарный тег в TagsTable
 
@@ -181,6 +182,18 @@ Tag — это display-only `<span>`, не button.
 - статус / роль → используй `Badge`
 - removable chip → feature-specific
 - overlay тег внутри кликабельной hero-карточки (FeaturedNews.newsTagOverlay)
+
+---
+
+## TagList
+
+**Путь:** `src/components/UI/TagList/TagList.jsx` (2026-10-29, первый потребитель — `NewsTable`).
+
+Presentation-примитив для набора display-only тегов (`Tag`): раскладка с переносом, лимит видимых и кнопка «+N». API: `items [{ key, label }]`, `maxVisible?` (по умолчанию — все), `label` (`aria-label` списка, например «Темы»), `variant?` (вариант `Tag`, по умолчанию `admin`). Что показать, в каком порядке и сколько — решает фича; компонент данные не загружает, не фильтрует и о сущностях (новости, статьи) не знает.
+
+- Разметка: `ul` с `aria-label` → `li` → `Tag`. Пустой набор — ничего не рендерит (заглушку «—» показывает фича).
+- «+N» — настоящая `button` (`aria-expanded`, `aria-controls` на список, имя «+N: показать все, всего M»): раскрывает полный список на месте и сворачивает его («Свернуть»); работает мышью, клавиатурой (Tab, Enter, Space) и на touch (зона нажатия расширена без роста строки). Без popover и Escape.
+- Длинный тег не обрезается: текст переносится внутри «таблетки» (радиус как у однострочной), тег не шире контейнера — набор не держит ширину колонки и не даёт горизонтального скролла. Глобальный `Tag` не меняется (`nowrap` остаётся по умолчанию).
 
 ---
 
@@ -313,11 +326,11 @@ Popover сам выбирает направление (вниз/вверх) и 
 
 ## ResponsiveTable
 
-Путь: `components/UI/ResponsiveTable/ResponsiveTable.jsx` (2026-10-29, извлечён из одобренного `/admin/users`). Потребители — три management-экрана, все без расширения API: `features/admin/users/components/UsersDataView.jsx`, `pages/supervisor/EngagementsPage.jsx` (связь «психолог + статус» — в слоте `status`), `features/studentVerification/ui/VerificationsTable.jsx` (одно действие без меню; состояния очереди — `pageLoading`, ошибка, пусто — страница держит снаружи, как и Engagements). Бизнес-действия — доменные (`userActions.js`, `features/supervisor/engagementActions.js`). Слот `status` рассчитан на короткие метки и бейджи (ширина по содержимому); длинный текст — в `identity`, `meta` или `columns`. Без `actions.menu` слот «⋮» в записях не резервируется. Стандарт таблиц MindCare: страница описывает **содержимое**, компонент — **раскладку**. Своих `UsersTable + UsersCompactList`-пар с отдельной responsive-разметкой и CSS в фичах не заводить.
+Путь: `components/UI/ResponsiveTable/ResponsiveTable.jsx` (2026-10-29, извлечён из одобренного `/admin/users`). Потребители — три management-экрана, все без расширения API: `features/admin/users/components/UsersDataView.jsx`, `pages/supervisor/EngagementsPage.jsx` (связь «психолог + статус» — в слоте `status`), `features/studentVerification/ui/VerificationsTable.jsx` (одно действие без меню; состояния очереди — `pageLoading`, ошибка, пусто — страница держит снаружи, как и Engagements); первая content-таблица — `features/admin/news/components/NewsTable.jsx` (admin и supervisor, обложка — `identity.media`, темы — `TagList` в колонке wide и в `meta` списка, чтобы не сжимать заголовок). Бизнес-действия — доменные (`userActions.js`, `features/supervisor/engagementActions.js`). Слот `status` рассчитан на короткие метки и бейджи (ширина по содержимому); длинный текст — в `identity`, `meta` или `columns`. Без `actions.menu` слот «⋮» в записях не резервируется. Стандарт таблиц MindCare: страница описывает **содержимое**, компонент — **раскладку**. Своих `UsersTable + UsersCompactList`-пар с отдельной responsive-разметкой и CSS в фичах не заводить.
 
 Три режима по ширине самого компонента (container query, `container-type: inline-size`; не viewport): **wide** ≥ 56rem — семантическая таблица на `TableShell` (`caption`, `thead`, `th scope="col"`); **compact** ≥ 39rem — список строк в одной карточке, записи разделены линией: «основное + вторичное | статус | основное действие ⋮», детали одной вторичной строкой; **mobile** < 39rem — та же запись вертикальнее: основное и ⋮ сверху, статус, затем детали и основное действие. Mobile — также fallback без container queries. Границы заданы только в `ResponsiveTable.module.css` (по замеру Playwright на Users); страницы своих media/container queries для таблиц не пишут — другой набор границ вводится осознанным расширением API компонента.
 
-API: `label` (caption таблицы и `aria-label` списка), `items`, `getKey`, `loading`, `error` (готовый текст), `emptyText`, `isMuted(item)` (приглушить данные, не действия), `identity { header, primary, secondary? }` (первая колонка и заголовок записи `h2`), `status { header, width?, render }` (метки: вторая колонка и область статуса записи), `columns [{ key, header, width?, render }]` (прочие колонки — только wide), `meta(item) → [{ label, value }]` (детали записи, `dl`), `actions { primary?, menu? }` (готовые элементы фичи: основная кнопка и `ActionsMenu`; в таблице основное действие — от левого края ячейки, «⋮» — у правого, поэтому обе стоят в одну вертикаль при разной ширине основного). Порядок колонок wide: identity, status, columns, «Действия». Состояния страницы с особым поведением (например, ошибка с кнопкой «Повторить») фича может показывать сама, рендеря `ResponsiveTable` только при наличии записей. Нет `priority`, сортировки, фильтров, выделения, виртуализации — добавлять по реальной необходимости.
+API: `label` (caption таблицы и `aria-label` списка), `items`, `getKey`, `loading`, `error` (готовый текст), `emptyText`, `isMuted(item)` (приглушить данные, не действия), `identity { header, media?, primary, secondary? }` (первая колонка и заголовок записи `h2`; `media(item)` — необязательная универсальная картинка слева от текста — обложка, аватар — в квадрате фиксированного размера, заданного компонентом, с `object-fit: cover`; `null` у записи — нейтральная плашка того же размера, чтобы заголовки стояли в одну вертикаль; без `media` место не резервируется и разметка прежняя), `status { header, width?, render }` (метки: вторая колонка и область статуса записи), `columns [{ key, header, width?, render }]` (прочие колонки — только wide), `meta(item) → [{ label, value }]` (детали записи, `dl`), `actions { primary?, menu? }` (готовые элементы фичи: основная кнопка и `ActionsMenu`; в таблице основное действие — от левого края ячейки, «⋮» — у правого, поэтому обе стоят в одну вертикаль при разной ширине основного). Порядок колонок wide: identity, status, columns, «Действия». Состояния страницы с особым поведением (например, ошибка с кнопкой «Повторить») фича может показывать сама, рендеря `ResponsiveTable` только при наличии записей. Нет `priority`, сортировки, фильтров, выделения, виртуализации — добавлять по реальной необходимости.
 
 Компонент не знает о ролях, правах, API, диалогах и пагинации и ничего не импортирует из `features/` (проверяется тестом). Обе раскладки в DOM, скрытая — `display: none` (вне дерева доступности); все режимы получают одни `items` и одни обработчики; смена ширины не делает запросов и не сбрасывает фильтры, страницу и открытый диалог. Слот «⋮» фиксированной ширины (36px, на touch 44px), основное действие на touch не ниже 44px. Доменное содержимое (бейджи, даты, матрица действий) остаётся в фиче: у Users — `UserCells.jsx`, `userActions.js`.
 

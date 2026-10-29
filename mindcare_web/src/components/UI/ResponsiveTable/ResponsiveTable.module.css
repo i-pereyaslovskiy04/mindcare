@@ -100,6 +100,45 @@
   overflow-wrap: anywhere;
 }
 
+/* media: квадрат слева от основного и вторичного (обложка, аватар). Размер
+   задаёт компонент, а не фича: заголовки строк стоят в одну вертикаль; у
+   записи без картинки — нейтральная плашка того же размера. Картинка
+   заполняет квадрат с обрезкой (object-fit), вертикальная — тоже. */
+.withMedia {
+  --media-size: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.media {
+  flex: none;
+  width: var(--media-size);
+  height: var(--media-size);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--fog);
+}
+
+.media > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.identityText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* В записи списка картинка — у первой строки заголовка, а не посередине
+   длинного текста. */
+.identity .withMedia {
+  align-items: flex-start;
+}
+
 /* Метки (бейджи) переносятся строками. */
 .statusContent {
   display: flex;

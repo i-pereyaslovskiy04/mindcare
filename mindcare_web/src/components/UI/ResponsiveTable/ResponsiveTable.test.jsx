@@ -70,6 +70,45 @@ test('без меню (actions.menu не передан) слот «⋮» в з�
   expect(screen.queryByRole('button', { name: /^Меню/ })).toBeNull();
 });
 
+test('identity.media — картинка слева от текста в таблице и в записи списка', () => {
+  renderTable({
+    identity: {
+      header: 'Запись',
+      media: (i) => (i.off ? null : <img src={`/${i.id}.png`} alt="" data-testid={`media-${i.id}`} />),
+      primary: (i) => i.title,
+      secondary: (i) => i.sub,
+    },
+  });
+  const firstRow = within(table()).getAllByRole('row')[1];
+  const cell = within(firstRow).getAllByRole('cell')[0];
+  expect(cell).toHaveTextContent('Первая записьa@x.ru');
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(cell.querySelector('.withMedia > .media > img')).not.toBeNull();
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(cell.querySelector('.withMedia > .identityText > .primary')).toHaveTextContent('Первая запись');
+
+  const [first, second] = within(list()).getAllByRole('listitem');
+  const heading = within(first).getByRole('heading', { level: 2, name: 'Первая запись' });
+  expect(heading).toHaveClass('primary');
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(heading.closest('.identity .withMedia')).not.toBeNull();
+  // media вернул null — пустая плашка того же размера (заголовки в одну вертикаль)
+  // eslint-disable-next-line testing-library/no-node-access
+  const emptyMedia = second.querySelector('.media');
+  expect(emptyMedia).toBeEmptyDOMElement();
+  expect(screen.getAllByTestId('media-a')).toHaveLength(2);
+  expect(screen.queryByTestId('media-b')).toBeNull();
+});
+
+test('без identity.media место под картинку не резервируется (разметка прежняя)', () => {
+  const { container } = renderTable();
+  // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+  expect(container.querySelector('.withMedia, .media, .identityText')).toBeNull();
+  const cell = within(within(table()).getAllByRole('row')[1]).getAllByRole('cell')[0];
+  // eslint-disable-next-line testing-library/no-node-access
+  expect([...cell.children].map((el) => el.className)).toEqual(['primary', 'secondary']);
+});
+
 test('без status, columns и actions — только колонка identity', () => {
   renderTable({ status: undefined, columns: [], actions: {} });
   expect(within(table()).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Запись']);

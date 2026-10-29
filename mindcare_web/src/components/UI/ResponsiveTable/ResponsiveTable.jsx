@@ -19,8 +19,11 @@ const SKELETON_ITEMS = 4;
  *   items, getKey;
  *   loading, error (готовый текст), emptyText — состояния;
  *   isMuted(item)  — приглушить данные записи (действия не приглушаются);
- *   identity  — { header, primary(item), secondary?(item) }: первая колонка
- *               и заголовок записи списка (h2);
+ *   identity  — { header, media?(item), primary(item), secondary?(item) }:
+ *               первая колонка и заголовок записи списка (h2); media —
+ *               небольшая картинка слева от текста (обложка, аватар) в
+ *               квадрате фиксированного размера; null у записи — нейтральная
+ *               плашка того же размера; без media место не резервируется;
  *   status    — { header, width?, render(item) }: метки — вторая колонка и
  *               область статуса записи;
  *   columns   — [{ key, header, width?, render(item) }]: прочие колонки
@@ -41,6 +44,25 @@ export default function ResponsiveTable({
     <div className={styles.root}>
       <div className={styles.wide}><WideTable {...props} /></div>
       <div className={styles.list}><RecordList {...props} /></div>
+    </div>
+  );
+}
+
+/** Основное + вторичное; с media — картинка слева, текст справа. В списке
+    основное — заголовок записи (h2), в таблице — обычный текст ячейки. */
+function IdentityContent({ item, identity, heading = false }) {
+  const Primary = heading ? 'h2' : 'span';
+  const text = (
+    <>
+      <Primary className={styles.primary}>{identity.primary(item)}</Primary>
+      {identity.secondary && <span className={styles.secondary}>{identity.secondary(item)}</span>}
+    </>
+  );
+  if (!identity.media) return text;
+  return (
+    <div className={styles.withMedia}>
+      <div className={styles.media}>{identity.media(item)}</div>
+      <div className={styles.identityText}>{text}</div>
     </div>
   );
 }
@@ -96,8 +118,7 @@ function WideTable({
         {!loading && !error && items.map((item) => (
           <tr key={getKey(item)} className={`${styles.row}${isMuted?.(item) ? ` ${styles.muted}` : ''}`}>
             <td>
-              <span className={styles.primary}>{identity.primary(item)}</span>
-              {identity.secondary && <span className={styles.secondary}>{identity.secondary(item)}</span>}
+              <IdentityContent item={item} identity={identity} />
             </td>
             {status && <td><div className={styles.statusContent}>{status.render(item)}</div></td>}
             {columns.map((col) => <td key={col.key}>{col.render(item)}</td>)}
@@ -137,8 +158,7 @@ function RecordList({
         return (
           <li key={getKey(item)} className={`${styles.record}${isMuted?.(item) ? ` ${styles.muted}` : ''}`}>
             <div className={styles.identity}>
-              <h2 className={styles.primary}>{identity.primary(item)}</h2>
-              {identity.secondary && <span className={styles.secondary}>{identity.secondary(item)}</span>}
+              <IdentityContent item={item} identity={identity} heading />
             </div>
             {status && <div className={`${styles.statusArea} ${styles.statusContent}`}>{status.render(item)}</div>}
             {rows.length > 0 && (
