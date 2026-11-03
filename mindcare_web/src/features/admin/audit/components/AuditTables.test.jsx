@@ -73,6 +73,10 @@ const TABLES = [
   ['DataChangesTable', DataChangesTable, dclRow],
 ];
 
+// jsdom не применяет CSS: таблица (≥ 56rem) и список (< 56rem) оба в DOM.
+// Проверки содержимого строк — в таблице; список проверяется отдельно ниже.
+const table = () => screen.getByRole('table');
+
 function renderTable(Table, props = {}) {
   const onOpenDetails = jest.fn();
   const onRetry = jest.fn();
@@ -130,14 +134,14 @@ describe.each(TABLES)('%s — общие состояния и разметка'
 
   test('кнопка «Подробнее» имеет содержательный aria-label', () => {
     renderTable(Table, { items: [row()] });
-    const button = screen.getByRole('button', { name: /Подробнее/ });
+    const button = within(table()).getByRole('button', { name: /Подробнее/ });
     expect(button).toHaveAttribute('type', 'button');
     expect(button.getAttribute('aria-label')).toMatch(/22\.08\.2026, 14:03:07/);
   });
 
   test('время показано по Москве с секундами', () => {
     renderTable(Table, { items: [row()] });
-    expect(screen.getByText('22.08.2026, 14:03:07')).toBeInTheDocument();
+    expect(within(table()).getByText('22.08.2026, 14:03:07')).toBeInTheDocument();
   });
 
   test('BIGINT entry_id не приводится к Number', () => {
@@ -152,18 +156,18 @@ describe.each(TABLES)('%s — общие состояния и разметка'
 describe.each(TABLES)('%s — классы участника', (_name, Table, row) => {
   test('системный актор подписан «Система», без имени и email', () => {
     renderTable(Table, { items: [row({ actor: { kind: 'system' } })] });
-    expect(screen.getByText('Система')).toBeInTheDocument();
+    expect(within(table()).getByText('Система')).toBeInTheDocument();
     expect(screen.queryByText('Тестовый Пользователь')).toBeNull();
   });
 
   test('анонимный актор подписан отдельно', () => {
     renderTable(Table, { items: [row({ actor: { kind: 'anonymous' } })] });
-    expect(screen.getByText('Анонимный пользователь')).toBeInTheDocument();
+    expect(within(table()).getByText('Анонимный пользователь')).toBeInTheDocument();
   });
 
   test('недоступный актор подписан как удалённый или недоступный', () => {
     renderTable(Table, { items: [row({ actor: { kind: 'unavailable' } })] });
-    expect(screen.getByText('Удалённый или недоступный пользователь'))
+    expect(within(table()).getByText('Удалённый или недоступный пользователь'))
       .toBeInTheDocument();
   });
 
@@ -171,32 +175,32 @@ describe.each(TABLES)('%s — классы участника', (_name, Table, r
     renderTable(Table, {
       items: [row({ actor: { ...userActor, is_deleted_current: true } })],
     });
-    expect(screen.getByText('Тестовый Пользователь')).toBeInTheDocument();
-    expect(screen.getByText('Удалён')).toBeInTheDocument();
+    expect(within(table()).getByText('Тестовый Пользователь')).toBeInTheDocument();
+    expect(within(table()).getByText('Удалён')).toBeInTheDocument();
   });
 
   test('признак частичного сокрытия виден в строке', () => {
     renderTable(Table, { items: [row({ details_redacted: true })] });
-    expect(screen.getByText('Часть данных скрыта')).toBeInTheDocument();
+    expect(within(table()).getByText('Часть данных скрыта')).toBeInTheDocument();
   });
 });
 
 describe('AuditEventsTable', () => {
   test('русская подпись события и роль действия из строки журнала', () => {
     renderTable(AuditEventsTable, { items: [auditRow()] });
-    expect(screen.getByText('Администратор добавил роль')).toBeInTheDocument();
-    expect(screen.getByText('Администратор')).toBeInTheDocument();
+    expect(within(table()).getByText('Администратор добавил роль')).toBeInTheDocument();
+    expect(within(table()).getByText('Администратор')).toBeInTheDocument();
   });
 
   test('успех и отказ показаны разными badge', () => {
     const { unmount } = renderTable(AuditEventsTable, { items: [auditRow()] });
-    expect(screen.getByText('Успешно')).toBeInTheDocument();
+    expect(within(table()).getByText('Успешно')).toBeInTheDocument();
     unmount();
 
     renderTable(AuditEventsTable, {
       items: [auditRow({ outcome: 'failure', failure_code: 'access_denied' })],
     });
-    expect(screen.getByText('Отказ')).toBeInTheDocument();
+    expect(within(table()).getByText('Отказ')).toBeInTheDocument();
   });
 
   test('неизвестное событие получает нейтральную подпись, а не сырой код', () => {
@@ -209,14 +213,14 @@ describe('AuditEventsTable', () => {
         details_redacted: true,
       })],
     });
-    expect(screen.getByText('Неизвестное или историческое событие')).toBeInTheDocument();
+    expect(within(table()).getByText('Неизвестное или историческое событие')).toBeInTheDocument();
     expect(screen.queryByText('legacy_unknown_event')).toBeNull();
   });
 
   test('цель-человек показана сводкой, внутренний id отсутствует', () => {
     const { container } = renderTable(AuditEventsTable, { items: [auditRow()] });
-    expect(screen.getByText('Цель Действия')).toBeInTheDocument();
-    expect(screen.getByText('c***@example.test')).toBeInTheDocument();
+    expect(within(table()).getByText('Цель Действия')).toBeInTheDocument();
+    expect(within(table()).getByText('c***@example.test')).toBeInTheDocument();
     expect(container.textContent).not.toContain('№');
   });
 
@@ -227,8 +231,8 @@ describe('AuditEventsTable', () => {
         target: { entity_type: 'meeting_type', entity_ref: 42, user: null },
       })],
     });
-    expect(screen.getByText('Тип встречи')).toBeInTheDocument();
-    expect(screen.getByText('№ 42')).toBeInTheDocument();
+    expect(within(table()).getByText('Тип встречи')).toBeInTheDocument();
+    expect(within(table()).getByText('№ 42')).toBeInTheDocument();
   });
 });
 
@@ -249,22 +253,22 @@ describe('AuthEventsTable', () => {
         actor: { kind: 'anonymous' },
       })],
     });
-    expect(screen.getByText('Неудачная попытка входа')).toBeInTheDocument();
-    expect(screen.getByText('Отказ')).toBeInTheDocument();
-    expect(screen.getByText('Неверные учётные данные')).toBeInTheDocument();
+    expect(within(table()).getByText('Неудачная попытка входа')).toBeInTheDocument();
+    expect(within(table()).getByText('Отказ')).toBeInTheDocument();
+    expect(within(table()).getByText('Неверные учётные данные')).toBeInTheDocument();
   });
 
   test('email в момент события показан маскированным', () => {
     renderTable(AuthEventsTable, { items: [authRow()] });
-    expect(screen.getByText('l***@example.test')).toBeInTheDocument();
+    expect(within(table()).getByText('l***@example.test')).toBeInTheDocument();
   });
 });
 
 describe('DataChangesTable', () => {
   test('имена изменённых полей переведены подписями своей таблицы', () => {
     renderTable(DataChangesTable, { items: [dclRow()] });
-    expect(screen.getByText('Длительность, мин')).toBeInTheDocument();
-    expect(screen.getByText('Описание типа встречи')).toBeInTheDocument();
+    expect(within(table()).getByText('Длительность, мин')).toBeInTheDocument();
+    expect(within(table()).getByText('Описание типа встречи')).toBeInTheDocument();
   });
 
   test('одноимённое поле другой таблицы получает свою подпись', () => {
@@ -274,7 +278,7 @@ describe('DataChangesTable', () => {
         changed_fields: ['description'],
       })],
     });
-    expect(screen.getByText('Описание занятия')).toBeInTheDocument();
+    expect(within(table()).getByText('Описание занятия')).toBeInTheDocument();
     expect(screen.queryByText('Описание типа встречи')).toBeNull();
   });
 
@@ -292,8 +296,8 @@ describe('DataChangesTable', () => {
         },
       })],
     });
-    expect(screen.getByText('Изменённый Пользователь')).toBeInTheDocument();
-    expect(screen.getByText('ФИО')).toBeInTheDocument();
+    expect(within(table()).getByText('Изменённый Пользователь')).toBeInTheDocument();
+    expect(within(table()).getByText('ФИО')).toBeInTheDocument();
     expect(screen.queryByText(/№/)).toBeNull();
   });
 
@@ -306,7 +310,7 @@ describe('DataChangesTable', () => {
         details_redacted: true,
       })],
     });
-    expect(screen.getByText('Часть данных скрыта')).toBeInTheDocument();
+    expect(within(table()).getByText('Часть данных скрыта')).toBeInTheDocument();
   });
 });
 
@@ -323,7 +327,7 @@ describe('AuthEventsTable — способ входа (Stage Social Auth 3B)', (
     ['vk', 'VK ID'],
   ])('%s подписан как «%s»', (method, label) => {
     renderTable(AuthEventsTable, { items: [authRow({ auth_method: method })] });
-    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(within(table()).getByText(label)).toBeInTheDocument();
   });
 
   test('NULL — прочерк, а не пустая ячейка', () => {
@@ -338,7 +342,7 @@ describe('AuthEventsTable — способ входа (Stage Social Auth 3B)', (
   test('неожиданное значение не показывается сырым', () => {
     renderTable(AuthEventsTable, { items: [authRow({ auth_method: 'telegram_raw' })] });
     expect(screen.queryByText('telegram_raw')).toBeNull();
-    expect(screen.getByText('Неизвестный способ')).toBeInTheDocument();
+    expect(within(table()).getByText('Неизвестный способ')).toBeInTheDocument();
   });
 
   test.each([
@@ -355,7 +359,7 @@ describe('AuthEventsTable — способ входа (Stage Social Auth 3B)', (
         auth_method: 'yandex', actor: { kind: 'anonymous' },
       })],
     });
-    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(within(table()).getByText(label)).toBeInTheDocument();
     expect(screen.queryByText(code)).toBeNull();
   });
 });

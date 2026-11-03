@@ -4,82 +4,60 @@ import Icon from '../../../../components/Icon/Icon';
 import { ROLE_BADGE_TONES, ROLE_LABELS } from '../../../../shared/lib/roles';
 import { ACTOR_KIND_LABELS, ENTITY_TYPE_LABELS, labelFor } from '../lib/auditLabels';
 import { EMPTY_VALUE } from '../lib/auditFormatters';
+import { rowKey } from './rowKey';
 import styles from './AuditTableShell.module.css';
 
 const SKELETON_ROWS = 8;
 
-function SkeletonRows({ cols }) {
-  return Array.from({ length: SKELETON_ROWS }, (_, row) => (
-    <tr key={row}>
-      {Array.from({ length: cols }, (_, col) => (
-        <td key={col}><span className={styles.skeletonCell} /></td>
-      ))}
-    </tr>
-  ));
-}
-
 /**
- * Общая обвязка таблиц трёх журналов: заголовки, состояния загрузки/ошибки/
- * пустой выдачи и горизонтальный скролл.
+ * Широкое представление журнала (≥ 56rem, см. AuditLogView): плотная
+ * семантическая таблица. Колонки задаёт журнал — `columns: [{ key, label,
+ * render(item) }]`; последняя колонка «Подробнее» добавляется здесь и
+ * закреплена справа (sticky), поэтому кнопка видна, даже если очень длинное
+ * значение всё-таки вызовет локальный горизонтальный скролл.
  *
- * Скролл живёт на обёртке таблицы, а не на странице: строки журналов длинные
- * (подпись события + объект + участник), но фильтры и пагинация обязаны
- * оставаться на месте.
+ * Своей ширины у таблицы нет: длинные ФИО, объекты и маскированные email
+ * переносятся внутри ячеек, а время не переносится — это ось просмотра журнала.
+ * Состояния ошибки и пустой выдачи показывает AuditLogView.
  */
 export default function AuditTableShell({
-  caption,
-  columns,
-  loading,
-  error,
-  isEmpty,
-  emptyText,
-  onRetry,
-  children,
+  caption, columns, items, loading, detailsLabel, onOpenDetails,
 }) {
-  const cols = columns.length;
+  const cols = columns.length + 1;
 
   return (
     <div className={styles.wrapper}>
       <table className={styles.table}>
-        <caption className={styles.caption}>{caption}</caption>
+        <caption className="visually-hidden">{caption}</caption>
         <thead>
           <tr>
             {columns.map((column) => (
-              <th
-                key={column.key}
-                scope="col"
-                className={column.srOnly ? styles.srOnlyHead : undefined}
-              >
-                {column.label}
-              </th>
+              <th key={column.key} scope="col" className={column.className}>{column.label}</th>
             ))}
+            <th scope="col" className={styles.actionsCell}>
+              <span className="visually-hidden">Подробнее</span>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {loading && <SkeletonRows cols={cols} />}
+          {loading && Array.from({ length: SKELETON_ROWS }, (_, row) => (
+            <tr key={row}>
+              {Array.from({ length: cols }, (__, col) => (
+                <td key={col}><span className={styles.skeletonCell} /></td>
+              ))}
+            </tr>
+          ))}
 
-          {!loading && error && (
-            <tr>
-              <td colSpan={cols} className={styles.state}>
-                <p className={styles.errorText}>{error}</p>
-                {onRetry && (
-                  <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
-                    Повторить
-                  </Button>
-                )}
+          {!loading && items.map((item) => (
+            <tr key={rowKey(item)}>
+              {columns.map((column) => (
+                <td key={column.key} className={column.className}>{column.render(item)}</td>
+              ))}
+              <td className={styles.actionsCell}>
+                <DetailsButton onClick={() => onOpenDetails(item)} label={detailsLabel(item)} />
               </td>
             </tr>
-          )}
-
-          {!loading && !error && isEmpty && (
-            <tr>
-              <td colSpan={cols} className={styles.state}>
-                {emptyText}
-              </td>
-            </tr>
-          )}
-
-          {!loading && !error && !isEmpty && children}
+          ))}
         </tbody>
       </table>
     </div>
@@ -92,14 +70,18 @@ export default function AuditTableShell({
  * `system` / `anonymous` / `unavailable` — полноценные классы актора, а не
  * «пусто»: у них нет и не может быть ни имени, ни email. ФИО и email
  * пользователя — ТЕКУЩЕЕ состояние аккаунта, а не снимок на момент события,
- * поэтому подписаны как текущие и не выдаются за исторические.
+ * поэтому подписаны как текущие и не выдаются за исторические. Подпись
+ * `currentEmailLabel` нужна там, где рядом показан email на момент события.
+ * Класс актора — отдельный блок: следующая за ним строка не склеивается с ним.
  */
-export function ActorCell({ actor }) {
+export function ActorCell({ actor, currentEmailLabel }) {
   if (!actor || actor.kind !== 'user') {
     return (
-      <span className={styles.actorMuted}>
-        {labelFor(ACTOR_KIND_LABELS, actor?.kind, EMPTY_VALUE)}
-      </span>
+      <div className={styles.actor}>
+        <span className={styles.actorMuted}>
+          {labelFor(ACTOR_KIND_LABELS, actor?.kind, EMPTY_VALUE)}
+        </span>
+      </div>
     );
   }
 
@@ -109,7 +91,10 @@ export function ActorCell({ actor }) {
         {actor.display_name_current || EMPTY_VALUE}
       </span>
       {actor.email_masked && (
-        <span className={styles.actorEmail}>{actor.email_masked}</span>
+        <span className={styles.actorEmail}>
+          {currentEmailLabel && <span className={styles.emailLabel}>{currentEmailLabel} </span>}
+          {actor.email_masked}
+        </span>
       )}
       {actor.is_deleted_current && (
         <span className={styles.actorFlag}>
@@ -117,6 +102,16 @@ export function ActorCell({ actor }) {
         </span>
       )}
     </div>
+  );
+}
+
+/** Email на момент события (журнал входов) — с подписью, чтобы не путать с текущим. */
+export function EventEmail({ email }) {
+  return (
+    <span className={styles.actorEmail}>
+      <span className={styles.emailLabel}>Email события: </span>
+      {email}
+    </span>
   );
 }
 
@@ -156,7 +151,7 @@ export function TargetCell({ target }) {
   );
 }
 
-/** Кнопка «Подробнее». Кликабельна только она — не вся строка. */
+/** Кнопка «Подробнее» таблицы. Кликабельна только она — не вся строка. */
 export function DetailsButton({ onClick, label }) {
   return (
     <Button type="button" variant="icon" size="sm" onClick={onClick} aria-label={label} title={label}>

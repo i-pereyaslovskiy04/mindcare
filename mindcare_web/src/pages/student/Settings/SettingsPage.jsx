@@ -81,8 +81,6 @@ export default function SettingsPage() {
         label="Разделы настроек"
         idPrefix={TABS_PREFIX}
         fill
-        indicator="fill"
-        className={styles.tabs}
       />
 
       <Panel id={SECTION_PERSONAL} active={active}>

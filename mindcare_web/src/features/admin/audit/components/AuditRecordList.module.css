@@ -1,0 +1,204 @@
+/* Узкое представление журнала. База — mobile (< 39rem), compact — по
+   container query на корне AuditLogView. Значение 39rem — общий стандарт
+   таблиц MindCare (как у ResponsiveTable), здесь не меняется. */
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.record + .record,
+.skeleton + .skeleton {
+  border-top: 1px solid var(--outline);
+}
+
+/* mobile: время + событие и «Подробнее», ниже результат, участник и объект
+   подписаны и идут друг под другом. */
+.record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head    details'
+    'result  result'
+    'parties parties'
+    'meta    meta';
+  gap: 6px 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.head    { grid-area: head; min-width: 0; }
+.result  { grid-area: result; justify-self: start; }
+.parties { grid-area: parties; min-width: 0; }
+.meta    { grid-area: meta; min-width: 0; }
+.details { grid-area: details; align-self: start; }
+
+.heading {
+  margin: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.time {
+  display: block;
+  color: var(--on-surface-variant);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.event {
+  display: block;
+  color: var(--on-surface);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.redacted {
+  margin: 2px 0 0;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+}
+
+.parties {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* mobile: подпись слева, значение справа — без лишней строки на подпись. */
+.party {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0 8px;
+  min-width: 0;
+}
+
+.partyLabel {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+}
+
+.partyValue {
+  min-width: 0;
+}
+
+.arrow {
+  display: none;
+  color: var(--on-surface-variant);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
+}
+
+.metaRow dt {
+  color: var(--on-surface-variant);
+}
+
+.metaRow dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--on-surface);
+  overflow-wrap: anywhere;
+}
+
+/* Touch: «Подробнее» не ниже 44px. */
+@media (hover: none) {
+  .details > * {
+    min-height: 44px;
+  }
+}
+
+/* compact: «время + событие | результат | Подробнее», ниже
+   «участник → объект» одной строкой (подписи — только для скринридера). */
+@container (min-width: 39rem) {
+  .record {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'head    result  details'
+      'parties parties parties'
+      'meta    meta    meta';
+  }
+
+  .result {
+    justify-self: end;
+    align-self: start;
+  }
+
+  /* Участник и объект рядом: «участник → объект», высота — по большему. */
+  .parties {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: start;
+    gap: 0 10px;
+  }
+
+  .parties.single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .party {
+    display: block;
+  }
+
+  .partyLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .arrow {
+    display: block;
+  }
+
+  .meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0 18px;
+  }
+}
+
+/* ── загрузка ── */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.skeletonLine {
+  display: block;
+  height: 13px;
+  width: 60%;
+  border-radius: 6px;
+  background: var(--surface-container-high);
+  opacity: 0.7;
+}
+
+.skeletonShort {
+  width: 35%;
+}

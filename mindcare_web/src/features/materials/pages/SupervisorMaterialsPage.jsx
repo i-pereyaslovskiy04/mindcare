@@ -39,6 +39,7 @@ export default function SupervisorMaterialsPage() {
             onChange={setActive}
             label="Разделы материалов"
             idPrefix={TABS_PREFIX}
+            fill
             className={styles.tabs}
           />
           <div

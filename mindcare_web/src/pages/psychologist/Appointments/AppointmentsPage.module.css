@@ -29,32 +29,12 @@
   margin: 0;
 }
 
-/* Tabs */
-.tabs {
+/* Вкладки — shared components/UI/Tabs. Видимая панель — та же колонка с
+   интервалом, что у страницы; скрытую прячет атрибут hidden. */
+.tabPanel:not([hidden]) {
   display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--nav-border);
-}
-
-.tab {
-  padding: 8px 16px;
-  border: none;
-  background: none;
-  font-family: inherit;
-  font-size: var(--fs-body);
-  color: var(--text-muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.tab:hover { color: var(--text-main); }
-
-.tabActive {
-  color: var(--text-main);
-  font-weight: 600;
-  border-bottom-color: var(--espresso);
+  flex-direction: column;
+  gap: 20px;
 }
 
 /* Filter chips */

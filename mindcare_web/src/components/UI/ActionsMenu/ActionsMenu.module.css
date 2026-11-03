@@ -1,0 +1,90 @@
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--warm-white);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background: var(--sand);
+  color: var(--coffee);
+}
+
+.trigger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Touch: кнопка не меньше 44×44. */
+@media (hover: none) {
+  .trigger {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Всплывающий список: portal + position: fixed — не обрезается таблицей. */
+.menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--warm-white);
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(var(--shadow-rgb), 0.16);
+}
+
+.item {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.item:hover:not(:disabled),
+.item:focus-visible {
+  background: var(--sand);
+  outline: none;
+}
+
+.item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.danger { color: var(--error); }
+.danger:hover:not(:disabled),
+.danger:focus-visible { background: var(--error-bg); }
+
+.success { color: var(--success); }
+
+@media (hover: none) {
+  .item {
+    min-height: 44px;
+  }
+}

@@ -1,11 +1,5 @@
 /* StudentVerificationsPage — кабинет супервизора, подтверждение студентов ДонГУ */
 
-.page {
-  padding: 32px 28px;
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
 .header {
   display: flex;
   align-items: flex-start;
@@ -85,8 +79,4 @@
   color: var(--text-muted);
   min-width: 60px;
   text-align: center;
-}
-
-@media (max-width: 700px) {
-  .page { padding: 20px 14px; }
 }

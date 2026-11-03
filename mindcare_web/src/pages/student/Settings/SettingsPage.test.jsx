@@ -619,12 +619,12 @@ test('якорь #student-verification открывает «Личные дан�
 });
 
 describe('оформление разделов', () => {
-  it('вкладки настроек без подчёркивания (indicator=fill), роли и выбор сохранены', async () => {
+  it('вкладки настроек — shared Tabs (равные колонки), роли и выбор сохранены', async () => {
     useAuth.mockReturnValue(authState());
     render(<SettingsPage />);
     await screen.findByText('Профиль');
     const list = screen.getByRole('tablist', { name: 'Разделы настроек' });
-    expect(list.className).toMatch(/indicatorFill/);
+    expect(list.className).toMatch(/fill/);
     expect(screen.getAllByRole('tab')).toHaveLength(3);
     expect(screen.getByRole('tab', { name: 'Личные данные' })).toHaveAttribute('aria-selected', 'true');
   });

@@ -43,7 +43,7 @@ export default function StudentVerificationsPage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div>
       <div className={styles.header}>
         <div>
           <h1 className={styles.pageTitle}>Подтверждение студентов</h1>

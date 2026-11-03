@@ -44,12 +44,9 @@ const STATUS_OPTIONS = [
   { value: 'needs_changes', label: 'Нужны правки' },
 ];
 
-// Редактировать можно draft/needs_changes и published (Этап F2.1 — правка
-// published снимает его с публикации, требуется повторная модерация); удалять —
-// только draft/needs_changes. На проверке (in_review) решение уже не за автором
-// (ADR-016) — ни правка, ни удаление недоступны.
-const EDITABLE_STATUSES = ['draft', 'needs_changes', 'published'];
-const DELETABLE_STATUSES = ['draft', 'needs_changes'];
+// Какие действия доступны автору при каком статусе (правка draft/needs_changes/
+// published, удаление draft/needs_changes, на проверке — ни то ни другое) —
+// матрица features/admin/tests/lib/testActions.js, context 'author'.
 
 export default function PsychologistTestsPage() {
   const navigate = useNavigate();
@@ -162,12 +159,12 @@ export default function PsychologistTestsPage() {
         items={items}
         loading={loading}
         error={error}
+        context="author"
+        pending={{ preview: previewLoadingUuid, submit: submittingUuid }}
         onPreview={handlePreview}
         onEdit={handleEditClick}
         onDelete={(item) => { setDeleteTarget(item); setDeleteError(''); }}
         onSubmitForReview={handleSubmitForReview}
-        restrictEditToStatuses={EDITABLE_STATUSES}
-        restrictDeleteToStatuses={DELETABLE_STATUSES}
       />
 
       {pageCount > 1 && (

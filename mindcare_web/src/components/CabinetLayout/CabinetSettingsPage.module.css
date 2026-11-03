@@ -3,8 +3,13 @@
   to   { opacity: 1; transform: none; }
 }
 
+/* Страница-форма: одна узкая колонка по центру content-area кабинета
+   (как настройки студента) — общий левый и правый край у всех блоков. */
 .page {
   animation: fadeIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  width: 100%;
+  max-width: var(--cabinet-narrow-max);
+  margin-inline: auto;
 }
 
 /* ---- header ---- */
@@ -29,18 +34,14 @@
   max-width: 600px;
 }
 
-/* ---- two-column grid ---- */
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  align-items: flex-start;
+/* ---- разделы: вкладки и панели (раскладка как в настройках студента) ---- */
+.tabs {
+  margin-bottom: 18px;
 }
-.leftCol,
-.rightCol {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+
+/* Панель только прячется атрибутом hidden: display здесь не задаётся. */
+.panel {
+  min-width: 0;
 }
 
 /* ---- card base ---- */
@@ -170,11 +171,4 @@
   padding: 9px 12px;
   margin-bottom: 10px;
   line-height: 1.5;
-}
-
-/* ---- responsive ---- */
-@media (max-width: 980px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
 }

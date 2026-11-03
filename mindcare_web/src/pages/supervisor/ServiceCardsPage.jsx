@@ -5,6 +5,8 @@ import Button from '../../components/UI/Button/Button';
 import Checkbox from '../../components/UI/Checkbox/Checkbox';
 import ImageUpload from '../../components/UI/ImageUpload/ImageUpload';
 import Modal from '../../components/Modal/Modal';
+import ResponsiveTable from '../../components/UI/ResponsiveTable/ResponsiveTable';
+import ActionsMenu from '../../components/UI/ActionsMenu/ActionsMenu';
 import {
   getSupervisorServiceCards,
   createServiceCard,
@@ -12,6 +14,11 @@ import {
   deleteServiceCard,
 } from '../../api/serviceCards.api';
 import styles from './ServiceCardsPage.module.css';
+
+// Битая ссылка на картинку: вместо значка браузера — плашка media.
+function hideBrokenImage(e) {
+  e.currentTarget.style.visibility = 'hidden';
+}
 
 function useAdminServiceCards() {
   const [items, setItems]     = useState([]);
@@ -45,7 +52,6 @@ const EMPTY_FORM = {
   is_active: true,
 };
 
-const COLS = 5;
 
 export default function ServiceCardsPage() {
   const { items, loading, error, refetch } = useAdminServiceCards();
@@ -148,92 +154,70 @@ export default function ServiceCardsPage() {
         </Button>
       </div>
 
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.thCenter}>Порядок</th>
-              <th aria-label="Картинка" />
-              <th>Заголовок</th>
-              <th>Статус</th>
-              <th aria-label="Действия" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={COLS} className={styles.empty}>Загрузка…</td></tr>
-            )}
-
-            {!loading && error && (
-              <tr>
-                <td colSpan={COLS} className={styles.errorCell}>
-                  Ошибка загрузки: {error}{' '}
-                  <Button variant="secondary" size="sm" onClick={refetch}>
-                    Повторить
-                  </Button>
-                </td>
-              </tr>
-            )}
-
-            {!loading && !error && items.length === 0 && (
-              <tr>
-                <td colSpan={COLS} className={styles.empty}>
-                  Нет карточек. На странице «Услуги» показывается стандартный набор.
-                </td>
-              </tr>
-            )}
-
-            {!loading && !error && items.map(item => (
-              <tr key={item.id} className={styles.row}>
-                <td className={styles.count}>{item.display_order}</td>
-                <td>
-                  {item.image_url
-                    ? <img src={item.image_url} alt="" className={styles.thumb} />
-                    : <span className={styles.thumbEmpty}><Icon name="image" size={16} /></span>}
-                </td>
-                <td>
-                  <span className={styles.name}>{item.title}</span>
-                </td>
-                <td>
-                  <Badge tone={item.is_active ? 'success' : 'neutral'}>
-                    {item.is_active ? 'Активна' : 'Отключена'}
-                  </Badge>
-                </td>
-                <td className={styles.actionsCell}>
-                  <div className={styles.actions}>
-                    <Button
-                      variant="icon"
-                      size="sm"
-                      onClick={() => openEdit(item)}
-                      aria-label={`Изменить карточку «${item.title}»`}
-                      title="Изменить"
-                    >
-                      <Icon name="edit" size={15} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleActive(item)}
-                    >
-                      {item.is_active ? 'Отключить' : 'Включить'}
-                    </Button>
-                    <Button
-                      variant="icon"
-                      size="sm"
-                      tone="danger"
-                      onClick={() => { setDeleteTarget(item); setDeleteError(''); }}
-                      aria-label={`Удалить карточку «${item.title}»`}
-                      title="Удалить"
-                    >
-                      <Icon name="trash" size={15} />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Ошибка с «Повторить» — снаружи таблицы, как у Engagements; загрузку,
+          пусто и записи показывает shared ResponsiveTable. */}
+      {!loading && error ? (
+        <div className={styles.stateBox}>
+          <div className={styles.errorText}>Ошибка загрузки: {error}</div>
+          <Button variant="secondary" size="sm" onClick={refetch}>Повторить</Button>
+        </div>
+      ) : (
+        <ResponsiveTable
+          label="Карточки услуг"
+          items={items}
+          getKey={(item) => item.id}
+          loading={loading}
+          emptyText="Нет карточек. На странице «Услуги» показывается стандартный набор."
+          identity={{
+            header: 'Карточка',
+            media: (item) => (item.image_url
+              ? <img src={item.image_url} alt="" onError={hideBrokenImage} />
+              : null),
+            primary: (item) => item.title,
+          }}
+          status={{
+            header: 'Статус',
+            render: (item) => (
+              <Badge tone={item.is_active ? 'success' : 'neutral'}>
+                {item.is_active ? 'Активна' : 'Отключена'}
+              </Badge>
+            ),
+          }}
+          columns={[
+            {
+              key: 'order',
+              header: 'Порядок',
+              render: (item) => <span className={styles.params}>{item.display_order}</span>,
+            },
+          ]}
+          meta={(item) => [{ label: 'Порядок', value: item.display_order }]}
+          actions={{
+            primary: (item) => (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => openEdit(item)}
+                aria-label={`Изменить карточку «${item.title}»`}
+              >
+                Изменить
+              </Button>
+            ),
+            menu: (item) => (
+              <ActionsMenu
+                triggerLabel={`Другие действия: карточка «${item.title}»`}
+                items={[
+                  item.is_active
+                    ? { id: 'toggle', label: 'Отключить', onSelect: () => toggleActive(item) }
+                    : { id: 'toggle', label: 'Включить', tone: 'success', onSelect: () => toggleActive(item) },
+                  { id: 'delete', label: 'Удалить', tone: 'danger',
+                    onSelect: () => { setDeleteTarget(item); setDeleteError(''); } },
+                ]}
+              />
+            ),
+          }}
+        />
+      )}
 
       <Modal
         open={!!modal}

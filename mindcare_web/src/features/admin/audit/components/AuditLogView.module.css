@@ -1,0 +1,34 @@
+/*
+ * Переключение представлений журнала — по ширине самого слоя (container
+ * query, не viewport): ≥ 56rem — таблица, ниже — список (его compact/mobile —
+ * в AuditRecordList.module.css, 39rem). Значения — общий стандарт таблиц
+ * MindCare (как у ResponsiveTable); Audit их не меняет и своих не вводит.
+ */
+
+.root {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.wide {
+  display: none;
+}
+
+@container (min-width: 56rem) {
+  .wide { display: block; }
+  .list { display: none; }
+}
+
+.state {
+  padding: 28px 14px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--on-surface-variant);
+  text-align: center;
+}
+
+.errorText {
+  margin: 0 0 12px;
+  color: var(--error);
+}

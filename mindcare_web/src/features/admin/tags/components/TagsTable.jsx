@@ -1,101 +1,92 @@
-import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
-import Tag from '../../../../components/UI/Tag/Tag';
+import ResponsiveTable from '../../../../components/UI/ResponsiveTable/ResponsiveTable';
+import ActionsMenu from '../../../../components/UI/ActionsMenu/ActionsMenu';
 import styles from './TagsTable.module.css';
-
-const SKELETON_ROWS = 5;
-
-function SkeletonRow() {
-  return (
-    <tr>
-      {Array.from({ length: 6 }, (_, i) => (
-        <td key={i}><span className={styles.skeletonCell} /></td>
-      ))}
-    </tr>
-  );
-}
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('ru-RU');
 }
 
+const USAGES = [
+  ['article_count', 'Статьи'],
+  ['news_count', 'Новости'],
+  ['test_count', 'Тесты'],
+];
+
+// Только ненулевые счётчики: [{ label, value }].
+const usages = (item) => USAGES
+  .filter(([field]) => item[field] > 0)
+  .map(([field, label]) => ({ label, value: item[field] }));
+
+/**
+ * Справочник тем (/admin/tags, UI-подпись «Темы») на shared ResponsiveTable.
+ * Название темы — идентификатор записи: выводится полностью и переносится,
+ * без обрезки. Использование — ненулевые счётчики статей, новостей и
+ * тестов; без связей — «Не используется».
+ * Основное действие — «Переименовать», удаление — в меню «⋮» (страница
+ * предупреждает о связях по общему числу использований).
+ */
 export default function TagsTable({ items, loading, error, onEdit, onDelete }) {
-  const cols = 6;
-
   return (
-    <div className={styles.wrapper}>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Название</th>
-            <th className={styles.thCenter}>Статьи</th>
-            <th className={styles.thCenter}>Новости</th>
-            <th className={styles.thCenter}>Тесты</th>
-            <th>Создан</th>
-            <th aria-label="Действия" />
-          </tr>
-        </thead>
-        <tbody>
-          {loading && Array.from({ length: SKELETON_ROWS }, (_, i) => (
-            <SkeletonRow key={i} />
-          ))}
-
-          {!loading && error && (
-            <tr>
-              <td colSpan={cols} className={styles.error}>
-                Ошибка загрузки: {error}
-              </td>
-            </tr>
-          )}
-
-          {!loading && !error && items.length === 0 && (
-            <tr>
-              <td colSpan={cols} className={styles.empty}>
-                Темы не найдены
-              </td>
-            </tr>
-          )}
-
-          {!loading && !error && items.map((item) => {
-            const totalUsages = item.article_count + item.news_count + item.test_count;
+    <ResponsiveTable
+      label="Темы"
+      items={items}
+      getKey={(item) => item.uuid}
+      loading={loading}
+      error={error ? `Ошибка загрузки: ${error}` : null}
+      emptyText="Темы не найдены"
+      identity={{
+        header: 'Тема',
+        primary: (item) => item.name,
+        secondary: (item) => `создана ${formatDate(item.created_at)}`,
+      }}
+      columns={[
+        {
+          key: 'usage',
+          header: 'Использование',
+          render: (item) => {
+            const used = usages(item);
+            if (used.length === 0) return <span className={styles.unused}>Не используется</span>;
             return (
-              <tr key={item.uuid} className={styles.row}>
-                <td>
-                  <Tag variant="admin">{item.name}</Tag>
-                </td>
-                <td className={styles.count}>{item.article_count || '—'}</td>
-                <td className={styles.count}>{item.news_count    || '—'}</td>
-                <td className={styles.count}>{item.test_count    || '—'}</td>
-                <td className={styles.date}>{formatDate(item.created_at)}</td>
-                <td className={styles.actionsCell}>
-                  <div className={styles.actions}>
-                    <Button
-                      variant="icon"
-                      size="sm"
-                      onClick={() => onEdit?.(item)}
-                      aria-label={`Переименовать ${item.name}`}
-                      title="Переименовать"
-                    >
-                      <Icon name="edit" size={15} />
-                    </Button>
-                    <Button
-                      variant="icon"
-                      size="sm"
-                      tone="danger"
-                      onClick={() => onDelete?.(item, totalUsages)}
-                      aria-label={`Удалить ${item.name}`}
-                      title="Удалить"
-                    >
-                      <Icon name="trash" size={15} />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
+              <span className={styles.usage}>
+                {used.map(({ label, value }, i) => (
+                  <span key={label}>
+                    {i > 0 && <span aria-hidden="true"> · </span>}
+                    <span className={styles.nowrap}>{label} {value}</span>
+                  </span>
+                ))}
+              </span>
             );
-          })}
-        </tbody>
-      </table>
-    </div>
+          },
+        },
+      ]}
+      meta={(item) => {
+        const used = usages(item);
+        return used.length > 0 ? used : [{ label: 'Использование', value: 'нет' }];
+      }}
+      actions={{
+        primary: (item) => (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onEdit?.(item)}
+            aria-label={`Переименовать ${item.name}`}
+          >
+            Переименовать
+          </Button>
+        ),
+        menu: (item) => (
+          <ActionsMenu
+            triggerLabel={`Другие действия: ${item.name}`}
+            items={[{
+              id: 'delete', label: 'Удалить', tone: 'danger',
+              onSelect: () => onDelete?.(item, item.article_count + item.news_count + item.test_count),
+            }]}
+          />
+        ),
+      }}
+    />
   );
 }
