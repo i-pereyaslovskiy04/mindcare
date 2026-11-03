@@ -4,7 +4,8 @@
 Функции:
   ensure_database()     — создаёт БД если отсутствует (dev convenience)
   check_migrations()    — проверяет, что DB на head; бросает RuntimeError если нет
-  health_check()        — для /api/health endpoint
+  ping()                — публичный /api/health: только «БД отвечает»
+  diagnostics()         — /api/admin/health (только admin): ревизия, head, таблицы
   init_db()             — точка входа FastAPI: ensure_database + check + seed
 
 ╔══════════════════════════════════════════════════════════════╗
@@ -148,37 +149,56 @@ def check_migrations() -> None:
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 
-def health_check() -> dict:
+def ping() -> bool:
     """
-    Возвращает словарь с состоянием БД.
-    Используется в /api/health эндпоинте.
+    Публичная проверка доступности для мониторинга и скриптов запуска:
+    True, если БД отвечает на SELECT 1. Ни ревизии, ни числа таблиц, ни текста
+    исключения наружу не уходит (вызывающий отдаёт только статус).
+    """
+    from app.db.session import engine
 
-    Пример ответа:
-        {"status": "ok", "db": "connected", "tables": 41, "revision": "af13ad7a133c"}
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception as exc:   # noqa: BLE001 — только класс, без str(exc)
+        log.warning("[HEALTH] ping failed: %s", type(exc).__name__)
+        return False
+
+
+def diagnostics() -> dict:
     """
+    Подробная диагностика для администратора (/api/admin/health): текущая и
+    ожидаемая (head) ревизии Alembic и число таблиц в metadata. При сбое —
+    только класс исключения (без str(exc): там могут быть адрес БД, SQL).
+    """
+    import os
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from alembic.runtime.migration import MigrationContext
     from app.db.session import engine
     from app.db.base import Base
     import app.db.models  # noqa: F401
 
+    ini_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "alembic.ini",
+    )
     try:
-        from alembic.runtime.migration import MigrationContext
+        heads = sorted(ScriptDirectory.from_config(Config(ini_path)).get_heads())
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-            ctx = MigrationContext.configure(conn)
-            revision = ctx.get_current_revision()
-
+            revision = MigrationContext.configure(conn).get_current_revision()
         return {
             "status": "ok",
             "db": "connected",
-            "tables": len(Base.metadata.tables),
             "revision": revision,
+            "head_revisions": heads,
+            "revision_ok": revision in heads,
+            "tables": len(Base.metadata.tables),
         }
-    except Exception as exc:
-        return {
-            "status": "error",
-            "db": "disconnected",
-            "detail": str(exc),
-        }
+    except Exception as exc:   # noqa: BLE001 — только класс, без str(exc)
+        return {"status": "error", "db": "unavailable", "error_class": type(exc).__name__}
 
 
 # ─── Main entry point (FastAPI runtime) ──────────────────────────────────────

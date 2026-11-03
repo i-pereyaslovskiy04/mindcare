@@ -1,11 +1,15 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.deps import require_role, resolve_role_or_403
 from app.tests import service
-from app.tests.service import TestHasResults, TestTransitionError, TestTransitionForbidden
+from app.tests.guards import forbid_impersonation
+from app.tests.service import (
+    TestHasResults, TestStateChanged, TestTransitionError, TestTransitionForbidden,
+)
 from app.tests.schemas import (
     TestCreate,
     TestUpdate,
@@ -14,6 +18,7 @@ from app.tests.schemas import (
     TestAnalysisRead,
     TestPreviewScoreIn,
     TestPreviewScoreRead,
+    TestDecisionIn,
     TestReturnIn,
     TestPendingCountOut,
     PaginatedTestsResponse,
@@ -218,21 +223,45 @@ def delete_test(
 # Не литеральные сегменты на месте {uuid} — shadowing с /analyze, /preview-score
 # не грозит (та защита нужна только для литералов, совпадающих по позиции с uuid).
 
-@router.post("/{uuid}/publish", response_model=TestRead)
+def _state_changed(exc: TestStateChanged) -> JSONResponse:
+    """Решение принято по устаревшему состоянию (или повтор уже принятого):
+    без изменений, без success-события и уведомления. current_status позволяет
+    UI отличить повтор того же решения от конфликта."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": "Состояние теста изменилось. Обновите список и проверьте тест снова.",
+            "code": "test_state_changed",
+            "current_status": exc.current_status,
+        },
+    )
+
+
+@router.post(
+    "/{uuid}/publish", response_model=TestRead,
+    dependencies=[Depends(forbid_impersonation)],
+)
 def publish_test(
     uuid: str,
+    body: TestDecisionIn,
     request: Request,
     current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
-    """admin/supervisor публикуют тест (из draft/in_review/needs_changes)."""
+    """admin/supervisor публикуют тест (из draft/in_review/needs_changes).
+    Тело — состояние, которое видел проверяющий (expected_status +
+    expected_updated_at); иное под блокировкой → 409 test_state_changed."""
     ip, ua = _client(request)
     try:
         return service.publish_test(
             uuid,
             actor_id=int(current_user["id"]),
             actor_role=_acting_role(current_user),
+            expected_status=body.expected_status,
+            expected_updated_at=body.expected_updated_at,
             ip=ip, user_agent=ua,
         )
+    except TestStateChanged as exc:
+        return _state_changed(exc)
     except TestTransitionForbidden as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except TestTransitionError as exc:
@@ -241,7 +270,10 @@ def publish_test(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
-@router.post("/{uuid}/return", response_model=TestRead)
+@router.post(
+    "/{uuid}/return", response_model=TestRead,
+    dependencies=[Depends(forbid_impersonation)],
+)
 def return_test(
     uuid: str,
     body: TestReturnIn,
@@ -250,16 +282,21 @@ def return_test(
 ):
     """admin/supervisor возвращают тест на доработку (только из in_review).
     body.reason не логируется (audit metadata пустая — свободный текст); он
-    передаётся автору только в зашифрованном system-сообщении."""
+    передаётся автору только в зашифрованном system-сообщении. Ожидаемое
+    состояние — как у публикации."""
     ip, ua = _client(request)
     try:
         return service.return_for_changes(
             uuid,
             actor_id=int(current_user["id"]),
             actor_role=_acting_role(current_user),
+            expected_status=body.expected_status,
+            expected_updated_at=body.expected_updated_at,
             reason=body.reason,
             ip=ip, user_agent=ua,
         )
+    except TestStateChanged as exc:
+        return _state_changed(exc)
     except TestTransitionForbidden as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except TestTransitionError as exc:

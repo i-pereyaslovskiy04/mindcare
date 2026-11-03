@@ -11,7 +11,7 @@ from typing import Optional
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
 from app.tests import notifications, storage, scoring
-from app.tests.storage import TestHasResults  # noqa: F401  (ре-экспорт для routes)
+from app.tests.storage import TestHasResults, TestStateChanged  # noqa: F401  (ре-экспорт для routes)
 
 _CHOICE_TYPES = {"single_choice", "multiple_choice"}
 # Типы, участвующие в подсчёте баллов (free_text — не участвует).
@@ -426,30 +426,36 @@ def _apply_transition(
     *,
     actor_id: int, actor_role: str,
     reason: Optional[str] = None,
+    expected_status: Optional[str] = None,
+    expected_updated_at=None,
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
-    found = storage.get_status_and_author(uuid)
+    """
+    Проверка состояния, легальность, права, смена статуса и success-аудит —
+    в ОДНОЙ транзакции под FOR UPDATE строки теста (storage.transition_atomic).
+    created_by IS NULL (автор удалён, ON DELETE SET NULL) → is_author всегда
+    False: submit-for-review такого черновика недоступен никому, но
+    admin/supervisor публикуют его напрямую — тупика нет.
+    """
+    def decide(current: str, created_by: Optional[int]) -> str:
+        is_author = created_by is not None and created_by == actor_id
+        return _validate_transition(current, target, actor_role, is_author)
+
+    found = storage.transition_atomic(
+        uuid, target,
+        decide=decide,
+        expected_status=expected_status, expected_updated_at=expected_updated_at,
+        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
     if found is None:
         raise ValueError("Тест не найден")
-    # created_by IS NULL (автор аккаунта удалён, ON DELETE SET NULL) → is_author
-    # всегда False: submit-for-review для такого черновика недоступен НИКОМУ, но
-    # admin/supervisor всё равно публикуют его напрямую (draft → published — их
-    # право, не завязано на авторство) — тупика нет.
-    is_author = found["created_by"] is not None and found["created_by"] == actor_id
-    event = _validate_transition(found["status"], target, actor_role, is_author)
-    result = storage.set_status(
-        uuid, target,
-        event=event, actor_id=actor_id, actor_role=actor_role,
-        ip=ip, user_agent=user_agent,
-    )
-    if result is None:
-        raise ValueError("Тест не найден")
-    # Решение по тесту, отправленному на проверку, — автору system-сообщением
-    # (post-commit, soft-fail; см. app/tests/notifications.py).
-    if found["status"] == "in_review" and target in ("published", "needs_changes"):
+    result, previous = found
+    # Только реально принятое решение по проверке (статус под блокировкой был
+    # in_review) — автору system-сообщением после commit (soft-fail).
+    if previous == "in_review" and target in ("published", "needs_changes"):
         notifications.notify_author(
             "published" if target == "published" else "returned",
-            author_id=found["created_by"], actor_id=actor_id, test=result, reason=reason,
+            author_id=result.get("created_by"), actor_id=actor_id, test=result, reason=reason,
         )
     return result
 
@@ -471,17 +477,24 @@ def submit_for_review(
 
 def publish_test(
     uuid: str, *, actor_id: int, actor_role: str,
+    expected_status: str, expected_updated_at,
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
-    """admin/supervisor публикуют тест (из draft/in_review/needs_changes)."""
+    """admin/supervisor публикуют тест (из draft/in_review/needs_changes).
+    expected_status = in_review — решение по проверке (уведомляет автора);
+    draft/needs_changes — намеренная прямая публикация. Состояние иное, чем
+    видел проверяющий, → TestStateChanged (409) без изменений."""
     return _apply_transition(
         uuid, "published",
-        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+        actor_id=actor_id, actor_role=actor_role,
+        expected_status=expected_status, expected_updated_at=expected_updated_at,
+        ip=ip, user_agent=user_agent,
     )
 
 
 def return_for_changes(
     uuid: str, *, actor_id: int, actor_role: str,
+    expected_status: str, expected_updated_at,
     reason: Optional[str] = None,
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
@@ -490,6 +503,7 @@ def return_for_changes(
     return _apply_transition(
         uuid, "needs_changes",
         actor_id=actor_id, actor_role=actor_role, reason=reason,
+        expected_status=expected_status, expected_updated_at=expected_updated_at,
         ip=ip, user_agent=user_agent,
     )
 
@@ -585,11 +599,16 @@ def update_my_test(
     unpublish_event = (
         "test_unpublished_for_edit" if found["status"] == "published" else None
     )
-    result = storage.update_test(
-        uuid, data,
-        actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
-        unpublish_event=unpublish_event,
-    )
+    try:
+        result = storage.update_test(
+            uuid, data,
+            actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+            unpublish_event=unpublish_event, expected_status=found["status"],
+        )
+    except TestStateChanged:
+        # Статус сменился между гейтом и записью (например, тест только что
+        # опубликовали или отправили на проверку) — правка не применяется.
+        raise TestNotEditable("Статус теста изменился — обновите страницу и повторите правку")
     if result is None:
         raise ValueError("Тест не найден")
     return result
@@ -599,10 +618,15 @@ def delete_my_test(
     uuid: str, *, actor_id: int, actor_role: str = "psychologist",
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> None:
-    _own_editable_test(uuid, actor_id)
-    if not storage.delete_test(
-        uuid, actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
-    ):
+    found = _own_editable_test(uuid, actor_id)
+    try:
+        deleted = storage.delete_test(
+            uuid, actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
+            expected_status=found["status"],
+        )
+    except TestStateChanged:
+        raise TestNotEditable("Статус теста изменился — обновите страницу")
+    if not deleted:
         raise ValueError("Тест не найден")
 
 
@@ -803,15 +827,31 @@ def get_result(user_id: int, result_uuid: str) -> Optional[dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Staff-доступ к результатам (Этап E, ADR-016) — шаблон session_notes
+# Staff-доступ к результатам (Этап E, ADR-016; дополнение 2026-10-29)
 # ══════════════════════════════════════════════════════════════════════════════
+#
+# psychologist — список, деталь и ответы только при СТРОГОМ активном
+#   сопровождении с активным клиентом (клиент может иметь staff-роли); любой
+#   отказ — один и тот же ResultNotAvailable (route: 404 + test_result_read_failed);
+# supervisor   — список и деталь «чистого» активного студента (иначе 404),
+#   ответов нет (403);
+# admin        — доступа нет (роутер).
+# Проверка области — в storage ДО чтения содержимого. Чтение детали и ответов
+# фиксируется test_result_content_read (INDEPENDENT + RAISE, fail-closed):
+# событие пишется после чтения и ДО возврата; AuditError пробрасывается — route
+# отвечает 503 без содержимого. Список — metadata-only, без события.
 
 class ResultAccessError(Exception):
-    """Невалидная active-роль или нет scope-доступа → route мапит на 403."""
+    """Невалидная active-роль или действие недоступно роли → route мапит на 403."""
 
 
 class ResultNotFound(Exception):
-    """Студент/результат не найден → route мапит на 404."""
+    """supervisor: студент/результат не найден → route мапит на 404."""
+
+
+class ResultNotAvailable(Exception):
+    """psychologist: нет результата или области доступа → 404 + *_read_failed."""
+    failure_reason = "access_denied"
 
 
 # Роли с доступом к результатам (admin ИСКЛЮЧЁН по ADR-016). Консервативный
@@ -839,46 +879,66 @@ def _resolve_staff_result_role(role_names, requested: Optional[str]) -> str:
 
 def list_student_results(
     *, current_user: dict, requested_role: Optional[str],
-    student_uuid: str, page: int, size: int,
+    student_uuid, page: int, size: int,
 ) -> tuple[list[dict], int]:
-    """Metadata-список результатов студента. supervisor — любой; psychologist —
-    только при active/past engagement. Без audit (баллов нет — как metadata-list
-    заметок)."""
+    """Metadata-список результатов (без баллов и без события)."""
     role = _resolve_staff_result_role(current_user.get("roles") or [], requested_role)
-    student_id = storage.resolve_student_id(student_uuid)
-    if student_id is None:
-        raise ResultNotFound("Студент не найден")
-    if role == "psychologist" and not storage.psychologist_has_engagement(
-        int(current_user["id"]), student_id,
-    ):
-        raise ResultAccessError("Нет доступа к результатам этого студента")
-    return storage.find_results_for_student(student_id, page=page, size=size)
-
-
-def get_staff_result(
-    *, current_user: dict, requested_role: Optional[str], result_uuid: str,
-    ip: Optional[str] = None, user_agent: Optional[str] = None,
-) -> dict:
-    """Полный результат для staff + audit content-read. psychologist — только
-    результат своего студента (иначе 403 без audit)."""
-    role = _resolve_staff_result_role(current_user.get("roles") or [], requested_role)
-    found = storage.get_result_with_owner(result_uuid)
+    if role == "psychologist":
+        found = storage.list_results_for_psychologist(
+            int(current_user["id"]), student_uuid, page, size,
+        )
+        if found is None:
+            raise ResultNotAvailable()
+        return found
+    found = storage.list_results_for_supervisor(student_uuid, page, size)
     if found is None:
-        raise ResultNotFound("Результат не найден")
-    result, owner_id, result_id = found
-    if role == "psychologist" and not storage.psychologist_has_engagement(
-        int(current_user["id"]), owner_id,
-    ):
-        raise ResultAccessError("Нет доступа к этому результату")
+        raise ResultNotFound("Студент не найден")
+    return found
 
-    # Staff-чтение результата — read trail (INDEPENDENT/SOFT, provisional fail-open;
-    # facade сам гасит storage-сбой без raise). db НЕ передаём.
+
+def _record_content_read(actor_id: int, role: str, result_id: int, ip, user_agent) -> None:
+    # INDEPENDENT + RAISE (fail-closed): сбой записи → AuditError наружу,
+    # содержимое не возвращается. db НЕ передаётся.
     record_event(
         event="test_result_content_read",
-        actor=Actor.user(int(current_user["id"]), role),
+        actor=Actor.user(int(actor_id), role),
         target=Target("test_result", result_id),
         outcome=Outcome.SUCCESS,
         metadata={},
         context=build_request_context(ip=ip, user_agent=user_agent),
     )
-    return result
+
+
+def get_staff_result(
+    *, current_user: dict, requested_role: Optional[str], result_uuid,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Полный результат (баллы, шкалы, интерпретации) + content-read событие."""
+    role = _resolve_staff_result_role(current_user.get("roles") or [], requested_role)
+    found = storage.read_result_for_staff(
+        role=role, actor_id=int(current_user["id"]), result_uuid=result_uuid,
+    )
+    if found is None:
+        if role == "psychologist":
+            raise ResultNotAvailable()
+        raise ResultNotFound("Результат не найден")
+    _record_content_read(current_user["id"], role, found["result_id"], ip, user_agent)
+    return found["data"]
+
+
+def get_staff_result_answers(
+    *, current_user: dict, requested_role: Optional[str], result_uuid,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Ответы прохождения — только психологу клиента; то же content-read событие."""
+    role = _resolve_staff_result_role(current_user.get("roles") or [], requested_role)
+    if role != "psychologist":
+        raise ResultAccessError("Ответы на вопросы доступны только психологу клиента")
+    found = storage.read_result_for_staff(
+        role=role, actor_id=int(current_user["id"]), result_uuid=result_uuid,
+        with_answers=True,
+    )
+    if found is None:
+        raise ResultNotAvailable()
+    _record_content_read(current_user["id"], role, found["result_id"], ip, user_agent)
+    return found["data"]

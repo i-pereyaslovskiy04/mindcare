@@ -37,6 +37,21 @@ def _boom_encrypt(*a, **k):
     raise AssertionError("encrypt_text must not run before actor guard")
 
 
+def _locked_note(**over):
+    base = dict(id=777, version=1, content="enc:v1:old", note_type="general",
+                is_shared_with_client=False, updated_at=None)
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def _db_returning(note):
+    """db.query(...).filter(...).populate_existing().with_for_update().first() → note."""
+    db = MagicMock(name="db")
+    (db.query.return_value.filter.return_value.populate_existing.return_value
+     .with_for_update.return_value.first.return_value) = note
+    return db
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # 1. create/update mapping — единый author_id, target, metadata, db
 # ══════════════════════════════════════════════════════════════════════════
@@ -83,10 +98,10 @@ def test_update_mapping_single_actor_id(monkeypatch):
     calls = []
     monkeypatch.setattr(sn_storage, "record_event", lambda **kw: calls.append(kw))
 
-    note = SimpleNamespace(id=777, version=1)
-    db = MagicMock(name="db")
-    db.query.return_value.filter.return_value.first.return_value = note
+    note = _locked_note()
+    db = _db_returning(note)
     monkeypatch.setattr(sn_storage, "encrypt_text", lambda t: "enc:v1:x")
+    monkeypatch.setattr(sn_storage, "decrypt_text", lambda t: "старый")
     monkeypatch.setattr(sn_storage, "_note_to_dict", lambda n: {"id": n.id})
     monkeypatch.setattr(sn_storage, "SessionLocal", _mock_session(db))
 
@@ -184,10 +199,10 @@ def test_update_audit_failure_prevents_commit(monkeypatch):
         raise AuditStorageError("audit storage failure for session_note_updated")
     monkeypatch.setattr(sn_storage, "record_event", _boom)
 
-    note = SimpleNamespace(id=777, version=1)
-    db = MagicMock(name="db")
-    db.query.return_value.filter.return_value.first.return_value = note
+    note = _locked_note()
+    db = _db_returning(note)
     monkeypatch.setattr(sn_storage, "encrypt_text", lambda t: "enc:v1:x")
+    monkeypatch.setattr(sn_storage, "decrypt_text", lambda t: "старый")
     monkeypatch.setattr(sn_storage, "SessionLocal", _mock_session(db))
 
     with pytest.raises(AuditStorageError):
@@ -299,3 +314,53 @@ def test_no_direct_auditlog_writer_outside_facade():
         if "AuditLog(" in path.read_text(encoding="utf-8"):
             hits.append(rel)
     assert hits == []
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5. ADR-035: общий механизм правки — версия, no-op, CAS
+# ══════════════════════════════════════════════════════════════════════════
+
+def _apply(note, changes, *, expected_version=None, allow_shared=True, calls=None):
+    db = MagicMock(name="db")
+    return sn_storage._apply_note_update(
+        db, note, changes, expected_version=expected_version, allow_shared=allow_shared,
+        author_id=AUTHOR_ID, actor_role="psychologist", ip=None, user_agent=None,
+    )
+
+
+@pytest.fixture
+def note_env(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sn_storage, "record_event", lambda **kw: calls.append(kw))
+    monkeypatch.setattr(sn_storage, "decrypt_text", lambda t: "старый текст")
+    monkeypatch.setattr(sn_storage, "encrypt_text", lambda t: "enc:v1:new")
+    return calls
+
+
+def test_note_type_only_change_bumps_version(note_env):
+    note = _locked_note()
+    assert _apply(note, {"note_type": "plan"}) is True
+    assert note.version == 2 and note.note_type == "plan"
+    assert [c["event"] for c in note_env] == ["session_note_updated"]
+
+
+def test_true_noop_changes_nothing(note_env):
+    note = _locked_note()
+    assert _apply(note, {"content": "старый текст", "note_type": "general",
+                         "is_shared_with_client": False}) is False
+    assert note.version == 1 and note.content == "enc:v1:old" and note.updated_at is None
+    assert note_env == []
+
+
+def test_cas_conflict_before_any_change(note_env):
+    note = _locked_note(version=3)
+    with pytest.raises(sn_storage.NoteVersionConflict):
+        _apply(note, {"content": "новый"}, expected_version=2)
+    assert note.version == 3 and note.content == "enc:v1:old" and note_env == []
+
+
+def test_client_path_ignores_shared_flag(note_env):
+    note = _locked_note()
+    assert _apply(note, {"is_shared_with_client": True}, allow_shared=False) is False
+    assert note.is_shared_with_client is False and note_env == []

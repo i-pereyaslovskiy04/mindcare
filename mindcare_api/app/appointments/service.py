@@ -10,10 +10,17 @@
 - Групповые занятия не требуют подтверждения психолога.
 - Системные уведомления — soft-fail после основной транзакции.
 - Блокировки: advisory lock для индивидуальных слотов; FOR UPDATE для
-  ёмкости групповых занятий.
+  ёмкости групповых занятий; все writer'ы статуса индивидуальной встречи
+  (confirm/decline/student cancel/итог) берут строку FOR NO KEY UPDATE (ADR-035).
+- Итог индивидуальной встречи (completed/no_show) отмечает вручную психолог
+  этой встречи после её окончания; автоматического перевода нет.
 """
 
+import base64
+import binascii
+import json
 import re
+import uuid as _uuid
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
@@ -610,6 +617,19 @@ def list_student_appointments(
         )
 
 
+def list_student_upcoming_appointments(
+    student_id: int,
+    limit: int = 3,
+) -> list[dict]:
+    """Ближайшие будущие встречи студента (главная кабинета)."""
+    with SessionLocal() as db:
+        return storage.get_student_upcoming_appointments(
+            client_id=student_id,
+            limit=limit,
+            db=db,
+        )
+
+
 # ── Student cancel ────────────────────────────────────────────────────────────
 
 def student_cancel(
@@ -625,7 +645,9 @@ def student_cancel(
     today_msk = now_msk.date()
 
     with SessionLocal() as db:
-        appt = storage.get_appointment_by_uuid(uuid, db)
+        # FOR NO KEY UPDATE: проверка статуса по свежей версии строки (ADR-035) —
+        # отмена не перезапишет итог/отклонение, зафиксированные конкурентом.
+        appt = storage.get_appointment_by_uuid(uuid, db, for_update=True)
         if appt is None:
             raise AppointmentError("Запись не найдена", status_code=404)
         # Доступ: прямой студент (client_id) ИЛИ владелец привязанной карточки.
@@ -739,7 +761,7 @@ def psychologist_confirm(
     ip: Optional[str] = None, user_agent: Optional[str] = None,
 ) -> dict:
     with SessionLocal() as db:
-        appt = storage.get_appointment_by_uuid(uuid, db)
+        appt = storage.get_appointment_by_uuid(uuid, db, for_update=True)
         if appt is None:
             raise AppointmentError("Запись не найдена", status_code=404)
         if appt.psychologist_id != int(psychologist_user["id"]):
@@ -806,7 +828,7 @@ def psychologist_decline(
     user_agent: Optional[str] = None,
 ) -> dict:
     with SessionLocal() as db:
-        appt = storage.get_appointment_by_uuid(uuid, db)
+        appt = storage.get_appointment_by_uuid(uuid, db, for_update=True)
         if appt is None:
             raise AppointmentError("Запись не найдена", status_code=404)
         if appt.psychologist_id != int(psychologist_user["id"]):
@@ -817,6 +839,12 @@ def psychologist_decline(
             raise AppointmentError(
                 f"Нельзя отклонить статус {appt.status}",
                 status_code=422,
+            )
+        # ADR-035: после окончания подтверждённой встречи доступен только итог
+        # («Состоялась»/«Неявка»), отклонение его не подменяет. Время — сервера.
+        if appt.status == "confirmed" and storage.effective_end(appt) <= datetime.now(MOSCOW_TZ):
+            raise AppointmentError(
+                "Встреча уже прошла — отметьте её итог", status_code=409,
             )
         # Получатель уведомления: прямой студент или привязанный к карточке user
         # (захватываем ДО commit, пока appt в сессии).
@@ -859,6 +887,117 @@ def _notify_declined(
         )
     except Exception:
         pass
+
+
+# ── Итог встречи и встречи клиента (ADR-035) ────────────────────────────────
+
+AUDIT_CODE_INVALID_STATUS = "invalid_status"
+AUDIT_CODE_OUTCOME_CONFLICT = "outcome_conflict"
+AUDIT_CODE_NOT_ENDED = "not_ended"
+
+CLIENT_APPOINTMENTS_DEFAULT_SIZE = 20
+CLIENT_APPOINTMENTS_MAX_SIZE = 50
+
+
+class ClientAppointmentsNotAvailable(Exception):
+    """Нет строгого активного сопровождения с клиентом / клиент отключён → 404."""
+
+
+def psychologist_mark_outcome(
+    uuid: str,
+    psychologist_user: dict,
+    outcome: str,
+    *,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    confirmed → completed («Состоялась») | no_show («Неявка») — вручную, только
+    психолог этой встречи и только после её окончания (время сервера).
+    Автоматического перевода по времени нет.
+
+    Строка встречи — FOR NO KEY UPDATE: конкурирующие итоги, отклонение и
+    отмена сериализуются и видят свежий статус. Повтор того же итога — no-op
+    (changed=False, без события); иной конечный статус — 409 без изменений.
+    Смена статуса и appointment_completed/appointment_no_show — один commit;
+    сбой аудита откатывает переход (AuditError наружу → route 503).
+    """
+    if outcome not in storage.OUTCOME_STATUSES:
+        raise AppointmentError("Недопустимый итог встречи", status_code=422)
+    with SessionLocal() as db:
+        appt = storage.get_appointment_by_uuid(uuid, db, for_update=True)
+        if appt is None:
+            raise AppointmentError("Запись не найдена", status_code=404)
+        if appt.psychologist_id != int(psychologist_user["id"]):
+            raise AuditableAppointmentError(
+                "Нет доступа", 403, audit_code=AUDIT_CODE_ACCESS_DENIED,
+            )
+        if appt.status == outcome:
+            return {"uuid": str(appt.uuid), "status": appt.status, "changed": False}
+        if appt.status in storage.OUTCOME_STATUSES:
+            raise AuditableAppointmentError(
+                "Итог встречи уже отмечен", 409,
+                audit_code=AUDIT_CODE_OUTCOME_CONFLICT,
+            )
+        if appt.status != "confirmed":
+            raise AuditableAppointmentError(
+                "Итог можно отметить только у подтверждённой встречи", 409,
+                audit_code=AUDIT_CODE_INVALID_STATUS,
+            )
+        if storage.effective_end(appt) > datetime.now(MOSCOW_TZ):
+            raise AuditableAppointmentError(
+                "Итог можно отметить после окончания встречи", 409,
+                audit_code=AUDIT_CODE_NOT_ENDED,
+            )
+        actor, ctx = _audit_actor_ctx(
+            psychologist_user["id"], actor_role, ip, user_agent
+        )
+        result = storage.mark_outcome(appt, outcome, db, actor=actor, context=ctx)
+        db.commit()
+    return result
+
+
+def _encode_cursor(starts_at: datetime, appt_uuid) -> str:
+    raw = json.dumps([starts_at.isoformat(), str(appt_uuid)], separators=(",", ":"))
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _decode_cursor(value: Optional[str]) -> Optional[tuple]:
+    if value is None:
+        return None
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        stamp, raw_uuid = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+        starts_at = datetime.fromisoformat(stamp)
+        if starts_at.tzinfo is None:
+            raise ValueError("naive cursor")
+        return starts_at, _uuid.UUID(raw_uuid)
+    except (ValueError, TypeError, binascii.Error, UnicodeDecodeError):
+        raise AppointmentError("Некорректный курсор", status_code=422) from None
+
+
+def list_client_appointments(
+    psychologist_id: int, client_uuid, view: str, before: Optional[str], size: int,
+) -> dict:
+    """
+    Встречи выбранного клиента с текущим психологом (upcoming / history) —
+    выборка ограничена на backend обоими участниками; не редактор доступности.
+    """
+    cursor = _decode_cursor(before)
+    size = max(1, min(int(size), CLIENT_APPOINTMENTS_MAX_SIZE))
+    with SessionLocal() as db:
+        page = storage.list_client_appointments(
+            db, int(psychologist_id), client_uuid, view, cursor, size,
+        )
+    if page is None:
+        raise ClientAppointmentsNotAvailable()
+    items = page["items"]
+    next_cursor = (
+        _encode_cursor(items[-1]["starts_at"], items[-1]["uuid"])
+        if page["has_more"] and items else None
+    )
+    return {"items": items, "has_more": page["has_more"], "next_cursor": next_cursor}
 
 
 # ── MeetingType management (supervisor) ────────────────────────────────────

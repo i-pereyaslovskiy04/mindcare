@@ -258,6 +258,14 @@ _ALL += [
     # privileged content read — INDEPENDENT/SOFT (fail-open PROVISIONAL, §12)
     _audit_ok("session_note_content_read", {"supervisor"}, "session_note",
               tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.SOFT),
+    # ADR-035: отказ привязки при создании (чужая/несуществующая встреча или
+    # сопровождение, нет строгой области карточки — access_denied; связи
+    # разных клиентов — link_mismatch) и отказ правки (нет области/заметки —
+    # access_denied; устаревшая version — version_conflict). Текст не пишется.
+    _audit_fail("session_note_create_failed", {"psychologist"},
+                {"access_denied", "link_mismatch"}),
+    _audit_fail("session_note_update_failed", {"psychologist"},
+                {"access_denied", "version_conflict"}),
 ]
 
 # ── AUDIT_LOG: chat (INDEPENDENT/SOFT) ───────────────────────────────────────
@@ -319,14 +327,20 @@ _ALL.append(_audit_ok("test_duplicated", {"admin", "supervisor", "psychologist"}
 _ALL += [
     _audit_ok("test_consent_accepted", {"student"}, "consent_record"),
     _audit_ok("test_submitted", {"student"}, "test_result"),
-    # Этап E (ADR-016): staff-чтение результата студента. supervisor — любого,
-    # psychologist — только своего (active/past engagement); admin доступа НЕ имеет.
-    # INDEPENDENT/SOFT (provisional fail-open, как session_note_content_read).
+    # Этап E (ADR-016): staff-чтение результата/ответов. supervisor — «чистого»
+    # активного студента (деталь), psychologist — клиента строгого активного
+    # сопровождения (деталь и ответы); admin доступа НЕ имеет. Дополнение
+    # 2026-10-29: INDEPENDENT + RAISE (fail-closed, как assignment_content_read):
+    # сбой записи → 503 без баллов и ответов.
     _audit_ok("test_result_content_read", {"supervisor", "psychologist"},
               "test_result",
-              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.SOFT),
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+    # Отказ области психолога (нет результата / сопровождение не строго
+    # активное / клиент отключён) — единый 404. Отказ supervisor и общий
+    # role/impersonation-guard событие не пишут.
+    _audit_fail("test_result_read_failed", {"psychologist"}, {"access_denied"}),
     # Этап F (ADR-016): moderation workflow. ATOMIC/RAISE (default _audit_ok) —
-    # storage.set_status пишет событие в той же транзакции, что и смену status
+    # storage.transition_atomic пишет событие в той же транзакции (FOR UPDATE), что и смену status
     # (как test_created/test_updated). target — существующий entity_type "test".
     _audit_ok("test_submitted_for_review", {"psychologist"}, "test"),
     _audit_ok("test_published", {"admin", "supervisor"}, "test"),
@@ -393,6 +407,11 @@ _ALL += [
     _audit_ok("appointment_confirmed", {"psychologist"}, "appointment"),
     _audit_ok("appointment_declined", {"psychologist"}, "appointment"),
     _audit_ok("appointment_cancelled", {"student"}, "appointment"),
+    # ADR-035: итог индивидуальной встречи — вручную психолог этой встречи после
+    # её окончания (confirmed → completed | no_show). ATOMIC/RAISE в транзакции
+    # перехода; повтор того же итога — no-op без события.
+    _audit_ok("appointment_completed", {"psychologist"}, "appointment"),
+    _audit_ok("appointment_no_show", {"psychologist"}, "appointment"),
     _audit_ok("unregistered_student_card_created",
               {"supervisor", "admin"}, "unregistered_student_card"),
     _audit_ok("unregistered_student_card_updated",
@@ -421,6 +440,10 @@ _ALL += [
                 {"access_denied"}),
     _audit_fail("appointment_decline_failed", {"psychologist"},
                 {"access_denied"}),
+    # ADR-035: отказ отметки итога — чужая встреча, статус не confirmed,
+    # конфликт конечных статусов, встреча ещё не закончилась.
+    _audit_fail("appointment_outcome_failed", {"psychologist"},
+                {"access_denied", "invalid_status", "outcome_conflict", "not_ended"}),
     _audit_fail("unregistered_student_card_create_failed",
                 {"supervisor", "admin"}, {"consent_required"}),
 ]

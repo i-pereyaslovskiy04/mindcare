@@ -230,6 +230,9 @@ class TestListItem(BaseModel):
     tags:            list[TagRef]
     created_at:      datetime
     created_by_name: Optional[str]
+    # Токен версии для решений модерации (expected_updated_at): меняется при
+    # каждой правке и смене статуса.
+    updated_at:      Optional[datetime] = None
 
 
 class PaginatedTestsResponse(BaseModel):
@@ -246,10 +249,27 @@ class TestPendingCountOut(BaseModel):
     count: int
 
 
-class TestReturnIn(BaseModel):
+ModerationStatus = Literal["draft", "in_review", "needs_changes", "published"]
+
+
+class TestDecisionIn(BaseModel):
+    """
+    Решение модерации по конкретному состоянию теста (ADR-016, дополнение
+    2026-11-02): статус и updated_at, которые видел проверяющий. Если под
+    блокировкой состояние другое — 409 test_state_changed без изменений.
+    expected_status = in_review — решение по проверке; draft/needs_changes —
+    намеренная прямая публикация.
+    """
+    expected_status:     ModerationStatus
+    expected_updated_at: datetime
+
+    model_config = {"extra": "forbid"}
+
+
+class TestReturnIn(TestDecisionIn):
     """Возврат теста на доработку (in_review → needs_changes). reason необязателен —
     свободный текст в response не логируется (audit metadata пустая)."""
-    reason: Optional[str] = None
+    reason: Optional[str] = Field(default=None, max_length=2000)
 
 
 # ── student-facing (Этап B) ───────────────────────────────────────────────────
@@ -380,6 +400,41 @@ class PaginatedStaffResultsResponse(BaseModel):
     total: int
     page:  int
     size:  int
+
+
+class StaffAnswerOptionRead(BaseModel):
+    """Выбранный вариант: текст (то же имя, что у варианта при прохождении) и
+    его медиа. value_score/id не отдаются — ключ теста скрыт."""
+    option_text: str
+    media:       list[MediaOut]
+
+
+class StaffAnswerItemRead(BaseModel):
+    """Вопрос теста и сохранённый ответ клиента. answered=False — «Нет ответа»."""
+    position:      int
+    question_text: str
+    question_type: str
+    answered:      bool
+    media:         list[MediaOut]
+    options:       list[StaffAnswerOptionRead]
+    scale_value:   Optional[int]
+    scale_min:     Optional[int]
+    scale_max:     Optional[int]
+    free_text:     Optional[str]
+
+
+class StaffResultAnswersRead(BaseModel):
+    """
+    Ответы прохождения для психолога клиента (ADR-016, дополнение 2026-10-29).
+    test_title — АКТУАЛЬНОЕ название теста (snapshot нет); ответы — сохранённые
+    значения. order="test_order": вопросы в порядке теста, фактический порядок
+    показа клиенту (перемешивание) не сохраняется.
+    """
+    result_uuid:  str
+    test_title:   Optional[str]
+    submitted_at: datetime
+    order:        Literal["test_order"]
+    items:        list[StaffAnswerItemRead]
 
 
 class ConsentStatusRead(BaseModel):

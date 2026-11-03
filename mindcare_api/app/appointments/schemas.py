@@ -92,6 +92,39 @@ class AppointmentDetailRead(AppointmentRead):
     student: Optional[StudentRef] = None
     psychologist: Optional[PsychologistRef] = None
     unregistered_student_card: Optional[UnregisteredStudentCardBrief] = None
+    # ADR-035: confirmed и уже закончилась (время сервера) — можно отметить итог.
+    can_mark_outcome: bool = False
+
+
+class AppointmentOutcomeIn(BaseModel):
+    """Итог индивидуальной встречи: «Состоялась» / «Неявка» (ADR-035)."""
+    outcome: Literal["completed", "no_show"]
+
+    model_config = {"extra": "forbid"}
+
+
+class AppointmentOutcomeRead(BaseModel):
+    uuid: str
+    status: str
+    changed: bool
+
+
+class ClientAppointmentItem(BaseModel):
+    """Встреча клиента с текущим психологом — для карточки клиента (без ПДн)."""
+    uuid: str
+    starts_at: datetime
+    ends_at: datetime
+    status: str
+    meeting_type_name: Optional[str] = None
+    modality: Optional[str] = None
+    via_card: bool
+    can_mark_outcome: bool
+
+
+class ClientAppointmentsPage(BaseModel):
+    items: list[ClientAppointmentItem]
+    has_more: bool
+    next_cursor: Optional[str] = None
 
 
 class AppointmentDecline(BaseModel):

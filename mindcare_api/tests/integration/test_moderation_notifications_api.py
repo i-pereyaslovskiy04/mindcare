@@ -20,6 +20,7 @@ from app.core.encryption import decrypt_text
 from app.db.models import Article, ChatConversation, ChatMessage, Test as TestModel
 from app.db.session import SessionLocal
 from app.tests import storage as tests_storage
+from tests.integration.moderation_helpers import decision
 from tests.integration.assignments_helpers import (
     SECRET, auth, blob, cancel, create_ok, engage, marks, rows_since, user, uuid_of,
 )
@@ -249,13 +250,14 @@ def test_tests_pending_count_and_author_notifications(client, actors):
     assert _events(m) == []
     assert client.get(url, headers=auth(a["ptoken"])).status_code == 403
 
-    r = client.post(f"/api/admin/tests/{t1['uuid']}/publish", headers=auth(a["stoken"]))
+    r = client.post(f"/api/admin/tests/{t1['uuid']}/publish", headers=auth(a["stoken"]),
+                    json=decision(t1['uuid']))
     assert r.status_code == 200
     (published,) = _messages(a["pid"], f"test_published:test:{t1['uuid']}")
     assert t1["title"] in published and "/psychologist/tests" in published
 
     r = client.post(f"/api/admin/tests/{t2['uuid']}/return", headers=auth(a["stoken"]),
-                    json={"reason": REASON})
+                    json=decision(t2['uuid'], reason=REASON))
     assert r.status_code == 200 and REASON not in r.text
     (returned,) = _messages(a["pid"], f"test_returned:test:{t2['uuid']}")
     assert t2["title"] in returned and REASON in returned
@@ -267,7 +269,7 @@ def test_direct_publication_of_draft_is_not_notified(client, actors):
     a = actors
     t = _psych_test(a["pid"], "draft")
     assert client.post(f"/api/admin/tests/{t['uuid']}/publish",
-                       headers=auth(a["stoken"])).status_code == 200
+                       headers=auth(a["stoken"]), json=decision(t['uuid'])).status_code == 200
     assert _messages(a["pid"], "test_") == []
 
 

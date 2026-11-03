@@ -198,6 +198,29 @@ def _make_group_session(
     return gs
 
 
+def _make_appointment(
+    db,
+    *,
+    client_id: int,
+    psychologist_id: int,
+    starts_at: datetime,
+    status: str = "confirmed",
+) -> int:
+    """Прямая вставка записи (минуя booking flow) — для тестов выборок, где
+    важны только client_id/psychologist_id/starts_at/status."""
+    appt = Appointment(
+        client_id=client_id,
+        psychologist_id=psychologist_id,
+        starts_at=starts_at,
+        ends_at=starts_at + timedelta(minutes=50),
+        duration_minutes=50,
+        status=status,
+    )
+    db.add(appt)
+    db.flush()
+    return appt.id
+
+
 # ─── Individual appointment validation ────────────────────────────────────────
 
 class TestIndividualAppointments:
@@ -720,6 +743,150 @@ class TestCancellation:
                 .first()
             )
             assert msg is not None
+
+
+# ─── Upcoming appointments (главная кабинета) ────────────────────────────────
+
+class TestUpcomingAppointments:
+    """GET /api/appointments/my/upcoming — серверная выборка ближайших
+    будущих встреч (pending_confirmation/confirmed, по возрастанию starts_at,
+    лимит после фильтрации), отдельная от /api/appointments/my (контракт
+    календаря — все статусы, newest-first, пагинация — не меняется)."""
+
+    def test_more_than_20_future_returns_three_nearest_ascending(self, client):
+        tok_p, pid, _ = _setup_schedule(client)
+        tok_s, sid = _student_for(client, pid)
+        created_starts = []
+        with SessionLocal() as db:
+            # 25 будущих записей вразнобой: не по возрастанию вставки.
+            offsets = list(range(1, 26))
+            offsets.reverse()
+            for i, h in enumerate(offsets):
+                status = "confirmed" if i % 2 == 0 else "pending_confirmation"
+                starts_at = _future_slot(h)
+                created_starts.append(starts_at)
+                _make_appointment(
+                    db, client_id=sid, psychologist_id=pid,
+                    starts_at=starts_at, status=status,
+                )
+            db.commit()
+
+        r = client.get("/api/appointments/my/upcoming", headers=_auth(tok_s))
+        assert r.status_code == 200, r.text
+        items = r.json()
+        assert len(items) == 3
+        starts = [datetime.fromisoformat(i["starts_at"]) for i in items]
+        assert starts == sorted(starts)
+        # Ближайшие три из реально созданных значений (не пересчёт _future_slot).
+        expected_starts = sorted(created_starts)[:3]
+        assert starts == expected_starts
+
+    def test_nearest_confirmed_found_beyond_old_page_blind_spot(self, client):
+        """Старая выборка (первая страница /my, 20 строк, starts_at DESC) могла
+        не увидеть ближайшую confirmed-встречу, если её опережали 20 более
+        дальних (по времени) записей любого статуса. Новая выборка фильтрует
+        по статусу и будущему времени ДО лимита — находит её всегда."""
+        tok_p, pid, _ = _setup_schedule(client)
+        tok_s, sid = _student_for(client, pid)
+        with SessionLocal() as db:
+            # 20 отменённых записей с очень дальним starts_at — в старой
+            # DESC-сортировке по /my они заняли бы все 20 мест первой страницы.
+            for i in range(20):
+                _make_appointment(
+                    db, client_id=sid, psychologist_id=pid,
+                    starts_at=_future_slot(1000 + i), status="cancelled",
+                )
+            # Ближайшая подтверждённая — значительно раньше по времени.
+            near_starts = _future_slot(10)
+            _make_appointment(
+                db, client_id=sid, psychologist_id=pid,
+                starts_at=near_starts, status="confirmed",
+            )
+            db.commit()
+
+        r = client.get("/api/appointments/my/upcoming", headers=_auth(tok_s))
+        assert r.status_code == 200, r.text
+        items = r.json()
+        assert len(items) == 1
+        assert items[0]["status"] == "confirmed"
+        assert datetime.fromisoformat(items[0]["starts_at"]) == near_starts
+
+    def test_no_future_appointments_returns_empty_list(self, client):
+        tok_p, pid, _ = _setup_schedule(client)
+        tok_s, sid = _student_for(client, pid)
+        with SessionLocal() as db:
+            # Прошедшая confirmed и будущая, но отменённая — обе не подходят.
+            _make_appointment(
+                db, client_id=sid, psychologist_id=pid,
+                starts_at=_future_slot(-5), status="confirmed",
+            )
+            _make_appointment(
+                db, client_id=sid, psychologist_id=pid,
+                starts_at=_future_slot(5), status="cancelled",
+            )
+            db.commit()
+
+        r = client.get("/api/appointments/my/upcoming", headers=_auth(tok_s))
+        assert r.status_code == 200, r.text
+        assert r.json() == []
+
+    def test_other_students_appointments_excluded(self, client):
+        tok_p, pid, _ = _setup_schedule(client)
+        tok_s1, sid1 = _student_for(client, pid)
+        tok_s2, sid2 = _student_for(client, pid)
+        with SessionLocal() as db:
+            _make_appointment(
+                db, client_id=sid1, psychologist_id=pid,
+                starts_at=_future_slot(5), status="confirmed",
+            )
+            _make_appointment(
+                db, client_id=sid2, psychologist_id=pid,
+                starts_at=_future_slot(5), status="confirmed",
+            )
+            db.commit()
+
+        r1 = client.get("/api/appointments/my/upcoming", headers=_auth(tok_s1))
+        assert r1.status_code == 200
+        items1 = r1.json()
+        assert len(items1) == 1
+        with SessionLocal() as db:
+            owner = db.query(Appointment.client_id).filter(
+                Appointment.uuid == items1[0]["uuid"]
+            ).scalar()
+        assert owner == sid1
+
+    def test_existing_calendar_endpoint_contract_unchanged(self, client):
+        """/api/appointments/my остаётся прежним: все статусы, newest-first,
+        {items, total, page, size} — независимо от новой выборки /upcoming."""
+        tok_p, pid, _ = _setup_schedule(client)
+        tok_s, sid = _student_for(client, pid)
+        with SessionLocal() as db:
+            _make_appointment(
+                db, client_id=sid, psychologist_id=pid,
+                starts_at=_future_slot(50), status="cancelled",
+            )
+            _make_appointment(
+                db, client_id=sid, psychologist_id=pid,
+                starts_at=_future_slot(10), status="confirmed",
+            )
+            db.commit()
+
+        r = client.get("/api/appointments/my", headers=_auth(tok_s))
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert set(body.keys()) == {"items", "total", "page", "size"}
+        assert body["page"] == 1 and body["size"] == 20
+        assert body["total"] == 2
+        statuses_by_order = [i["status"] for i in body["items"]]
+        # newest-first по starts_at: дальняя (отменённая) первой.
+        assert statuses_by_order == ["cancelled", "confirmed"]
+
+        r_upcoming = client.get(
+            "/api/appointments/my/upcoming", headers=_auth(tok_s)
+        )
+        assert r_upcoming.status_code == 200
+        upcoming_statuses = [i["status"] for i in r_upcoming.json()]
+        assert upcoming_statuses == ["confirmed"]
 
 
 # ─── One-off blockers (exceptions) ────────────────────────────────────────────

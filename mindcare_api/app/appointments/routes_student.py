@@ -115,6 +115,21 @@ def list_my_appointments(
     return {"items": items, "total": total, "page": page, "size": size}
 
 
+@router.get("/my/upcoming", response_model=list[AppointmentDetailRead])
+def list_my_upcoming_appointments(
+    limit: int = Query(default=3, ge=1, le=20),
+    current_user: dict = Depends(get_current_user),
+):
+    """Ближайшие будущие записи студента (ожидает подтверждения/подтверждена,
+    по возрастанию starts_at) — для главной кабинета. Отдельная серверная
+    выборка: не первая страница `/my`, а отфильтрованный и отсортированный
+    хвост, обрезанный лимитом уже после фильтрации."""
+    return service.list_student_upcoming_appointments(
+        student_id=current_user["id"],
+        limit=limit,
+    )
+
+
 # ── Book appointment ──────────────────────────────────────────────────────────
 
 @router.post("", response_model=AppointmentDetailRead, status_code=status.HTTP_201_CREATED)

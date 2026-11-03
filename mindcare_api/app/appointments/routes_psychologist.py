@@ -1,25 +1,34 @@
 """
-Эндпоинты для психолога: список записей, подтверждение, отклонение.
+Эндпоинты для психолога: список записей, подтверждение, отклонение, итог
+встречи (ADR-035) и встречи клиента для карточки.
 Доступ: только роль psychologist.
 """
 
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.auth.deps import get_current_user, require_role, resolve_role_or_403
-from app.audit import Actor
+from app.audit import Actor, AuditError
 from app.audit.failsafe import record_secondary_failure
 from app.audit.request_context import build_request_context
 from app.appointments import service
+from app.appointments.guards import forbid_impersonation
 from app.appointments.schemas import (
     AppointmentDecline,
     AppointmentDetailRead,
+    AppointmentOutcomeIn,
+    AppointmentOutcomeRead,
+    ClientAppointmentsPage,
     PaginatedAppointmentsResponse,
     PaginatedGroupSessionsResponse,
     PsychologistScheduleRead,
     ScheduleExceptionRead,
+)
+from app.core.no_store_route import (
+    NoStoreRoute, audit_unavailable_response, no_store_json,
 )
 
 
@@ -170,6 +179,90 @@ def decline_appointment(
                 context=build_request_context(ip=ip, user_agent=ua),
             )
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+@router.patch(
+    "/{uuid}/outcome",
+    response_model=AppointmentOutcomeRead,
+    dependencies=[Depends(forbid_impersonation)],
+)
+def mark_appointment_outcome(
+    uuid:         UUID,
+    body:         AppointmentOutcomeIn,
+    request:      Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Итог индивидуальной встречи (ADR-035): confirmed → completed («Состоялась»)
+    | no_show («Неявка»). Только психолог этой встречи, только после её
+    окончания (время сервера). Повтор того же итога — 200 changed=false без
+    события; иной итог / не confirmed / не закончилась — 409 без изменений.
+    """
+    role = resolve_role_or_403(
+        current_user, allowed={"psychologist"}, preferred="psychologist",
+    )
+    actor = Actor.user(int(current_user["id"]), role)
+    ip = _ip(request)
+    ua = request.headers.get("user-agent")
+    try:
+        return service.psychologist_mark_outcome(
+            uuid=str(uuid),
+            psychologist_user=current_user,
+            outcome=body.outcome,
+            actor_role=role,
+            ip=ip,
+            user_agent=ua,
+        )
+    except service.AppointmentError as exc:
+        if isinstance(exc, service.AuditableAppointmentError):
+            record_secondary_failure(
+                event="appointment_outcome_failed", actor=actor,
+                failure_reason_code=exc.audit_code,
+                context=build_request_context(ip=ip, user_agent=ua),
+            )
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+    except AuditError:
+        # Сбой обязательного аудита: переход откатан, итог не сохранён.
+        return audit_unavailable_response()
+
+
+# ── Встречи клиента в карточке психолога (ADR-035) ───────────────────────────
+
+client_router = APIRouter(
+    prefix="/psychologist/clients",
+    tags=["appointments-psychologist"],
+    route_class=NoStoreRoute,
+    dependencies=[
+        Depends(require_role("psychologist")),
+        Depends(forbid_impersonation),
+    ],
+)
+
+
+@client_router.get("/{student_uuid}/appointments", response_model=ClientAppointmentsPage)
+def list_client_appointments(
+    student_uuid: UUID,
+    view:   Literal["upcoming", "history"] = Query(default="upcoming"),
+    before: Optional[str] = Query(default=None, max_length=256),
+    size:   int = Query(
+        default=service.CLIENT_APPOINTMENTS_DEFAULT_SIZE,
+        ge=1, le=service.CLIENT_APPOINTMENTS_MAX_SIZE,
+    ),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Встречи выбранного клиента с текущим психологом: предстоящие и история.
+    Право — строгое активное сопровождение с активным клиентом; иначе 404.
+    Групповые занятия и рабочая доступность психолога сюда не входят.
+    """
+    try:
+        return service.list_client_appointments(
+            int(current_user["id"]), student_uuid, view, before, size,
+        )
+    except service.ClientAppointmentsNotAvailable:
+        return no_store_json(404, {"detail": "Встречи клиента недоступны"})
+    except service.AppointmentError as exc:
+        return no_store_json(exc.status_code, {"detail": exc.message})
 
 
 exception_router = APIRouter(
