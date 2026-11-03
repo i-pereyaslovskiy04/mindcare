@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
 import Badge from '../../components/UI/Badge/Badge';
@@ -6,6 +7,10 @@ import { getInitials } from '../../shared/lib/utils';
 import { useStudentCard } from '../../features/psychologist/hooks/useStudentCard';
 import { getPsychologistStudentChatPath } from '../../features/psychologist/chatLinks';
 import StudentTestResults from '../../features/tests/ui/StudentTestResults';
+import ClientMeetings from '../../features/psychologist/ui/ClientMeetings';
+import ClientNotes from '../../features/psychologist/ui/ClientNotes';
+import useScrollToHash, { scrollToSection } from '../../hooks/useScrollToHash';
+import ClientAssignments from '../../features/assignments/ui/ClientAssignments';
 import useUserContacts from '../../features/contacts/hooks/useUserContacts';
 import UserContactsSection from '../../features/contacts/ui/ContactsReadOnly';
 import styles from './PsychologistStudentCardPage.module.css';
@@ -26,17 +31,14 @@ function getDuration(iso) {
   return `${days} дней`;
 }
 
-const ACTIONS = [
-  { icon: 'calendar', label: 'Расписание',        title: 'Расписание будет доступно позже' },
-  { icon: 'diary',    label: 'Заметки',           title: 'Рабочие заметки будут добавлены позже' },
-  { icon: 'articles', label: 'Материалы и тесты', title: 'Назначение материалов появится позже' },
+const FUTURE_ITEMS = [
+  'Запрос супервизии',
 ];
 
-const FUTURE_ITEMS = [
-  'История консультаций и сессий',
-  'Рабочие заметки психолога',
-  'Назначенные материалы и тесты',
-  'Запрос супервизии',
+/** Быстрые действия, прокручивающие карточку к своему разделу. */
+const SECTION_ACTIONS = [
+  { icon: 'calendar', label: 'Встречи с клиентом', section: 'client-meetings' },
+  { icon: 'diary',    label: 'Заметки',            section: 'client-notes' },
 ];
 
 /** Контакты студента (ADR-032): запрос — только когда карточка загружена; данные привязаны к uuid. */
@@ -51,6 +53,26 @@ export default function PsychologistStudentCardPage() {
   const isValidId = !isNaN(numericId) && numericId > 0;
   const { student, loading, error, refetch } = useStudentCard(isValidId ? numericId : null);
   const chatPath = getPsychologistStudentChatPath(student, isValidId ? numericId : null);
+  // Переход «Встречи с клиентом» из списка клиентов (#client-meetings).
+  useScrollToHash(Boolean(student) && !loading && !error);
+  // «Заметка» к конкретной встрече: привязана к uuid клиента — у другого
+  // клиента не применяется (ClientNotes сверяет clientUuid).
+  const [noteMeeting, setNoteMeeting] = useState(null);
+  // Выбранная встреча принадлежит клиенту, для которого её выбрали: при смене
+  // клиента привязка сбрасывается (не переносится ни на B, ни обратно на A).
+  const currentStudentUuid = student?.student_uuid;
+  useEffect(() => { setNoteMeeting(null); }, [currentStudentUuid]);
+
+  // Снимает привязку только того клиента, чья форма просит об этом: поздний
+  // колбэк прежней карточки не должен снять встречу нового клиента.
+  function clearNoteMeeting(clientUuid) {
+    setNoteMeeting(cur => (cur && cur.clientUuid === clientUuid ? null : cur));
+  }
+
+  function addNoteForMeeting(meeting) {
+    setNoteMeeting({ clientUuid: student?.student_uuid, meeting });
+    scrollToSection('client-notes');
+  }
 
   const is404 = Boolean(
     error && (
@@ -186,21 +208,51 @@ export default function PsychologistStudentCardPage() {
                   <div className={styles.actionLabel}>Чат со студентом</div>
                 </Link>
               )}
-              {ACTIONS.map(({ icon, label, title }) => (
+              {SECTION_ACTIONS.map(({ icon, label, section }) => (
                 <button
-                  key={label}
-                  className={`${styles.actionCard} ${styles.actionCardDisabled}`}
-                  disabled
-                  title={title}
+                  key={section}
+                  type="button"
+                  className={`${styles.actionCard} ${styles.actionLink}`}
+                  onClick={() => scrollToSection(section)}
                 >
                   <div className={styles.actionIcon}>
                     <Icon name={icon} size={22} />
                   </div>
                   <div className={styles.actionLabel}>{label}</div>
-                  <span className={styles.soonTag}>скоро</span>
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Встречи с клиентом и итоги (ADR-035) */}
+          <div className={styles.section} id="client-meetings">
+            <h3 className={styles.sectionTitle} tabIndex={-1} data-section-heading>
+              Встречи с клиентом
+            </h3>
+            <ClientMeetings
+              key={student.student_uuid}
+              studentUuid={student.student_uuid}
+              onAddNote={addNoteForMeeting}
+            />
+          </div>
+
+          {/* Заметки психолога о клиенте — существующие session_notes (ADR-035) */}
+          <div className={styles.section} id="client-notes">
+            <h3 className={styles.sectionTitle} tabIndex={-1} data-section-heading>
+              Заметки
+            </h3>
+            <ClientNotes
+              key={student.student_uuid}
+              studentUuid={student.student_uuid}
+              linkedMeeting={noteMeeting}
+              onClearLinkedMeeting={() => clearNoteMeeting(student.student_uuid)}
+            />
+          </div>
+
+          {/* Задания клиенту (ADR-033) */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Задания</h3>
+            <ClientAssignments key={student.student_uuid} studentUuid={student.student_uuid} />
           </div>
 
           {/* Контакты студента (ADR-032) */}
@@ -212,7 +264,12 @@ export default function PsychologistStudentCardPage() {
           {/* Результаты психодиагностики (Этап E) */}
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>Результаты психодиагностики</h3>
-            <StudentTestResults studentUuid={student.student_uuid} activeRole="psychologist" />
+            <StudentTestResults
+              key={student.student_uuid}
+              studentUuid={student.student_uuid}
+              activeRole="psychologist"
+              canViewAnswers
+            />
           </div>
 
           {/* Future block */}

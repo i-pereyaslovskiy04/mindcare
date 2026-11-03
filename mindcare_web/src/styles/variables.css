@@ -41,6 +41,11 @@
   --section-py: clamp(36px, 4vw, 60px);
   --grid-gap: clamp(12px, 1.2vw, 18px);
 
+  /* Кабинеты: колонка контента (.contentInner в CabinetLayout/AdminLayout)
+     и узкая центрированная колонка страниц-форм (настройки, мастера). */
+  --cabinet-content-max: 1180px;
+  --cabinet-narrow-max: 760px;
+
   /* Animation */
   --ease-card: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }

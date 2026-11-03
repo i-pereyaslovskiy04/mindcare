@@ -62,7 +62,7 @@ export default function TagFormModal({ mode, tag, onSuccess, onClose }) {
               maxLength={100}
             />
             <span className={styles.hint}>
-              Первая буква будет заглавной, остальные — строчными
+              Первая буква будет заглавной, остальные - строчными
             </span>
           </div>
 

@@ -1,6 +1,6 @@
 import styles from '../styles/forgot-password.module.css';
 
-export default function StepSuccess({ onClose }) {
+export default function StepSuccess({ onClose, fieldRef }) {
   return (
     <div className={styles.panel}>
       <div className={styles.successIcon} aria-hidden="true">
@@ -19,14 +19,14 @@ export default function StepSuccess({ onClose }) {
         <h2 className={`${styles.heading} ${styles.headingCenter}`}>
           Пароль<br /><span className={styles.headingEm}>изменён</span>
         </h2>
-        <p className={`${styles.body} ${styles.bodyCenter}`} style={{ marginTop: 6 }}>
+        <p className={`${styles.lead} ${styles.leadCenter}`}>
           Теперь вы можете войти в аккаунт с новым паролем.
         </p>
       </div>
 
       <div className={styles.divider} />
 
-      <button className={`${styles.btn} ${styles.btnSuccess}`} type="button" onClick={onClose}>
+      <button ref={fieldRef} className={`${styles.btn} ${styles.btnSuccess}`} type="button" onClick={onClose}>
         Войти в аккаунт
       </button>
     </div>

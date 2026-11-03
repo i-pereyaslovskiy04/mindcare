@@ -24,9 +24,17 @@ Multi-role: у пользователя может быть несколько �
 Plaintext content не логируется нигде; audit-хелпер принимает только id/метаданные.
 """
 
+import base64
+import binascii
+import json
+import uuid as _uuid
+from datetime import datetime
 from typing import Optional
 
 from app.session_notes import storage
+from app.session_notes.storage import (  # noqa: F401  (ре-экспорт для routes)
+    ClientScopeUnavailable, NoteLinkInvalid, NoteVersionConflict, NotesStorageError,
+)
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
 
@@ -193,5 +201,78 @@ def update_note(
         user_agent=user_agent,
     )
     if not note:
+        raise NoteNotFound()
+    return note
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Заметки в карточке клиента (ADR-035): свои заметки психолога о клиенте
+# строгого активного сопровождения. Чтение своих заметок события не пишет
+# (существующая политика); создание/правка — session_note_created/_updated
+# ATOMIC в storage.
+# ══════════════════════════════════════════════════════════════════════════════
+
+CLIENT_NOTES_DEFAULT_SIZE = 20
+CLIENT_NOTES_MAX_SIZE = 50
+
+
+class InvalidCursor(Exception):
+    pass
+
+
+def _encode_cursor(created_at: datetime, note_uuid: str) -> str:
+    raw = json.dumps([created_at.isoformat(), str(note_uuid)], separators=(",", ":"))
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _decode_cursor(value: Optional[str]) -> Optional[tuple]:
+    if value is None:
+        return None
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        stamp, raw_uuid = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+        created_at = datetime.fromisoformat(stamp)
+        if created_at.tzinfo is None:
+            raise ValueError("naive cursor")
+        return created_at, _uuid.UUID(raw_uuid)
+    except (ValueError, TypeError, binascii.Error, UnicodeDecodeError):
+        raise InvalidCursor() from None
+
+
+def list_client_notes(author_id: int, client_uuid, before: Optional[str], size: int) -> dict:
+    cursor = _decode_cursor(before)
+    size = max(1, min(int(size), CLIENT_NOTES_MAX_SIZE))
+    page = storage.list_client_notes(author_id, client_uuid, cursor, size)
+    items = page["items"]
+    next_cursor = (
+        _encode_cursor(items[-1]["created_at"], items[-1]["uuid"])
+        if page["has_more"] and items else None
+    )
+    return {"items": items, "has_more": page["has_more"], "next_cursor": next_cursor}
+
+
+def create_client_note(
+    author_id: int, client_uuid, data: dict, *,
+    actor_role: str, ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    return storage.create_client_note(
+        author_id, client_uuid,
+        content=data["content"], note_type=data.get("note_type", "general"),
+        appointment_uuid=data.get("appointment_uuid"),
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+
+
+def update_client_note(
+    author_id: int, client_uuid, note_uuid, data: dict, *,
+    actor_role: str, ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    changes = {k: data[k] for k in ("content", "note_type") if k in data}
+    note = storage.update_client_note(
+        author_id, client_uuid, note_uuid, changes,
+        expected_version=data["version"],
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+    if note is None:
         raise NoteNotFound()
     return note

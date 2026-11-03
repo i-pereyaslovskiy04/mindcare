@@ -299,7 +299,7 @@ export default function CalendarPage() {
 
       <div className={styles.right}>
         <section className={styles.bookingBox}>
-          <h3 className={styles.bookingTitle}>Записаться на сессию</h3>
+          <h2 className={styles.bookingTitle}>Записаться на сессию</h2>
 
           <div className={styles.field}>
             <Select
@@ -332,7 +332,7 @@ export default function CalendarPage() {
                 </div>
               ) : (
                 <span className={styles.slotHint}>
-                  {modality === 'online' ? 'Онлайн' : 'Очно'} — единственный доступный формат
+                  {modality === 'online' ? 'Онлайн' : 'Очно'} - единственный доступный формат
                 </span>
               )}
             </div>

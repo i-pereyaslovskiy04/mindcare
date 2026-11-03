@@ -40,7 +40,7 @@ export default function AuditPagination({
 
       {windowLimited && (
         <p className={styles.limitNote}>
-          Доступны первые {maxResultWindow.toLocaleString('ru-RU')} записей —
+          Доступны первые {maxResultWindow.toLocaleString('ru-RU')} записей -
           сузьте период или фильтры.
         </p>
       )}

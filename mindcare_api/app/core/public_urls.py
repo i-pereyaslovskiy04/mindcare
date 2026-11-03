@@ -22,6 +22,9 @@ from app.core.config import settings
 # /register/confirm открывают главную с модалкой входа на нужном шаге.
 LOGIN_PATH = "/login"
 REGISTER_CONFIRM_PATH = "/register/confirm"
+# Продолжение регистрации через Яндекс/VK: путь без секретов, ticket — в
+# HttpOnly cookie браузера, прошедшего вход через провайдера.
+SOCIAL_REGISTRATION_PATH = "/register/social"
 
 
 def normalize_frontend_base(raw: Optional[str]) -> Optional[str]:

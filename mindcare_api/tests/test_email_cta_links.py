@@ -201,10 +201,10 @@ class TestRegisterInitPassesReferenceOfThisIssue:
         from app.auth.otp_service import RegistrationOtpIssue
         assert CODE not in repr(RegistrationOtpIssue(code=CODE, registration_reference=REF))
 
-    def test_social_registration_does_not_get_ordinary_reference(self):
+    def test_social_registration_gets_social_link_not_ordinary_reference(self):
         from app.oauth import service as oauth_service
         source = inspect.getsource(oauth_service)
-        assert "send_registration_otp(bound_email, code)" in source
+        assert "send_registration_otp(bound_email, code, social_continuation=True)" in source
         assert "registration_reference" not in source
 
 

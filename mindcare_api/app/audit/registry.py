@@ -258,6 +258,14 @@ _ALL += [
     # privileged content read — INDEPENDENT/SOFT (fail-open PROVISIONAL, §12)
     _audit_ok("session_note_content_read", {"supervisor"}, "session_note",
               tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.SOFT),
+    # ADR-035: отказ привязки при создании (чужая/несуществующая встреча или
+    # сопровождение, нет строгой области карточки — access_denied; связи
+    # разных клиентов — link_mismatch) и отказ правки (нет области/заметки —
+    # access_denied; устаревшая version — version_conflict). Текст не пишется.
+    _audit_fail("session_note_create_failed", {"psychologist"},
+                {"access_denied", "link_mismatch"}),
+    _audit_fail("session_note_update_failed", {"psychologist"},
+                {"access_denied", "version_conflict"}),
 ]
 
 # ── AUDIT_LOG: chat (INDEPENDENT/SOFT) ───────────────────────────────────────
@@ -290,9 +298,18 @@ _ALL += [
 ]
 
 # ── AUDIT_LOG: контент CRUD (ATOMIC/RAISE) ───────────────────────────────────
-for _base in ("article", "news", "tag", "category"):
+for _base in ("tag", "category"):
     for _op in ("created", "updated", "deleted"):
         _ALL.append(_audit_ok(f"{_base}_{_op}", {"admin"}, _base))
+# Новости ведут admin и supervisor (/api/admin/news, Дополнение 2026-10-28 к
+# ADR-034) — роль добавлена, count не меняется.
+for _op in ("created", "updated", "deleted"):
+    _ALL.append(_audit_ok(f"news_{_op}", {"admin", "supervisor"}, "news"))
+# ADR-034: psychologist создаёт, правит и удаляет СВОИ статьи (модерация) через те
+# же storage-функции и те же события — роль добавлена, count не меняется.
+# Дополнение 2026-10-28: supervisor — тоже автор своих статей (/api/supervisor/articles).
+for _op in ("created", "updated", "deleted"):
+    _ALL.append(_audit_ok(f"article_{_op}", {"admin", "psychologist", "supervisor"}, "article"))
 # test CRUD доступен admin И supervisor на HTTP-уровне
 # (app/tests/routes_admin.py: require_role("admin","supervisor")) — роли widened
 # до {admin, supervisor}, чтобы supervisor-инициированная операция не падала в
@@ -310,14 +327,20 @@ _ALL.append(_audit_ok("test_duplicated", {"admin", "supervisor", "psychologist"}
 _ALL += [
     _audit_ok("test_consent_accepted", {"student"}, "consent_record"),
     _audit_ok("test_submitted", {"student"}, "test_result"),
-    # Этап E (ADR-016): staff-чтение результата студента. supervisor — любого,
-    # psychologist — только своего (active/past engagement); admin доступа НЕ имеет.
-    # INDEPENDENT/SOFT (provisional fail-open, как session_note_content_read).
+    # Этап E (ADR-016): staff-чтение результата/ответов. supervisor — «чистого»
+    # активного студента (деталь), psychologist — клиента строгого активного
+    # сопровождения (деталь и ответы); admin доступа НЕ имеет. Дополнение
+    # 2026-10-29: INDEPENDENT + RAISE (fail-closed, как assignment_content_read):
+    # сбой записи → 503 без баллов и ответов.
     _audit_ok("test_result_content_read", {"supervisor", "psychologist"},
               "test_result",
-              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.SOFT),
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+    # Отказ области психолога (нет результата / сопровождение не строго
+    # активное / клиент отключён) — единый 404. Отказ supervisor и общий
+    # role/impersonation-guard событие не пишут.
+    _audit_fail("test_result_read_failed", {"psychologist"}, {"access_denied"}),
     # Этап F (ADR-016): moderation workflow. ATOMIC/RAISE (default _audit_ok) —
-    # storage.set_status пишет событие в той же транзакции, что и смену status
+    # storage.transition_atomic пишет событие в той же транзакции (FOR UPDATE), что и смену status
     # (как test_created/test_updated). target — существующий entity_type "test".
     _audit_ok("test_submitted_for_review", {"psychologist"}, "test"),
     _audit_ok("test_published", {"admin", "supervisor"}, "test"),
@@ -327,6 +350,19 @@ _ALL += [
     # content-правку (test_updated), доп. событие фиксирует ИМЕННО смену статуса
     # (снятие с публикации требует повторной модерации супервизором).
     _audit_ok("test_unpublished_for_edit", {"psychologist"}, "test"),
+]
+
+# ── AUDIT_LOG: модерация статей психолога (ADR-034) ───────────────────────────
+# Зеркало модерации тестов (Этап F/F2.1): ATOMIC/RAISE в транзакции смены статуса
+# под FOR UPDATE строки статьи; target — "article", metadata пустая (комментарий
+# проверяющего хранится зашифрованным в articles и в журнал не попадает).
+_ALL += [
+    _audit_ok("article_submitted_for_review", {"psychologist"}, "article"),
+    _audit_ok("article_published", {"admin", "supervisor"}, "article"),
+    _audit_ok("article_returned_for_changes", {"admin", "supervisor"}, "article"),
+    # supervisor публикует свою статью сам (article_published с ролью supervisor)
+    # и при правке своей опубликованной тоже снимает её с публикации.
+    _audit_ok("article_unpublished_for_edit", {"psychologist", "supervisor"}, "article"),
 ]
 
 # ── AUDIT_LOG: Stage 5A-2 durable failure события (INDEPENDENT/SOFT) ──────────
@@ -371,6 +407,11 @@ _ALL += [
     _audit_ok("appointment_confirmed", {"psychologist"}, "appointment"),
     _audit_ok("appointment_declined", {"psychologist"}, "appointment"),
     _audit_ok("appointment_cancelled", {"student"}, "appointment"),
+    # ADR-035: итог индивидуальной встречи — вручную психолог этой встречи после
+    # её окончания (confirmed → completed | no_show). ATOMIC/RAISE в транзакции
+    # перехода; повтор того же итога — no-op без события.
+    _audit_ok("appointment_completed", {"psychologist"}, "appointment"),
+    _audit_ok("appointment_no_show", {"psychologist"}, "appointment"),
     _audit_ok("unregistered_student_card_created",
               {"supervisor", "admin"}, "unregistered_student_card"),
     _audit_ok("unregistered_student_card_updated",
@@ -399,6 +440,10 @@ _ALL += [
                 {"access_denied"}),
     _audit_fail("appointment_decline_failed", {"psychologist"},
                 {"access_denied"}),
+    # ADR-035: отказ отметки итога — чужая встреча, статус не confirmed,
+    # конфликт конечных статусов, встреча ещё не закончилась.
+    _audit_fail("appointment_outcome_failed", {"psychologist"},
+                {"access_denied", "invalid_status", "outcome_conflict", "not_ended"}),
     _audit_fail("unregistered_student_card_create_failed",
                 {"supervisor", "admin"}, {"consent_required"}),
 ]
@@ -537,6 +582,32 @@ _ALL += [
               tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
     _audit_fail("user_contacts_read_failed", {"psychologist", "supervisor"},
                 {"access_denied"}),
+]
+
+# ── AUDIT_LOG: задания психолога клиенту (ADR-033) ────────────────────────────
+# Target — задание (assignments.id); metadata пуста: ни текста, ни срока, ни
+# материала. Переходы (создание/выполнение/отмена) — ATOMIC + RAISE в той же
+# транзакции, что и изменение. Чтение содержимого психологом — INDEPENDENT +
+# RAISE по одному событию на каждое задание возвращаемой страницы (fail-closed,
+# как student_verification_content_read). Чтение владельцем своих заданий
+# отдельного события не требует. Повтор уже выполненного перехода — no-op без
+# события. Отказы: access_denied — единый ответ «нет задания / нет права» (не
+# раскрываем существование); engagement_inactive — своё задание завершённого
+# сопровождения; assignment_finalized — задание уже в другом конечном статусе.
+_ASSIGNMENT = "assignment"
+_ALL += [
+    _audit_ok("assignment_created", {"psychologist"}, _ASSIGNMENT),
+    _audit_ok("assignment_completed", {"student"}, _ASSIGNMENT),
+    _audit_ok("assignment_cancelled", {"psychologist"}, _ASSIGNMENT),
+    _audit_ok("assignment_content_read", {"psychologist"}, _ASSIGNMENT,
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+    _audit_fail("assignment_create_failed", {"psychologist"},
+                {"access_denied", "material_unavailable", "invalid_request"}),
+    _audit_fail("assignment_complete_failed", {"student"},
+                {"access_denied", "engagement_inactive", "assignment_finalized"}),
+    _audit_fail("assignment_cancel_failed", {"psychologist"},
+                {"access_denied", "assignment_finalized"}),
+    _audit_fail("assignment_read_failed", {"psychologist"}, {"access_denied"}),
 ]
 
 # ── AUDIT_LOG: Stage 8 — привилегированное чтение журналов ────────────────────

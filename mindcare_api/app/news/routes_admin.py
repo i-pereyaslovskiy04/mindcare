@@ -13,12 +13,16 @@ from app.news.schemas import (
 router = APIRouter(
     prefix="/admin/news",
     tags=["admin-news"],
-    dependencies=[Depends(require_role("admin"))],
+    dependencies=[Depends(require_role("admin", "supervisor"))],
 )
 
 
 def _acting_role(current_user: dict) -> str:
-    return resolve_role_or_403(current_user, allowed={"admin"}, preferred="admin")
+    # Новости ведут admin и supervisor (Дополнение 2026-10-28 к ADR-034);
+    # preferred=admin детерминирует роль аудита для dual-role пользователя.
+    return resolve_role_or_403(
+        current_user, allowed={"admin", "supervisor"}, preferred="admin",
+    )
 
 
 @router.get("", response_model=PaginatedNewsResponse)
@@ -27,7 +31,7 @@ def list_news(
     size:         int            = Query(default=20, ge=1, le=100),
     search:       Optional[str]  = Query(default=None),
     is_published: Optional[bool] = Query(default=None),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
     items, total = service.list_news(
         page=page, size=size, search=search, is_published=is_published,
@@ -38,7 +42,7 @@ def list_news(
 @router.get("/{uuid}", response_model=NewsRead)
 def get_news(
     uuid: str,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
     news = service.get_news(uuid)
     if not news:
@@ -50,7 +54,7 @@ def get_news(
 def create_news(
     body: NewsCreate,
     request: Request,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
     news = service.create_news(
         body.model_dump(),
@@ -67,7 +71,7 @@ def update_news(
     uuid: str,
     body: NewsUpdate,
     request: Request,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
     try:
         news = service.update_news(
@@ -86,7 +90,7 @@ def update_news(
 def delete_news(
     uuid: str,
     request: Request,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "supervisor")),
 ):
     try:
         service.delete_news(

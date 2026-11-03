@@ -43,7 +43,7 @@ function PhoneForm({ profile, state, onSave, onEdit }) {
       {state.success && <div className={styles.formSuccess} role="status">Телефон сохранён.</div>}
       <div className={styles.actions}>
         <Button type="submit" variant="primary" loading={state.saving} disabled={!dirty}>
-          Сохранить телефон
+          Сохранить
         </Button>
       </div>
     </form>

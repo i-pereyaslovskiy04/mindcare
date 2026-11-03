@@ -5,6 +5,7 @@ import AuthModal from '../../features/auth/ui/AuthModal';
 import NewsGrid from './components/NewsGrid';
 import Pagination from './components/Pagination';
 import { useNews } from '../../hooks/useNews';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import styles from './components/NewsPage.module.css';
 
 export default function NewsPage() {
@@ -12,6 +13,7 @@ export default function NewsPage() {
   const [page, setPage] = useState(1);
 
   const { items, totalPages, loading } = useNews(page);
+  usePageTitle('Новости и события');
 
   const handlePageChange = (p) => {
     setPage(p);
@@ -22,7 +24,7 @@ export default function NewsPage() {
     <>
       <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
 
-      <div className={styles.pageWrap}>
+      <main id="main-content" className={styles.pageWrap}>
         <div className={`container ${styles.pageInner}`}>
           <header className={styles.pageHeader}>
             <h1 className={styles.pageTitle}>Новости и события</h1>
@@ -43,7 +45,7 @@ export default function NewsPage() {
             </>
           )}
         </div>
-      </div>
+      </main>
 
       <Footer />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />

@@ -317,6 +317,23 @@ uvicorn app.main:app --reload
 python scripts/create_admin.py
 ```
 
+### Демо-материалы библиотеки
+
+После миграций и создания активного admin/supervisor можно явно добавить 12
+опубликованных материалов. Скрипт работает только при `ENV=development` или
+`ENV=test`; production и остальные значения блокируются. Автоматически при
+старте он не запускается. Использует только существующие типы и темы.
+
+```bash
+cd mindcare_api
+python scripts/seed_demo_materials.py --dry-run  # показать план без записи
+python scripts/seed_demo_materials.py
+```
+
+Повторный запуск идемпотентен по стабильным `demo-*` slug, удалённые материалы
+не восстанавливаются. Прерванное создание без slug восстанавливается только при
+однозначном совпадении demo-текста и автора; конфликт требует ручной проверки.
+
 ### Frontend
 
 ```bash
@@ -328,6 +345,18 @@ npm start
 
 > Proxy в `mindcare_web/package.json` перенаправляет все `/api/*` запросы на `localhost:8000`.
 > Для full-stack разработки нужны оба сервера.
+
+### Playwright MCP (браузер для Claude Code)
+
+Инструмент разработки, не зависимость приложения. Сервер описан в `.mcp.json`
+(версия `@playwright/mcp` зафиксирована): при первом запуске Claude Code в проекте
+`npx` сам загрузит пакет — ставить его вручную не нужно. Claude Code спросит
+разрешение на project-scoped сервер `playwright`.
+
+- Нужен **Node.js 20+**.
+- Браузер — встроенный Chromium Playwright (не зависит от системного браузера);
+  один раз скачать: `npx @playwright/mcp@0.0.83 install-browser chromium`.
+- Скриншоты и снимки страниц пишутся в `.playwright-mcp/` (в `.gitignore`).
 
 ---
 
@@ -805,16 +834,11 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 
 **Интерактивная документация:** [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI)
 
-**Health check:** `GET /api/health`
-
-```json
-{
-  "status": "ok",
-  "db": "connected",
-  "tables": 58,
-  "revision": "27202a87a892"
-}
-```
+**Health check:** `GET /api/health` (публичный, для мониторинга и скриптов
+запуска) — `200 {"status": "ok"}` или `503 {"status": "unavailable"}`, без
+ревизии, числа таблиц и текста ошибок. Подробная диагностика (ревизия и head
+Alembic, число таблиц; при сбое — только класс исключения) —
+`GET /api/admin/health`, только admin; страница `/admin/health`.
 
 **Реализованные эндпоинты** (полный список — `/docs` Swagger UI)**:**
 
@@ -836,7 +860,8 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 | `/api/supervisor/*` | Student list/create, psychologist list, engagements, meeting types, schedules, schedule exceptions, manual booking, group sessions, unregistered student cards | Supervisor |
 | `/api/psychologist/*` | Cabinet: students, schedule, schedule exceptions, appointments, group sessions | Psychologist |
 | `/api/appointments/*` | Student appointments, available slots, meeting types | Student |
-| `/api/health` | Health check: status, tables, revision | Public |
+| `/api/health` | Health check: только `status` (200/503) | Public |
+| `/api/admin/health` | Диагностика: revision, head, tables | Admin |
 
 ---
 

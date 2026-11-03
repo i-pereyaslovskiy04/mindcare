@@ -91,6 +91,48 @@
   margin-bottom: 14px;
 }
 
+/* ── Ближайшие встречи и активные задания ── */
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.overviewList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.overviewItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.overviewMain {
+  font-size: 14px;
+  color: var(--espresso);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.overviewClamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.overviewMeta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .actionCard {
   background: var(--warm-white);
   border: 1px solid var(--nav-border);
@@ -102,6 +144,7 @@
 }
 
 .cardTitle {
+  font-family: inherit; /* у h2 карточек — шрифт подписи, а не заголовка */
   font-size: 11px;
   letter-spacing: 0.12em;
   color: var(--text-light);
@@ -282,7 +325,8 @@
    ~497–664px, и две колонки (~230–320px) теснее одной колонки на 600px (~568px,
    rail уже скрыт). С 769px rail-контент ≥665px — две колонки по ≥325px. */
 @media (max-width: 768px) {
-  .actionCardsGrid { grid-template-columns: 1fr; }
+  .actionCardsGrid,
+  .overviewGrid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {

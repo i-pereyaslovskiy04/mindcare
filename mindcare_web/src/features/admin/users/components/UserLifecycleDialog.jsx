@@ -115,7 +115,7 @@ export default function UserLifecycleDialog({ open, mode, userInfo, onClose, onD
         ) : (
           <p className={styles.text}>
             Аккаунт <strong>{userInfo?.full_name}</strong> снова станет активным
-            с прежними ролями и данными. Пользователь войдёт заново — прежние
+            с прежними ролями и данными. Пользователь войдёт заново - прежние
             сессии не восстанавливаются.
           </p>
         )}

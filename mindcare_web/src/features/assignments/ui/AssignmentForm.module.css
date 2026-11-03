@@ -1,0 +1,132 @@
+/* Форма выдачи задания: раздел карточки клиента и быстрый диалог. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  background: var(--warm-white);
+}
+
+.formTitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--espresso);
+}
+
+.label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--espresso);
+  background: var(--warm-white);
+  resize: vertical;
+  min-height: 92px;
+}
+
+.textarea:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 1px;
+  border-color: var(--coffee);
+}
+
+.textarea[aria-invalid='true'] {
+  border-color: var(--error);
+}
+
+.counter {
+  margin: 0;
+  align-self: flex-end;
+  font-size: 11.5px;
+  color: var(--text-light);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field > :global(*) {
+  max-width: 100%;
+}
+
+.chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chosenTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--espresso);
+  overflow-wrap: anywhere;
+}
+
+.linkBtn {
+  padding: 4px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--coffee);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkBtn:hover {
+  color: var(--espresso);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.bare {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--error);
+}
+
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  .formActions :global(button) {
+    width: 100%;
+  }
+}

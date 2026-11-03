@@ -1,65 +1,31 @@
 import { useState } from 'react';
 import Navbar from '../../components/Navbar/Navbar';
-import Button from '../../components/UI/Button/Button';
 import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 // Баннер общий с главной (banner_slides CMS, placement='materials') —
 // не отдельная копия PageHero.
 import Hero from '../home/components/Hero';
-import SearchBar from './components/SearchBar';
-import MaterialsGrid from './components/MaterialsGrid';
-import { useMaterials } from '../../hooks/useMaterials';
-import styles from './MaterialsPage.module.css';
+import MaterialsLibrary from '../../features/materials/ui/MaterialsLibrary';
+import { usePageTitle } from '../../hooks/usePageTitle';
+
+const publicMaterialPath = (id) => `/materials/${id}`;
 
 export default function MaterialsPage() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-
-  const {
-    setQuery,
-    selectedTags,   setSelectedTags,
-    selectedTopics, setSelectedTopics,
-    sort,           setSort,
-    tagOptions,
-    topicOptions,
-    items,
-    hasMore,
-    loadMore,
-    loading,
-    error,
-  } = useMaterials();
+  usePageTitle('Материалы');
 
   return (
     <>
       <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
-      <Hero placement="materials" />
+      <main id="main-content">
+        <Hero placement="materials" />
 
-      <section className="section-wrap alt">
-        <div className="container">
-          <SearchBar
-            onQueryChange={setQuery}
-            selectedTags={selectedTags}
-            onTagsChange={setSelectedTags}
-            selectedTopics={selectedTopics}
-            onTopicsChange={setSelectedTopics}
-            sort={sort}
-            onSortChange={setSort}
-            tagOptions={tagOptions}
-            topicOptions={topicOptions}
-          />
-
-          {error && <p className={styles.error}>Ошибка загрузки: {error}</p>}
-
-          <MaterialsGrid items={items} loading={loading} />
-
-          {hasMore && !loading && (
-            <div className={styles.loadMore}>
-              <Button type="button" variant="secondary" onClick={loadMore}>
-                Загрузить ещё
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
+        <section className="section-wrap alt">
+          <div className="container">
+            <MaterialsLibrary getItemPath={publicMaterialPath} />
+          </div>
+        </section>
+      </main>
 
       <Footer />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />

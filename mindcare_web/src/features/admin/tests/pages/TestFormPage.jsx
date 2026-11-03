@@ -257,7 +257,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
         <div className={styles.lockedNotice} role="alert">
           <p className={styles.lockedText}>
             По этому тесту уже есть пройденные результаты, поэтому его вопросы
-            изменить нельзя — иначе ответы студентов потеряли бы смысл.
+            изменить нельзя - иначе ответы студентов потеряли бы смысл.
             Создайте копию методики и правьте её: копия сохранится черновиком
             и не появится в каталоге, пока вы её не активируете.
           </p>
@@ -365,7 +365,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
             <Checkbox
               checked={form.is_active}
               onChange={(checked) => set('is_active', checked)}
-              label="Активен — виден студентам в каталоге"
+              label="Активен - виден студентам в каталоге"
             />
           </div>
         )}

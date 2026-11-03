@@ -49,7 +49,7 @@ function FullNameForm({ profile, isVerifiedStudent, state, onSave, onEdit }) {
         type="email"
         value={profile.email}
         readOnly
-        hint="Адрес аккаунта изменить нельзя"
+        hint="Используется для входа, изменить нельзя"
       />
 
       {state.error && <div className={styles.formError} role="alert">{state.error}</div>}
@@ -57,7 +57,7 @@ function FullNameForm({ profile, isVerifiedStudent, state, onSave, onEdit }) {
 
       <div className={styles.actions}>
         <Button type="submit" variant="primary" loading={state.saving} disabled={!dirty}>
-          Сохранить ФИО
+          Сохранить
         </Button>
       </div>
     </form>

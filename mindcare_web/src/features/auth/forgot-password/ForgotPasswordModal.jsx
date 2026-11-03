@@ -12,35 +12,33 @@ export default function ForgotPasswordModal({
   open, onClose, initialEmail = '', emailLocked = false, onCompleted,
 }) {
   const state = useForgotPassword({ initialEmail, onCompleted });
-  const { step, reset, submitEmail, submitOtp, submitPassword, otp } = state;
+  const { step, reset } = state;
   const modalRef = useRef(null);
+  // Основное поле текущего шага (см. ForgotPasswordStepper).
+  const fieldRef = useRef(null);
+  const contentRef = useRef(null);
 
   useEffect(() => {
     if (!open) reset();
   }, [open, reset, initialEmail]);
 
-  // Re-focus first input when step changes
+  // Открытие и смена шага: фокус на основное поле шага, а не на «Закрыть».
+  // rAF — после собственного фокуса Modal при открытии. Если пользователь уже
+  // в поле этого шага, фокус не перехватывается.
   useEffect(() => {
-    if (!open) return;
-    modalRef.current?.focusFirst();
+    if (!open) return undefined;
+    const id = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active?.tagName === 'INPUT' && contentRef.current?.contains(active)) return;
+      if (fieldRef.current) fieldRef.current.focus();
+      else modalRef.current?.focusFirst();
+    });
+    return () => cancelAnimationFrame(id);
   }, [open, step]);
 
-  // Enter submits the current step (Escape + Tab handled by Modal)
-  useEffect(() => {
-    if (!open) return;
-
-    const handler = (e) => {
-      if (e.key === 'Enter' && !e.defaultPrevented) {
-        if (step === 1) submitEmail();
-        else if (step === 2) submitOtp(otp);
-        else if (step === 3) submitPassword();
-      }
-    };
-
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open, step, otp, submitEmail, submitOtp, submitPassword]);
-
+  // Enter отправляет только текущую форму шага (нативный submit): глобального
+  // обработчика Enter нет — Enter на «Закрыть», «Изменить почту/код» шаг не
+  // отправляет. Escape и Tab — в Modal.
   return (
     <Modal
       ref={modalRef}
@@ -49,8 +47,13 @@ export default function ForgotPasswordModal({
       ariaLabel="Восстановление пароля"
       zIndex={2100}
     >
-      <div className={styles.body}>
-        <ForgotPasswordStepper state={state} onClose={onClose} emailLocked={emailLocked} />
+      <div ref={contentRef} className={styles.content}>
+        <ForgotPasswordStepper
+          state={state}
+          onClose={onClose}
+          emailLocked={emailLocked}
+          fieldRef={fieldRef}
+        />
       </div>
     </Modal>
   );

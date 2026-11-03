@@ -6,6 +6,10 @@
 
 export const INTERNAL_LINKS = Object.freeze({
   '/student/settings#student-verification': 'Подтверждение студента ДонГУ',
+  // Дополнение 2026-10-28 к ADR-034: уведомления о заданиях и модерации.
+  '/student/tasks': 'Задания',
+  '/psychologist/materials#my-materials': 'Мои материалы',
+  '/psychologist/tests': 'Мои тесты',
 });
 
 function escapeRe(value) {

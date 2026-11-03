@@ -30,6 +30,7 @@ from app.db.models import (
     UnregisteredStudentCard,
     User,
 )
+from app.psychologist.client_scope import lock_client_scope
 
 
 def _require_actor(actor, context) -> None:
@@ -81,6 +82,23 @@ def _now_moscow() -> datetime:
     return datetime.now(MOSCOW_TZ)
 
 
+# Итог индивидуальной встречи (ADR-035) — только эти статусы.
+OUTCOME_STATUSES = ("completed", "no_show")
+_OUTCOME_EVENTS = {"completed": "appointment_completed", "no_show": "appointment_no_show"}
+
+
+def effective_end(appt: Appointment) -> datetime:
+    """Окончание встречи: ends_at (nullable), иначе starts_at + duration_minutes."""
+    if appt.ends_at is not None:
+        return appt.ends_at
+    return appt.starts_at + timedelta(minutes=int(appt.duration_minutes or 0))
+
+
+def can_mark_outcome(appt: Appointment, now: datetime) -> bool:
+    """Итог отмечается только у подтверждённой встречи после её окончания (время сервера)."""
+    return appt.status == "confirmed" and effective_end(appt) <= now
+
+
 def _appointment_to_dict(appt: Appointment, db) -> dict:
     """Convert ORM Appointment to serialisable dict with embedded refs.
 
@@ -123,6 +141,7 @@ def _appointment_to_dict(appt: Appointment, db) -> dict:
         "created_by":          appt.created_by,
         "created_at":          appt.created_at,
         "updated_at":          appt.updated_at,
+        "can_mark_outcome":    can_mark_outcome(appt, _now_moscow()),
         "student": {
             "id":        student.id,
             "uuid":      str(student.uuid),
@@ -549,15 +568,21 @@ def create_appointment(
     return _appointment_to_dict(appt, db)
 
 
-def get_appointment_by_uuid(uuid_str: str, db) -> Optional[Appointment]:
-    return (
-        db.query(Appointment)
-        .filter(
-            Appointment.uuid == uuid_str,
-            Appointment.deleted_at.is_(None),
-        )
-        .first()
+def get_appointment_by_uuid(uuid_str: str, db, for_update: bool = False) -> Optional[Appointment]:
+    """
+    for_update=True — для ВСЕХ writer'ов статуса (confirm/decline/student cancel/
+    outcome, ADR-035): SELECT … FOR NO KEY UPDATE + populate_existing. Writer'ы
+    сериализуются на строке встречи, и проверка статуса идёт по свежей версии
+    после ожидания: ни один не перезапишет итог/отмену по устаревшему
+    состоянию. NO KEY не блокирует FK-вставки, ссылающиеся на встречу (заметки).
+    """
+    q = db.query(Appointment).filter(
+        Appointment.uuid == uuid_str,
+        Appointment.deleted_at.is_(None),
     )
+    if for_update:
+        q = q.populate_existing().with_for_update(key_share=True)
+    return q.first()
 
 
 def acquire_slot_lock(
@@ -652,6 +677,47 @@ def get_student_appointments(
     return [_appointment_to_dict(a, db) for a in rows], total
 
 
+UPCOMING_STATUSES = ("pending_confirmation", "confirmed")
+
+
+def get_student_upcoming_appointments(
+    client_id: int,
+    limit: int,
+    db,
+) -> list[dict]:
+    """Ближайшие будущие записи студента для главной кабинета.
+
+    Фильтрация (ожидает подтверждения/подтверждена, starts_at в будущем) и
+    сортировка (starts_at по возрастанию, id — устойчивый довесок на случай
+    совпадающего starts_at) — на сервере; `limit` применяется уже к
+    отфильтрованной и отсортированной выборке, а не к первой странице общего
+    списка. `get_student_appointments` (контракт календаря — все статусы,
+    newest-first, с пагинацией) не меняется.
+    """
+    cid = int(client_id)
+    now_msk = _now_moscow()
+    linked_card_ids = (
+        db.query(UnregisteredStudentCard.id)
+        .filter(UnregisteredStudentCard.linked_user_id == cid)
+    )
+    rows = (
+        db.query(Appointment)
+        .filter(
+            Appointment.deleted_at.is_(None),
+            Appointment.status.in_(UPCOMING_STATUSES),
+            Appointment.starts_at > now_msk,
+            or_(
+                Appointment.client_id == cid,
+                Appointment.unregistered_student_card_id.in_(linked_card_ids),
+            ),
+        )
+        .order_by(Appointment.starts_at.asc(), Appointment.id.asc())
+        .limit(limit)
+        .all()
+    )
+    return [_appointment_to_dict(a, db) for a in rows]
+
+
 def get_psychologist_appointments(
     psychologist_id: int,
     page: int,
@@ -720,6 +786,102 @@ def decline_appointment(
         metadata={}, context=context, db=db,
     )
     return _appointment_to_dict(appt, db)
+
+
+def mark_outcome(
+    appt: Appointment, outcome: str, db, *, actor: Actor, context: RequestContext
+) -> dict:
+    """
+    confirmed → completed | no_show (ADR-035). Вызывающий держит строку
+    FOR NO KEY UPDATE и уже проверил владельца, статус и окончание встречи.
+    Смена статуса и success-событие — одна транзакция; commit — у service.
+    """
+    _require_actor(actor, context)
+    if outcome not in OUTCOME_STATUSES:
+        raise RuntimeError("unsupported appointment outcome")
+    appt.status = outcome
+    appt.updated_at = _now_moscow()
+    db.flush()
+    record_event(
+        event=_OUTCOME_EVENTS[outcome], actor=actor,
+        target=Target("appointment", appt.id), outcome=Outcome.SUCCESS,
+        metadata={}, context=context, db=db,
+    )
+    return {"uuid": str(appt.uuid), "status": appt.status, "changed": True}
+
+
+# ── Встречи клиента в карточке психолога (ADR-035) ───────────────────────────
+
+_ACTIVE_STATUSES = ("pending_confirmation", "confirmed")
+_EFFECTIVE_END = sa.func.coalesce(
+    Appointment.ends_at,
+    Appointment.starts_at + sa.func.make_interval(0, 0, 0, 0, 0, Appointment.duration_minutes),
+)
+
+
+def list_client_appointments(
+    db,
+    psychologist_id: int,
+    client_uuid,
+    view: str,
+    cursor: Optional[tuple],
+    size: int,
+) -> Optional[dict]:
+    """
+    Встречи клиента С ЭТИМ психологом. Нет строгого активного сопровождения /
+    клиент отключён → None. Область держится FOR SHARE (lock_client_scope) на
+    всё чтение. Выборка ограничена одновременно психологом и клиентом:
+    прямые записи (client_id) и записи по карточке, привязанной к клиенту
+    (linked_user_id) — как /api/appointments/my. Групповые занятия не входят.
+
+    view='upcoming' — pending/confirmed, ещё не закончившиеся (starts_at ASC);
+    view='history' — остальное (starts_at DESC). Keyset по (starts_at, uuid).
+    """
+    scope = lock_client_scope(db, psychologist_id, client_uuid=client_uuid)
+    if scope is None:
+        return None
+    client_id = scope[1]
+    now = _now_moscow()
+    linked_cards = sa.select(UnregisteredStudentCard.id).where(
+        UnregisteredStudentCard.linked_user_id == client_id,
+    )
+    upcoming = sa.and_(Appointment.status.in_(_ACTIVE_STATUSES), _EFFECTIVE_END > now)
+    stmt = (
+        sa.select(Appointment, MeetingType.name.label("meeting_type_name"))
+        .outerjoin(MeetingType, MeetingType.id == Appointment.meeting_type_id)
+        .where(
+            Appointment.psychologist_id == int(psychologist_id),
+            Appointment.deleted_at.is_(None),
+            or_(
+                Appointment.client_id == client_id,
+                Appointment.unregistered_student_card_id.in_(linked_cards),
+            ),
+            upcoming if view == "upcoming" else sa.not_(upcoming),
+        )
+    )
+    if view == "upcoming":
+        if cursor is not None:
+            stmt = stmt.where(sa.tuple_(Appointment.starts_at, Appointment.uuid) > sa.tuple_(*cursor))
+        stmt = stmt.order_by(Appointment.starts_at.asc(), Appointment.uuid.asc())
+    else:
+        if cursor is not None:
+            stmt = stmt.where(sa.tuple_(Appointment.starts_at, Appointment.uuid) < sa.tuple_(*cursor))
+        stmt = stmt.order_by(Appointment.starts_at.desc(), Appointment.uuid.desc())
+    rows = db.execute(stmt.limit(size + 1)).all()
+    has_more = len(rows) > size
+    items = []
+    for appt, meeting_type_name in rows[:size]:
+        items.append({
+            "uuid":              str(appt.uuid),
+            "starts_at":         appt.starts_at,
+            "ends_at":           effective_end(appt),
+            "status":            appt.status,
+            "meeting_type_name": meeting_type_name,
+            "modality":          appt.modality,
+            "via_card":          appt.unregistered_student_card_id is not None,
+            "can_mark_outcome":  can_mark_outcome(appt, now),
+        })
+    return {"items": items, "has_more": has_more}
 
 
 def cancel_appointment(

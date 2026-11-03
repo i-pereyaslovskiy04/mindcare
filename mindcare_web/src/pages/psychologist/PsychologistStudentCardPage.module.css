@@ -310,11 +310,6 @@
   text-align: center;
 }
 
-.actionCardDisabled {
-  cursor: not-allowed;
-  opacity: 0.58;
-}
-
 .actionLink {
   color: inherit;
   cursor: pointer;
@@ -349,17 +344,6 @@
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--espresso);
-}
-
-.soonTag {
-  font-size: 0.62rem;
-  background: var(--sand);
-  color: var(--text-light);
-  padding: 1px 7px;
-  border-radius: 4px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 /* ── Future block ────────────────────────────────────────────── */

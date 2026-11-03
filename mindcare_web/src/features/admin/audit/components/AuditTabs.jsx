@@ -8,9 +8,11 @@ export const tabPanelId = (id) => sharedPanelId(PREFIX, id);
 /**
  * Вкладки трёх журналов. Тонкая обёртка над shared `Tabs`: прежние id
  * (`audit-tab-*`, `audit-panel-*`), подпись по умолчанию и экспорты сохранены
- * для AuditLogsPage.
+ * для AuditLogsPage. Вкладки разделов страницы — на всю ширину колонки (`fill`).
  */
-export default function AuditTabs({ tabs, active, onChange, label = 'Журналы аудита' }) {
+export default function AuditTabs({
+  tabs, active, onChange, label = 'Журналы аудита', className,
+}) {
   return (
     <Tabs
       tabs={tabs}
@@ -18,6 +20,8 @@ export default function AuditTabs({ tabs, active, onChange, label = 'Журна�
       onChange={onChange}
       label={label}
       idPrefix={PREFIX}
+      fill
+      className={className}
     />
   );
 }

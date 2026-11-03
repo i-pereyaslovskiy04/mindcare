@@ -23,6 +23,7 @@ from app.db.session import SessionLocal
 from app.db.models import AuditLog, Test as TestModel
 from app.tests import storage as tests_storage
 from tests.integration.conftest import create_test_user
+from tests.integration.moderation_helpers import decision
 
 PASSWORD = "SecurePass42!"
 
@@ -133,7 +134,8 @@ def test_admin_publishes_draft_and_student_sees_it(client):
     admin, admin_id = _staff(client, "admin")
     test = _make_test(admin_id, status="draft")
     try:
-        r = client.post(f"/api/admin/tests/{test['uuid']}/publish", headers=admin)
+        r = client.post(f"/api/admin/tests/{test['uuid']}/publish", headers=admin,
+                        json=decision(test['uuid']))
         assert r.status_code == 200, r.text
         assert r.json()["status"] == "published"
 
@@ -153,7 +155,8 @@ def test_supervisor_publishes_draft(client):
     supervisor, _ = _staff(client, "supervisor")
     test = _make_test(admin_id, status="draft")
     try:
-        r = client.post(f"/api/admin/tests/{test['uuid']}/publish", headers=supervisor)
+        r = client.post(f"/api/admin/tests/{test['uuid']}/publish", headers=supervisor,
+                        json=decision(test['uuid']))
         assert r.status_code == 200, r.text
         assert r.json()["status"] == "published"
     finally:
@@ -168,7 +171,7 @@ def test_admin_returns_in_review_for_changes(client):
     try:
         r = client.post(
             f"/api/admin/tests/{test['uuid']}/return",
-            json={"reason": "нужно уточнить формулировку"}, headers=admin,
+            json=decision(test['uuid'], reason="нужно уточнить формулировку"), headers=admin,
         )
         assert r.status_code == 200, r.text
         assert r.json()["status"] == "needs_changes"
@@ -254,7 +257,8 @@ def test_publish_already_published_returns_409(client):
     admin, admin_id = _staff(client, "admin")
     test = _make_test(admin_id, status="published")
     try:
-        r = client.post(f"/api/admin/tests/{test['uuid']}/publish", headers=admin)
+        r = client.post(f"/api/admin/tests/{test['uuid']}/publish", headers=admin,
+                        json=decision(test['uuid']))
         assert r.status_code == 409, r.text
         assert _audit_rows("test_published", _internal_id(test["uuid"])) == []
     finally:
@@ -267,7 +271,7 @@ def test_return_draft_returns_409(client):
     test = _make_test(admin_id, status="draft")
     try:
         r = client.post(
-            f"/api/admin/tests/{test['uuid']}/return", json={}, headers=admin,
+            f"/api/admin/tests/{test['uuid']}/return", json=decision(test['uuid']), headers=admin,
         )
         assert r.status_code == 409, r.text
     finally:

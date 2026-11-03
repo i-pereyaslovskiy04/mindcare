@@ -123,6 +123,12 @@ from app.db.models.student_verification import (  # noqa: F401
 # ── user contacts (FK → users) — ADR-032 ─────────────────────────────────────
 from app.db.models.user_contacts import UserContacts  # noqa: F401
 
+# ── assignments (FK → therapy_engagements, articles) — ADR-033 ───────────────
+from app.db.models.assignments import Assignment  # noqa: F401
+
+# ── material favorites (FK → users, articles) — ADR-034 ──────────────────────
+from app.db.models.material_favorites import MaterialFavorite  # noqa: F401
+
 # ── audit ─────────────────────────────────────────────────────────────────────
 from app.db.models.audit import (  # noqa: F401
     AuditLog,
@@ -177,6 +183,10 @@ __all__ = [
     "StudentVerificationRequest",
     # user contacts
     "UserContacts",
+    # assignments
+    "Assignment",
+    # material favorites
+    "MaterialFavorite",
     # audit
     "AuditLog", "AuthLog", "DataChangeLog",
     # diary

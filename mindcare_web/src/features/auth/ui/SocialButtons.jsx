@@ -10,18 +10,19 @@ import {
   startErrorMessage,
 } from '../lib/oauthCallback';
 
-// Порядок и подписи кнопок — как раньше: VK, затем Яндекс.
+// Порядок и подписи кнопок — как раньше: VK, затем Яндекс. Доступное имя
+// содержит видимую подпись (WCAG 2.5.3 Label in Name) и не обещает ни вход,
+// ни регистрацию: что произойдёт, решает backend.
 const BUTTONS = Object.freeze([
-  { provider: 'vk', label: 'VK', ariaLabel: 'Войти через ВКонтакте', Icon: VKIcon },
-  { provider: 'yandex', label: 'Яндекс', ariaLabel: 'Войти через Яндекс', Icon: YandexIcon },
+  { provider: 'vk', label: 'VK', ariaLabel: 'Продолжить через VK', Icon: VKIcon },
+  { provider: 'yandex', label: 'Яндекс', ariaLabel: 'Продолжить через Яндекс', Icon: YandexIcon },
 ]);
 
 /**
- * Блок «Быстрая авторизация» — общий для вкладок «Вход» и «Регистрация»
- * (Stage Social Auth 4, VK-1A). Кнопка провайдера в обеих вкладках запускает
- * ОДИН и тот же поток `oauthStart(provider)`: backend после callback сам
- * решает, вход это или продолжение регистрации. Отдельного «намерения» вкладка
- * не передаёт.
+ * Блок «Продолжить через» — один на всю AuthModal, над вкладками «Вход |
+ * Регистрация» (Stage Social Auth 4, VK-1A). Кнопка провайдера запускает
+ * ОДИН поток `oauthStart(provider)`: backend после callback сам решает, вход
+ * это или продолжение регистрации. Активная вкладка в поток не передаётся.
  *
  * Кнопка активна, только если backend реально зарегистрировал адаптер
  * (GET /api/public/config → social_providers); иначе видима, но disabled и
@@ -70,7 +71,7 @@ export default function SocialButtons() {
   return (
     <>
       <div className={styles.socialSection}>
-        <div className={styles.socialLabel}>Быстрая авторизация</div>
+        <div className={styles.socialLabel}>Продолжить через</div>
         <div className={styles.socialBtns}>
           {BUTTONS.map(({ provider, label, ariaLabel, Icon }) => {
             const available = providers.includes(provider);
@@ -101,7 +102,7 @@ export default function SocialButtons() {
 
       <div className={styles.authDivider}>
         <div className={styles.authDividerLine} />
-        <span className={styles.authDividerText}>или продолжить с email</span>
+        <span className={styles.authDividerText}>или по email</span>
         <div className={styles.authDividerLine} />
       </div>
     </>

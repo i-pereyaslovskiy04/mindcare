@@ -6,6 +6,7 @@ import Footer from '../../components/Footer/Footer';
 import AuthModal from '../../features/auth/ui/AuthModal';
 import { getNewsById } from '../../api/news.api';
 import Tag from '../../components/UI/Tag/Tag';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import styles from './NewsItemPage.module.css';
 
 function formatDate(iso) {
@@ -65,12 +66,13 @@ export default function NewsItemPage() {
   }, [id]);
 
   const dateLabel = formatDate(news?.published_at || news?.created_at);
+  usePageTitle(news?.title || 'Новости');
 
   return (
     <>
       <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
 
-      <div className={styles.pageWrap}>
+      <main id="main-content" className={styles.pageWrap}>
         <div className={`container ${styles.pageInner}`}>
           <Link to="/news" className={styles.backLink}>← Все новости</Link>
 
@@ -118,7 +120,7 @@ export default function NewsItemPage() {
             </article>
           )}
         </div>
-      </div>
+      </main>
 
       <Footer />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />

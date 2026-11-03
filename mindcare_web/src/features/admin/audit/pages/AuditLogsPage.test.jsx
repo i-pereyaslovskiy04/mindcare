@@ -61,8 +61,9 @@ beforeEach(() => {
 async function renderPage() {
   const view = render(<AuditLogsPage />);
   await waitFor(() => expect(getAuditEvents).toHaveBeenCalled());
-  // Ждём отрисовки таблицы: к этому моменту оба hook'а уже применили ответы.
-  await screen.findByRole('table');
+  // Ждём отрисовки журнала (здесь — пустой выдачи: она показывается одним
+  // блоком вне таблицы и списка): к этому моменту оба hook'а уже применили ответы.
+  await screen.findByText(/За выбранный период с текущими фильтрами|Журнал недоступен/);
   return view;
 }
 
@@ -153,7 +154,7 @@ describe('состав фильтров по вкладкам', () => {
 
   test('период показан текстом', async () => {
     await renderPage();
-    expect(screen.getByText(/^Период: \d{2}\.\d{2}\.\d{4} — \d{2}\.\d{2}\.\d{4}$/))
+    expect(screen.getByText(/^Период: \d{2}\.\d{2}\.\d{4} - \d{2}\.\d{2}\.\d{4}$/))
       .toBeInTheDocument();
   });
 });
@@ -168,7 +169,7 @@ describe('ошибка справочника отделена от ошибки
 
     // Список всё равно загружен.
     expect(getAuditEvents).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByText(/За выбранный период с текущими фильтрами/)).toBeInTheDocument();
 
     // Registry-зависимый селект отключён, базовые фильтры доступны.
     expect(screen.getByRole('button', { name: /Категория событий/ })).toBeDisabled();

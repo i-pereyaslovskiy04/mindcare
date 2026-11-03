@@ -1,0 +1,175 @@
+/* ── Article column ────────────────────────────────────── */
+
+.article {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* ── Header ────────────────────────────────────────────── */
+
+.header {
+  margin-bottom: clamp(24px, 2.8vw, 40px);
+}
+
+.tagItem {
+  margin-bottom: 16px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(26px, 4vw, 46px);
+  font-weight: 400;
+  line-height: 1.18;
+  color: var(--espresso);
+  margin: 0 0 18px;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sub);
+  color: var(--text-light);
+  font-weight: 400;
+}
+
+.metaDivider {
+  opacity: 0.35;
+}
+
+/* ── Hero image ────────────────────────────────────────── */
+
+.heroWrap {
+  border-radius: 18px;
+  overflow: hidden;
+  margin-bottom: clamp(32px, 3.5vw, 52px);
+  box-shadow:
+    0 2px 8px rgba(var(--shadow-rgb), 0.10),
+    0 10px 32px rgba(var(--shadow-rgb), 0.10),
+    0 24px 56px rgba(var(--shadow-rgb), 0.08);
+}
+
+.heroImg {
+  width: 100%;
+  max-height: 440px;
+  object-fit: cover;
+  display: block;
+}
+
+.heroSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ── Body ──────────────────────────────────────────────── */
+
+.body {
+  font-size: clamp(15px, 1.1vw, 17px);
+  color: var(--text-main);
+  line-height: 1.82;
+}
+
+.body p {
+  margin: 0 0 1.45em;
+}
+
+.lead {
+  font-size: clamp(16px, 1.25vw, 19px) !important;
+  color: var(--espresso) !important;
+  font-weight: 400;
+  line-height: 1.7 !important;
+  padding-bottom: 1.4em;
+  border-bottom: 1px solid var(--nav-border);
+  margin-bottom: 1.6em !important;
+}
+
+.pullQuote {
+  margin: clamp(28px, 3vw, 44px) 0;
+  padding: clamp(18px, 2vw, 28px) clamp(20px, 2.4vw, 32px);
+  border-left: 3px solid var(--coffee);
+  background: var(--warm-white);
+  border-radius: 0 12px 12px 0;
+  box-shadow: 0 2px 14px rgba(var(--shadow-rgb), 0.06);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(17px, 1.5vw, 21px);
+  font-style: italic;
+  color: var(--espresso);
+  line-height: 1.55;
+}
+
+/* Rich text content from TipTap */
+.richContent p        { margin: 0 0 1.2em; }
+.richContent h1,
+.richContent h2,
+.richContent h3       { font-weight: 700; margin: 1.2em 0 0.5em; color: var(--espresso); }
+.richContent ul,
+.richContent ol       { padding-left: 1.5em; margin-bottom: 1em; }
+.richContent li       { margin-bottom: 0.3em; }
+.richContent blockquote {
+  border-left: 3px solid var(--coffee);
+  padding-left: 1em; margin: 1em 0;
+  font-style: italic; color: var(--text-light);
+}
+.richContent code {
+  font-family: monospace; background: var(--cream);
+  padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.9em;
+}
+.richContent pre {
+  background: var(--code-bg); color: var(--code-text);
+  padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 1em 0;
+}
+.richContent hr { border: none; border-top: 1px solid var(--nav-border); margin: 1.5em 0; }
+.richContent :global(.tiptap-image) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 1em 0;
+}
+
+/* ── Topics ────────────────────────────────────────────── */
+
+.topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  font-size: var(--fs-sub);
+  color: var(--coffee);
+  font-weight: 600;
+}
+
+.topic::before {
+  content: '#';
+  opacity: 0.6;
+  margin-right: 1px;
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .article {
+    max-width: 100%;
+  }
+
+  .heroWrap {
+    border-radius: 14px;
+  }
+
+  .pullQuote {
+    font-size: 16px;
+  }
+}
+
+/* Обложка во всю ширину экрана — только на публичной странице (.bleed),
+   где известен отступ контейнера; в кабинете это дало бы горизонтальный скролл. */
+@media (max-width: 480px) {
+  .bleed .heroWrap {
+    border-radius: 0;
+    margin-left: calc(-1 * var(--container-px, 20px));
+    margin-right: calc(-1 * var(--container-px, 20px));
+  }
+}

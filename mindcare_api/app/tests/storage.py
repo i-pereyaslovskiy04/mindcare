@@ -6,23 +6,40 @@ test_categories (M:N), test_tags (M:N). Запись/обновление дер
 транзакции (one SessionLocal + один commit).
 """
 
+import sys
 import uuid as _uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 from sqlalchemy import desc, func, or_
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
-from app.core.encryption import encrypt_text
+from app.core.encryption import decrypt_text, encrypt_text
 from app.db.session import SessionLocal
 from app.db.models import (
     Test, TestCategory, TestTag, TestInterpretation,
     Question, Option, QuestionMedia, OptionMedia, MediaFile,
     TestResult, TestResultScale, StudentAnswer,
-    Category, Tag, User, Role, UserRole, TherapyEngagement,
+    Category, Tag, User, Role, UserRole,
     Consent, ConsentRecord,
 )
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
+from app.psychologist.client_scope import lock_client_scope
+
+
+class TestStateChanged(Exception):
+    """
+    Состояние теста под блокировкой строки не совпало с ожидаемым вызывающей
+    стороной (статус или updated_at изменились с момента, когда решение было
+    принято). Мутации нет; route мапит на 409 test_state_changed. Определена
+    здесь (как TestHasResults), service её ре-экспортирует.
+    """
+
+    def __init__(self, current_status: str):
+        super().__init__(current_status)
+        self.current_status = current_status
 
 
 class TestHasResults(Exception):
@@ -319,6 +336,7 @@ def find_tests(
                 "tags":            _tags_of(t.id, db),
                 "created_at":      t.created_at,
                 "created_by_name": _author_name(t.created_by, db),
+                "updated_at":      t.updated_at,
             })
     return items, total
 
@@ -368,6 +386,7 @@ def find_my_tests(
                 "tags":           _tags_of(t.id, db),
                 "created_at":     t.created_at,
                 "created_by_name": _author_name(t.created_by, db),
+                "updated_at":      t.updated_at,
             })
     return items, total
 
@@ -583,6 +602,7 @@ def update_test(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
     unpublish_event: Optional[str] = None,
+    expected_status: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Частичное обновление. Скалярные поля — по наличию ключа.
@@ -600,6 +620,12 @@ def update_test(
     audit-событие с этим именем поверх обычного test_updated (одна транзакция,
     один commit). Применяется ПОСЛЕ проверки has_results на вопросах — неуспешная
     правка (TestHasResults) не должна снимать тест с публикации попутно.
+
+    Строка теста берётся FOR UPDATE: правка сериализуется с решениями модерации.
+    expected_status — статус, по которому service принял решение (гейт автора,
+    выбор unpublish_event); если под блокировкой он другой → TestStateChanged
+    без мутации (иначе правка легла бы на только что опубликованный/отправленный
+    на проверку тест).
     """
     if actor_id is None or actor_role is None:
         raise RuntimeError(
@@ -614,11 +640,11 @@ def update_test(
         return None
 
     with SessionLocal() as db:
-        test = db.query(Test).filter(
-            Test.uuid == uuid_obj, Test.deleted_at.is_(None)
-        ).first()
+        test = _lock_test(db, uuid_obj)
         if not test:
             return None
+        if expected_status is not None and test.status != expected_status:
+            raise TestStateChanged(test.status)
 
         for field in ("title", "description", "scoring", "max_score",
                       "time_limit_min", "is_active",
@@ -675,7 +701,9 @@ def delete_test(
     actor_role: Optional[str] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    expected_status: Optional[str] = None,
 ) -> bool:
+    """Мягкое удаление под FOR UPDATE; expected_status — как в update_test."""
     if actor_id is None or actor_role is None:
         raise RuntimeError(
             "test delete requires authenticated actor context "
@@ -688,11 +716,11 @@ def delete_test(
     except ValueError:
         return False
     with SessionLocal() as db:
-        test = db.query(Test).filter(
-            Test.uuid == uuid_obj, Test.deleted_at.is_(None)
-        ).first()
+        test = _lock_test(db, uuid_obj)
         if not test:
             return False
+        if expected_status is not None and test.status != expected_status:
+            raise TestStateChanged(test.status)
         test.deleted_at = datetime.now(timezone.utc)
         test.is_active = False
         record_event(
@@ -730,22 +758,50 @@ def get_status_and_author(uuid_str: str) -> Optional[dict]:
         return {"status": test.status, "created_by": test.created_by}
 
 
-def set_status(
+def pending_review_count() -> int:
+    """Число тестов на модерации (in_review) — бейдж меню проверяющего, без аудита."""
+    with SessionLocal() as db:
+        return db.query(Test).filter(
+            Test.deleted_at.is_(None), Test.status == "in_review",
+        ).count()
+
+
+def _lock_test(db, uuid_obj) -> Optional[Test]:
+    """Строка неудалённого теста под FOR UPDATE (свежая версия после ожидания)."""
+    return (
+        db.query(Test)
+        .filter(Test.uuid == uuid_obj, Test.deleted_at.is_(None))
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+
+
+def transition_atomic(
     uuid_str: str,
     new_status: str,
     *,
-    event: str,
+    decide: Callable[[str, Optional[int]], str],
+    expected_status: Optional[str] = None,
+    expected_updated_at: Optional[datetime] = None,
     actor_id: int,
     actor_role: str,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
-) -> Optional[dict]:
+) -> Optional[tuple[dict, str]]:
     """
-    Меняет tests.status и атомарно пишет audit-событие перехода. Легальность
-    перехода (кто → откуда → куда) уже проверена в service._validate_transition —
-    здесь только мутация, как в update_test/delete_test. event — конкретное имя
-    события (test_submitted_for_review / test_published / test_returned_for_changes),
-    выбранное вызывающей стороной по целевому статусу.
+    Переход статуса модерации в ОДНОЙ транзакции (ADR-016, дополнение
+    2026-11-02): строка теста FOR UPDATE → сверка ожидаемого состояния →
+    decide(текущий статус, created_by) — легальность и права (service), уже под
+    блокировкой → смена status/updated_at → audit-событие, которое вернул decide
+    (test_submitted_for_review / test_published / test_returned_for_changes),
+    ATOMIC → один commit.
+
+    expected_status / expected_updated_at — состояние, по которому принято
+    решение (строка очереди или формы). Несовпадение → TestStateChanged без
+    мутации и без события: решение по устаревшему экрану не применяется,
+    а второе из двух конкурирующих решений не проходит как «новая» прямая
+    публикация. Возвращает (test_dict, previous_status) или None (не найден).
     """
     safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
     try:
@@ -753,11 +809,15 @@ def set_status(
     except ValueError:
         return None
     with SessionLocal() as db:
-        test = db.query(Test).filter(
-            Test.uuid == uuid_obj, Test.deleted_at.is_(None)
-        ).first()
+        test = _lock_test(db, uuid_obj)
         if not test:
             return None
+        previous = test.status
+        if expected_status is not None and previous != expected_status:
+            raise TestStateChanged(previous)
+        if expected_updated_at is not None and test.updated_at != expected_updated_at:
+            raise TestStateChanged(previous)
+        event = decide(previous, test.created_by)
         test.status = new_status
         test.updated_at = datetime.now(timezone.utc)
         record_event(
@@ -771,7 +831,7 @@ def set_status(
         )
         db.commit()
         db.refresh(test)
-        return _test_to_dict(test, db)
+        return _test_to_dict(test, db), previous
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -928,6 +988,7 @@ def _result_to_dict(result: TestResult, db) -> dict:
     scales = (
         db.query(TestResultScale)
         .filter(TestResultScale.test_result_id == result.id)
+        .order_by(TestResultScale.id)
         .all()
     )
     return {
@@ -980,94 +1041,294 @@ def get_user_result(user_id: int, result_uuid: str) -> Optional[dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Staff-доступ к результатам (Этап E, ADR-016)
+# Staff-доступ к результатам (Этап E, ADR-016; дополнение 2026-10-29)
 # ══════════════════════════════════════════════════════════════════════════════
+#
+# Одна и та же проверка владельца результата и области доступа для списка,
+# детали и ответов — ДО чтения баллов/ответов и в той же транзакции, что и
+# чтение:
+#   * psychologist — строгое активное сопровождение с активным клиентом
+#     (app.psychologist.client_scope.lock_client_scope: FOR SHARE строки
+#     сопровождения и строки клиента; клиент может иметь staff-роли);
+#   * supervisor — владелец обязан быть «чистым» активным студентом (тот же
+#     предикат, что у списка: staff не читает самотесты другого staff).
+# Нет области / результата → None (route: единый отказ). Баллы, шкалы и ответы
+# читаются только после проверки; free_text расшифровывается только в пути
+# ответов. Блокировки снимаются при закрытии сессии — до записи content_read.
+#
+# Исторический контракт: test_title — АКТУАЛЬНОЕ название теста (snapshot нет);
+# баллы, recommendations, test_result_scales и student_answers — сохранённые
+# при submit значения, без пересчёта. Тексты вопросов/вариантов и связи медиа —
+# текущие строки, неизменные при наличии результатов (TestHasResults + FK
+# RESTRICT); удалённый файл медиатеки не показывается (правило хелперов медиа).
+#
+# Санитизация: неожиданная SQLAlchemyError / сбой расшифровки → rollback,
+# в stderr — операция/фаза/класс, наружу StaffResultsStorageError (вне except,
+# from None): SQL, параметры, ответы и шифртекст не попадают в traceback.
 
-def resolve_student_id(student_uuid: str) -> Optional[int]:
+class StaffResultsStorageError(Exception):
+    """Технический сбой staff-чтения результатов (без деталей и значений)."""
+
+
+class _Undecryptable(Exception):
+    pass
+
+
+def _diag(operation: str, phase: str, error_class: str) -> None:
+    print(
+        f"[STAFF_RESULTS] op={operation} phase={phase} error={error_class}",
+        file=sys.stderr,
+    )
+
+
+def _parse_uuid(value) -> Optional[_uuid.UUID]:
+    if isinstance(value, _uuid.UUID):
+        return value
+    try:
+        return _uuid.UUID(str(value))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _pure_active_student_id(db, *, user_id: Optional[int] = None,
+                            user_uuid: Optional[_uuid.UUID] = None) -> Optional[int]:
     """
-    users.id по uuid, ТОЛЬКО если это реальный студент: активная роль student и
+    users.id, ТОЛЬКО если это реальный активный студент: активная роль student и
     НИ ОДНОЙ активной не-student роли. Роль student неявно выдана всем staff
-    (ADR-024), поэтому staff-аккаунты исключаем — иначе staff мог бы читать
+    (ADR-024), поэтому staff-аккаунты исключаем — иначе supervisor читал бы
     результаты самотестирования другого staff. Предикат совпадает с
     supervisor.storage.get_students.
     """
-    try:
-        uuid_obj = _uuid.UUID(student_uuid)
-    except (ValueError, TypeError, AttributeError):
-        return None
     now = datetime.now(timezone.utc)
-    with SessionLocal() as db:
-        user = db.query(User).filter(
-            User.uuid == uuid_obj,
-            User.is_active.is_(True),
-            User.deleted_at.is_(None),
-        ).first()
-        if not user:
-            return None
+    q = db.query(User.id).filter(User.is_active.is_(True), User.deleted_at.is_(None))
+    q = q.filter(User.id == int(user_id)) if user_id is not None else q.filter(User.uuid == user_uuid)
+    uid = q.scalar()
+    if uid is None:
+        return None
 
-        def _has_role(is_student: bool) -> bool:
-            q = (
-                db.query(UserRole.id)
-                .join(Role, Role.id == UserRole.role_id)
-                .filter(
-                    UserRole.user_id == user.id,
-                    (Role.name == "student") if is_student else (Role.name != "student"),
-                    or_(UserRole.expires_at.is_(None), UserRole.expires_at > now),
-                )
+    def _has_role(is_student: bool) -> bool:
+        sub = (
+            db.query(UserRole.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .filter(
+                UserRole.user_id == uid,
+                (Role.name == "student") if is_student else (Role.name != "student"),
+                or_(UserRole.expires_at.is_(None), UserRole.expires_at > now),
             )
-            return db.query(q.exists()).scalar()
-
-        return user.id if (_has_role(True) and not _has_role(False)) else None
-
-
-def psychologist_has_engagement(psychologist_id: int, client_id: int) -> bool:
-    """Есть ли у психолога active/past назначенная консультация с этим студентом
-    (ADR-016). Любой статус engagement — по psychologist_id (не transferred_to:
-    после перевода доступ имеет уже новый психолог по своей строке engagement)."""
-    with SessionLocal() as db:
-        return db.query(
-            db.query(TherapyEngagement.id).filter(
-                TherapyEngagement.psychologist_id == psychologist_id,
-                TherapyEngagement.client_id == client_id,
-            ).exists()
-        ).scalar()
-
-
-def find_results_for_student(
-    student_id: int, page: int = 1, size: int = 20,
-) -> tuple[list[dict], int]:
-    """Metadata-список результатов студента для staff: uuid/test_title/submitted_at
-    БЕЗ баллов (баллы — только в detail под audit, как content session_notes)."""
-    with SessionLocal() as db:
-        q = db.query(TestResult).filter(TestResult.user_id == student_id)
-        total = q.count()
-        rows = (
-            q.order_by(desc(TestResult.submitted_at))
-            .offset((page - 1) * size).limit(size).all()
         )
-        items = []
-        for r in rows:
-            test = db.query(Test).filter(Test.id == r.test_id).first()
-            items.append({
-                "uuid": str(r.uuid),
-                "test_title": test.title if test else None,
-                "submitted_at": r.submitted_at,
-            })
-    return items, total
+        return db.query(sub.exists()).scalar()
+
+    return uid if (_has_role(True) and not _has_role(False)) else None
 
 
-def get_result_with_owner(result_uuid: str) -> Optional[tuple[dict, int, int]]:
-    """(полный result-dict, owner user_id, result.id) или None. owner_id — для
-    scope-проверки, result.id — target аудита."""
-    try:
-        uuid_obj = _uuid.UUID(result_uuid)
-    except (ValueError, TypeError, AttributeError):
+def resolve_student_id(student_uuid) -> Optional[int]:
+    """users.id «чистого» активного студента по uuid (см. _pure_active_student_id)."""
+    uuid_obj = _parse_uuid(student_uuid)
+    if uuid_obj is None:
         return None
     with SessionLocal() as db:
-        result = db.query(TestResult).filter(TestResult.uuid == uuid_obj).first()
-        if not result:
+        return _pure_active_student_id(db, user_uuid=uuid_obj)
+
+
+def _results_page(db, user_id: int, page: int, size: int) -> tuple[list[dict], int]:
+    """Metadata-страница: uuid/test_title/submitted_at БЕЗ баллов.
+    Устойчивая сортировка (submitted_at DESC, id DESC); название — актуальное.
+    Фильтров по публикации/статусу/удалению теста нет: история доступна всегда."""
+    total = db.query(func.count(TestResult.id)).filter(TestResult.user_id == user_id).scalar() or 0
+    rows = (
+        db.query(TestResult.uuid, TestResult.submitted_at, Test.title)
+        .join(Test, Test.id == TestResult.test_id)
+        .filter(TestResult.user_id == user_id)
+        .order_by(TestResult.submitted_at.desc(), TestResult.id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
+    items = [
+        {"uuid": str(r.uuid), "test_title": r.title, "submitted_at": r.submitted_at}
+        for r in rows
+    ]
+    return items, int(total)
+
+
+def _guarded(operation: str, fn):
+    """Выполняет fn(db) в одной сессии с санитизацией технических сбоев."""
+    with SessionLocal() as db:
+        error_class = None
+        phase = "read"
+        out = None
+        try:
+            out = fn(db)
+        except _Undecryptable:
+            error_class, phase = "Undecryptable", "decrypt"
+        except SQLAlchemyError as exc:
+            error_class = type(exc).__name__
+        if error_class is not None:
+            try:
+                db.rollback()
+            except Exception as exc:   # noqa: BLE001 — rollback best-effort
+                _diag(operation, "rollback", type(exc).__name__)
+            _diag(operation, phase, error_class)
+            raise StaffResultsStorageError() from None
+    return out
+
+
+def list_results_for_psychologist(
+    psychologist_id: int, student_uuid, page: int, size: int,
+) -> Optional[tuple[list[dict], int]]:
+    """Список результатов клиента психолога; нет области → None."""
+    uuid_obj = _parse_uuid(student_uuid)
+    if uuid_obj is None:
+        return None
+
+    def _read(db):
+        scope = lock_client_scope(db, psychologist_id, client_uuid=uuid_obj)
+        if scope is None:
             return None
-        return _result_to_dict(result, db), result.user_id, result.id
+        return _results_page(db, scope[1], page, size)
+
+    return _guarded("list_psychologist", _read)
+
+
+def list_results_for_supervisor(
+    student_uuid, page: int, size: int,
+) -> Optional[tuple[list[dict], int]]:
+    """Список результатов «чистого» активного студента; иначе None."""
+    uuid_obj = _parse_uuid(student_uuid)
+    if uuid_obj is None:
+        return None
+
+    def _read(db):
+        student_id = _pure_active_student_id(db, user_uuid=uuid_obj)
+        if student_id is None:
+            return None
+        return _results_page(db, student_id, page, size)
+
+    return _guarded("list_supervisor", _read)
+
+
+def _decrypt_answer(enc: str) -> str:
+    text = None
+    failed = False
+    try:
+        text = decrypt_text(enc)
+    except Exception:   # noqa: BLE001 — класс и значения не раскрываем
+        failed = True
+    if failed:
+        raise _Undecryptable()   # вне except: без __context__ со значениями
+    return text
+
+
+def _int_or_none(value) -> Optional[int]:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _answers_to_dict(result: TestResult, db) -> dict:
+    """
+    Ответы прохождения для психолога: ВСЕ вопросы теста в порядке теста
+    (question_order, id) + сохранённые ответы. Порядок показа клиенту при
+    перемешивании не сохраняется — поэтому order="test_order". Неотвеченный
+    вопрос → answered=False. Варианты — только выбранные, по option_order,
+    с текстом и медиа; value_score, config, id и ciphertext не отдаются.
+    """
+    test = db.query(Test.title).filter(Test.id == result.test_id).first()
+    questions = (
+        db.query(Question)
+        .options(
+            selectinload(Question.media).selectinload(QuestionMedia.media),
+            selectinload(Question.options)
+            .selectinload(Option.media).selectinload(OptionMedia.media),
+        )
+        .filter(Question.test_id == result.test_id)
+        .order_by(Question.question_order, Question.id)
+        .all()
+    )
+    answers = (
+        db.query(StudentAnswer)
+        .filter(StudentAnswer.test_result_id == result.id)
+        .order_by(StudentAnswer.id)
+        .all()
+    )
+    by_question: dict[int, StudentAnswer] = {}
+    for a in answers:
+        by_question.setdefault(a.question_id, a)
+
+    items = []
+    for position, q in enumerate(questions, start=1):
+        a = by_question.get(q.id)
+        chosen_ids: set[int] = set()
+        scale_value = None
+        free_text = None
+        if a is not None:
+            if a.option_id is not None:
+                chosen_ids.add(a.option_id)
+            chosen_ids.update(a.selected_options or [])
+            scale_value = a.scale_value
+            if a.free_text_answer_enc:
+                free_text = _decrypt_answer(a.free_text_answer_enc) or None
+        chosen = [
+            {"option_text": o.option_text, "media": _option_media_to_list(o.media)}
+            for o in sorted(q.options, key=lambda o: (o.option_order, o.id))
+            if o.id in chosen_ids
+        ]
+        cfg = q.config or {}
+        is_scale = q.question_type == "scale"
+        items.append({
+            "position":      position,
+            "question_text": q.question_text,
+            "question_type": q.question_type or "single_choice",
+            "answered":      bool(chosen) or scale_value is not None or bool(free_text),
+            "media":         _question_media_to_list(q.media),
+            "options":       chosen,
+            "scale_value":   scale_value,
+            "scale_min":     _int_or_none(cfg.get("min")) if is_scale else None,
+            "scale_max":     _int_or_none(cfg.get("max")) if is_scale else None,
+            "free_text":     free_text,
+        })
+    return {
+        "result_uuid":  str(result.uuid),
+        "test_title":   test.title if test else None,
+        "submitted_at": result.submitted_at,
+        "order":        "test_order",
+        "items":        items,
+    }
+
+
+def read_result_for_staff(
+    *, role: str, actor_id: int, result_uuid, with_answers: bool = False,
+) -> Optional[dict]:
+    """
+    {"result_id", "data"} — полный результат (with_answers=False) или ответы
+    (with_answers=True, только psychologist) после проверки области; иначе None.
+
+    Проверка — по проекции (id, user_id) результата, БЕЗ чтения баллов; затем
+    область роли; только потом чтение содержимого в той же транзакции.
+    """
+    uuid_obj = _parse_uuid(result_uuid)
+    if uuid_obj is None:
+        return None
+    if with_answers and role != "psychologist":
+        raise ValueError("answers are available to psychologist only")
+
+    def _read(db):
+        owner = (
+            db.query(TestResult.id, TestResult.user_id)
+            .filter(TestResult.uuid == uuid_obj)
+            .first()
+        )
+        if owner is None:
+            return None
+        result_id, owner_id = int(owner.id), int(owner.user_id)
+        if role == "psychologist":
+            if lock_client_scope(db, actor_id, client_id=owner_id) is None:
+                return None
+        elif _pure_active_student_id(db, user_id=owner_id) is None:
+            return None
+        result = db.get(TestResult, result_id)
+        data = _answers_to_dict(result, db) if with_answers else _result_to_dict(result, db)
+        return {"result_id": result_id, "data": data}
+
+    return _guarded("answers" if with_answers else "detail", _read)
 
 
 # ── consent (ФЗ-152) ──────────────────────────────────────────────────────────

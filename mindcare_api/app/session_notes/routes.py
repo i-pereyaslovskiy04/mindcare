@@ -11,6 +11,11 @@ Session notes API.
                     admin: metadata-only (content_available=false)
   - DELETE        → эндпоинта нет (намеренно)
 
+ADR-035: POST проверяет связи (чужие/несогласованные → 422 +
+session_note_create_failed); PATCH пишет через общий механизм версий
+(необязательный version → CAS 409 + session_note_update_failed; без version —
+сохранённый last-write-wins), no-op не пишет событие.
+
 Для multi-role пользователя policy-ветка/audit выбираются через
 `service._resolve_notes_role`: заголовок `X-Active-Role` (активный кабинет)
 валидируется по membership (невалидная роль → 403, не тихий fallback); без
@@ -21,6 +26,9 @@ service.py.
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from typing import Optional, Union
 
+from app.audit import Actor
+from app.audit.failsafe import record_secondary_failure
+from app.audit.request_context import build_request_context
 from app.auth.deps import get_current_user, require_role, resolve_role_or_403
 from app.session_notes import service
 from app.session_notes.schemas import (
@@ -43,6 +51,17 @@ def _client_ip(request: Request) -> Optional[str]:
     return request.client.host if request.client else None
 
 
+def _record_failure(event: str, actor_id: int, code: str, request: Request) -> None:
+    record_secondary_failure(
+        event=event,
+        actor=Actor.user(int(actor_id), "psychologist"),
+        failure_reason_code=code,
+        context=build_request_context(
+            ip=_client_ip(request), user_agent=request.headers.get("user-agent"),
+        ),
+    )
+
+
 @router.post("", response_model=SessionNoteRead, status_code=status.HTTP_201_CREATED)
 def create_note(
     body:         SessionNoteCreate,
@@ -58,6 +77,13 @@ def create_note(
             ),
             ip=_client_ip(request),
             user_agent=request.headers.get("user-agent"),
+        )
+    except service.NoteLinkInvalid as exc:
+        _record_failure("session_note_create_failed", current_user["id"],
+                        exc.failure_reason, request)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Недопустимая привязка заметки",
         )
     except RuntimeError:
         raise HTTPException(
@@ -147,6 +173,13 @@ def update_note(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except service.NoteNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заметка не найдена")
+    except service.NoteVersionConflict as exc:
+        _record_failure("session_note_update_failed", current_user["id"],
+                        exc.failure_reason, request)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Заметку уже изменили. Обновите её и повторите правку.",
+        )
     except RuntimeError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

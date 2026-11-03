@@ -1,117 +1,106 @@
-import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Badge from '../../../../components/UI/Badge/Badge';
-import Tag from '../../../../components/UI/Tag/Tag';
+import ResponsiveTable from '../../../../components/UI/ResponsiveTable/ResponsiveTable';
+import ActionsMenu from '../../../../components/UI/ActionsMenu/ActionsMenu';
+import TagList from '../../../../components/UI/TagList/TagList';
 import styles from './NewsTable.module.css';
 
-const SKELETON_ROWS = 6;
+// Тем видно до «+N»: две — строка таблицы не выше двух строк меток.
+const TOPICS_VISIBLE = 2;
 
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('ru-RU');
 }
 
-function SkeletonRow() {
-  return (
-    <tr>
-      {Array.from({ length: 6 }, (_, i) => (
-        <td key={i}><span className={styles.skeletonCell} /></td>
-      ))}
-    </tr>
-  );
+// Битая ссылка на обложку: вместо значка браузера — плашка media.
+function hideBrokenImage(e) {
+  e.currentTarget.style.visibility = 'hidden';
 }
 
+function topicItems(item) {
+  return item.tags.map((t) => ({ key: t.uuid, label: t.name }));
+}
+
+function Topics({ item }) {
+  return <TagList items={topicItems(item)} maxVisible={TOPICS_VISIBLE} label="Темы" />;
+}
+
+/**
+ * Список новостей admin и supervisor (один компонент — права обеих ролей на
+ * /api/admin/news одинаковы) на shared ResponsiveTable: здесь только
+ * содержимое, раскладку wide / compact / mobile задаёт ResponsiveTable.
+ *   wide    — Новость (обложка, заголовок, автор · дата) | Статус | Темы | действия;
+ *   compact/mobile — темы уходят строкой деталей и не сжимают заголовок.
+ * Основное действие — «Редактировать», удаление — в меню «⋮».
+ */
 export default function NewsTable({ items, loading, error, onEdit, onDelete, editLoadingId = null }) {
   return (
-    <div className={styles.wrapper}>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th className={styles.colCover} />
-            <th>Заголовок</th>
-            <th>Теги</th>
-            <th>Статус</th>
-            <th>Дата</th>
-            <th aria-label="Действия" />
-          </tr>
-        </thead>
-        <tbody>
-          {loading && Array.from({ length: SKELETON_ROWS }, (_, i) => (
-            <SkeletonRow key={i} />
-          ))}
-
-          {!loading && error && (
-            <tr>
-              <td colSpan={6} className={styles.stateCell}>
-                <span className={styles.errorText}>Ошибка загрузки: {error}</span>
-              </td>
-            </tr>
-          )}
-
-          {!loading && !error && items.length === 0 && (
-            <tr>
-              <td colSpan={6} className={styles.stateCell}>Новостей пока нет</td>
-            </tr>
-          )}
-
-          {!loading && !error && items.map(item => (
-            <tr key={item.uuid} className={styles.row}>
-              <td className={styles.colCover}>
-                {item.cover_image_url
-                  ? <img src={item.cover_image_url} alt="" className={styles.thumb} />
-                  : <div className={styles.thumbPlaceholder} />}
-              </td>
-              <td>
-                <span className={styles.title}>{item.title}</span>
-                {item.created_by_name && (
-                  <span className={styles.meta}>{item.created_by_name}</span>
-                )}
-              </td>
-              <td>
-                <div className={styles.tags}>
-                  {item.tags.map(t => (
-                    <Tag key={t.uuid} variant="admin">{t.name}</Tag>
-                  ))}
-                </div>
-              </td>
-              <td>
-                <Badge tone={item.is_published ? 'success' : 'warning'}>
-                  {item.is_published ? 'Опубликовано' : 'Черновик'}
-                </Badge>
-              </td>
-              <td className={styles.date}>
-                {formatDate(item.published_at || item.created_at)}
-              </td>
-              <td className={styles.actionsCell}>
-                <div className={styles.actions}>
-                  <Button
-                    variant="icon"
-                    size="sm"
-                    onClick={() => onEdit(item)}
-                    aria-label={`Редактировать «${item.title}»`}
-                    title="Редактировать"
-                    disabled={editLoadingId === item.uuid}
-                  >
-                    {editLoadingId === item.uuid
-                      ? <span className={styles.spinner}>…</span>
-                      : <Icon name="edit" size={15} />}
-                  </Button>
-                  <Button
-                    variant="icon"
-                    size="sm"
-                    tone="danger"
-                    onClick={() => onDelete(item)}
-                    aria-label={`Удалить «${item.title}»`}
-                    title="Удалить"
-                  >
-                    <Icon name="trash" size={15} />
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ResponsiveTable
+      label="Новости"
+      items={items}
+      getKey={(item) => item.uuid}
+      loading={loading}
+      error={error ? `Ошибка загрузки: ${error}` : null}
+      emptyText="Новостей пока нет"
+      identity={{
+        header: 'Новость',
+        media: (item) => (item.cover_image_url
+          ? <img src={item.cover_image_url} alt="" onError={hideBrokenImage} />
+          : null),
+        primary: (item) => item.title,
+        secondary: (item) => (
+          <>
+            {item.created_by_name && (
+              <>
+                {item.created_by_name}
+                <span aria-hidden="true"> · </span>
+              </>
+            )}
+            <span className={styles.nowrap}>{formatDate(item.published_at || item.created_at)}</span>
+          </>
+        ),
+      }}
+      status={{
+        header: 'Статус',
+        render: (item) => (
+          <Badge tone={item.is_published ? 'success' : 'warning'}>
+            {item.is_published ? 'Опубликовано' : 'Черновик'}
+          </Badge>
+        ),
+      }}
+      columns={[
+        {
+          key: 'topics',
+          header: 'Темы',
+          width: '14rem',
+          render: (item) => (item.tags.length > 0
+            ? <Topics item={item} />
+            : <span className={styles.none}>—</span>),
+        },
+      ]}
+      meta={(item) => (item.tags.length > 0 ? [{ label: 'Темы', value: <Topics item={item} /> }] : [])}
+      actions={{
+        primary: (item) => (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onEdit(item)}
+            disabled={editLoadingId === item.uuid}
+            aria-busy={editLoadingId === item.uuid || undefined}
+            aria-label={`Редактировать «${item.title}»`}
+          >
+            Редактировать
+          </Button>
+        ),
+        menu: (item) => (
+          <ActionsMenu
+            triggerLabel={`Другие действия: «${item.title}»`}
+            items={[{ id: 'delete', label: 'Удалить', tone: 'danger', onSelect: () => onDelete(item) }]}
+          />
+        ),
+      }}
+    />
   );
 }

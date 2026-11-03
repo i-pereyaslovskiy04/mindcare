@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../AuthContext';
 import { registerInit, registerConfirm } from '../../../api/auth.api';
-import SocialButtons from './SocialButtons';
 import RegistrationOtpStep, {
   EMPTY_CODE, OTP_STATUS, useResendTimer,
 } from './RegistrationOtpStep';
 import Checkbox from '../../../components/UI/Checkbox/Checkbox';
 import useAllowedEmailDomains from '../hooks/useAllowedEmailDomains';
+import AllowedDomainsHint, {
+  DOMAIN_ERROR_ID, DOMAINS_HINT_ID, isDomainUnsupported,
+} from './AllowedDomainsHint';
 
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
@@ -47,6 +49,9 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState({});
   const [passwordStrength, setPasswordStrength] = useState(0);
+  // Адрес, для которого показана проверка домена (blur/submit). Пока email
+  // правят, ошибка домена скрыта; свежий список (refetch после 422) учитывается.
+  const [domainCheckedFor, setDomainCheckedFor] = useState(null);
 
   // Step 2 — code confirmation
   const [step, setStep] = useState('form');
@@ -60,16 +65,20 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
 
-  // Разрешённые домены — ТОЛЬКО из ответа backend (GET /api/public/email-domains),
-  // подсказкой под полем Email. Допуск решает backend (init и confirm); список его
-  // не заменяет и форму не блокирует. Тексты отказов приходят с backend как есть.
+  // Разрешённые домены — ТОЛЬКО из ответа backend (GET /api/public/email-domains):
+  // короткая подсказка под полем Email, сам список — в tooltip (AllowedDomainsHint).
+  // Допуск решает backend (init и confirm); список его не заменяет и форму не
+  // блокирует: ошибка домена — только подсказка. Тексты отказов приходят с
+  // backend как есть.
   const { data: allowedDomains, refetch: refetchDomains } = useAllowedEmailDomains();
-  const domainsHint = allowedDomains.length
-    ? `Разрешённые домены: ${allowedDomains.map((d) => `@${d}`).join(', ')}`
-    : '';
+  const domainError = !errors.email
+    && domainCheckedFor === email
+    && allowedDomains.length > 0
+    && isDomainUnsupported(email, allowedDomains);
   const emailDescribedBy = [
     errors.email ? 'r-email-hint' : null,
-    domainsHint ? 'r-email-domains' : null,
+    // Строка под полем — подсказка или (при неподдерживаемом домене) ошибка.
+    allowedDomains.length ? (domainError ? DOMAIN_ERROR_ID : DOMAINS_HINT_ID) : null,
   ].filter(Boolean).join(' ') || undefined;
 
   // Родитель узнаёт о шаге в том же обновлении, что и сама форма — без кадра,
@@ -111,6 +120,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
       confirmPassword: !confirmValid,
       consent: !consent,
     });
+    setDomainCheckedFor(email);
 
     if (!nameValid || !emailValid || !passwordValid || !confirmValid || !consent) return;
 
@@ -218,16 +228,13 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
   // ── STEP 1: форма регистрации ──────────────────────────────────────────────
   return (
     <form className={`${styles.authPanel} ${styles.active}`} onSubmit={handleFormSubmit} noValidate>
-      {/* VK (заглушка) + Яндекс — та же логика, что на соседней вкладке. */}
-      <SocialButtons />
-
       <div className={`${styles.authField} ${errors.name ? styles.hasErr : ''}`}>
-        <label htmlFor="r-name">Имя</label>
+        <label htmlFor="r-name">ФИО</label>
         <input
           type="text"
           id="r-name"
-          placeholder="Ваше имя"
-          autoComplete="given-name"
+          placeholder="Введите ФИО"
+          autoComplete="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => setErrors((p) => ({ ...p, name: !validateName() }))}
@@ -236,7 +243,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
           aria-describedby={errors.name ? 'r-name-hint' : undefined}
         />
         <span className={styles.authHint} id="r-name-hint" role="alert">
-          Введите имя (минимум 2 символа)
+          Введите ФИО (минимум 2 символа)
         </span>
       </div>
 
@@ -249,19 +256,21 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          onBlur={() => setErrors((p) => ({ ...p, email: !validateEmail() }))}
-          className={errors.email ? styles.err : email && isEmail(email) ? styles.ok : ''}
-          aria-invalid={errors.email ? 'true' : undefined}
+          onBlur={() => {
+            setErrors((p) => ({ ...p, email: !validateEmail() }));
+            setDomainCheckedFor(email);
+          }}
+          className={
+            errors.email || domainError ? styles.err : email && isEmail(email) ? styles.ok : ''
+          }
+          aria-invalid={errors.email || domainError ? 'true' : undefined}
           aria-describedby={emailDescribedBy}
         />
-        <span className={styles.authHint} id="r-email-hint" role="alert">
-          Введите корректный email
-        </span>
-        {domainsHint && (
-          <span className={styles.authNote} id="r-email-domains">
-            {domainsHint}
+        <AllowedDomainsHint domains={allowedDomains} unsupported={domainError}>
+          <span className={styles.authHint} id="r-email-hint" role="alert">
+            Введите корректный email
           </span>
-        )}
+        </AllowedDomainsHint>
       </div>
 
       <div className={`${styles.authField} ${errors.password ? styles.hasErr : ''}`}>
@@ -278,23 +287,27 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
           aria-invalid={errors.password ? 'true' : undefined}
           aria-describedby="r-pass-hint r-pass-strength"
         />
-        <div className={styles.psBars} aria-hidden="true">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={`${styles.psBar} ${
-                i <= passwordStrength ? styles[STRENGTH_CLASSES[passwordStrength]] : ''
-              }`}
-            />
-          ))}
-        </div>
-        <div
-          id="r-pass-strength"
-          className={styles.psLbl}
-          style={{ color: STRENGTH_COLORS[passwordStrength] }}
-          aria-live="polite"
-        >
-          {STRENGTH_LABELS[passwordStrength]}
+        {/* Полоски и подпись силы — одна строка: под полем нет отдельного
+            ряда, который держал бы место, пока пароль не введён. */}
+        <div className={styles.psRow}>
+          <div className={styles.psBars} aria-hidden="true">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`${styles.psBar} ${
+                  i <= passwordStrength ? styles[STRENGTH_CLASSES[passwordStrength]] : ''
+                }`}
+              />
+            ))}
+          </div>
+          <div
+            id="r-pass-strength"
+            className={styles.psLbl}
+            style={{ color: STRENGTH_COLORS[passwordStrength] }}
+            aria-live="polite"
+          >
+            {STRENGTH_LABELS[passwordStrength]}
+          </div>
         </div>
         <span className={styles.authHint} id="r-pass-hint" role="alert">
           Минимум 8 символов
@@ -350,6 +363,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
         }
         error={errors.consent}
         ariaDescribedBy={errors.consent ? 'r-consent-hint' : undefined}
+        className={styles.consentField}
       />
       {errors.consent && (
         <span className={styles.consentHint} id="r-consent-hint" role="alert">
@@ -361,7 +375,7 @@ export default function RegisterForm({ onSuccess, onStepChange, onRegisteredWith
         <div className={styles.apiError} role="alert">{apiError}</div>
       )}
 
-      <button type="submit" className={styles.authBtn} disabled={isLoading}>
+      <button type="submit" className={`${styles.authBtn} ${styles.registerSubmit}`} disabled={isLoading}>
         {isLoading ? 'Отправляем код…' : 'Продолжить'}
       </button>
     </form>

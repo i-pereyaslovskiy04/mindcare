@@ -1,0 +1,29 @@
+/* Оформление — как у диалогов кабинетов на общем Modal (UserLifecycleDialog). */
+.body {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--espresso);
+  overflow-wrap: anywhere;
+}
+
+.text {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+  .body {
+    padding: 20px 18px 24px;
+  }
+}

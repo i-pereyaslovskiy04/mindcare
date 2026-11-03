@@ -104,7 +104,7 @@ export default function StudentGroupSessionsPage() {
           <Icon name="calendar" size={36} />
           <div className={styles.stateTitle}>Нет предстоящих занятий</div>
           <div className={styles.stateSub}>
-            Следите за расписанием — занятия появятся здесь.
+            Следите за расписанием - занятия появятся здесь.
           </div>
         </div>
       )}
@@ -145,7 +145,7 @@ export default function StudentGroupSessionsPage() {
                     <span className={styles.metaItem}>
                       <Icon name="calendar" size={13} />
                       {fmtDatetime(gs.starts_at)}
-                      {gs.ends_at ? ` — ${fmtDatetime(gs.ends_at)}` : ''}
+                      {gs.ends_at ? ` - ${fmtDatetime(gs.ends_at)}` : ''}
                     </span>
                     <span className={styles.metaItem}>
                       <Icon name="users" size={13} />

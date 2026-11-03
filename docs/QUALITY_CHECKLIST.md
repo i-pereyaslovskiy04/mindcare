@@ -330,6 +330,26 @@ control / set-based API, а не single-role replace:
 - Тесты: `tests/integration/test_registration_continuation.py`,
   `tests/test_register_confirm_continuation_unit.py`.
 
+**Продолжение регистрации через Яндекс/VK из письма (инварианты, не ломать):**
+
+- Отдельно от обычной регистрации: `registration_reference` и
+  `/register/confirm` к social-регистрации не относятся и наоборот.
+- Callback новой identity кладёт raw registration-ticket в HttpOnly
+  SameSite=Strict cookie `mindcare_oauth_registration`, Path
+  `/api/auth/oauth/registration`, Max-Age не больше оставшегося срока ticket,
+  Secure — по схеме callback base. Login-ticket в cookie не кладётся.
+- Письмо — ссылка `/register/social` без ticket, email, кода и провайдера.
+  Raw ticket никогда не попадает в письмо, URL, storage, логи и журнал.
+- `POST /api/auth/oauth/registration/resume` — только cookie, только чтение:
+  не отправляет код, не меняет email, не продлевает ticket и код.
+- preview/init/confirm: ticket из тела ИЛИ cookie; оба — только совпадающие,
+  иначе 409 `oauth_registration_ticket_conflict` (fail closed); ни одного —
+  400 `oauth_registration_not_found` без деталей.
+- Без cookie (другой браузер) продолжить, отправить код или сменить email
+  нельзя — защита от VK pre-hijacking.
+- Cookie удаляется после успешного confirm и когда её ticket больше не жив.
+- Тесты: `tests/integration/test_oauth_registration_continuation.py`.
+
 ---
 
 ## 8. Tables / pagination rules

@@ -53,6 +53,13 @@ export function getStaffTestResult(resultUuid, activeRole) {
   return apiFetch(`/api/staff/test-results/${resultUuid}`, { headers: _roleHeader(activeRole) });
 }
 
+// Ответы прохождения — только психологу клиента (под тем же audit content-read).
+export function getStaffTestResultAnswers(resultUuid, activeRole) {
+  return apiFetch(`/api/staff/test-results/${resultUuid}/answers`, {
+    headers: _roleHeader(activeRole),
+  });
+}
+
 // ── Admin / supervisor (Этап A/C) ─────────────────────────────────────────────
 
 export function getAdminTests({ page = 1, size = 20, search, is_active, status } = {}) {
@@ -112,16 +119,31 @@ export function deleteTest(uuid) {
 
 // ── Moderation workflow (Этап F) ────────────────────────────────────────────
 
+/** Только число тестов на модерации — бейдж меню проверяющего. */
+export function getTestsPendingCount() {
+  return apiFetch('/api/admin/tests/pending-count');
+}
+
+// Решение модерации — по конкретному состоянию теста, которое видел проверяющий
+// (статус + updated_at строки списка). Если под блокировкой состояние иное —
+// 409 { code: 'test_state_changed', current_status } без изменений.
+function decisionBody(item) {
+  return { expected_status: item.status, expected_updated_at: item.updated_at };
+}
+
 /** admin/supervisor публикуют тест (из draft/in_review/needs_changes). */
-export function publishTest(uuid) {
-  return apiFetch(`/api/admin/tests/${uuid}/publish`, { method: 'POST' });
+export function publishTest(item) {
+  return apiFetch(`/api/admin/tests/${item.uuid}/publish`, {
+    method: 'POST',
+    body: JSON.stringify(decisionBody(item)),
+  });
 }
 
 /** admin/supervisor возвращают тест на доработку (только из in_review). */
-export function returnTest(uuid, reason) {
-  return apiFetch(`/api/admin/tests/${uuid}/return`, {
+export function returnTest(item, reason) {
+  return apiFetch(`/api/admin/tests/${item.uuid}/return`, {
     method: 'POST',
-    body: JSON.stringify({ reason: reason || null }),
+    body: JSON.stringify({ ...decisionBody(item), reason: reason || null }),
   });
 }
 

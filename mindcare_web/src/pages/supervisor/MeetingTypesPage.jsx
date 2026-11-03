@@ -4,6 +4,8 @@ import Badge from '../../components/UI/Badge/Badge';
 import Button from '../../components/UI/Button/Button';
 import Checkbox from '../../components/UI/Checkbox/Checkbox';
 import Modal from '../../components/Modal/Modal';
+import ResponsiveTable from '../../components/UI/ResponsiveTable/ResponsiveTable';
+import ActionsMenu from '../../components/UI/ActionsMenu/ActionsMenu';
 import {
   getMeetingTypes,
   createMeetingType,
@@ -46,7 +48,20 @@ const EMPTY_FORM = {
   display_order: 0,
 };
 
-const COLS = 6;
+// Параметры строки: длительность (+ буфер), форматы и вид встречи.
+function durationText(item) {
+  return item.buffer_minutes > 0
+    ? `${item.duration_minutes} мин + ${item.buffer_minutes} мин буфер`
+    : `${item.duration_minutes} мин`;
+}
+
+function formatText(item) {
+  const formats = [item.allow_online && 'онлайн', item.allow_in_person && 'очно'].filter(Boolean);
+  const text = formats.join(' и ') || 'формат не задан';
+  return text[0].toUpperCase() + text.slice(1);
+}
+
+const kindText = (item) => (item.is_group ? 'Групповой' : 'Индивидуальный');
 
 export default function MeetingTypesPage() {
   const { items, loading, error, refetch } = useMeetingTypes();
@@ -130,99 +145,78 @@ export default function MeetingTypesPage() {
         </Button>
       </div>
 
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Название</th>
-              <th className={styles.thCenter}>Длительность</th>
-              <th>Формат</th>
-              <th>Тип</th>
-              <th>Статус</th>
-              <th aria-label="Действия" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={COLS} className={styles.empty}>Загрузка…</td></tr>
-            )}
-
-            {!loading && error && (
-              <tr>
-                <td colSpan={COLS} className={styles.errorCell}>
-                  Ошибка загрузки: {error}{' '}
-                  <Button variant="secondary" size="sm" onClick={refetch}>
-                    Повторить
-                  </Button>
-                </td>
-              </tr>
-            )}
-
-            {!loading && !error && items.length === 0 && (
-              <tr>
-                <td colSpan={COLS} className={styles.empty}>
-                  Нет типов встреч. Создайте первый тип консультации.
-                </td>
-              </tr>
-            )}
-
-            {!loading && !error && items.map(item => (
-              <tr key={item.id} className={styles.row}>
-                <td>
-                  <span className={styles.name}>{item.name}</span>
-                </td>
-                <td className={styles.count}>
-                  {item.duration_minutes} мин
-                  {item.buffer_minutes > 0 && (
-                    <span className={styles.bufferSub}> + {item.buffer_minutes} мин буфер</span>
-                  )}
-                </td>
-                <td>
-                  <div className={styles.badges}>
-                    {item.allow_online && <Badge tone="neutral">Онлайн</Badge>}
-                    {item.allow_in_person && <Badge tone="neutral">Очно</Badge>}
-                  </div>
-                </td>
-                <td>
-                  {item.is_group
-                    ? <Badge tone="warning">Групповой</Badge>
-                    : <Badge tone="neutral">Индивидуальный</Badge>}
-                </td>
-                <td>
-                  <div className={styles.badges}>
-                    <Badge tone={item.is_active ? 'success' : 'neutral'}>
-                      {item.is_active ? 'Активен' : 'Отключён'}
-                    </Badge>
-                    {item.is_bookable
-                      ? <Badge tone="neutral">Запись открыта</Badge>
-                      : <Badge tone="neutral">Запись закрыта</Badge>}
-                  </div>
-                </td>
-                <td className={styles.actionsCell}>
-                  <div className={styles.actions}>
-                    <Button
-                      variant="icon"
-                      size="sm"
-                      onClick={() => openEdit(item)}
-                      aria-label={`Изменить ${item.name}`}
-                      title="Изменить"
-                    >
-                      <Icon name="edit" size={15} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleActive(item)}
-                    >
-                      {item.is_active ? 'Отключить' : 'Включить'}
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Ошибка с «Повторить» — снаружи таблицы, как у Engagements; загрузку,
+          пусто и записи показывает shared ResponsiveTable. */}
+      {!loading && error ? (
+        <div className={styles.stateBox}>
+          <div className={styles.errorText}>Ошибка загрузки: {error}</div>
+          <Button variant="secondary" size="sm" onClick={refetch}>Повторить</Button>
+        </div>
+      ) : (
+        <ResponsiveTable
+          label="Типы встреч"
+          items={items}
+          getKey={(item) => item.id}
+          loading={loading}
+          emptyText="Нет типов встреч. Создайте первый тип консультации."
+          identity={{
+            header: 'Тип встречи',
+            primary: (item) => item.name,
+          }}
+          status={{
+            header: 'Доступность',
+            render: (item) => (
+              <>
+                <Badge tone={item.is_active ? 'success' : 'neutral'}>
+                  {item.is_active ? 'Активен' : 'Отключён'}
+                </Badge>
+                <Badge tone="neutral">{item.is_bookable ? 'Запись открыта' : 'Запись закрыта'}</Badge>
+              </>
+            ),
+          }}
+          columns={[
+            {
+              key: 'params',
+              header: 'Параметры',
+              render: (item) => (
+                <span className={styles.params}>
+                  <span className={styles.nowrap}>{durationText(item)}</span>
+                  <br />
+                  {formatText(item)}
+                  <span aria-hidden="true"> · </span>
+                  <span className={item.is_group ? styles.group : undefined}>{kindText(item)}</span>
+                </span>
+              ),
+            },
+          ]}
+          meta={(item) => [
+            { label: 'Длительность', value: durationText(item) },
+            { label: 'Формат', value: formatText(item) },
+            { label: 'Тип', value: kindText(item) },
+          ]}
+          actions={{
+            primary: (item) => (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => openEdit(item)}
+                aria-label={`Изменить ${item.name}`}
+              >
+                Изменить
+              </Button>
+            ),
+            menu: (item) => (
+              <ActionsMenu
+                triggerLabel={`Другие действия: ${item.name}`}
+                items={[item.is_active
+                  ? { id: 'toggle', label: 'Отключить', onSelect: () => toggleActive(item) }
+                  : { id: 'toggle', label: 'Включить', tone: 'success', onSelect: () => toggleActive(item) }]}
+              />
+            ),
+          }}
+        />
+      )}
 
       <Modal
         open={!!modal}

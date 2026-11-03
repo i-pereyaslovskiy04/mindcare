@@ -1,9 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import * as AuthContext from '../../features/auth/AuthContext';
 import * as diaryApi from '../../api/diary.api';
+import * as appointmentsApi from '../../api/appointments.api';
+import * as assignmentsApi from '../../api/assignments.api';
 import StudentHome from './StudentHome';
 
 jest.mock('../../api/diary.api');
+jest.mock('../../api/appointments.api');
+jest.mock('../../api/assignments.api');
 jest.mock('../../features/auth/AuthContext');
 jest.mock('react-router-dom', () => ({
   useNavigate: jest.fn(() => jest.fn()),
@@ -42,7 +46,9 @@ const MOCK_TODAY_WITH_ENTRY = { entry_date: '2026-06-24', mood_score: 7,    entr
 
 beforeEach(() => {
   jest.clearAllMocks();
-  AuthContext.useAuth.mockReturnValue({ user: { name: 'Тест Тестов' } });
+  AuthContext.useAuth.mockReturnValue({ user: { name: 'Тест Тестов' }, isImpersonating: false });
+  appointmentsApi.getMyUpcomingAppointments.mockResolvedValue([]);
+  assignmentsApi.getMyAssignments.mockResolvedValue({ items: [], has_more: false });
   diaryApi.getDiarySummary.mockResolvedValue(MOCK_SUMMARY_14D_WITH_ENTRIES);
   diaryApi.getTodayDiaryEntry.mockResolvedValue(MOCK_TODAY_NO_ENTRY);
   diaryApi.getDiaryEmotions.mockResolvedValue([
@@ -133,10 +139,70 @@ test('psychologistCard does not show old "Предстоящая сессия п
   expect(screen.queryByText(/Предстоящая сессия пока не назначена/i)).not.toBeInTheDocument();
 });
 
-test('psychologistCard shows honest placeholder for session info', async () => {
+test('psychologistCard больше не обещает «информацию о встречах позже»', async () => {
   render(<StudentHome />);
   await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalledTimes(1));
-  expect(screen.getByText(/Информация о встречах появится здесь позже/i)).toBeInTheDocument();
+  expect(screen.queryByText(/появится здесь позже/i)).not.toBeInTheDocument();
+});
+
+// ─── Ближайшие встречи и активные задания ─────────────────────────────────────
+
+const FUTURE = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString();
+
+test('«Ближайшие встречи»: рендерит выборку сервера как есть (по возрастанию, уже не больше трёх)', async () => {
+  // Фильтрация и сортировка — на сервере (/api/appointments/my/upcoming);
+  // хук и компонент только отображают то, что вернул API.
+  appointmentsApi.getMyUpcomingAppointments.mockResolvedValue([
+    { uuid: 'a1', status: 'pending_confirmation', starts_at: FUTURE(24), meeting_type_name: 'Первая' },
+    { uuid: 'a2', status: 'confirmed', starts_at: FUTURE(48), meeting_type_name: 'Вторая' },
+    { uuid: 'a4', status: 'pending_confirmation', starts_at: FUTURE(96), meeting_type_name: 'Четвёртая' },
+  ]);
+  render(<StudentHome />);
+  const card = await screen.findByRole('region', { name: 'Ближайшие встречи' });
+  const rows = await within(card).findAllByRole('listitem');
+  expect(rows.map((r) => r.textContent)).toEqual([
+    expect.stringContaining('Первая · ожидает подтверждения'),
+    expect.stringContaining('Вторая · подтверждена'),
+    expect.stringContaining('Четвёртая'),
+  ]);
+  expect(within(card).queryByText(/Отменённая|Прошедшая|Пятая/)).toBeNull();
+  expect(appointmentsApi.getMyUpcomingAppointments).toHaveBeenCalledWith({ limit: 3 });
+  expect(within(card).getByRole('link', { name: 'Открыть календарь' }))
+    .toHaveAttribute('href', '/student/calendar');
+});
+
+test('«Ближайшие встречи»: пусто — честное сообщение', async () => {
+  render(<StudentHome />);
+  const card = await screen.findByRole('region', { name: 'Ближайшие встречи' });
+  expect(await within(card).findByText('Запланированных встреч нет.')).toBeInTheDocument();
+});
+
+test('«Активные задания»: первые три открытых, ссылка на задания', async () => {
+  assignmentsApi.getMyAssignments.mockResolvedValue({
+    items: [
+      { uuid: 't1', text: 'Прочитать материал', due_date: '2026-11-10' },
+      { uuid: 't2', text: 'Записать мысли', due_date: null },
+    ],
+    has_more: false,
+  });
+  render(<StudentHome />);
+  const card = await screen.findByRole('region', { name: 'Активные задания' });
+  expect(await within(card).findByText('Прочитать материал')).toBeInTheDocument();
+  expect(within(card).getByText(/до 10 ноября 2026/)).toBeInTheDocument();
+  expect(within(card).getByText('Записать мысли')).toBeInTheDocument();
+  expect(assignmentsApi.getMyAssignments).toHaveBeenCalledWith({ view: 'open', size: 3 });
+  expect(within(card).getByRole('link', { name: 'Открыть задания' }))
+    .toHaveAttribute('href', '/student/tasks');
+});
+
+test('«Активные задания» при входе под именем пользователя: без запроса, одно сообщение', async () => {
+  AuthContext.useAuth.mockReturnValue({ user: { name: 'Тест Тестов' }, isImpersonating: true });
+  render(<StudentHome />);
+  const card = await screen.findByRole('region', { name: 'Активные задания' });
+  expect(within(card).getByText('Задания недоступны при входе под именем пользователя.')).toBeInTheDocument();
+  expect(within(card).queryByRole('link')).toBeNull();
+  await waitFor(() => expect(diaryApi.getTodayDiaryEntry).toHaveBeenCalled());
+  expect(assignmentsApi.getMyAssignments).not.toHaveBeenCalled();
 });
 
 // ─── wellbeingCard ────────────────────────────────────────────────────────────
@@ -263,20 +329,14 @@ test('old panel heading "Моё состояние" is not rendered', async () =
   expect(screen.queryByText('Моё состояние')).not.toBeInTheDocument();
 });
 
-// ─── приветствие без имени: подпись роли — из общей карты ─────────────────────
+// ─── приветствие: нейтральное, ФИО не разбирается ────────────────────────────
 
-test('без имени приветствие использует подпись роли «Пользователь», не «Студент»', async () => {
-  AuthContext.useAuth.mockReturnValue({ user: {} });
+test('приветствие нейтральное: первое слово ФИО (фамилия) не выводится', async () => {
+  AuthContext.useAuth.mockReturnValue({ user: { name: 'Иванова Анна Петровна' }, isImpersonating: false });
   render(<StudentHome />);
   const heading = await screen.findByRole('heading', { level: 1 });
-  expect(heading).toHaveTextContent('Здравствуйте, Пользователь');
-  expect(heading).not.toHaveTextContent('Студент');
-  await screen.findByText('Самонаблюдение за 14 дней');   // дождаться загрузки данных
-});
-
-test('с именем в профиле приветствие по-прежнему по имени', async () => {
-  render(<StudentHome />);
-  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Здравствуйте, Тест');
+  expect(heading).toHaveTextContent('Здравствуйте!');
+  expect(heading).not.toHaveTextContent('Иванова');
   await screen.findByText('Самонаблюдение за 14 дней');   // дождаться загрузки данных
 });
 

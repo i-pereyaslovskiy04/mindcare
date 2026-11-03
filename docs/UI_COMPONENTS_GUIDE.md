@@ -18,6 +18,7 @@
 | Интерактивный фильтр-чип | `FilterChip` |
 | Статус / роль / состояние сущности | `Badge` |
 | Display-only тег контента | `Tag` |
+| Набор display-only тегов с лимитом «+N» | `TagList` |
 | Выпадающий список | `Select` |
 | Множественный выбор | `MultiSelect` |
 | Выбор даты (только дата) | `DateInput` |
@@ -168,8 +169,8 @@ Badge — это display-only `<span>`, не button.
 
 **Использовать для:**
 - тема материала (MaterialCard, MaterialsItemPage)
-- тег новости (NewsItemPage, NewsTable)
-- категория статьи (ArticlesTable)
+- тег новости (NewsItemPage; в NewsTable — через `TagList`)
+- тип материала (категория) в ArticlesTable — через `TagList variant="category"`
 - словарный тег в TagsTable
 
 Tag — это display-only `<span>`, не button.
@@ -181,6 +182,18 @@ Tag — это display-only `<span>`, не button.
 - статус / роль → используй `Badge`
 - removable chip → feature-specific
 - overlay тег внутри кликабельной hero-карточки (FeaturedNews.newsTagOverlay)
+
+---
+
+## TagList
+
+**Путь:** `src/components/UI/TagList/TagList.jsx` (2026-10-29). Потребители: `NewsTable` (темы), `ArticlesTable` (темы и тип материала — второй `TagList` с `variant="category"`), `TestsTable` (тип материала), без изменения API.
+
+Presentation-примитив для набора display-only тегов (`Tag`): раскладка с переносом, лимит видимых и кнопка «+N». API: `items [{ key, label }]`, `maxVisible?` (по умолчанию — все), `label` (`aria-label` списка, например «Темы»), `variant?` (вариант `Tag`, по умолчанию `admin`). Что показать, в каком порядке и сколько — решает фича; компонент данные не загружает, не фильтрует и о сущностях (новости, статьи) не знает.
+
+- Разметка: `ul` с `aria-label` → `li` → `Tag`. Пустой набор — ничего не рендерит (заглушку «—» показывает фича).
+- «+N» — настоящая `button` (`aria-expanded`, `aria-controls` на список, имя «+N: показать все, всего M»): раскрывает полный список на месте и сворачивает его («Свернуть»); работает мышью, клавиатурой (Tab, Enter, Space) и на touch (зона нажатия расширена без роста строки). Без popover и Escape.
+- Длинный тег не обрезается: текст переносится внутри «таблетки» (радиус как у однострочной), тег не шире контейнера — набор не держит ширину колонки и не даёт горизонтального скролла. Глобальный `Tag` не меняется (`nowrap` остаётся по умолчанию).
 
 ---
 
@@ -209,7 +222,8 @@ Tag — это display-only `<span>`, не button.
 ошибке (`<id>-error`); без `error` новых атрибутов нет.
 
 **Optional `appearance="field"` (2026-10-15).** Вид TextField: подпись
-(11px uppercase), рамка `--outline`, фон `--surface-container`, фокус-кольцо, текст
+(13px/600, sentence case — без принудительного uppercase), рамка `--outline`, фон
+`--surface`, фокус-кольцо, текст
 ошибки 12.5px и общая коробка (`min-height` 40px вместо фиксированной высоты —
 контрол растёт, а не обрезает). По умолчанию (`appearance="default"`) вид прежний;
 выпадающий список не меняется.
@@ -304,11 +318,48 @@ Popover сам выбирает направление (вниз/вверх) и 
 ## Tabs
 
 Путь: `components/UI/Tabs/Tabs.jsx`. Tablist с автоактивацией (стрелки, Home/End, roving tabIndex).
-Props: `tabs [{id,label}]`, `active`, `onChange`, `label` (aria-label списка), `idPrefix`, `fill` (равные колонки на узких экранах), `indicator` (`'underline'` по умолчанию — заливка + подчёркивание; `'fill'` — заливка без подчёркивания, используется в настройках), `className`. Панели рисует потребитель: `role="tabpanel"`, `id={tabPanelId(prefix,id)}`, `aria-labelledby={tabButtonId(prefix,id)}`; неактивные держать смонтированными с `hidden`. Активная вкладка отмечается не только цветом: жирность + подчёркивание (`underline`) либо заливка + жирность (`fill`). Режим ГОСТ принудительно перекрашивает `button` (фон схемы + рамка 2px), поэтому для `fill` выбранная вкладка в этом режиме инвертируется и получает внутреннюю рамку (inset box-shadow — размеры и соседние элементы не сдвигаются). Используется: `/student/settings`, журнал аудита (`AuditTabs` — обёртка).
+Единственная реализация навигационных вкладок проекта (2026-10-28): настройки всех кабинетов, материалы, сессии психолога, журнал аудита. Свои вкладки в фичах не заводить. Props: `tabs [{id,label}]`, `active`, `onChange`, `label` (aria-label списка), `idPrefix`, `fill` (равные колонки на всю ширину колонки страницы; без него ширина по содержимому), `className` (внешняя раскладка: у компонента своих внешних отступов нет). Вид один: сегменты на подложке, выбранная — поверхность, рамка `--outline`, тень и жирное начертание (без акцентной заливки; прежний `indicator` удалён). На ≤480px вкладки всегда — равные колонки, на ≤380px — столбец. Панели рисует потребитель: `role="tabpanel"`, `id={tabPanelId(prefix,id)}`, `aria-labelledby={tabButtonId(prefix,id)}`; неактивные держать смонтированными с `hidden` (содержимое можно не монтировать, но сама панель нужна для `aria-controls`). Режим ГОСТ принудительно перекрашивает `button`, поэтому выбранная вкладка в нём инвертируется и получает внутреннюю рамку. Используется: `/student/settings`, `/psychologist|supervisor/settings`, `/psychologist/materials`, `/supervisor/materials`, `/psychologist/appointments`, журнал аудита (`AuditTabs` — обёртка с прежними id). Правило `fill` (2026-10-29): вкладки, переключающие разделы всей страницы, передают `fill` — их ширина равна ширине колонки страницы (во всех местах выше); вкладки внутри карточки или панели фильтров остаются по содержимому. Отдельных `MaterialsTabs` и подобных обёрток ради ширины не заводить.
+
+## TableShell
+
+Путь: `components/UI/TableShell/TableShell.jsx` (2026-10-29, пилот — `/admin/users`). Оболочка семантической таблицы: карточка-контейнер, `<table>`, `caption` (доступное имя; по умолчанию скрыт классом `visually-hidden`, `captionVisible` показывает) и базовые стили `th`/`td`. Props: `caption`, `captionVisible`, `className` (контейнер), `tableClassName`, остальные (`aria-*`, `id`) — на `<table>`; `thead`/`tbody` передаёт фича. Shell не знает о данных. `overflow-x: auto` контейнера — только страховка. Низкоуровневый примитив: адаптивные списки записей строятся на `ResponsiveTable` (ниже), который использует `TableShell` для режима wide.
+
+## ResponsiveTable
+
+Путь: `components/UI/ResponsiveTable/ResponsiveTable.jsx` (2026-10-29, извлечён из одобренного `/admin/users`). Потребители — три management-экрана, все без расширения API: `features/admin/users/components/UsersDataView.jsx`, `pages/supervisor/EngagementsPage.jsx` (связь «психолог + статус» — в слоте `status`), `features/studentVerification/ui/VerificationsTable.jsx` (одно действие без меню; состояния очереди — `pageLoading`, ошибка, пусто — страница держит снаружи, как и Engagements); content-таблицы — `features/admin/news/components/NewsTable.jsx` (admin и supervisor, обложка — `identity.media`, темы — `TagList` в колонке wide и в `meta` списка, чтобы не сжимать заголовок) и `features/admin/articles/components/ArticlesTable.jsx` (тот же стандарт без изменения API: `identity.media`, статус модерации в `status`, тип и темы — два `TagList` в одной колонке wide «Тип и темы» и двумя строками `meta` в списке); `features/admin/tests/components/TestsTable.jsx` — один компонент для `/admin/tests`, `/supervisor/tests` и `/psychologist/tests` (два бейджа модерации и видимости — в одном `status`). Сложные действия, зависящие от роли и статуса, определяет доменная матрица фичи (`features/admin/tests/lib/testActions.js`: `context` moderator / author, основное действие по статусу, `pending` — недоступность выполняющегося действия только у своей строки); `ResponsiveTable` и `ActionsMenu` получают готовые основное действие и список меню и о ролях не знают. Компактные справочники — тоже на нём: `features/admin/tags/components/TagsTable.jsx` (название темы — идентификатор, полностью, без обрезки), `features/admin/categories/components/CategoriesTable.jsx`, `pages/supervisor/MeetingTypesPage.jsx`, `BannerSlidesPage.jsx` и `ServiceCardsPage.jsx` (картинка — `identity.media`; ошибка с «Повторить» — снаружи таблицы, как у Engagements). Итого обычные management-, content- и справочные таблицы используют `ResponsiveTable`; исключение — журналы `/admin/audit` (см. «Журналы аудита» ниже). Бизнес-действия — доменные (`userActions.js`, `features/supervisor/engagementActions.js`). Слот `status` рассчитан на короткие метки и бейджи (ширина по содержимому); длинный текст — в `identity`, `meta` или `columns`. Без `actions.menu` слот «⋮» в записях не резервируется. Стандарт таблиц MindCare: страница описывает **содержимое**, компонент — **раскладку**. Своих `UsersTable + UsersCompactList`-пар с отдельной responsive-разметкой и CSS в фичах не заводить.
+
+Три режима по ширине самого компонента (container query, `container-type: inline-size`; не viewport): **wide** ≥ 56rem — семантическая таблица на `TableShell` (`caption`, `thead`, `th scope="col"`); **compact** ≥ 39rem — список строк в одной карточке, записи разделены линией: «основное + вторичное | статус | основное действие ⋮», детали одной вторичной строкой; **mobile** < 39rem — та же запись вертикальнее: основное и ⋮ сверху, статус, затем детали и основное действие. Mobile — также fallback без container queries. Границы заданы только в `ResponsiveTable.module.css` (по замеру Playwright на Users); страницы своих media/container queries для таблиц не пишут — другой набор границ вводится осознанным расширением API компонента.
+
+API: `label` (caption таблицы и `aria-label` списка), `items`, `getKey`, `loading`, `error` (готовый текст), `emptyText`, `isMuted(item)` (приглушить данные, не действия), `identity { header, media?, primary, secondary? }` (первая колонка и заголовок записи `h2`; `media(item)` — необязательная универсальная картинка слева от текста — обложка, аватар — в квадрате фиксированного размера, заданного компонентом, с `object-fit: cover`; `null` у записи — нейтральная плашка того же размера, чтобы заголовки стояли в одну вертикаль; без `media` место не резервируется и разметка прежняя), `status { header, width?, render }` (метки: вторая колонка и область статуса записи), `columns [{ key, header, width?, render }]` (прочие колонки — только wide), `meta(item) → [{ label, value }]` (детали записи, `dl`), `actions { primary?, menu? }` (готовые элементы фичи: основная кнопка и `ActionsMenu`; в таблице основное действие — от левого края ячейки, «⋮» — у правого, поэтому обе стоят в одну вертикаль при разной ширине основного). Порядок колонок wide: identity, status, columns, «Действия». Состояния страницы с особым поведением (например, ошибка с кнопкой «Повторить») фича может показывать сама, рендеря `ResponsiveTable` только при наличии записей. Нет `priority`, сортировки, фильтров, выделения, виртуализации — добавлять по реальной необходимости.
+
+Компонент не знает о ролях, правах, API, диалогах и пагинации и ничего не импортирует из `features/` (проверяется тестом). Обе раскладки в DOM, скрытая — `display: none` (вне дерева доступности); все режимы получают одни `items` и одни обработчики; смена ширины не делает запросов и не сбрасывает фильтры, страницу и открытый диалог. Слот «⋮» фиксированной ширины (36px, на touch 44px), основное действие на touch не ниже 44px. Доменное содержимое (бейджи, даты, матрица действий) остаётся в фиче: у Users — `UserCells.jsx`, `userActions.js`.
+
+## Журналы аудита (специализированная система)
+
+Правило таблиц MindCare: обычные management-, content- и справочные таблицы → `ResponsiveTable`; хронологические технические журналы → специализированная система журналов `features/admin/audit/` (2026-10-29). Причина — своя модель строки «время → событие → участник → объект → результат», три разные схемы (`audit_log`, `auth_log`, `data_change_log`), маскирование, окно выдачи `max_result_window` и подробности; подгонка под `ResponsiveTable` отодвинула бы время с первой колонки.
+
+- `AuditLogView` — адаптивный слой: ≥ 56rem — `AuditTableShell` (плотная семантическая таблица: `caption`, `th scope="col"`, время первой колонкой, «Подробнее» — последняя колонка, закреплена справа, заголовок — обычный `th` с visually-hidden текстом; своей минимальной ширины нет, длинные значения и маскированные email переносятся); < 56rem — `AuditRecordList` (`ul`/`li`, заголовок записи `h2` = время + событие, «участник → объект», мелкие детали `dl`, кнопка «Подробнее»; compact ≥ 39rem, mobile — подписи слева, результат под заголовком). Границы — те же 56rem / 39rem, только в CSS этого слоя.
+- Журнал — конфигурация слоя: `columns` (таблица), `record(item)` (запись списка), подпись «Подробнее». Ошибка с «Повторить» и пустая выдача — один раз вне обеих раскладок.
+- Фильтры уже 56rem свёрнуты за кнопкой «Фильтры · N» (`aria-expanded`, `aria-controls`); N — реально применённые значения (`countActiveFilters`: сравнение `buildQuery` с умолчаниями; период — один фильтр; порядок и категория не считаются). Сворачивание запросов не делает.
+- Переиспользуются shared `Tabs`, `Modal` (`AuditDetailsModal` — только из загруженной строки, без запросов), `Badge`, `Button`; пагинация — своя `AuditPagination` (offset, точный total, окно выдачи), не общая.
+
+## ActionsMenu
+
+Путь: `components/UI/ActionsMenu/ActionsMenu.jsx`. Кнопка «⋮» с меню второстепенных действий строки; основное действие фича показывает обычной кнопкой рядом. Props: `triggerLabel` (доступное имя кнопки и меню, напр. «Другие действия: ФИО»), `items [{id, label, onSelect, tone?: 'danger'|'success', disabled?}]` — уже отфильтрованные фичей (меню о ролях, правах и API не знает), `className`. Пустой `items` — ничего не рендерится. Меню — portal в `body` с `position: fixed` (не обрезается контейнером таблицы), позиция — `shared/lib/actionsMenuPosition.js` (её же использует меню сообщения в чате). Клавиатура: Enter/Space/↓ на кнопке открывают меню с фокусом на первом доступном пункте; ↑/↓/Home/End по пунктам (недоступные пропускаются); Escape закрывает и возвращает фокус на кнопку; Tab закрывает и ведёт фокус дальше от кнопки; при выборе фокус возвращается на кнопку до вызова `onSelect` (открытый действием `Modal` после закрытия вернёт его туда же). Touch (`hover: none`): кнопка и пункты не меньше 44px.
+
+## Контейнеры страниц кабинетов
+
+Ширину задаёт layout, а не страница (2026-10-29). `CabinetLayout` и `AdminLayout`: `.content` — поля (28/36px, на ≤980px 20/16px), внутри `.contentInner { width:100%; max-width:var(--cabinet-content-max) /* 1180px */; margin:0 auto }`. Корень страницы — прямой ребёнок `.contentInner`.
+
+- **Рабочая страница** (списки, таблицы, библиотека, календарь, сообщения): корень без своих `max-width`, `padding` и `margin` — занимает всю колонку. Поверх `.contentInner` контейнер не дублировать (так раньше были сдвинуты на 68px «Мои студенты», «Назначение психологов», «Подтверждение студентов»).
+- **Страница-форма** (настройки всех кабинетов, `/admin/settings`, `/admin/email-domains`, мастер записи супервизора): ширину ограничивает корень — `width:100%; max-width:var(--cabinet-narrow-max) /* 760px */; margin-inline:auto`. Заголовок, описание, вкладки и панели внутри — с общим левым и правым краем. Не ставить `max-width` отдельным детям (`.tabs`, `.panel`, `.stack`) без центрирования: колонка прижимается к левому краю и визуально уезжает влево.
+- **Detail-страницы публичной части** (`/materials/:id`, `/news/:id`) держат свою узкую колонку по центру `.container` — их не трогать.
+- Токены — в `styles/variables.css`. Тулбары и фильтры над таблицами переносятся (`flex-wrap: wrap`), а не растягивают content-area на мобильном; в двухколоночных сетках гибкая колонка — `minmax(0, 1fr)`.
+- Контракт закреплён тестом `src/styles/pageLayout.test.js` (без пиксельных проверок).
 
 ## TextField
 
-Путь: `components/UI/TextField/TextField.jsx` (`forwardRef`). Подписанное поле: `label` связан с `input` через `htmlFor`/`id`, `hint` и `error` — через `aria-describedby`, ошибка — `role="alert"` и `aria-invalid`. Остальные props (`type`, `value`, `onChange`, `maxLength`, `readOnly`, `inputMode`…) передаются в `<input>`. Prop `appearance="field"` включает коробку, общую со `Select appearance="field"` (border-box, рамка 1px, вертикальный padding 9px, `line-height` 1.4, `min-height` 40px): контролы одинаковой высоты, при увеличенном шрифте/межстрочном интервале растут и не обрезают текст. По умолчанию вид прежний.
+Путь: `components/UI/TextField/TextField.jsx` (`forwardRef`). Подписанное поле: `label` связан с `input` через `htmlFor`/`id`, `hint` и `error` — через `aria-describedby`, ошибка — `role="alert"` и `aria-invalid`. Остальные props (`type`, `value`, `onChange`, `maxLength`, `readOnly`, `inputMode`…) передаются в `<input>`. Prop `appearance="field"` включает коробку, общую со `Select appearance="field"` (border-box, рамка 1px, вертикальный padding 9px, `line-height` 1.4, `min-height` 40px): контролы одинаковой высоты, при увеличенном шрифте/межстрочном интервале растут и не обрезают текст. По умолчанию вид прежний. Подпись — sentence case (13px/600, `--on-surface`), как пишется в тексте («ФИО», «Email»), без принудительного uppercase (2026-10-27, страница настроек — единственный потребитель).
 
 ## Shared content utilities
 

@@ -28,6 +28,19 @@
   line-height: 1;
 }
 
+/* Логотип — ссылка на главную сайта: вид прежний, без подчёркивания. */
+a.navLogo {
+  text-decoration: none;
+  border-radius: 6px;
+}
+a.navLogo:hover .navLogoHighlight {
+  color: var(--espresso);
+}
+a.navLogo:focus-visible {
+  outline: 2.5px solid var(--coffee);
+  outline-offset: 4px;
+}
+
 .navLogoHighlight {
   color: var(--coffee);
   font-style: italic;
@@ -127,7 +140,10 @@
   transform: translateY(-6px);
   opacity: 0;
   pointer-events: none;
-  transition: transform 0.22s ease, opacity 0.18s ease;
+  /* visibility скрывает ссылки от Tab и дерева доступности, но только после
+     того, как доиграла анимация закрытия (задержка 0.22s). */
+  visibility: hidden;
+  transition: transform 0.22s ease, opacity 0.18s ease, visibility 0s linear 0.22s;
   /* Hidden by default on desktop too — CSS controls via media query */
   display: none;
 }
@@ -136,6 +152,8 @@
   transform: translateY(0);
   opacity: 1;
   pointer-events: all;
+  visibility: visible;
+  transition: transform 0.22s ease, opacity 0.18s ease, visibility 0s linear 0s;
 }
 
 .mobileNavLinks {
@@ -221,7 +239,7 @@
   }
 
   .mobileMenu {
-    display: block; /* allow visibility toggle via opacity/pointer-events */
+    display: block; /* показ/скрытие — opacity, visibility и inert */
   }
 }
 

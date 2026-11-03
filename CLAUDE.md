@@ -2,7 +2,56 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальные handoff'ы — два параллельных этапа, объединённых merge
+Актуальный handoff (ветка `mindcare_alex`):
+`docs/HANDOFFS/2026-11-02-corrective-pass-moderation-health-ui.md` — corrective
+pass без миграций (REGISTRY 141 без изменений): решения модерации тестов под
+`FOR UPDATE` с обязательным ожидаемым состоянием (409 `test_state_changed`,
+уведомление только после commit); публичный `/api/health` — только `status`,
+диагностика — `/api/admin/health`; подписи журнала сверяются со снимком
+registry; интерфейс (закрытое меню Navbar `inert`, задания при impersonation,
+главные кабинетов без ложных обещаний, нейтральное приветствие, подтверждение
+входа под именем, title/`main`/заголовки). Вопросы по контенту — BACKLOG.
+Дополнение 2026-11-03 (§9 того же файла, без миграций): серверная выборка
+`GET /api/appointments/my/upcoming` (фильтр/сортировка/лимит на сервере,
+закрывает ограничение «первые 20 записей `/my`» из §8) и конкурентные тесты
+автора/проверяющего над одной записью теста (update/submit, delete/submit,
+update/publish — оба порядка фиксации, `lock_helpers`).
+
+Предыдущий handoff (ветка `mindcare_alex`):
+`docs/HANDOFFS/2026-10-29-psychologist-client-card.md` — карточка клиента у
+психолога (ADR-016 «Дополнение 2026-10-29», **ADR-035**, без миграций, REGISTRY
+135 → 141): результаты тестов клиента только при строгом активном сопровождении,
+«Показать ещё», ответы с медиа (только психологу), fail-closed
+`test_result_content_read`, 404 + `test_result_read_failed`; «Встречи с
+клиентом» и ручной итог «Состоялась»/«Неявка» (все writer'ы статуса встречи —
+FOR NO KEY UPDATE, decline после окончания — 409); заметки на существующем
+`session_notes` (проверка связей, client-scoped API, общий механизм версий;
+generic PATCH без `version` — last-write-wins).
+
+Предыдущий handoff (ветка `mindcare_alex`):
+`docs/HANDOFFS/2026-10-26-cabinet-materials-assignments.md` — реальная библиотека
+материалов в кабинетах студента и психолога (общий слой `features/materials/`,
+публичная `/materials` без нерабочих сортировки и «Темы») и базовые задания
+психолога клиенту (**ADR-033**, миграция `eb1460dc4954`): текст (`enc:v1:`),
+необязательные срок и опубликованный материал, active → completed | cancelled,
+доступ — строгое активное сопровождение / только свои задания, impersonation
+закрыт, fail-closed `assignment_content_read` по заданиям страницы, keyset-
+пагинация, `Cache-Control: no-store`. REGISTRY 123 → 131. Доработка 2026-10-27
+(**ADR-034**, раздел 9 того же handoff, миграции `ffd5e761b87b` → `d0ee44dc2527`):
+серверное избранное материалов, статьи психолога с модерацией супервизора/админа
+(`articles.status`, «Мои материалы», «Модерация материалов»), уведомление
+психолога о выполнении задания, быстрая выдача задания из «Мои студенты»,
+компактные карточки кабинетов. REGISTRY 131 → 135. Дополнение 2026-10-28
+(раздел 10, без миграций, REGISTRY 135): бейджи очередей модерации материалов и
+тестов в меню супервизора/админа (`pending-count`), system-сообщения автору о
+решении по статье/тесту и клиенту о новом/отменённом задании, супервизор —
+автор своих статей (`/api/supervisor/articles`, публикует сам; вкладки
+«На проверке» / «Мои материалы»); второй проход (раздел 11): фильтр «Тема»
+библиотеки (`tag_uuid`, `GET /api/articles/tags`) и новости у супервизора
+(`/api/admin/news` — admin и supervisor, `/supervisor/news`). **Перед запуском
+API применить `alembic upgrade head`.**
+
+Предыдущие handoff'ы — два параллельных этапа, объединённых merge
 `mindcare_alex` → `mindcare_igor`:
 
 1. `docs/HANDOFFS/2026-10-14-user-contacts-settings.md` (ветка `mindcare_alex`) —
@@ -174,14 +223,21 @@ Hero-баннер не инвертируется в тёмных палитра
 
 ## Рекомендуемый запуск Claude Code
 
-- Обычная реализация и corrective pass: актуальный **Claude Sonnet** (сейчас
-  Sonnet 5), усилие `High`.
-- Небольшая локальная правка с ясным контрактом: Sonnet, усилие `Medium`.
-- Сложная архитектура, auth/security/compliance, миграция с высокой ценой ошибки:
-  актуальный **Claude Opus** (сейчас Opus 5), усилие `High`; максимальное усилие
-  использовать только для действительно самых тяжёлых задач.
-- Конкретный task prompt может переопределить рекомендацию. В промптах, которые
-  готовит Codex, модель и усилие должны быть указаны явно.
+Матрица выбора и официальные источники: [`docs/AI_WORKFLOW_GUIDE.md`](docs/AI_WORKFLOW_GUIDE.md)
+(проверено 2026-10-29). Доступность проверять в своём клиенте и аккаунте.
+
+- Обычная реализация с ясным контрактом: **Claude Sonnet 5.5, Medium**;
+  corrective pass и задачи с большим объёмом проверки: **Sonnet 5.5, High**.
+- Архитектура, auth/security/compliance, рискованные миграции: **Claude Opus 5.5,
+  High**. Для самых трудных длительных задач рассмотреть **Claude Fable 5.1,
+  High**, если доступен; `xhigh`/`max` обосновывать отдельно.
+- **Plan** — когда сначала нужны решения по контракту и границам изменений.
+  **Ultracode** — для оправданного разделения работы на независимые ветки;
+  для обычной локальной правки не требуется. Это отдельная функция, её поведение
+  зависит от версии Claude Code. Режимы разрешений настраиваются отдельно.
+- В промптах Codex явно указывает модель, усилие, режим, полезные функции, способ
+  включения и причину выбора. Конкретная задача может переопределить рекомендацию;
+  настройка модели или функции не расширяет разрешённую область изменений.
 
 ## Язык ответов Claude Code
 
@@ -484,6 +540,14 @@ POST /api/auth/register/confirm → создаёт user + consent_records
   теле POST; GET ссылки ничего не подтверждает. Ссылки в письмах — от
   FRONTEND_PUBLIC_URL, см. deploy/README.md «Окружения и адреса»
 
+Регистрация через Яндекс/VK (отдельно от обычной):
+callback → registration-ticket → raw ticket в HttpOnly SameSite=Strict cookie
+mindcare_oauth_registration (Path /api/auth/oauth/registration) → письмо с
+кодом и ссылкой /register/social (без секретов) → в ТОМ ЖЕ браузере
+POST /api/auth/oauth/registration/resume (read-only, код не отправляет) →
+шаг кода + согласие → confirm (ticket из тела или cookie; разные → 409) →
+аккаунт + identity + сессия, cookie удаляется. Без cookie — «начните заново».
+
 Логин:
 POST /api/auth/login → session_token в ответе
 Фронт хранит token в localStorage
@@ -545,7 +609,8 @@ Conventional Commits:
 Критические риски (прочитай перед любой работой с auth или БД):
 - `refresh_tokens`, `user_mfa_methods` — таблицы в БД, логика НЕ реализована
 
-- `/student/tasks` — hardcoded mock-данные, осознанная демо-витрина до отдельного этапа
+- `/student/tasks` — на real API заданий (ADR-033, модуль `app/assignments/`);
+  `/student/materials`, `/psychologist/materials` — на публичном `/api/articles`
 - `/student/diary`, `/student/calendar`, `/student/chat`, `/psychologist/chat` —
   уже на real API, мок-данные удалены (подробности — в `docs/BACKLOG.md`)
 - **Group chat — postponed/future**: отдельный этап после стабилизации Messenger,

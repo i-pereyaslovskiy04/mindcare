@@ -5,12 +5,12 @@
   min-width: 0;
 }
 
+/* Подпись — sentence case, как пишется в тексте («ФИО», «Email»): без
+   принудительного uppercase. Метрики общие с Select appearance="field". */
 .label {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--on-surface-variant);
-  text-transform: uppercase;
-  font-weight: 700;
+  font-size: 13px;
+  color: var(--on-surface);
+  font-weight: 600;
 }
 
 .input {

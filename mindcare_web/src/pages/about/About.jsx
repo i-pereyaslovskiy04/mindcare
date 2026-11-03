@@ -11,20 +11,24 @@ import AboutServicesPreview from './components/AboutServicesPreview';
 import AboutApproach from './components/AboutApproach';
 import AboutTrust from './components/AboutTrust';
 import AboutMedia from './components/AboutMedia';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 export default function About() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  usePageTitle('О нас');
 
   return (
     <>
       <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
-      <Hero placement="about" />
-      <AboutIntro />
-      <AboutMission />
-      <AboutServicesPreview />
-      <AboutApproach />
-      <AboutTrust />
-      <AboutMedia />
+      <main id="main-content">
+        <Hero placement="about" />
+        <AboutIntro />
+        <AboutMission />
+        <AboutServicesPreview />
+        <AboutApproach />
+        <AboutTrust />
+        <AboutMedia />
+      </main>
       <Footer />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
     </>

@@ -44,12 +44,16 @@ export function useForgotPassword({ initialEmail = '', onCompleted } = {}) {
 
   const startTimer = useCallback(() => setTimerSec(TIMER_SEC), []);
 
+  // Отправка шага возвращает имя поля, только если не прошла клиентская
+  // проверка (форма переводит на него фокус); после ответа сервера фокус не
+  // переносится.
+
   // ── Step 1: send reset OTP ─────────────────────────────────────────────────
   const submitEmail = useCallback(async () => {
-    if (loadingRef.current) return;
+    if (loadingRef.current) return undefined;
     if (!EMAIL_RE.test(email.trim())) {
       setErrors({ email: 'Введите корректный email' });
-      return;
+      return 'email';
     }
     setErrors({});
     setLoading(true);
@@ -62,26 +66,31 @@ export function useForgotPassword({ initialEmail = '', onCompleted } = {}) {
     } finally {
       setLoading(false);
     }
+    return undefined;
   }, [email, startTimer]);
 
   // ── Step 2: local OTP validation only — server verifies in step 3 ─────────
   const submitOtp = useCallback((currentOtp) => {
-    if (loadingRef.current) return;
+    if (loadingRef.current) return undefined;
     if (currentOtp.some((d) => d === '')) {
       setErrors({ otp: 'Введите все 6 цифр кода' });
-      return;
+      return 'otp';
     }
     setErrors({});
     setStep(3);
+    return undefined;
   }, []);
 
   // ── Step 3: confirm OTP + set new password ─────────────────────────────────
   const submitPassword = useCallback(async () => {
-    if (loadingRef.current || confirmInFlightRef.current) return;
+    if (loadingRef.current || confirmInFlightRef.current) return undefined;
     const errs = {};
     if (password.length < 8)                errs.password  = 'Минимум 8 символов';
     if (!password2 || password !== password2) errs.password2 = 'Пароли не совпадают';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return errs.password ? 'password' : 'password2';
+    }
 
     setErrors({});
     setLoading(true);
@@ -105,13 +114,14 @@ export function useForgotPassword({ initialEmail = '', onCompleted } = {}) {
       confirmInFlightRef.current = false;
       if (gen === genRef.current) setLoading(false);
     }
-    if (!confirmed) return;
+    if (!confirmed) return undefined;
     // Пароль изменён на сервере: результат учитываем независимо от того, открыто ли окно.
     if (!completedRef.current) {
       completedRef.current = true;
       onCompletedRef.current?.();
     }
     if (gen === genRef.current) setStep('done');
+    return undefined;
   }, [email, otp, password, password2]);
 
   // ── Resend OTP ─────────────────────────────────────────────────────────────

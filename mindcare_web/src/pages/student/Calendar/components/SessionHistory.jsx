@@ -40,7 +40,7 @@ export default function SessionHistory({ sessions }) {
 
   return (
     <section className={styles.section}>
-      <h3 className={styles.heading}>
+      <h2 className={styles.heading}>
         <button
           type="button"
           className={styles.toggle}
@@ -54,7 +54,7 @@ export default function SessionHistory({ sessions }) {
             <Icon name="chevron-right" size={16} />
           </span>
         </button>
-      </h3>
+      </h2>
       <ul id={listId} className={styles.list} hidden={!open}>
         {sessions.map(s => {
           const { day, month } = parseDate(s.date);

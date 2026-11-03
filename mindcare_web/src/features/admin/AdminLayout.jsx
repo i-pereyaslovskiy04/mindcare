@@ -9,6 +9,7 @@ import { resolveBreadcrumbs } from '../../components/CabinetHeader/breadcrumbs';
 import A11yPanel from '../a11y/A11yPanel';
 import { getInitials } from '../../shared/lib/utils';
 import { normalizeRoles } from '../../shared/lib/roles';
+import useReviewQueueCounts, { reviewBadge } from '../moderation/hooks/useReviewQueueCounts';
 import styles from './AdminLayout.module.css';
 
 const ADMIN_NAV_GROUPS = [
@@ -22,8 +23,9 @@ const ADMIN_NAV_GROUPS = [
     label: 'Контент',
     items: [
       { label: 'Материалы', path: '/admin/articles', icon: 'articles' },
+      { label: 'Модерация материалов', path: '/admin/materials-review', icon: 'check', reviewQueue: 'articles' },
       { label: 'Новости',   path: '/admin/news',     icon: 'news' },
-      { label: 'Тесты',     path: '/admin/tests',    icon: 'tests' },
+      { label: 'Тесты',     path: '/admin/tests',    icon: 'tests', reviewQueue: 'tests' },
       { label: 'Баннер',    path: '/admin/banner-slides', icon: 'image' },
       { label: 'Карточки услуг', path: '/admin/service-cards', icon: 'image' },
     ],
@@ -62,7 +64,12 @@ const ADMIN_HOME = '/admin';
 
 export default function AdminLayout() {
   const { pathname } = useLocation();
-  const { user, activeRole, setActiveRole } = useAuth();
+  const { user, activeRole, setActiveRole, isImpersonating } = useAuth();
+  // Бейджи очередей модерации (материалы и тесты); review API закрыт в режиме
+  // «под именем» — тогда счётчики не запрашиваются.
+  const reviewCounts = useReviewQueueCounts(
+    !isImpersonating && normalizeRoles(user).includes('admin'), user?.id ?? null,
+  );
   const breadcrumbs = resolveBreadcrumbs({
     pathname,
     homePath: ADMIN_HOME,
@@ -94,7 +101,7 @@ export default function AdminLayout() {
       <Link
         to={ADMIN_HOME}
         className={styles.brand}
-        aria-label="Психология ДонГУ, панель управления — на главную"
+        aria-label="Психология ДонГУ, панель управления - на главную"
         title="На главную панели управления"
         onClick={closeMenu}
       >
@@ -120,26 +127,49 @@ export default function AdminLayout() {
         {ADMIN_NAV_GROUPS.map((group) => (
           <div key={group.label} className={styles.navGroup}>
             <div className={styles.navSectionLabel}>{group.label}</div>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) =>
-                  `${styles.navItem} ${isActive ? styles.active : ''}`
-                }
-                aria-label={item.label}
-                title={item.label}
-                onClick={closeMenu}
-              >
-                <span className={styles.navIcon}>
-                  <Icon name={item.icon} size={18} />
-                </span>
-                <span className={styles.navLabel}>{item.label}</span>
-              </NavLink>
-            ))}
+            {group.items.map((item) => {
+              const { badge, badgeLabel } = item.reviewQueue
+                ? reviewBadge(reviewCounts[item.reviewQueue]) : {};
+              const name = badgeLabel ? `${item.label}, ${badgeLabel}` : item.label;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `${styles.navItem} ${isActive ? styles.active : ''}`
+                  }
+                  aria-label={name}
+                  title={name}
+                  onClick={closeMenu}
+                >
+                  <span className={styles.navIcon}>
+                    <Icon name={item.icon} size={18} />
+                  </span>
+                  <span className={styles.navLabel}>{item.label}</span>
+                  {badge && <span className={styles.badge} aria-hidden="true">{badge}</span>}
+                </NavLink>
+              );
+            })}
           </div>
         ))}
       </nav>
+
+      {/* Переход на публичный сайт — не раздел панели: отдельно от навигации,
+          без active-состояния, в той же вкладке. */}
+      <div className={styles.siteNav}>
+        <Link
+          to="/"
+          className={`${styles.navItem} ${styles.siteLink}`}
+          aria-label="На сайт «Психология ДонГУ»"
+          title="На сайт «Психология ДонГУ»"
+          onClick={closeMenu}
+        >
+          <span className={styles.navIcon}>
+            <Icon name="globe" size={18} />
+          </span>
+          <span className={styles.navLabel}>На сайт</span>
+        </Link>
+      </div>
 
       <div className={styles.foot}>
         ФГАОУ ВО «Донецкий государственный университет»

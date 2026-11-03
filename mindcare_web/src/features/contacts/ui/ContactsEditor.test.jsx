@@ -111,10 +111,10 @@ describe('ContactsEditor', () => {
     }));
     const [phone, email] = screen.getAllByRole('group');
     expect(within(email).getByLabelText('Email'))
-      .toHaveAccessibleDescription('Только для связи, не используется для входа.');
+      .toHaveAccessibleDescription('Только для связи, не используется для входа');
     expect(within(phone).getByLabelText('Номер телефона'))
       .not.toHaveAccessibleDescription(/для входа/);
-    expect(screen.getAllByText('Только для связи, не используется для входа.')).toHaveLength(1);
+    expect(screen.getAllByText('Только для связи, не используется для входа')).toHaveLength(1);
     // Длинного пояснения про адрес аккаунта и восстановление пароля в строке нет.
     expect(screen.queryByText(/адрес аккаунта|восстановления пароля/)).toBeNull();
   });
@@ -311,7 +311,7 @@ describe('ContactsEditor', () => {
     const contacts = make({ rows: [row()], dirty: true });
     renderEditor(contacts);
     expect(screen.getByText('Есть несохранённые изменения')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Сохранить контакты' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     expect(contacts.save).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole('button', { name: 'Отменить изменения' }));
     expect(contacts.revert).toHaveBeenCalled();
@@ -319,7 +319,7 @@ describe('ContactsEditor', () => {
 
   it('без изменений кнопки сохранения и отмены отключены', () => {
     renderEditor(make({ rows: [row()] }));
-    expect(screen.getByRole('button', { name: 'Сохранить контакты' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Отменить изменения' })).toBeDisabled();
   });
 
@@ -349,7 +349,7 @@ describe('ContactsEditor', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('изменены в другом окне');
     fireEvent.click(screen.getByText(/Что сейчас сохранено \(1\)/));
     expect(screen.getByText('Telegram · @z')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Сохранить контакты' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Перезаписать моими правками' }));
     expect(contacts.overwrite).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Загрузить сохранённые' }));
@@ -393,7 +393,7 @@ function addContact() {
   return groups[groups.length - 1];
 }
 
-const saveButton = () => screen.getByRole('button', { name: 'Сохранить контакты' });
+const saveButton = () => screen.getByRole('button', { name: 'Сохранить' });
 const lastPayload = () => saveMyContacts.mock.calls[saveMyContacts.mock.calls.length - 1][0];
 
 describe('ContactsEditor с реальным хуком', () => {

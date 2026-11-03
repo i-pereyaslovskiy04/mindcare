@@ -270,3 +270,25 @@ describe('Hero', () => {
     expect(useHeroSlides).toHaveBeenCalledWith('home');
   });
 });
+
+describe('Hero: заголовок страницы', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    useHeroSlides.mockReturnValue({ slides: FIXTURE_SLIDES, loading: false });
+  });
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  test('h1 только у активного слайда; переключение переносит его', () => {
+    render(<Hero />);
+    const h1 = () => screen.getAllByRole('heading', { level: 1, hidden: true });
+    expect(h1()).toHaveLength(1);
+    expect(h1()[0]).toHaveTextContent('Заголовок 1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Слайд 2' }));
+    expect(h1()).toHaveLength(1);
+    expect(h1()[0]).toHaveTextContent('Заголовок 2');
+  });
+});

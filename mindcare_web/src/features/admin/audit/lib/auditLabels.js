@@ -31,6 +31,7 @@ export const EVENT_CATEGORY_ORDER = [
   'notes',
   'chat',
   'testing',
+  'assignments',
   'content',
   'system',
   'audit_access',
@@ -44,12 +45,13 @@ export const EVENT_CATEGORY_LABELS = {
   notes:         'Заметки сессий',
   chat:          'Чат и вложения',
   testing:       'Тестирование',
+  assignments:   'Задания',
   content:       'Контент',
   system:        'Системные операции',
   audit_access:  'Просмотр аудита',
 };
 
-// ── audit_log: 99 событий ────────────────────────────────────────────────────
+// ── audit_log: 134 события (полнота сверяется с auditRegistry.snapshot.json) ──
 
 export const AUDIT_EVENT_LABELS = {
   // Пользователи и роли (30, вкл. ADR-029). ADR-028: единый lifecycle отключения —
@@ -67,6 +69,7 @@ export const AUDIT_EVENT_LABELS = {
   admin_user_restore_failed:               'Восстановление учётной записи отклонено',
   admin_user_update_failed:                'Изменение учётной записи отклонено',
   admin_user_updated:                      'Учётная запись изменена администратором',
+  admin_user_impersonated:                 'Администратор вошёл под именем пользователя',
   profile_updated:                         'Пользователь изменил свой профиль',
   profile_update_failed:                   'Изменение профиля отклонено',
   user_reactivated:                        'Учётная запись восстановлена при регистрации (историческое)',
@@ -98,6 +101,9 @@ export const AUDIT_EVENT_LABELS = {
   appointment_created:                'Создана запись на консультацию',
   appointment_decline_failed:         'Отклонение записи не выполнено',
   appointment_declined:               'Запись на консультацию отклонена',
+  appointment_completed:              'Встреча отмечена как состоявшаяся',
+  appointment_no_show:                'Отмечена неявка на встречу',
+  appointment_outcome_failed:         'Отметка итога встречи отклонена',
   meeting_type_activated:             'Тип встречи включён',
   meeting_type_created:               'Создан тип встречи',
   meeting_type_deactivated:           'Тип встречи отключён',
@@ -132,6 +138,8 @@ export const AUDIT_EVENT_LABELS = {
   session_note_content_read: 'Прочитано содержимое заметки сессии',
   session_note_created:      'Создана заметка сессии',
   session_note_updated:      'Заметка сессии изменена',
+  session_note_create_failed: 'Создание заметки сессии отклонено',
+  session_note_update_failed: 'Изменение заметки сессии отклонено',
 
   // Чат и вложения (6)
   chat_attachment_downloaded:  'Скачано вложение чата',
@@ -147,7 +155,23 @@ export const AUDIT_EVENT_LABELS = {
   test_deleted:          'Методика удалена',
   test_duplicated:       'Методика скопирована',
   test_submitted:        'Тест пройден',
+  test_result_content_read: 'Просмотрен результат или ответы теста',
+  test_result_read_failed:  'Просмотр результатов теста отклонён',
   test_updated:          'Методика изменена',
+  test_submitted_for_review: 'Методика отправлена на проверку',
+  test_published:            'Методика опубликована',
+  test_returned_for_changes: 'Методика возвращена на доработку',
+  test_unpublished_for_edit: 'Методика снята с публикации для правки',
+
+  // Задания (8)
+  assignment_created:         'Задание выдано клиенту',
+  assignment_completed:       'Клиент выполнил задание',
+  assignment_cancelled:       'Задание отменено',
+  assignment_content_read:    'Просмотрено задание клиента',
+  assignment_create_failed:   'Выдача задания отклонена',
+  assignment_complete_failed: 'Выполнение задания отклонено',
+  assignment_cancel_failed:   'Отмена задания отклонена',
+  assignment_read_failed:     'Просмотр заданий отклонён',
 
   // Контент (12)
   article_created:  'Создан материал',
@@ -162,6 +186,21 @@ export const AUDIT_EVENT_LABELS = {
   tag_created:      'Создана тема',
   tag_deleted:      'Тема удалена',
   tag_updated:      'Тема изменена',
+  article_submitted_for_review: 'Материал отправлен на проверку',
+  article_published:            'Материал опубликован',
+  article_returned_for_changes: 'Материал возвращён на доработку',
+  article_unpublished_for_edit: 'Материал снят с публикации для правки',
+  banner_slide_created:     'Создан слайд баннера',
+  banner_slide_updated:     'Слайд баннера изменён',
+  banner_slide_activated:   'Слайд баннера включён',
+  banner_slide_deactivated: 'Слайд баннера выключен',
+  banner_slide_deleted:     'Слайд баннера удалён',
+  service_card_created:     'Создана карточка услуги',
+  service_card_updated:     'Карточка услуги изменена',
+  service_card_activated:   'Карточка услуги включена',
+  service_card_deactivated: 'Карточка услуги выключена',
+  service_card_deleted:     'Карточка услуги удалена',
+  media_uploaded:           'Загружен файл в медиатеку',
 
   // Системные операции (4)
   email_domain_add:        'Добавлен домен регистрации',
@@ -188,6 +227,7 @@ export const AUTH_EVENT_LABELS = {
 export const EVENT_CATEGORIES = {
   // audit_log
   admin_role_add: 'users_roles',
+  admin_user_impersonated: 'users_roles',
   admin_role_remove: 'users_roles',
   admin_role_update: 'users_roles',
   admin_user_activated: 'users_roles',
@@ -228,6 +268,9 @@ export const EVENT_CATEGORIES = {
   appointment_created: 'consultations',
   appointment_decline_failed: 'consultations',
   appointment_declined: 'consultations',
+  appointment_completed: 'consultations',
+  appointment_no_show: 'consultations',
+  appointment_outcome_failed: 'consultations',
   meeting_type_activated: 'consultations',
   meeting_type_created: 'consultations',
   meeting_type_deactivated: 'consultations',
@@ -260,6 +303,8 @@ export const EVENT_CATEGORIES = {
   session_note_content_read: 'notes',
   session_note_created: 'notes',
   session_note_updated: 'notes',
+  session_note_create_failed: 'notes',
+  session_note_update_failed: 'notes',
 
   chat_attachment_downloaded: 'chat',
   chat_attachment_uploaded: 'chat',
@@ -273,7 +318,22 @@ export const EVENT_CATEGORIES = {
   test_deleted: 'testing',
   test_duplicated: 'testing',
   test_submitted: 'testing',
+  test_result_content_read: 'testing',
+  test_result_read_failed: 'testing',
   test_updated: 'testing',
+  test_submitted_for_review: 'testing',
+  test_published: 'testing',
+  test_returned_for_changes: 'testing',
+  test_unpublished_for_edit: 'testing',
+
+  assignment_created: 'assignments',
+  assignment_completed: 'assignments',
+  assignment_cancelled: 'assignments',
+  assignment_content_read: 'assignments',
+  assignment_create_failed: 'assignments',
+  assignment_complete_failed: 'assignments',
+  assignment_cancel_failed: 'assignments',
+  assignment_read_failed: 'assignments',
 
   article_created: 'content',
   article_deleted: 'content',
@@ -287,6 +347,21 @@ export const EVENT_CATEGORIES = {
   tag_created: 'content',
   tag_deleted: 'content',
   tag_updated: 'content',
+  article_submitted_for_review: 'content',
+  article_published: 'content',
+  article_returned_for_changes: 'content',
+  article_unpublished_for_edit: 'content',
+  banner_slide_created: 'content',
+  banner_slide_updated: 'content',
+  banner_slide_activated: 'content',
+  banner_slide_deactivated: 'content',
+  banner_slide_deleted: 'content',
+  service_card_created: 'content',
+  service_card_updated: 'content',
+  service_card_activated: 'content',
+  service_card_deactivated: 'content',
+  service_card_deleted: 'content',
+  media_uploaded: 'content',
 
   email_domain_add: 'system',
   email_domain_disable: 'system',
@@ -296,7 +371,7 @@ export const EVENT_CATEGORIES = {
   audit_logs_viewed: 'audit_access',
 
   // auth_log — у него своя вкладка с плоским списком из семи пунктов. Категория
-  // объявлена, чтобы карта покрывала все 94 кода registry.
+  // объявлена, чтобы карта покрывала все коды registry (141).
   failed_login: 'auth_security',
   login: 'auth_security',
   logout: 'auth_security',
@@ -306,10 +381,14 @@ export const EVENT_CATEGORIES = {
   registration_succeeded: 'auth_security',
 };
 
-// ── Коды отказа (37) ─────────────────────────────────────────────────────────
+// ── Коды отказа (46) ─────────────────────────────────────────────────────────
 
 export const FAILURE_CODE_LABELS = {
   access_denied:         'Доступ запрещён',
+  assignment_finalized:  'Задание уже выполнено или отменено',
+  engagement_inactive:   'Сопровождение завершено',
+  material_unavailable:  'Материал недоступен',
+  registration_reference_invalid: 'Ссылка регистрации недействительна',
   account_already_active: 'Учётная запись уже активна',
   account_already_disabled: 'Учётная запись уже отключена',
   already_verified:      'Статус студента уже подтверждён',
@@ -324,6 +403,11 @@ export const FAILURE_CODE_LABELS = {
   internal_error:        'Внутренняя ошибка',
   invalid_credentials:   'Неверные учётные данные',
   invalid_request:       'Некорректный запрос',
+  invalid_status:        'Статус записи не допускает действие',
+  link_mismatch:         'Связи заметки относятся к разным клиентам',
+  not_ended:             'Встреча ещё не закончилась',
+  outcome_conflict:      'Итог встречи уже отмечен',
+  version_conflict:      'Изменено в другом окне (конфликт версий)',
   legal_basis_required:  'Требуется документированное основание',
   lifecycle_endpoint_required: 'Используйте «Отключить аккаунт» или «Восстановить»',
   no_active_roles:       'Нет активных ролей',
@@ -359,12 +443,14 @@ export const AUTH_METHOD_LABELS = {
 /** Fallback для значения вне карты: сырой код не показывается. */
 export const UNKNOWN_AUTH_METHOD_LABEL = 'Неизвестный способ';
 
-// ── Типы объектов (24) ───────────────────────────────────────────────────────
+// ── Типы объектов (28) ───────────────────────────────────────────────────────
 
 export const ENTITY_TYPE_LABELS = {
   allowed_email_domain:       'Домен регистрации',
   appointment:                'Запись на консультацию',
   article:                    'Материал',
+  assignment:                 'Задание',
+  banner_slide:               'Слайд баннера',
   category:                   'Тип материалов',
   chat_attachment:            'Вложение чата',
   chat_conversation:          'Беседа',
@@ -372,12 +458,14 @@ export const ENTITY_TYPE_LABELS = {
   consent_record:             'Запись о согласии',
   group_session:              'Групповое занятие',
   group_session_registration: 'Запись на групповое занятие',
+  media_file:                 'Файл медиатеки',
   meeting_type:               'Тип встречи',
   news:                       'Новость',
   schedule_break:             'Перерыв в расписании',
   schedule_exception:         'Исключение в расписании',
   schedule_rule:              'Рабочее окно',
   schedule_series:            'Серия расписания',
+  service_card:               'Карточка услуги',
   session_note:               'Заметка сессии',
   student_verification_request: 'Заявка на подтверждение студента',
   tag:                        'Тема',

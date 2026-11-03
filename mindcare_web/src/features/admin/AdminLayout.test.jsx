@@ -3,6 +3,8 @@ import AdminLayout from './AdminLayout';
 import { ThemeProvider } from '../theme/ThemeContext';
 import { A11yProvider } from '../a11y/A11yContext';
 import * as AuthContext from '../auth/AuthContext';
+import { getReviewArticlesPendingCount } from '../../api/articles.api';
+import { getTestsPendingCount } from '../../api/tests.api';
 
 let mockPathname = '/admin/users';
 
@@ -36,6 +38,8 @@ jest.mock('react-router-dom', () => ({
     </a>
   ),
 }), { virtual: true });
+jest.mock('../../api/articles.api', () => ({ getReviewArticlesPendingCount: jest.fn() }));
+jest.mock('../../api/tests.api', () => ({ getTestsPendingCount: jest.fn() }));
 const mockLogout = jest.fn();
 jest.mock('../auth/AuthContext', () => ({
   useAuth: jest.fn(),
@@ -44,17 +48,21 @@ jest.mock('../auth/AuthContext', () => ({
 
 const setActiveRole = jest.fn();
 
-function mockAuth({ roles, activeRole }) {
+function mockAuth({ roles, activeRole, isImpersonating = false }) {
   AuthContext.useAuth.mockReturnValue({
     user: { roles },
     activeRole,
     setActiveRole,
+    isImpersonating,
   });
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockPathname = '/admin/users';
+  // Без очереди по умолчанию: бейджей нет, доступные имена пунктов — как раньше.
+  getReviewArticlesPendingCount.mockReturnValue(new Promise(() => {}));
+  getTestsPendingCount.mockReturnValue(new Promise(() => {}));
 });
 
 test('direct entry into /admin syncs activeRole to admin', () => {
@@ -118,14 +126,15 @@ test('renders links to the new email-domains and settings pages', () => {
   expect(securityLink).toHaveAttribute('href', '/admin/settings');
 });
 
-// Отдельная home-иконка на публичный «/» удалена: на главную панели ведёт
-// текстовый brand (а «Главная» в крошках — туда же).
-test('brand «Панель управления» ведёт на /admin; ссылки на публичный «/» нет', () => {
+// Отдельная home-иконка «На главную» в шапке удалена (ADR-031): на главную
+// панели ведёт текстовый brand (а «Главная» в крошках — туда же). На публичный
+// сайт — только строка «На сайт» в sidebar.
+test('brand «Панель управления» ведёт на /admin; на «/» — только «На сайт»', () => {
   mockAuth({ roles: ['admin'], activeRole: 'admin' });
   render(<AdminLayout />);
 
   const brand = screen.getByRole('link', {
-    name: 'Психология ДонГУ, панель управления — на главную',
+    name: 'Психология ДонГУ, панель управления - на главную',
   });
   expect(brand).toHaveAttribute('href', '/admin');
   expect(brand).toHaveTextContent('Панель управления');
@@ -134,7 +143,9 @@ test('brand «Панель управления» ведёт на /admin; ссы
   expect(within(brand).queryByText('М')).toBeNull();
 
   expect(screen.queryByRole('link', { name: 'На главную' })).toBeNull();
-  expect(screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === '/')).toHaveLength(0);
+  const toSite = screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === '/');
+  expect(toSite).toHaveLength(1);
+  expect(toSite[0]).toHaveAccessibleName('На сайт «Психология ДонГУ»');
 });
 
 test('admin использует общий CabinetHeader: крошки, поиск, оформление, выход; без колокольчика', () => {
@@ -151,7 +162,7 @@ test('admin использует общий CabinetHeader: крошки, пои�
   expect(within(nav).getByRole('link', { name: 'Главная' })).toHaveAttribute('href', '/admin');
   expect(within(nav).getByText('Пользователи')).toHaveAttribute('aria-current', 'page');
 
-  expect(screen.getByRole('searchbox', { name: 'Поиск — будет доступен позже' })).toBeDisabled();
+  expect(screen.getByRole('searchbox', { name: 'Поиск - будет доступен позже' })).toBeDisabled();
   // Колокольчик — только student/psychologist; заглушки «скоро» больше нет.
   expect(screen.queryByRole('button', { name: /Уведомления/ })).toBeNull();
   expect(screen.getByRole('button', { name: 'Оформление и версия для слабовидящих' })).toBeInTheDocument();
@@ -213,7 +224,7 @@ describe('mobile drawer админки (<=600px — та же модель, чт
     const drawer = openDrawer();
 
     const brand = within(drawer).getByRole('link', {
-      name: 'Психология ДонГУ, панель управления — на главную',
+      name: 'Психология ДонГУ, панель управления - на главную',
     });
     expect(brand).toHaveAttribute('href', '/admin');
     expect(brand).toHaveTextContent('Панель управления');
@@ -254,8 +265,58 @@ describe('mobile drawer админки (<=600px — та же модель, чт
     render(<AdminLayout />);
     const drawer = openDrawer();
     fireEvent.click(within(drawer).getByRole('link', {
-      name: 'Психология ДонГУ, панель управления — на главную',
+      name: 'Психология ДонГУ, панель управления - на главную',
     }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+});
+
+// ── «На сайт»: переход из панели управления на публичный сайт ───────────────
+
+test('«На сайт» в панели: / в той же вкладке, вне навигации, без active, с подсказкой', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  mockPathname = '/';
+  render(<AdminLayout />);
+  const site = screen.getByRole('link', { name: 'На сайт «Психология ДонГУ»' });
+  expect(site).toHaveAttribute('href', '/');
+  expect(site).toHaveAttribute('title', 'На сайт «Психология ДонГУ»');
+  expect(site).not.toHaveAttribute('target');
+  screen.getAllByRole('navigation').forEach((landmark) => {
+    expect(within(landmark).queryByRole('link', { name: 'На сайт «Психология ДонГУ»' })).toBeNull();
+  });
+  expect(site).not.toHaveClass('active');
+  expect(screen.getByRole('link', { name: 'Психология ДонГУ, панель управления - на главную' }))
+    .toHaveAttribute('href', '/admin');
+});
+
+test('mobile drawer панели: «На сайт» есть и закрывает меню', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(<AdminLayout />);
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть меню' }));
+  const drawer = screen.getByRole('dialog', { name: 'Меню панели управления' });
+  fireEvent.click(within(drawer).getByRole('link', { name: 'На сайт «Психология ДонГУ»' }));
+  expect(screen.queryByRole('dialog', { name: 'Меню панели управления' })).toBeNull();
+});
+
+test('бейджи очередей модерации у «Модерация материалов» и «Тесты»', async () => {
+  getReviewArticlesPendingCount.mockResolvedValue({ count: 4 });
+  getTestsPendingCount.mockResolvedValue({ count: 120 });
+  mockAuth({ roles: ['admin'], activeRole: 'admin' });
+  render(
+    <ThemeProvider><A11yProvider><AdminLayout /></A11yProvider></ThemeProvider>,
+  );
+  const [review] = await screen.findAllByRole('link', { name: 'Модерация материалов, ожидают проверки: 4' });
+  expect(review).toHaveAttribute('href', '/admin/materials-review');
+  expect(review).toHaveTextContent('4');
+  const [tests] = await screen.findAllByRole('link', { name: 'Тесты, ожидают проверки: 120' });
+  expect(tests).toHaveTextContent('99+');
+});
+
+test('в режиме «под именем» счётчики очередей не запрашиваются', () => {
+  mockAuth({ roles: ['admin'], activeRole: 'admin', isImpersonating: true });
+  render(
+    <ThemeProvider><A11yProvider><AdminLayout /></A11yProvider></ThemeProvider>,
+  );
+  expect(getReviewArticlesPendingCount).not.toHaveBeenCalled();
+  expect(getTestsPendingCount).not.toHaveBeenCalled();
 });

@@ -3,7 +3,6 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: 760px;
 }
 
 .card {
@@ -26,6 +25,7 @@
   margin: 0 0 14px;
 }
 
+/* Вводный текст карточки — единый стиль нейтральной прозы разделов. */
 .lead {
   margin: 0 0 14px;
   font-size: 13.5px;
@@ -39,11 +39,11 @@
   gap: 14px;
 }
 
+/* Шапка профиля — первый элемент формы: интервал до поля ФИО задаёт gap формы. */
 .profileHead {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 18px;
 }
 
 .avatar {
@@ -149,7 +149,6 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  max-width: 760px;
 }
 
 .crisisIcon {

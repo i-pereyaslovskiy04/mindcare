@@ -19,7 +19,8 @@ Startup sequence (lifespan):
 Маршруты:
   /api/auth/*         — аутентификация (open + protected)
   /api/admin/users/*  — управление пользователями (admin only)
-  /api/health         — health-check (БД + revision + tables count)
+  /api/health         — публичный health-check: только {"status"} (200 / 503)
+  /api/admin/health   — подробная диагностика (только admin)
 """
 
 import logging
@@ -27,7 +28,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -126,6 +127,7 @@ app.mount("/media", StaticFiles(directory=str(_MEDIA_DIR)), name="media")
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
+from app.auth.deps import require_role                            # noqa: E402
 from app.auth.routes import router as auth_router                # noqa: E402
 from app.oauth.routes import router as oauth_router              # noqa: E402
 from app.oauth.providers import public_social_providers          # noqa: E402
@@ -141,6 +143,7 @@ from app.categories.routes_admin import router as admin_categories_router  # noq
 from app.supervisor.routes import router as supervisor_router              # noqa: E402
 from app.psychologist.routes import router as psychologist_router          # noqa: E402
 from app.session_notes.routes import router as session_notes_router        # noqa: E402
+from app.session_notes.routes_psych import router as psych_session_notes_router  # noqa: E402
 from app.chat.routes import router as chat_router                          # noqa: E402
 from app.chat.routes import system_router as chat_system_router            # noqa: E402
 from app.tests.routes_admin import router as admin_tests_router            # noqa: E402
@@ -153,6 +156,7 @@ from app.appointments.routes_psychologist import router as appointments_psycholo
 from app.appointments.routes_psychologist import group_router as group_sessions_psychologist_router  # noqa: E402
 from app.appointments.routes_psychologist import schedule_router as schedule_psychologist_router  # noqa: E402
 from app.appointments.routes_psychologist import exception_router as schedule_exceptions_psychologist_router  # noqa: E402
+from app.appointments.routes_psychologist import client_router as client_appointments_psychologist_router  # noqa: E402
 from app.appointments.routes_supervisor import router as appointments_supervisor_router  # noqa: E402
 from app.diary.routes import router as diary_router                        # noqa: E402
 from app.email_domains.routes_admin import router as admin_email_domains_router  # noqa: E402
@@ -167,6 +171,12 @@ from app.student_verification.routes import catalog_router as student_verificati
 from app.student_verification.routes_supervisor import router as supervisor_student_verification_router  # noqa: E402
 from app.user_contacts.routes import router as user_contacts_router        # noqa: E402
 from app.user_contacts.routes_staff import router as staff_user_contacts_router  # noqa: E402
+from app.assignments.routes import router as assignments_router            # noqa: E402
+from app.assignments.routes_psych import router as psych_assignments_router  # noqa: E402
+from app.material_favorites.routes import router as material_favorites_router  # noqa: E402
+from app.articles.routes_author import router as author_articles_router    # noqa: E402
+from app.articles.routes_author import supervisor_router as supervisor_articles_router  # noqa: E402
+from app.articles.routes_review import router as review_articles_router    # noqa: E402
 
 app.include_router(auth_router,               prefix="/api")
 app.include_router(oauth_router,              prefix="/api")
@@ -182,6 +192,7 @@ app.include_router(admin_categories_router,   prefix="/api")
 app.include_router(supervisor_router,         prefix="/api")
 app.include_router(psychologist_router,       prefix="/api")
 app.include_router(session_notes_router,      prefix="/api")
+app.include_router(psych_session_notes_router, prefix="/api")
 app.include_router(chat_router,               prefix="/api")
 app.include_router(chat_system_router,        prefix="/api")
 app.include_router(admin_tests_router,        prefix="/api")
@@ -194,6 +205,7 @@ app.include_router(appointments_psychologist_router, prefix="/api")
 app.include_router(group_sessions_psychologist_router, prefix="/api")
 app.include_router(schedule_psychologist_router,               prefix="/api")
 app.include_router(schedule_exceptions_psychologist_router,   prefix="/api")
+app.include_router(client_appointments_psychologist_router,   prefix="/api")
 app.include_router(appointments_supervisor_router,             prefix="/api")
 app.include_router(diary_router,              prefix="/api")
 app.include_router(admin_email_domains_router, prefix="/api")
@@ -208,6 +220,12 @@ app.include_router(student_verification_router,             prefix="/api")
 app.include_router(supervisor_student_verification_router,  prefix="/api")
 app.include_router(user_contacts_router,                    prefix="/api")
 app.include_router(staff_user_contacts_router,              prefix="/api")
+app.include_router(assignments_router,                      prefix="/api")
+app.include_router(psych_assignments_router,                prefix="/api")
+app.include_router(material_favorites_router,               prefix="/api")
+app.include_router(author_articles_router,                  prefix="/api")
+app.include_router(supervisor_articles_router,              prefix="/api")
+app.include_router(review_articles_router,                  prefix="/api")
 
 
 # ─── Built-in endpoints ───────────────────────────────────────────────────────
@@ -220,10 +238,37 @@ def read_root():
 @app.get("/api/health", tags=["meta"])
 def health():
     """
-    Health-check: проверяет соединение с БД и возвращает кол-во таблиц в metadata.
+    Публичная проверка доступности для мониторинга и скриптов запуска
+    (start.ps1/start.sh ждут HTTP 200): 200 {"status":"ok"}, если БД отвечает,
+    иначе 503 {"status":"unavailable"}. Ревизия, число таблиц и текст
+    исключения сюда не попадают — они в /api/admin/health.
     """
-    from app.db.init_db import health_check
-    return health_check()
+    from fastapi.responses import JSONResponse
+    from app.db.init_db import ping
+    ok = ping()
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "ok" if ok else "unavailable"},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/api/admin/health", tags=["meta"])
+def admin_health(_user: dict = Depends(require_role("admin"))):
+    """
+    Подробная диагностика только для администратора: ревизия и head Alembic,
+    число таблиц; при сбое — только класс исключения. Сессия «под именем» роли
+    admin не имеет (это сессия целевого пользователя) — доступа нет. Аудит не
+    пишется: служебные метаданные без ПДн (как /api/admin/audit/options).
+    """
+    from fastapi.responses import JSONResponse
+    from app.db.init_db import diagnostics
+    data = diagnostics()
+    return JSONResponse(
+        status_code=200 if data["status"] == "ok" else 503,
+        content=data,
+        headers={"Cache-Control": "no-store, private"},
+    )
 
 
 @app.get("/api/public/config", tags=["meta"])

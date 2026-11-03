@@ -1,0 +1,75 @@
+/* TagList — раскладка набора меток. Сама метка — shared Tag (не меняется);
+   здесь только перенос: длинная метка переносится внутри себя и не шире
+   контейнера, поэтому набор не держит ширину колонки и не даёт
+   горизонтального скролла. Только токены темы. */
+
+.root {
+  /* Строчная раскладка: метки и «+N» переносятся одним потоком (кнопка
+     встаёт сразу за последней видимой меткой, а не отдельной строкой).
+     Отрицательное поле компенсирует вертикальные поля элементов. */
+  margin: -2px 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.list {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: inline-flex;
+  max-width: 100%;
+  margin: 2px 4px 2px 0;
+  vertical-align: middle;
+}
+
+/* Длинная метка переносится внутри себя; радиус = половина высоты одной
+   строки: однострочная метка выглядит как прежняя «таблетка». */
+.list .tag {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  border-radius: 12px;
+}
+
+/* «+N» / «Свернуть» — того же размера, что метка, но с контуром: видно,
+   что это кнопка, а не ещё одна тема. */
+.toggle {
+  position: relative;
+  display: inline-flex;
+  margin: 2px 0;
+  vertical-align: middle;
+  padding: 2px 8px;
+  border: 1px solid var(--nav-border);
+  border-radius: 20px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-main);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: var(--cream);
+}
+
+.toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Touch: зона нажатия больше видимой кнопки, строка не становится выше. */
+@media (hover: none) {
+  .toggle::after {
+    content: '';
+    position: absolute;
+    inset: -10px -6px;
+  }
+}

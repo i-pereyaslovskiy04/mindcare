@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getHealth } from '../../api/health.api';
+import { getAdminHealth } from '../../api/health.api';
 import styles from './HealthPage.module.css';
 
 export default function HealthPage() {
@@ -8,7 +8,7 @@ export default function HealthPage() {
   const [error, setError]   = useState(null);
 
   useEffect(() => {
-    getHealth()
+    getAdminHealth()
       .then(setData)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -17,7 +17,7 @@ export default function HealthPage() {
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>System Health</h1>
-      <p className={styles.hint}>Debug endpoint — not visible to end users.</p>
+      <p className={styles.hint}>Диагностика для администратора (/admin/health).</p>
 
       {loading && <p className={styles.loading}>Checking…</p>}
 
@@ -47,6 +47,14 @@ export default function HealthPage() {
           <div className={styles.row}>
             <span className={styles.label}>Alembic revision</span>
             <code className={styles.code}>{data.revision}</code>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>Expected head</span>
+            <code className={styles.code}>{(data.head_revisions || []).join(', ')}</code>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>Schema up to date</span>
+            <span className={styles.value}>{data.revision_ok ? 'yes' : 'no'}</span>
           </div>
         </div>
       )}

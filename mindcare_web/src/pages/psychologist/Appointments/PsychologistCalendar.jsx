@@ -11,8 +11,8 @@ const STATUS_LABEL = {
   confirmed:            'Подтверждена',
   cancelled:            'Отменена',
   declined:             'Отклонена',
-  completed:            'Завершена',
-  no_show:              'Не явился',
+  completed:            'Состоялась',
+  no_show:              'Неявка',
 };
 const STATUS_TONE = {
   pending_confirmation: 'warning',

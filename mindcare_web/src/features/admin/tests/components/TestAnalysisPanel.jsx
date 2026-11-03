@@ -11,7 +11,7 @@ import styles from './TestAnalysisPanel.module.css';
  */
 
 const KIND_TEXT = {
-  gap: 'не покрыт ни одним порогом — студент получит результат без расшифровки',
+  gap: 'не покрыт ни одним порогом - студент получит результат без расшифровки',
   out_of_range: 'недостижим: такой балл невозможно набрать',
   unknown_scale: 'ссылается на шкалу, которой нет ни у одного вопроса',
 };
@@ -40,7 +40,7 @@ export default function TestAnalysisPanel({ data, loading, error }) {
         <span className={styles.boundsLabel}>Достижимый диапазон баллов:</span>
         {bounds.map((b) => (
           <span key={b.scale_name ?? '__total__'} className={styles.bound}>
-            {scaleLabel(b.scale_name)} — {rangeLabel(b.min_score, b.max_score)}
+            {scaleLabel(b.scale_name)} - {rangeLabel(b.min_score, b.max_score)}
           </span>
         ))}
       </div>

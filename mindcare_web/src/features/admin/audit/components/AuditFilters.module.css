@@ -1,9 +1,72 @@
+/* Уже 56rem (общий стандарт таблиц MindCare) панель свёрнута за кнопкой
+   «Фильтры · N»; шире — всегда раскрыта. Только представление: значения и
+   запросы от сворачивания не зависят. */
+.root {
+  container-type: inline-size;
+  margin-bottom: 16px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.toggleCount {
+  color: var(--on-surface-variant);
+}
+
+.chevron {
+  display: inline-flex;
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+}
+
+.expanded .chevron {
+  transform: rotate(-90deg);
+}
+
+.root:not(.expanded) .panel {
+  display: none;
+}
+
+.expanded .toggle {
+  margin-bottom: 8px;
+}
+
+@container (min-width: 56rem) {
+  .toggle {
+    display: none;
+  }
+
+  .root:not(.expanded) .panel {
+    display: flex;
+  }
+}
+
 .panel {
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 16px;
-  margin-bottom: 16px;
   border: 1px solid var(--outline);
   border-radius: 12px;
   background: var(--surface-container);

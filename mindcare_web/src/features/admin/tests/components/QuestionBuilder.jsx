@@ -225,7 +225,7 @@ export default function QuestionBuilder({ questions, onChange, nextKey, scoring 
           />
 
           <div className={styles.qMedia}>
-            <span className={styles.fieldLabel}>Медиа вопроса (изображения, аудио, видео — необязательно)</span>
+            <span className={styles.fieldLabel}>Медиа вопроса (изображения, аудио, видео - необязательно)</span>
             <MediaList
               list={q.media}
               withCaption
@@ -246,7 +246,7 @@ export default function QuestionBuilder({ questions, onChange, nextKey, scoring 
               <label className={styles.fieldLabel}>Шкала (для многошкальных)</label>
               <input
                 className={styles.input}
-                placeholder="напр. Тревога — или пусто"
+                placeholder="напр. Тревога - или пусто"
                 list="qb-scale-names"
                 value={q.scale}
                 onChange={(e) => patchQuestion(qIdx, { scale: e.target.value })}

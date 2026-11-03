@@ -259,7 +259,7 @@ export default function GroupSessionsPage() {
                   <span className={styles.metaItem}>
                     <Icon name="calendar" size={13} />
                     {fmtDatetime(gs.starts_at)}
-                    {gs.ends_at ? ` — ${fmtDatetime(gs.ends_at)}` : ''}
+                    {gs.ends_at ? ` - ${fmtDatetime(gs.ends_at)}` : ''}
                   </span>
                   <span className={styles.metaItem}>
                     <Icon name="users" size={13} />
@@ -344,7 +344,7 @@ export default function GroupSessionsPage() {
         <div className={styles.formField}>
           <Select
             label="Тип занятия"
-            placeholder="— выберите тип —"
+            placeholder="Выберите тип"
             value={form.meeting_type_id}
             options={meetingTypes.map(mt => ({
               value: String(mt.id), label: mt.name,
@@ -357,7 +357,7 @@ export default function GroupSessionsPage() {
         <div className={styles.formField}>
           <Select
             label="Психолог"
-            placeholder="— выберите психолога —"
+            placeholder="Выберите психолога"
             value={form.psychologist_id}
             options={psychologists.map(p => ({
               value: String(p.id), label: p.full_name || p.email,

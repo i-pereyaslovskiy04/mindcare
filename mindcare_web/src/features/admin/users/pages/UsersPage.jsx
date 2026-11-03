@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../auth/AuthContext';
 import { useAdminUsers } from '../hooks/useAdminUsers';
 import UsersFilters from '../components/UsersFilters';
-import UsersTable from '../components/UsersTable';
+import UsersDataView from '../components/UsersDataView';
 import UserCreateModal from '../components/UserCreateModal';
 import UserEditModal from '../components/UserEditModal';
 import UserLifecycleDialog from '../components/UserLifecycleDialog';
+import ConfirmDialog from '../../../assignments/ui/ConfirmDialog';
 import Button from '../../../../components/UI/Button/Button';
 import styles from './UsersPage.module.css';
 
@@ -55,22 +56,35 @@ export default function UsersPage() {
   const [editTarget, setEditTarget] = useState(null);   // user object for edit
   // ADR-028: { user, mode: 'deactivate' | 'restore' } — отключение/восстановление.
   const [lifecycleTarget, setLifecycleTarget] = useState(null);
-  const [impersonating, setImpersonating] = useState(null); // uuid in progress
+  // «Зайти» только открывает подтверждение; API — после «Войти» в диалоге.
+  const [impersonateTarget, setImpersonateTarget] = useState(null); // user object
+  const [impersonating, setImpersonating] = useState(false);
   const [impersonateError, setImpersonateError] = useState('');
 
-  const handleImpersonate = async (item) => {
-    if (impersonating) return;
+  const openImpersonate = (item) => {
     setImpersonateError('');
-    setImpersonating(item.uuid);
+    setImpersonateTarget(item);
+  };
+
+  const closeImpersonate = () => {
+    if (impersonating) return;
+    setImpersonateTarget(null);
+    setImpersonateError('');
+  };
+
+  const confirmImpersonate = async () => {
+    if (!impersonateTarget || impersonating) return;
+    setImpersonateError('');
+    setImpersonating(true);
     try {
-      await impersonate(item.uuid);
+      await impersonate(impersonateTarget.uuid);
       // Кабинет целевого пользователя выберет DashboardRedirect.
       navigate('/dashboard', { replace: true });
     } catch (e) {
       setImpersonateError(
         e?.message || 'Не удалось войти под именем пользователя.'
       );
-      setImpersonating(null);
+      setImpersonating(false);
     }
   };
 
@@ -93,21 +107,21 @@ export default function UsersPage() {
         onFiltersChange={setFilters}
       />
 
-      {impersonateError && (
-        <p className={styles.impersonateError} role="alert">
-          {impersonateError}
-        </p>
-      )}
-
-      <UsersTable
+      {/* Одни данные и одни обработчики для таблицы и компактного списка;
+          диалоги ниже монтируются один раз. «Зайти» только открывает
+          подтверждение (ConfirmDialog ниже); ошибка входа показывается в нём. */}
+      <UsersDataView
         items={items}
         loading={loading}
         error={error}
-        currentUserId={user ? Number(user.id) : null}
-        onEdit={(u) => setEditTarget(u)}
-        onDeactivate={(u) => setLifecycleTarget({ user: u, mode: 'deactivate' })}
-        onRestore={(u) => setLifecycleTarget({ user: u, mode: 'restore' })}
-        onImpersonate={handleImpersonate}
+        actionContext={{
+          currentUserId: user ? Number(user.id) : null,
+          pendingImpersonation: Boolean(impersonating),
+          onEdit: (u) => setEditTarget(u),
+          onDeactivate: (u) => setLifecycleTarget({ user: u, mode: 'deactivate' }),
+          onRestore: (u) => setLifecycleTarget({ user: u, mode: 'restore' }),
+          onImpersonate: openImpersonate,
+        }}
       />
 
       <Pagination
@@ -138,6 +152,21 @@ export default function UsersPage() {
         userInfo={lifecycleTarget?.user}
         onClose={() => setLifecycleTarget(null)}
         onDone={() => { setLifecycleTarget(null); refetch(); }}
+      />
+
+      <ConfirmDialog
+        open={!!impersonateTarget}
+        title="Войти под именем пользователя?"
+        description={impersonateTarget
+          ? `Вы откроете кабинет пользователя «${impersonateTarget.full_name}» с правами этого пользователя. `
+            + 'Вход записывается в журнал аудита; вернуться в профиль администратора '
+            + 'можно кнопкой в баннере сверху.'
+          : ''}
+        confirmLabel="Войти"
+        loading={impersonating}
+        error={impersonateError || null}
+        onConfirm={confirmImpersonate}
+        onClose={closeImpersonate}
       />
     </div>
   );

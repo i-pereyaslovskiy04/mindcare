@@ -21,7 +21,10 @@ class OAuthCompleteRequest(BaseModel):
 class OAuthRegistrationPreviewRequest(BaseModel):
     """Что показать на шаге email (Stage Social Auth VK-1B). Только ticket."""
     model_config = {"extra": "forbid"}
-    ticket: str = Field(min_length=1, max_length=128)
+    # Необязателен: ticket может прийти из HttpOnly cookie продолжения
+    # регистрации (см. routes._registration_ticket). Оба источника сразу —
+    # только если совпадают.
+    ticket: Optional[str] = Field(default=None, min_length=1, max_length=128)
 
 
 class OAuthRegistrationPreviewResponse(BaseModel):
@@ -43,7 +46,10 @@ class OAuthRegistrationInitRequest(BaseModel):
     Для Яндекса любой переданный email → 422 `email_not_changeable`. Формат,
     allowlist и занятость проверяет service/storage (стабильные коды ошибок)."""
     model_config = {"extra": "forbid"}
-    ticket: str = Field(min_length=1, max_length=128)
+    # Необязателен: ticket может прийти из HttpOnly cookie продолжения
+    # регистрации (см. routes._registration_ticket). Оба источника сразу —
+    # только если совпадают.
+    ticket: Optional[str] = Field(default=None, min_length=1, max_length=128)
     email: Optional[str] = Field(default=None, min_length=1, max_length=320)
 
 
@@ -55,7 +61,10 @@ class OAuthRegistrationInitResponse(BaseModel):
 
 class OAuthRegistrationConfirmRequest(BaseModel):
     model_config = {"extra": "forbid"}
-    ticket: str = Field(min_length=1, max_length=128)
+    # Необязателен: ticket может прийти из HttpOnly cookie продолжения
+    # регистрации (см. routes._registration_ticket). Оба источника сразу —
+    # только если совпадают.
+    ticket: Optional[str] = Field(default=None, min_length=1, max_length=128)
     # Только ASCII-цифры: \d в движке regex pydantic пропускает и юникодные.
     code: str = Field(pattern=r"^[0-9]{6}$")
     # Согласие MindCare — только буквальное JSON true: false, отсутствие, 1 или
@@ -68,3 +77,20 @@ class OAuthRegistrationConfirmRequest(BaseModel):
         if value is not True:
             raise ValueError("consent must be accepted")
         return value
+
+
+class OAuthRegistrationResumeRequest(BaseModel):
+    """Продолжение регистрации из письма (/register/social). Тело пустое:
+    ticket — только из HttpOnly cookie этого браузера."""
+    model_config = {"extra": "forbid"}
+
+
+class OAuthRegistrationResumeResponse(BaseModel):
+    provider: str
+    email_masked: Optional[str] = None
+    email_allowed: bool
+    email_editable: bool
+    # Код для адреса ticket выдан, не истёк и попытки не исчерпаны.
+    code_active: bool
+    # Секунд до повторной отправки (0 — можно сейчас).
+    resend_in_seconds: int

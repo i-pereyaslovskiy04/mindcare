@@ -99,7 +99,7 @@ export default function CategoryFormModal({ open, category, onClose, onSaved }) 
           <label className={styles.label}>
             Slug{' '}
             <span className={styles.labelHint}>
-              (оставьте пустым — сгенерируется автоматически)
+              (оставьте пустым - сгенерируется автоматически)
             </span>
           </label>
           <input

@@ -1,20 +1,25 @@
+/* Вкладки: один вид для всего проекта (сегменты на подложке). Внешних
+   отступов нет — раскладку задаёт страница через className. */
 .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 4px;
-  margin-bottom: 18px;
   border: 1px solid var(--outline);
   border-radius: 12px;
   background: var(--surface-container);
 }
 
+/* Рамка 1px есть у всех вкладок (у невыбранных — прозрачная): размеры при
+   переключении не меняются. */
 .tab {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 140px;
+  flex: 0 1 auto;
+  min-width: 120px;
   padding: 9px 16px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
   color: var(--on-surface-variant);
@@ -29,7 +34,7 @@
 
 .tab:hover {
   color: var(--on-surface);
-  background: var(--surface-elevated);
+  background: var(--surface-container-high);
 }
 
 .tab:focus-visible {
@@ -37,61 +42,29 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Выбранная — «приподнята»: поверхность, рамка --outline, лёгкая тень и жирное
+   начертание; без акцентной заливки — не похожа на primary-кнопку действия. */
 .tabActive,
 .tabActive:hover {
-  background: var(--primary);
-  color: var(--on-primary);
-  font-weight: 700;
-}
-
-/* Не только цвет: подчёркивание остаётся видимым и в режиме для слабовидящих. */
-.tabActive::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 3px;
-  height: 3px;
-  border-radius: 2px;
-  background: currentColor;
-}
-
-/* indicator="fill" (сегменты): без подчёркивания и без акцентной заливки —
-   выбранная вкладка не похожа на primary-кнопку действия. Она «приподнята»:
-   фон поверхности, рамка 1px --outline, лёгкая тень и жирное начертание.
-   Рамка 1px есть у всех вкладок варианта (у невыбранных — прозрачная), поэтому
-   размеры при переключении не меняются. В режиме для слабовидящих (там все
-   button получают фон схемы + рамку 2px) выбранная — инверсия и внутренняя
-   рамка; префикс :root[data-a11y='on'] поднимает специфичность выше глобального
-   правила «все кнопки — фон схемы» (как в A11yPanel). */
-.indicatorFill .tab {
-  border: 1px solid transparent;
-}
-
-.indicatorFill .tab:hover {
-  background: var(--surface-container-high);
-}
-
-.indicatorFill .tabActive,
-.indicatorFill .tabActive:hover {
   background: var(--surface);
   color: var(--on-surface);
   border-color: var(--outline);
   box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.12);
+  font-weight: 700;
 }
 
-.indicatorFill .tabActive::after {
-  content: none;
-}
-
-:root[data-a11y='on'] .indicatorFill .tabActive {
+/* Режим для слабовидящих: все button получают фон схемы + рамку 2px, поэтому
+   выбранная — инверсия и внутренняя рамка (размеры не сдвигаются); префикс
+   :root[data-a11y='on'] поднимает специфичность выше глобального правила. */
+:root[data-a11y='on'] .tabActive {
   background: var(--a11y-fg);
   color: var(--a11y-bg);
   box-shadow: inset 0 0 0 3px var(--a11y-bg);
 }
 
-/* Равные колонки без min-width — три раздела помещаются в строку на мобильном. */
+/* fill — равные колонки на всю ширину контейнера. */
 .fill {
+  width: auto;
   flex-wrap: nowrap;
 }
 
@@ -103,8 +76,24 @@
   hyphens: auto;
 }
 
+/* Узкий экран: всегда равные колонки на всю ширину. */
+@media (max-width: 480px) {
+  .tabs {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+
+  .tab {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 9px 6px;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+}
+
 @media (max-width: 380px) {
-  .fill {
+  .tabs {
     flex-direction: column;
   }
 }

@@ -77,7 +77,7 @@ export default function AuditLogsPage() {
         перехода по страницам.
       </p>
 
-      <AuditTabs tabs={TABS} active={source} onChange={setSource} />
+      <AuditTabs tabs={TABS} active={source} onChange={setSource} className={styles.tabs} />
 
       <div
         role="tabpanel"
@@ -87,6 +87,7 @@ export default function AuditLogsPage() {
       >
         <AuditFilters
           source={source}
+          defaultRangeDays={options?.limits?.default_range_days}
           filters={filters}
           setFilters={setFilters}
           resetFilters={resetFilters}

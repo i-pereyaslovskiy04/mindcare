@@ -13,7 +13,7 @@
 import uuid as _uuid
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey,
+    Boolean, CheckConstraint, Column, DateTime, ForeignKey,
     Index, Integer, String, Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -39,8 +39,34 @@ class Category(Base):
     children = relationship("Category", back_populates="parent", overlaps="parent")
 
 
+ARTICLE_STATUSES = ("draft", "in_review", "needs_changes", "published")
+
+
 class Article(Base):
+    """
+    Статья библиотеки. ADR-034: модерация статей психолога —
+    status ∈ {draft, in_review, needs_changes, published}; публичность по-прежнему
+    определяет is_published (публичные выборки и задания не менялись), CHECK
+    ck_articles_status_published держит их согласованными: published ⇔
+    is_published IS TRUE. review_comment_enc — комментарий проверяющего при
+    возврате на доработку (только Fernet enc:v1:, виден автору).
+    """
     __tablename__ = "articles"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'in_review', 'needs_changes', 'published')",
+            name="ck_articles_status",
+        ),
+        CheckConstraint(
+            "(status = 'published') = (is_published IS TRUE)",
+            name="ck_articles_status_published",
+        ),
+        CheckConstraint(
+            "review_comment_enc IS NULL OR review_comment_enc LIKE 'enc:v1:%'",
+            name="ck_articles_review_comment_enc",
+        ),
+        Index("ix_articles_status", "status"),
+    )
 
     id           = Column(Integer, primary_key=True)
     uuid         = Column(
@@ -57,6 +83,8 @@ class Article(Base):
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
     updated_at   = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at   = Column(DateTime(timezone=True))
+    status       = Column(String(20), nullable=False, server_default="draft")
+    review_comment_enc = Column(Text)   # ТОЛЬКО enc:v1:
 
     categories = relationship(
         "ArticleCategory", back_populates="article", cascade="all, delete-orphan"

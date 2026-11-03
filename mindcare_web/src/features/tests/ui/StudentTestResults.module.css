@@ -124,3 +124,117 @@
   color: var(--coffee);
   font-weight: 600;
 }
+
+.stateRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+/* ---- ответы прохождения (только психолог клиента) ---- */
+
+.answersBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--nav-border);
+}
+
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.answersNote {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.answerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.answerItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.question {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--espresso);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.qNum {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--nav-border);
+}
+
+.chosen {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chosenItem {
+  min-width: 0;
+}
+
+.answerText,
+.freeText {
+  font-size: 14px;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.freeText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.scaleRange {
+  color: var(--text-muted);
+}
+
+.noAnswer {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--nav-border);
+}

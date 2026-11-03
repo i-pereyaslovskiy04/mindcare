@@ -9,6 +9,7 @@ consumed_at IS NULL ... RETURNING), а не память процесса — м
 Попутная очистка: при вставке нового запроса/ticket удаляются строки, истёкшие
 больше часа назад (индексы по expires_at). Не lifespan и не планировщик.
 """
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
@@ -16,8 +17,8 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.otp_service import (
-    MAX_ATTEMPTS, _utcnow as otp_utcnow, _verify_code as verify_otp_code,
-    create_or_update_otp_in_tx,
+    MAX_ATTEMPTS, RESEND_COOLDOWN, _utcnow as otp_utcnow,
+    _verify_code as verify_otp_code, create_or_update_otp_in_tx,
 )
 from app.auth.storage import (
     RegistrationDataError, _assign_role, _user_to_dict, create_session_in_tx,
@@ -346,6 +347,57 @@ def get_registration_ticket(ticket_hash: str) -> dict:
     if row is None:
         raise OAuthTicketInvalidError()
     return {"provider": row.provider, "email": row.email}
+
+
+def get_registration_resume_state(ticket_hash: str) -> dict:
+    """
+    Чтение живого registration-ticket и кода его адреса — без блокировок и без
+    изменений (resume продолжения из письма).
+
+    Код — запись OTP адреса ticket без хеша пароля (код регистрации через
+    провайдера; запись с хешем — код обычной регистрации, она сюда не
+    относится). {"provider", "email", "code_active", "resend_in_seconds"};
+    иначе OAuthTicketInvalidError.
+    """
+    with SessionLocal() as db:
+        row = db.execute(
+            select(OAuthPendingTicket.provider, OAuthPendingTicket.email)
+            .where(
+                OAuthPendingTicket.ticket_hash == ticket_hash,
+                OAuthPendingTicket.kind == "registration",
+                OAuthPendingTicket.consumed_at.is_(None),
+                OAuthPendingTicket.expires_at > func.now(),
+            )
+        ).first()
+        if row is None:
+            raise OAuthTicketInvalidError()
+        otp = None
+        if row.email is not None:
+            otp = db.execute(
+                select(
+                    OtpVerification.expires_at, OtpVerification.attempts,
+                    OtpVerification.last_sent_at,
+                )
+                .where(
+                    OtpVerification.email == row.email,
+                    OtpVerification.password_hash.is_(None),
+                )
+                .order_by(OtpVerification.last_sent_at.desc())
+            ).first()
+    now = otp_utcnow()
+    code_active = (
+        otp is not None and now <= otp.expires_at and otp.attempts < MAX_ATTEMPTS
+    )
+    resend_in = 0
+    if otp is not None:
+        elapsed = (now - otp.last_sent_at).total_seconds()
+        resend_in = max(0, math.ceil(RESEND_COOLDOWN - elapsed))
+    return {
+        "provider": row.provider,
+        "email": row.email,
+        "code_active": code_active,
+        "resend_in_seconds": resend_in,
+    }
 
 
 def _domain_error(db, email: str, provider: str, *, audited: bool):
