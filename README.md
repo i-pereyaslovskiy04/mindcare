@@ -834,16 +834,11 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 
 **Интерактивная документация:** [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI)
 
-**Health check:** `GET /api/health`
-
-```json
-{
-  "status": "ok",
-  "db": "connected",
-  "tables": 58,
-  "revision": "27202a87a892"
-}
-```
+**Health check:** `GET /api/health` (публичный, для мониторинга и скриптов
+запуска) — `200 {"status": "ok"}` или `503 {"status": "unavailable"}`, без
+ревизии, числа таблиц и текста ошибок. Подробная диагностика (ревизия и head
+Alembic, число таблиц; при сбое — только класс исключения) —
+`GET /api/admin/health`, только admin; страница `/admin/health`.
 
 **Реализованные эндпоинты** (полный список — `/docs` Swagger UI)**:**
 
@@ -865,7 +860,8 @@ staff break-glass access; усиление a11y mobile drawer; глубокий 
 | `/api/supervisor/*` | Student list/create, psychologist list, engagements, meeting types, schedules, schedule exceptions, manual booking, group sessions, unregistered student cards | Supervisor |
 | `/api/psychologist/*` | Cabinet: students, schedule, schedule exceptions, appointments, group sessions | Psychologist |
 | `/api/appointments/*` | Student appointments, available slots, meeting types | Student |
-| `/api/health` | Health check: status, tables, revision | Public |
+| `/api/health` | Health check: только `status` (200/503) | Public |
+| `/api/admin/health` | Диагностика: revision, head, tables | Admin |
 
 ---
 

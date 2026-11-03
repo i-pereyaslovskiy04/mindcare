@@ -444,18 +444,14 @@ Base.metadata.create_all(bind=engine, checkfirst=True)
 
 ### 7.2 Health check
 
-Эндпоинт `GET /api/health`:
+Публичный `GET /api/health` (`app/db/init_db.py → ping()`, `SELECT 1`):
+`200 {"status": "ok"}` или `503 {"status": "unavailable"}`, `Cache-Control:
+no-store`; ревизия, число таблиц и текст исключения наружу не отдаются.
+Скрипты запуска ждут HTTP 200.
 
-```python
-# app/db/init_db.py → health_check()
-{
-    "status": "ok",
-    "db": "connected",
-    "tables": 41          # число таблиц в Base.metadata
-}
-```
-
-При ошибке соединения: `{"status": "error", "db": "disconnected", "detail": "..."}`.
+`GET /api/admin/health` (только admin, `diagnostics()`): `{status, db, revision,
+head_revisions, revision_ok, tables}`; при сбое — `503` и только класс
+исключения (`error_class`).
 
 ### 7.3 Auto-create database
 
@@ -759,6 +755,7 @@ target_metadata = Base.metadata
 | PATCH | `/api/admin/users/{uuid}` | Admin | users/routes_admin.py |
 | DELETE | `/api/admin/users/{uuid}` | Admin | users/routes_admin.py |
 | GET | `/api/health` | Public | main.py |
+| GET | `/api/admin/health` | Admin | main.py |
 | GET | `/api/hello` | Public | main.py |
 
 ---

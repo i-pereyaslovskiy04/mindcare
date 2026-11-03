@@ -36,7 +36,7 @@ mindcare_web/
     │   ├── supervisor.api.js  ← /api/supervisor/* (students, psychologists, engagements)
     │   ├── appointments.api.js
     │   ├── media.api.js       ← /api/media/upload
-    │   └── health.api.js      ← /health
+    │   └── health.api.js      ← /api/admin/health
     │
     ├── shared/
     │   └── lib/
@@ -304,7 +304,7 @@ src/api/
                          transferEngagement, closeEngagement
   appointments.api.js
   media.api.js        ← uploadMedia
-  health.api.js
+  health.api.js       ← getAdminHealth (/api/admin/health, только admin)
 ```
 
 До реализации соответствующего бэкенд-эндпоинта `*.api.js` может импортировать mock из `data/`. После подключения к API импорт удаляется. См. раздел 6 для полных правил работы с моками.
@@ -373,7 +373,7 @@ src/data/
 | `/news/:id` | `NewsItemPage` | Public |
 | `/materials` | `MaterialsPage` | Public |
 | `/materials/:id` | `MaterialsItemPage` | Public |
-| `/health` | `HealthPage` | Public |
+| `/admin/health` | `HealthPage` | Admin |
 | `/login` | `LegacyAuthRedirect tab="login"` | Совместимость: replace → `/` + AuthModal «Вход» |
 | `/register` | `LegacyAuthRedirect tab="register"` | Совместимость: replace → `/` + AuthModal «Регистрация» |
 | `/auth/callback` | `OAuthCallbackPage` | Public, технический маршрут возврата от Яндекс ID / VK ID: вход → `/dashboard`; регистрация и ошибки → replace на `/` + AuthModal. Своих форм и карточки нет |

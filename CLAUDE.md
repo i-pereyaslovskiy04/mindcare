@@ -3,6 +3,32 @@
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
 Актуальный handoff (ветка `mindcare_alex`):
+`docs/HANDOFFS/2026-11-02-corrective-pass-moderation-health-ui.md` — corrective
+pass без миграций (REGISTRY 141 без изменений): решения модерации тестов под
+`FOR UPDATE` с обязательным ожидаемым состоянием (409 `test_state_changed`,
+уведомление только после commit); публичный `/api/health` — только `status`,
+диагностика — `/api/admin/health`; подписи журнала сверяются со снимком
+registry; интерфейс (закрытое меню Navbar `inert`, задания при impersonation,
+главные кабинетов без ложных обещаний, нейтральное приветствие, подтверждение
+входа под именем, title/`main`/заголовки). Вопросы по контенту — BACKLOG.
+Дополнение 2026-11-03 (§9 того же файла, без миграций): серверная выборка
+`GET /api/appointments/my/upcoming` (фильтр/сортировка/лимит на сервере,
+закрывает ограничение «первые 20 записей `/my`» из §8) и конкурентные тесты
+автора/проверяющего над одной записью теста (update/submit, delete/submit,
+update/publish — оба порядка фиксации, `lock_helpers`).
+
+Предыдущий handoff (ветка `mindcare_alex`):
+`docs/HANDOFFS/2026-10-29-psychologist-client-card.md` — карточка клиента у
+психолога (ADR-016 «Дополнение 2026-10-29», **ADR-035**, без миграций, REGISTRY
+135 → 141): результаты тестов клиента только при строгом активном сопровождении,
+«Показать ещё», ответы с медиа (только психологу), fail-closed
+`test_result_content_read`, 404 + `test_result_read_failed`; «Встречи с
+клиентом» и ручной итог «Состоялась»/«Неявка» (все writer'ы статуса встречи —
+FOR NO KEY UPDATE, decline после окончания — 409); заметки на существующем
+`session_notes` (проверка связей, client-scoped API, общий механизм версий;
+generic PATCH без `version` — last-write-wins).
+
+Предыдущий handoff (ветка `mindcare_alex`):
 `docs/HANDOFFS/2026-10-26-cabinet-materials-assignments.md` — реальная библиотека
 материалов в кабинетах студента и психолога (общий слой `features/materials/`,
 публичная `/materials` без нерабочих сортировки и «Темы») и базовые задания

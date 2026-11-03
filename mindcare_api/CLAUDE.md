@@ -323,6 +323,22 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    основание для назначения роли и обработки ПДн». Не смешивать student consent и staff legal basis
 ✅ session_notes: psychologist — только свои; supervisor — content только поштучно
    и под audit (session_note_content_read); admin — metadata-only без decrypt
+✅ session_notes (ADR-035): generic POST проверяет связи до вставки (встреча и
+   сопровождение — автора, при обеих — один клиент; иначе 422 +
+   `session_note_create_failed` access_denied|link_mismatch). Оба PATCH (generic
+   и `/api/psychologist/clients/{uuid}/notes/{note_uuid}`) пишут через ОДИН
+   `storage._apply_note_update`: FOR UPDATE, CAS если передан version (409 +
+   `session_note_update_failed` version_conflict), version+1 при ЛЮБОМ реальном
+   изменении (в т.ч. только note_type), no-op — без версии/updated_at/события.
+   Generic без version — сохранённый last-write-wins (от потери изменений НЕ
+   защищает); explicit null is_shared_with_client → 422
+✅ Client-scoped заметки (`app/session_notes/routes_psych.py`): строгое
+   сопровождение, impersonation → 403, NoStoreRoute; заметка относится к клиенту,
+   только если КАЖДАЯ заполненная связь — этого психолога и этого клиента
+   (`storage._relates_to_client`, SQL до расшифровки); противоречивые старые
+   записи не выдаются и не исправляются. Создание — engagement текущего
+   сопровождения + любая неудалённая встреча психолога с клиентом. Без удаления
+   и публикации клиенту; DCL для заметок не расширяется (ADR-035)
 ✅ Staff-чтение терапевтического content ОБЯЗАНО писать audit-событие (без plaintext)
 ✅ Metadata-путь session_notes не должен вызывать decrypt_text
 ✅ Chat content доступен только student/psychologist — участникам therapy_engagement
@@ -340,6 +356,24 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    unregistered_student_card_id; карточка хранит минимальные ПДн и может привязаться к
    будущему аккаунту по normalized_email. Психолог получает system-сообщение
    (event_key appointment_supervisor_new:{uuid})
+✅ Итог индивидуальной встречи (ADR-035): `PATCH /api/psychologist/appointments/
+   {uuid}/outcome` {completed|no_show} — только психолог встречи, только
+   confirmed, только после окончания (`COALESCE(ends_at, starts_at+duration)`,
+   время сервера); повтор того же итога — 200 changed=false без события; иной
+   итог/не confirmed/не закончилась — 409 (`outcome_conflict`/`invalid_status`/
+   `not_ended`), чужая — 403 (`appointment_outcome_failed`). Переход +
+   `appointment_completed`/`appointment_no_show` — один commit; сбой аудита → 503.
+   Автоперевода по времени нет. Impersonation → 403
+✅ ВСЕ writer'ы статуса индивидуальной встречи (confirm/decline/student cancel/
+   outcome) берут строку `get_appointment_by_uuid(..., for_update=True)` (FOR NO
+   KEY UPDATE + populate_existing) и проверяют статус после блокировки. Decline
+   confirmed-встречи после окончания — 409 (только итог)
+✅ Встречи клиента в карточке: `GET /api/psychologist/clients/{uuid}/appointments
+   ?view=upcoming|history` (keyset starts_at+uuid, NoStoreRoute) — выборка на
+   backend по психологу И клиенту (прямые + по привязанной карточке), строгое
+   сопровождение, групповые занятия не входят. `AppointmentDetailRead.can_mark_outcome`
+❌ Не менять статус встречи без блокировки строки; не фильтровать встречи клиента
+   на фронте по странице общего списка
 ✅ Групповые занятия (`group_sessions`) создаёт supervisor; student записывается только
    на `scheduled` + `booking_enabled=true`, без подтверждения психолога.
    **Stage 5C-3: lazy-completion из GET/list и из регистрации УДАЛЁН** — read-пути
@@ -811,18 +845,33 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    ответа в audit/logs
 ❌ Не считать «результаты тестов не шифруются» распространяющимся на free_text:
    решение опиралось на «не свободный терапевтический текст»
-✅ Этап E (ADR-016) РЕАЛИЗОВАН: staff-доступ к результатам через
-   `GET /api/staff/test-results` (`app/tests/routes_staff.py`,
-   require_role supervisor+psychologist; admin ИСКЛЮЧЁН). supervisor — любой
-   студент; psychologist — только при active/past `TherapyEngagement`
-   (`storage.psychologist_has_engagement`). Список — metadata-only (без баллов,
-   без audit); деталь — полный результат + обязательный audit
-   `test_result_content_read` (INDEPENDENT/SOFT). `resolve_student_id` пускает
-   только ЧИСТОГО student (предикат «нет активной не-student роли»), иначе staff
-   читал бы самотесты другого staff. acting-роль — из `X-Active-Role` по
-   membership (`service._resolve_staff_result_role`)
+✅ Этап E (ADR-016, дополнение 2026-10-29): staff-доступ к результатам —
+   `GET /api/staff/test-results` (список), `/{uuid}` (деталь), `/{uuid}/answers`
+   (ответы, ТОЛЬКО psychologist) в `app/tests/routes_staff.py`; require_role
+   supervisor+psychologist, admin ИСКЛЮЧЁН, impersonation → 403, NoStoreRoute
+   (`Cache-Control: no-store, private` на любом ответе). psychologist — только
+   СТРОГОЕ активное сопровождение (`status='active' AND ended_at IS NULL`) с
+   активным клиентом, клиент может иметь staff-роли
+   (`app/psychologist/client_scope.lock_client_scope`, FOR SHARE строк
+   сопровождения и клиента); любой отказ — единый 404 + `test_result_read_failed`
+   (access_denied). supervisor — список и деталь только «чистого» активного
+   студента (иначе 404), ответов нет (403). Проверка владельца и области — в
+   storage ДО чтения баллов/ответов и в той же транзакции. Список metadata-only
+   (без события), сортировка `submitted_at DESC, id DESC`. Деталь и ответы —
+   `test_result_content_read` INDEPENDENT/RAISE (fail-closed: сбой → 503 без
+   содержимого). acting-роль — `X-Active-Role` по membership
+   (`service._resolve_staff_result_role`)
+✅ Ответы (`StaffResultAnswersRead`): все вопросы теста в порядке теста
+   (`order="test_order"`, порядок показа при перемешивании не сохраняется),
+   пропуск — answered=false, выбранные варианты `{option_text, media[]}`
+   (`_option_media_to_list`), медиа вопроса (`_question_media_to_list`, тот же
+   публичный `/media`), значение шкалы, free_text расшифровывается ТОЛЬКО здесь.
+   test_title — актуальное (snapshot нет); баллы/интерпретации/ответы — сохранённые,
+   без пересчёта. История доступна независимо от публикации теста
 ❌ Не давать admin доступ к результатам через staff-эндпоинты (ADR-016 — нет
-   регулярного доступа); не отдавать баллы в списке (только в detail под audit)
+   регулярного доступа); не отдавать баллы в списке (только в detail под audit);
+   не отдавать value_score/config/id/ciphertext в ответах; не читать результат
+   до проверки области
 ✅ Этап F1 (ADR-016) РЕАЛИЗОВАН: moderation workflow тестов. `tests.status`
    draft/in_review/published/needs_changes (миграция `e1b4c8f2a6d9`). Видимость
    студенту = status='published' AND is_active=True — гейт стоит в ТРЁХ местах:
@@ -837,6 +886,18 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    отдельный от machine). Два разных исключения → разные коды:
    TestTransitionError (перехода не существует в машине состояний) → 409;
    TestTransitionForbidden (переход есть, но нет прав) → 403
+✅ Решения проверки (corrective pass 2026-11-02): publish/return требуют тело
+   `{expected_status, expected_updated_at}` (`TestDecisionIn`, extra=forbid;
+   return — ещё `reason` ≤ 2000). `storage.transition_atomic`: строка теста
+   `FOR UPDATE` → сверка ожидаемого состояния → `_validate_transition` под
+   блокировкой → смена status → `test_published`/`test_returned_for_changes`
+   ATOMIC → один commit. Несовпадение → 409 `{code: "test_state_changed",
+   current_status}` без мутации и без события (failure-события у модерации нет:
+   это конкуренция полномочных проверяющих, не отказ доступа). Уведомление
+   автору — только после commit и только если заблокированный prior status ==
+   in_review. Прямая публикация draft/needs_changes сохраняется (expected_status
+   = draft|needs_changes). publish/return закрыты в impersonation (403).
+   Правка/удаление автором — тоже под `FOR UPDATE` с `expected_status`
 ✅ status НЕ в TestUpdate (generic PATCH) — переходы только через выделенные
    роуты `/admin/tests/{uuid}/publish`|`/return` и
    `/api/psychologist/tests/{uuid}/submit-for-review` (`app/tests/routes_psych.py`,
@@ -887,6 +948,15 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    status в generic PATCH психолога (переходы — только через
    submit-for-review/publish/return/duplicate); has_results-проверка в
    update_my_test ДОСТИЖИМА начиная с F2.1 — не считать её мёртвым кодом
+✅ Health (2026-11-02): публичный `/api/health` — только `{"status"}` (200 ok /
+   503 unavailable, no-store); подробности — `/api/admin/health`
+   (require_role admin, при сбое только класс исключения). Скрипты запуска и
+   VK-callback listener ждут HTTP 200 публичного адреса
+❌ Не возвращать в публичный health ревизию, число таблиц и `str(exc)`
+✅ Подписи журнала во фронтенде сверяются со снимком registry
+   (`app/audit/registry_snapshot.py` → `auditRegistry.snapshot.json`): после
+   любого изменения REGISTRY/CHANGE_REGISTRY — `python scripts/export_audit_registry.py`
+   и подписи новых имён в `auditLabels.js` (иначе падают backend-тест и Jest)
 ```
 
 ---
@@ -1031,7 +1101,14 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 135 событий** (`AUTH_LOG=7`, `AUDIT_LOG=128`; ADR-034 добавил `article_submitted_for_review`/`article_unpublished_for_edit` ({psychologist}) и `article_published`/`article_returned_for_changes` ({admin,supervisor}) — ATOMIC/RAISE, target `article`, metadata пустая, и расширил `article_created/updated/deleted` ролью psychologist (Дополнение 2026-10-28 — ещё и supervisor-автор, `/api/supervisor/articles`; `article_unpublished_for_edit` — {psychologist,supervisor}; счётчики очередей `pending-count` и уведомления автора/клиента — без новых событий; `news_created/updated/deleted` — {admin,supervisor}, супервизор ведёт новости через `/api/admin/news`); избранное материалов — без событий; ADR-033 добавил `assignment_created`/`assignment_cancelled` ({psychologist}) и `assignment_completed` ({student}) — ATOMIC/RAISE, target `assignment`, metadata пустая; `assignment_content_read` ({psychologist}, INDEPENDENT/RAISE, fail-closed: событие на каждое задание страницы, сбой → 503 без текстов; чтение владельцем — без события) и failure `assignment_create_failed` / `assignment_complete_failed` / `assignment_cancel_failed` / `assignment_read_failed`; ADR-032 добавил `user_contacts_content_read` ({psychologist,supervisor}, target `user`, INDEPENDENT/RAISE, fail-closed: сбой аудита → 503 без данных) и failure `user_contacts_read_failed` (`access_denied`); сохранение владельцем — существующий `profile_updated` с `metadata.fields=["contacts"]`, отказ PUT — `profile_update_failed` (+ код `contacts_version_conflict`); ADR-029 добавил
+**Event REGISTRY: 141 событие** (`AUTH_LOG=7`, `AUDIT_LOG=134`; ADR-016 дополнение
+2026-10-29 и ADR-035 (карточка клиента) добавили `test_result_read_failed`
+({psychologist}, access_denied), `appointment_completed`/`appointment_no_show`
+({psychologist}, ATOMIC/RAISE, target appointment), `appointment_outcome_failed`
+({access_denied, invalid_status, outcome_conflict, not_ended}),
+`session_note_create_failed` ({access_denied, link_mismatch}) и
+`session_note_update_failed` ({access_denied, version_conflict}), а
+`test_result_content_read` перевели на INDEPENDENT/RAISE (fail-closed); ADR-034 добавил `article_submitted_for_review`/`article_unpublished_for_edit` ({psychologist}) и `article_published`/`article_returned_for_changes` ({admin,supervisor}) — ATOMIC/RAISE, target `article`, metadata пустая, и расширил `article_created/updated/deleted` ролью psychologist (Дополнение 2026-10-28 — ещё и supervisor-автор, `/api/supervisor/articles`; `article_unpublished_for_edit` — {psychologist,supervisor}; счётчики очередей `pending-count` и уведомления автора/клиента — без новых событий; `news_created/updated/deleted` — {admin,supervisor}, супервизор ведёт новости через `/api/admin/news`); избранное материалов — без событий; ADR-033 добавил `assignment_created`/`assignment_cancelled` ({psychologist}) и `assignment_completed` ({student}) — ATOMIC/RAISE, target `assignment`, metadata пустая; `assignment_content_read` ({psychologist}, INDEPENDENT/RAISE, fail-closed: событие на каждое задание страницы, сбой → 503 без текстов; чтение владельцем — без события) и failure `assignment_create_failed` / `assignment_complete_failed` / `assignment_cancel_failed` / `assignment_read_failed`; ADR-032 добавил `user_contacts_content_read` ({psychologist,supervisor}, target `user`, INDEPENDENT/RAISE, fail-closed: сбой аудита → 503 без данных) и failure `user_contacts_read_failed` (`access_denied`); сохранение владельцем — существующий `profile_updated` с `metadata.fields=["contacts"]`, отказ PUT — `profile_update_failed` (+ код `contacts_version_conflict`); ADR-029 добавил
 `student_verification_submitted` ({student}), `…_approved`/`…_rejected`
 ({supervisor}) — ATOMIC/RAISE, target `student_verification_request`, metadata
 пустая; `…_content_read` ({supervisor}, INDEPENDENT/RAISE, fail-closed) и
@@ -1042,8 +1119,8 @@ failure `…_submit_failed` / `…_review_failed` (INDEPENDENT/SOFT); ADR-028 д
 `admin_user_deleted` и `user_reactivated` writer'ов больше не имеют; среди прочих —
 `media_uploaded` (admin+supervisor, target media_file, metadata
 file_type/mime_type/file_size), `test_result_content_read` (Этап E: staff-чтение
-результата, {supervisor,psychologist}, target test_result, INDEPENDENT/SOFT,
-metadata пустая), три Этапа F1 moderation workflow — `test_submitted_for_review`
+результата/ответов, {supervisor,psychologist}, target test_result, с 2026-10-29
+INDEPENDENT/RAISE, metadata пустая), три Этапа F1 moderation workflow — `test_submitted_for_review`
 ({psychologist}), `test_published`/`test_returned_for_changes`
 ({admin,supervisor}), target `test`, ATOMIC/RAISE, metadata пустая, и
 `admin_user_impersonated` (ADR-025: вход админа «под именем», {admin}, target
