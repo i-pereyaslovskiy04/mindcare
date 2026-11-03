@@ -95,3 +95,40 @@ test('логотип — ссылка на главную сайта; пункт
   expect(logo).toHaveTextContent('Психология ДонГУ');
   expect(screen.getAllByRole('link', { name: 'Главная' })[0]).toHaveAttribute('href', '/');
 });
+
+describe('мобильное меню', () => {
+  const burger = () => screen.getByRole('button', { name: /меню$/ });
+  // eslint-disable-next-line testing-library/no-node-access
+  const drawer = () => document.getElementById(burger().getAttribute('aria-controls'));
+
+  test('закрытое меню inert и aria-hidden: его ссылки вне Tab и дерева доступности', () => {
+    renderNavbar();
+    expect(burger()).toHaveAttribute('aria-expanded', 'false');
+    expect(drawer()).toHaveAttribute('inert');
+    expect(drawer()).toHaveAttribute('aria-hidden', 'true');
+    // Доступна только ссылка десктопного меню.
+    expect(screen.getAllByRole('link', { name: 'О нас' })).toHaveLength(1);
+  });
+
+  test('открытое меню доступно; Escape закрывает и возвращает фокус на бургер', () => {
+    renderNavbar();
+    fireEvent.click(burger());
+    expect(burger()).toHaveAttribute('aria-expanded', 'true');
+    expect(drawer()).not.toHaveAttribute('inert');
+    expect(screen.getAllByRole('link', { name: 'О нас' })).toHaveLength(2);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(burger()).toHaveAttribute('aria-expanded', 'false');
+    expect(burger()).toHaveFocus();
+    expect(drawer()).toHaveAttribute('inert');
+  });
+
+  test('«Войти в аккаунт» без onOpenAuth не падает (страница без AuthModal)', () => {
+    render(<Navbar />);
+    fireEvent.click(burger());
+    const buttons = screen.getAllByRole('button', { name: 'Войти в аккаунт' });
+    expect(buttons).toHaveLength(2);
+    expect(() => buttons.forEach((b) => fireEvent.click(b))).not.toThrow();
+    expect(burger()).toHaveAttribute('aria-expanded', 'false');
+  });
+});

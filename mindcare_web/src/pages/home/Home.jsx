@@ -8,6 +8,7 @@ import NewsSection from '../../features/news/components/NewsSection';
 import Footer from '../../components/Footer/Footer';
 import AuthModal, { REGISTRATION_CONFIRMED_MESSAGE } from '../../features/auth/ui/AuthModal';
 import CookieBanner from '../../components/CookieBanner/CookieBanner';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import {
   AUTH_CONFIRM, AUTH_SOCIAL_CONTINUE, authEntryState, authRequestFrom,
   registrationReferenceFrom,
@@ -47,6 +48,7 @@ export default function Home({ routeAuth = null }) {
     registeredEmail, rememberRegisteredEmail, clearRegisteredEmail,
   } = useAuth();
   const navigate = useNavigate();
+  usePageTitle(null);
 
   const request = authRequestFrom(location.state);
   const routeTab = ROUTE_AUTH.has(routeAuth) ? routeAuth : null;
@@ -153,11 +155,13 @@ export default function Home({ routeAuth = null }) {
   return (
     <>
       <Navbar onOpenAuth={handleOpenAuth} />
-      <Hero />
-      {!loading && isAuthenticated && (
-        <QuickActions onGoToDashboard={handleGoToDashboard} />
-      )}
-      <NewsSection />
+      <main id="main-content">
+        <Hero />
+        {!loading && isAuthenticated && (
+          <QuickActions onGoToDashboard={handleGoToDashboard} />
+        )}
+        <NewsSection />
+      </main>
       <Footer />
       {!loading && !isAuthenticated && (
         <AuthModal

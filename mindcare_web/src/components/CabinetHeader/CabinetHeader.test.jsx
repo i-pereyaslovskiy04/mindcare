@@ -78,6 +78,11 @@ afterEach(() => {
 });
 
 describe('CabinetHeader', () => {
+  test('заголовок вкладки — текущая крошка', () => {
+    renderHeader();
+    expect(document.title).toBe('Дневник состояния — Психология ДонГУ');
+  });
+
   test('крошки — семантическая nav: «Главная» ссылка на корень кабинета, текущая — текст', () => {
     renderHeader();
     const nav = screen.getByRole('navigation', { name: 'Навигационная цепочка' });

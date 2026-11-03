@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Button from '../../../components/UI/Button/Button';
 import ConfirmDialog from '../../../features/assignments/ui/ConfirmDialog';
 import useMyAssignments from '../../../features/assignments/hooks/useMyAssignments';
+import { useAuth } from '../../../features/auth/AuthContext';
 import TaskItem from './components/TaskItem';
 import styles from './TasksPage.module.css';
 
@@ -74,11 +75,27 @@ function TaskSection({
   );
 }
 
+export const IMPERSONATION_NOTE = 'Задания недоступны при входе под именем пользователя.';
+
 export default function TasksPage() {
+  // Backend закрывает задания для impersonation (403) — страница не шлёт
+  // запросов и не предлагает «Повторить» заведомо отклонённое действие.
+  const { isImpersonating } = useAuth();
   const {
     open, history, summary, refetch, complete, pendingUuid, actionError,
-  } = useMyAssignments();
+  } = useMyAssignments({ enabled: !isImpersonating });
   const [confirmTask, setConfirmTask] = useState(null);
+
+  if (isImpersonating) {
+    return (
+      <div className={styles.page}>
+        <h1 className={styles.pageTitle}>
+          Задания от <em>психолога</em>
+        </h1>
+        <p className={styles.stateText} role="status">{IMPERSONATION_NOTE}</p>
+      </div>
+    );
+  }
 
   async function confirmComplete() {
     if (!confirmTask) return;

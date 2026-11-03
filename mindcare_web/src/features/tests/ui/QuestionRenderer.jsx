@@ -35,40 +35,7 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
         </h3>
       </div>
 
-      {questionImages.map((m, i) => {
-        if (m.kind === 'video') {
-          return (
-            <video
-              key={m.uuid || i}
-              className={styles.qMedia}
-              src={m.url}
-              controls
-              preload="metadata"
-              aria-label={m.caption || question_text}
-            />
-          );
-        }
-        if (m.kind === 'audio') {
-          return (
-            <audio
-              key={m.uuid || i}
-              className={styles.qAudio}
-              src={m.url}
-              controls
-              preload="metadata"
-              aria-label={m.caption || question_text}
-            />
-          );
-        }
-        return (
-          <img
-            key={m.uuid || i}
-            className={styles.qImage}
-            src={m.url}
-            alt={m.caption || question_text}
-          />
-        );
-      })}
+      <QuestionMedia media={questionImages} label={question_text} />
 
       {type === 'single_choice' && (
         <div className={styles.options} role="radiogroup" aria-labelledby={titleId}>
@@ -135,11 +102,54 @@ export default function QuestionRenderer({ question, index, value, onChange, inv
 }
 
 /**
+ * Медиа вопроса (изображение / аудио / видео) — тот же рендер при прохождении
+ * и при просмотре ответов психологом. label — текст вопроса: доступное имя,
+ * если у медиа нет подписи.
+ */
+export function QuestionMedia({ media, label }) {
+  return (media || []).map((m, i) => {
+    if (m.kind === 'video') {
+      return (
+        <video
+          key={m.uuid || i}
+          className={styles.qMedia}
+          src={m.url}
+          controls
+          preload="metadata"
+          aria-label={m.caption || label}
+        />
+      );
+    }
+    if (m.kind === 'audio') {
+      return (
+        <audio
+          key={m.uuid || i}
+          className={styles.qAudio}
+          src={m.url}
+          controls
+          preload="metadata"
+          aria-label={m.caption || label}
+        />
+      );
+    }
+    return (
+      <img
+        key={m.uuid || i}
+        className={styles.qImage}
+        src={m.url}
+        alt={m.caption || label}
+      />
+    );
+  });
+}
+
+/**
  * Текст варианта + необязательное изображение. Картинка декоративна: доступное
  * имя даёт текст варианта, поэтому alt="" и aria-hidden (у option_media нет
  * подписи, ГОСТ Р 52872-2019 требует именно так для дублирующей текст картинки).
+ * Ожидает { option_text, media } — ту же форму отдают ответы для психолога.
  */
-function OptionContent({ option }) {
+export function OptionContent({ option }) {
   const images = option.media || [];
   return (
     <span className={styles.optBody}>

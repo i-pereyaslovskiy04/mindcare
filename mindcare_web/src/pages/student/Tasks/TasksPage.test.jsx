@@ -1,10 +1,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import TasksPage from './TasksPage';
+import TasksPage, { IMPERSONATION_NOTE } from './TasksPage';
 import useMyAssignments from '../../../features/assignments/hooks/useMyAssignments';
 import { UNAVAILABLE_NOTE } from './components/TaskItem';
+import { useAuth } from '../../../features/auth/AuthContext';
 
 jest.mock('../../../features/assignments/hooks/useMyAssignments');
+jest.mock('../../../features/auth/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('react-router-dom', () => ({
   Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
 }), { virtual: true });
@@ -38,7 +40,10 @@ function mockHook(overrides = {}) {
   return value;
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  useAuth.mockReturnValue({ isImpersonating: false });
+});
 
 describe('TasksPage', () => {
   it('реальные данные: без INITIAL_TASKS, комментариев и «дней до сессии»', () => {
@@ -118,5 +123,25 @@ describe('TasksPage', () => {
     rerender(<TasksPage />);
     userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
     expect(useMyAssignments.mock.results.at(-1).value.refetch).toHaveBeenCalled();
+  });
+});
+
+describe('TasksPage при входе под именем пользователя', () => {
+  it('одно сообщение: без «Повторить», вкладок, статистики и запросов', () => {
+    useAuth.mockReturnValue({ isImpersonating: true });
+    mockHook({ open: list([], { error: new Error('403') }), history: list([], { error: new Error('403') }) });
+    render(<TasksPage />);
+    expect(useMyAssignments).toHaveBeenCalledWith({ enabled: false });
+    expect(screen.getByRole('status')).toHaveTextContent(IMPERSONATION_NOTE);
+    expect(screen.queryByRole('button', { name: 'Повторить' })).toBeNull();
+    expect(screen.queryByText('Не удалось загрузить задания.')).toBeNull();
+    expect(screen.queryByRole('heading', { name: /Активные/ })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Активных заданий' })).toBeNull();
+  });
+
+  it('обычный вход — запросы включены', () => {
+    mockHook();
+    render(<TasksPage />);
+    expect(useMyAssignments).toHaveBeenCalledWith({ enabled: true });
   });
 });

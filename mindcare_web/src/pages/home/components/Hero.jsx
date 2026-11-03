@@ -192,43 +192,48 @@ export default function Hero({ placement = 'home' }) {
 
       <div className={styles.heroInner}>
         <div className={styles.heroSlider}>
-          {slides.map((slide, i) => (
-            <div
-              key={i}
-              className={[
-                styles.heroSlide,
-                i === activeIndex ? styles.slideActive : '',
-                // Подложка под текст — только когда у слайда есть фоновая
-                // картинка (иначе текущий вид без картинки не должен меняться).
-                slide.image_url ? styles.hasImage : '',
-              ].filter(Boolean).join(' ')}
-              aria-hidden={i !== activeIndex}
-              data-testid={`hero-slide-${i}`}
-            >
-              {slide.label && <div className={styles.heroLabel}>{slide.label}</div>}
-              <h1 className={styles.heroTitle}>
-                {slide.title}
-                {slide.highlight && (
-                  <>
-                    <br />
-                    <span className={styles.heroTitleHighlight}>{slide.highlight}</span>
-                  </>
+          {slides.map((slide, i) => {
+            // На странице один h1 — у активного слайда; у остальных тот же
+            // класс на div (вид прежний, заголовков в DOM не плодим).
+            const TitleTag = i === activeIndex ? 'h1' : 'div';
+            return (
+              <div
+                key={i}
+                className={[
+                  styles.heroSlide,
+                  i === activeIndex ? styles.slideActive : '',
+                  // Подложка под текст — только когда у слайда есть фоновая
+                  // картинка (иначе текущий вид без картинки не должен меняться).
+                  slide.image_url ? styles.hasImage : '',
+                ].filter(Boolean).join(' ')}
+                aria-hidden={i !== activeIndex}
+                data-testid={`hero-slide-${i}`}
+              >
+                {slide.label && <div className={styles.heroLabel}>{slide.label}</div>}
+                <TitleTag className={styles.heroTitle}>
+                  {slide.title}
+                  {slide.highlight && (
+                    <>
+                      <br />
+                      <span className={styles.heroTitleHighlight}>{slide.highlight}</span>
+                    </>
+                  )}
+                </TitleTag>
+                {slide.sub && <p className={styles.heroSub}>{slide.sub}</p>}
+                {slide.link_url && (
+                  <a
+                    className={styles.heroCta}
+                    href={slide.link_url}
+                    // Неактивный слайд скрыт (opacity/pointer-events), но без
+                    // tabIndex=-1 его ссылка всё равно оставалась бы в Tab-обходе.
+                    tabIndex={i === activeIndex ? undefined : -1}
+                  >
+                    Подробнее
+                  </a>
                 )}
-              </h1>
-              {slide.sub && <p className={styles.heroSub}>{slide.sub}</p>}
-              {slide.link_url && (
-                <a
-                  className={styles.heroCta}
-                  href={slide.link_url}
-                  // Неактивный слайд скрыт (opacity/pointer-events), но без
-                  // tabIndex=-1 его ссылка всё равно оставалась бы в Tab-обходе.
-                  tabIndex={i === activeIndex ? undefined : -1}
-                >
-                  Подробнее
-                </a>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
 
       </div>

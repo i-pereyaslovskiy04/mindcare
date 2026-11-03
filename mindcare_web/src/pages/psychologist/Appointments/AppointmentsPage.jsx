@@ -7,6 +7,9 @@ import { usePsychologistAppointments } from '../../../features/psychologist/hook
 import { usePsychologistCalendarMonth } from '../../../features/psychologist/hooks/usePsychologistCalendarRange';
 import { confirmAppointment, declineAppointment } from '../../../api/appointments.api';
 import { mskTodayKey } from '../../../features/psychologist/calendar/calendarMappers';
+import useAppointmentOutcome from '../../../features/psychologist/hooks/useAppointmentOutcome';
+import AppointmentOutcomeActions from '../../../features/psychologist/ui/AppointmentOutcomeActions';
+import { OUTCOME_LABELS } from '../../../features/psychologist/lib/meetingFormat';
 import PsychologistCalendar from './PsychologistCalendar';
 import GroupSessionsPanel from './GroupSessionsPanel';
 import ScheduleTab from './ScheduleTab';
@@ -66,8 +69,8 @@ const STATUS_LABEL = {
   confirmed:            'Подтверждена',
   cancelled:            'Отменена студентом',
   declined:             'Отклонена',
-  completed:            'Завершена',
-  no_show:              'Не явился',
+  completed:            OUTCOME_LABELS.completed,
+  no_show:              OUTCOME_LABELS.no_show,
 };
 const STATUS_TONE = {
   pending_confirmation: 'warning',
@@ -84,7 +87,7 @@ const STATUS_FILTERS = [
   { value: '',                    label: 'Все' },
   { value: 'pending_confirmation', label: 'Ожидают' },
   { value: 'confirmed',           label: 'Подтверждённые' },
-  { value: 'completed',           label: 'Завершённые' },
+  { value: 'completed',           label: 'Состоявшиеся' },
   { value: 'cancelled',           label: 'Отменённые' },
 ];
 
@@ -125,6 +128,12 @@ export default function PsychologistAppointmentsPage() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / 20));
+
+  // Итог прошедшей подтверждённой встречи (ADR-035): после сохранения и после
+  // 409/404 перечитываются список и календарь.
+  const outcome = useAppointmentOutcome({
+    onDone: () => { refetch(); calRefetch(); },
+  });
 
   async function handleConfirm(uuid) {
     setConfirming(uuid);
@@ -305,6 +314,12 @@ export default function PsychologistAppointmentsPage() {
                 )}
                 {appt.decline_reason && (
                   <div className={styles.cardReason}>Причина отклонения: {appt.decline_reason}</div>
+                )}
+
+                {appt.can_mark_outcome && (
+                  <div className={styles.cardActions}>
+                    <AppointmentOutcomeActions appointment={appt} outcome={outcome} />
+                  </div>
                 )}
 
                 {appt.status === 'pending_confirmation' && (

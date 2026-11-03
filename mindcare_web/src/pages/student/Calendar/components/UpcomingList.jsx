@@ -21,7 +21,7 @@ export default function UpcomingList({ sessions, onCancel }) {
 
   return (
     <section className={styles.section}>
-      <h3 className={styles.heading}>Предстоящие сессии</h3>
+      <h2 className={styles.heading}>Предстоящие сессии</h2>
       <ul className={styles.list}>
         {sessions.map((s, i) => {
           const { day, month } = parseDate(s.date);

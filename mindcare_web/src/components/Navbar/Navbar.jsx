@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import ThemeToggle from '../../features/theme/ThemeToggle';
@@ -41,6 +41,7 @@ const CloseIcon = () => (
 
 export default function Navbar({ onOpenAuth }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const burgerRef = useRef(null);
   const { isAuthenticated, loading } = useAuth();
   // Кабинет выбирает DashboardRedirect (multi-role: chooser/activeRole).
   const cabinetTo = '/dashboard';
@@ -54,11 +55,24 @@ export default function Navbar({ onOpenAuth }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // Escape закрывает открытое мобильное меню и возвращает фокус на бургер.
+  useEffect(() => {
+    if (!isMenuOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      setIsMenuOpen(false);
+      burgerRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isMenuOpen]);
+
   const closeMenu = () => setIsMenuOpen(false);
 
+  // onOpenAuth необязателен: страницы без AuthModal (напр. 404) не должны падать.
   const handleAuthClick = () => {
     closeMenu();
-    onOpenAuth();
+    onOpenAuth?.();
   };
 
   return (
@@ -108,7 +122,7 @@ export default function Navbar({ onOpenAuth }) {
             ) : (
               <button
                 className={styles.navUserIcon}
-                onClick={onOpenAuth}
+                onClick={() => onOpenAuth?.()}
                 aria-label="Войти в аккаунт"
                 type="button"
               >
@@ -117,6 +131,7 @@ export default function Navbar({ onOpenAuth }) {
             )
           )}
           <button
+            ref={burgerRef}
             className={styles.navBurger}
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
@@ -129,11 +144,13 @@ export default function Navbar({ onOpenAuth }) {
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer. Закрытое меню — inert (вне Tab и дерева доступности),
+          после анимации закрытия ещё и visibility: hidden — как у Modal. */}
       <div
         id="mobile-menu"
         className={`${styles.mobileMenu} ${isMenuOpen ? styles.mobileMenuOpen : ''}`}
         aria-hidden={!isMenuOpen}
+        inert={!isMenuOpen}
       >
         <ul className={styles.mobileNavLinks}>
           {NAV_LINKS.map((link) => (

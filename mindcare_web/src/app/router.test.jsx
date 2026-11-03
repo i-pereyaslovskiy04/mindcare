@@ -327,3 +327,11 @@ test('новости: супервизор ведёт их той же стра�
   expect(adminRouteBlock()).toMatch(/path="news"\s+element=\{<AdminNewsPage \/>\}/);
   expect(cabinetRouteBlock('psychologist')).not.toContain('AdminNewsPage');
 });
+
+// Corrective pass 2026-11-02: подробная диагностика — только в админке.
+test('страница health доступна только внутри /admin (RoleRoute admin), публичного /health нет', () => {
+  expect(ROUTER_SOURCE).not.toMatch(/path="\/health"/);
+  const adminBlock = ROUTER_SOURCE.slice(ROUTER_SOURCE.indexOf('path="/admin"'));
+  expect(adminBlock).toMatch(/<Route path="health"\s+element={<HealthPage \/>} \/>/);
+  expect(ROUTER_SOURCE.indexOf('path="/admin"')).toBeLessThan(ROUTER_SOURCE.indexOf('path="health"'));
+});

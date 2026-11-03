@@ -195,6 +195,18 @@
   color: var(--text-muted);
   margin-top: 2px;
 }
+/* Строка-ссылка (быстрые переходы на главной кабинета). */
+.liLink {
+  cursor: pointer;
+  text-decoration: none;
+}
+.liLink:hover {
+  border-color: var(--coffee);
+}
+.liLink:focus-visible {
+  outline: 2.5px solid var(--coffee);
+  outline-offset: 2px;
+}
 .liBadge {
   margin-left: auto;
   background: rgba(var(--coffee-rgb), 0.12);

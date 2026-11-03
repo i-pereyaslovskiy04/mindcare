@@ -33,6 +33,7 @@ import {
 import SystemBell from '../../features/bell/ui/SystemBell';
 import { hasBell } from '../../features/bell/lib/bellView';
 import Icon from '../Icon/Icon';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import styles from './CabinetHeader.module.css';
 
 function Breadcrumbs({ items }) {
@@ -75,6 +76,8 @@ export default function CabinetHeader({
   menuButtonRef,
 }) {
   const logout = useLogout();
+  // Заголовок вкладки — текущая (последняя) крошка: одна точка для всех кабинетов.
+  usePageTitle(breadcrumbs?.[breadcrumbs.length - 1]?.label ?? null);
 
   return (
     <header className={[styles.header, className].filter(Boolean).join(' ')}>

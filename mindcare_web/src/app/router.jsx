@@ -11,7 +11,7 @@
  *                      пользователь идёт в кабинет.
  *   <RoleRoute>      — requires specific role(s), redirects to /profile on mismatch.
  *
- * Public routes: /, /about, /services, /news, /materials, /auth/callback, /health
+ * Public routes: /, /about, /services, /news, /materials, /auth/callback
  * Compatibility redirects: /login, /register → / + AuthModal
  * Guest route: /register/confirm → главная + AuthModal (шаг подтверждения)
  * Private routes: /dashboard, /profile
@@ -114,7 +114,6 @@ export default function AppRouter() {
       <Route path="/news/:id"      element={<NewsItemPage />} />
       <Route path="/materials"     element={<MaterialsPage />} />
       <Route path="/materials/:id" element={<MaterialsItemPage />} />
-      <Route path="/health"        element={<HealthPage />} />
       {process.env.NODE_ENV !== 'production' && (
         <Route path="/theme-preview" element={<ThemePreviewPage />} />
       )}
@@ -202,6 +201,7 @@ export default function AppRouter() {
       >
         <Route index              element={<Navigate to="users" replace />} />
         <Route path="users"      element={<UsersPage />} />
+        <Route path="health"     element={<HealthPage />} />
         <Route path="tags"       element={<TagsPage />} />
         <Route path="news"       element={<AdminNewsPage />} />
         <Route path="articles"   element={<AdminArticlesPage />} />

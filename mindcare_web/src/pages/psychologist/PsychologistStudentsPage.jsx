@@ -163,17 +163,15 @@ export default function PsychologistStudentsPage() {
                           <span className={styles.soonTag}>скоро</span>
                         </Button>
                       )}
-                      <Button
-                        type="button"
+                      <ButtonLink
+                        to={`/psychologist/students/${student.student_id}#client-meetings`}
                         variant="ghost"
                         size="sm"
-                        disabled
-                        title="Расписание будет доступно в следующих версиях"
+                        aria-label={`Встречи с клиентом: ${student.full_name}`}
                       >
                         <Icon name="calendar" size={13} />
-                        <span>Расписание</span>
-                        <span className={styles.soonTag}>скоро</span>
-                      </Button>
+                        <span>Встречи с клиентом</span>
+                      </ButtonLink>
                       <Button
                         type="button"
                         variant="ghost"

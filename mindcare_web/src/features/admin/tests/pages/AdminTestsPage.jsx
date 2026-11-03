@@ -60,6 +60,9 @@ const MODERATION_STATUS_OPTIONS = [
  * только базовый путь навигации (cabinetRole), как у MeetingTypesPage/
  * ServiceCardsPage.
  */
+const STATE_CHANGED_MESSAGE =
+  'Состояние теста изменилось: его уже проверили или изменили. Список обновлён — проверьте тест снова.';
+
 export default function AdminTestsPage({ cabinetRole = 'admin' }) {
   const navigate = useNavigate();
   const basePath = `/${cabinetRole}/tests`;
@@ -113,16 +116,29 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
     }
   }
 
+  // 409 test_state_changed: решение принималось по устаревшему состоянию.
+  // Если тест уже в целевом статусе (повтор того же решения) — просто обновляем
+  // список; иначе сообщаем. В обоих случаях список и бейдж очереди обновляются.
+  function handleStateChanged(err, target) {
+    if (err?.status !== 409 || err?.code !== 'test_state_changed') return false;
+    if (err.body?.current_status !== target) setActionError(STATE_CHANGED_MESSAGE);
+    refetch();
+    notifyReviewQueueChanged();
+    return true;
+  }
+
   async function handlePublish(item) {
     if (publishingUuid) return;
     setActionError('');
     setPublishingUuid(item.uuid);
     try {
-      await publishTest(item.uuid);
+      await publishTest(item);
       refetch();
       notifyReviewQueueChanged();
     } catch (err) {
-      setActionError(err.message || 'Не удалось опубликовать тест');
+      if (!handleStateChanged(err, 'published')) {
+        setActionError(err.message || 'Не удалось опубликовать тест');
+      }
     } finally {
       setPublishingUuid(null);
     }
@@ -153,12 +169,16 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
     setReturning(true);
     setReturnError('');
     try {
-      await returnTest(returnTarget.uuid, returnReason.trim() || undefined);
+      await returnTest(returnTarget, returnReason.trim() || undefined);
       setReturnTarget(null);
       refetch();
       notifyReviewQueueChanged();
     } catch (err) {
-      setReturnError(err.message || 'Не удалось вернуть тест на доработку');
+      if (handleStateChanged(err, 'needs_changes')) {
+        setReturnTarget(null);
+      } else {
+        setReturnError(err.message || 'Не удалось вернуть тест на доработку');
+      }
     } finally {
       setReturning(false);
     }

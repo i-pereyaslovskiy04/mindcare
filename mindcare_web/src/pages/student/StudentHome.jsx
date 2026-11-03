@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getDiarySummary, getTodayDiaryEntry, getDiaryEmotions } from '../../api/diary.api';
-import { ROLE_LABELS } from '../../shared/lib/roles';
+import useUpcomingAppointments from '../../features/appointments/hooks/useUpcomingAppointments';
+import useOpenAssignmentsPreview from '../../features/assignments/hooks/useOpenAssignmentsPreview';
+import { formatDueDate, formatMoment } from '../../features/assignments/lib/assignmentFormat';
+import { NEUTRAL_GREETING } from '../../shared/lib/greeting';
 import styles from './StudentHome.module.css';
 
 const MOOD_WORDS = [
@@ -18,9 +21,75 @@ function formatTodayLabel() {
   });
 }
 
-function getFirstName(fullName) {
-  if (!fullName) return ROLE_LABELS.student;
-  return fullName.trim().split(' ')[0];
+const MEETING_STATUS = {
+  pending_confirmation: 'ожидает подтверждения',
+  confirmed: 'подтверждена',
+};
+
+function UpcomingMeetings() {
+  const { items, loading, error } = useUpcomingAppointments();
+  return (
+    <section className={styles.actionCard} aria-labelledby="home-meetings-title">
+      <h2 id="home-meetings-title" className={styles.cardTitle}>Ближайшие встречи</h2>
+      {loading && <p className={styles.cardText}>Загружается…</p>}
+      {!loading && error && <p className={styles.cardText}>Не удалось загрузить встречи.</p>}
+      {!loading && !error && items.length === 0 && (
+        <p className={styles.cardText}>Запланированных встреч нет.</p>
+      )}
+      {items.length > 0 && (
+        <ul className={styles.overviewList}>
+          {items.map((a) => (
+            <li key={a.uuid} className={styles.overviewItem}>
+              <span className={styles.overviewMain}>{formatMoment(a.starts_at)}</span>
+              <span className={styles.overviewMeta}>
+                {a.meeting_type_name || 'Индивидуальная встреча'}
+                {MEETING_STATUS[a.status] ? ` · ${MEETING_STATUS[a.status]}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link to="/student/calendar" className={styles.cardAction}>
+        Открыть календарь
+      </Link>
+    </section>
+  );
+}
+
+function ActiveTasks({ disabled }) {
+  const { items, hasMore, loading, error } = useOpenAssignmentsPreview({ enabled: !disabled });
+  return (
+    <section className={styles.actionCard} aria-labelledby="home-tasks-title">
+      <h2 id="home-tasks-title" className={styles.cardTitle}>Активные задания</h2>
+      {disabled && (
+        <p className={styles.cardText}>Задания недоступны при входе под именем пользователя.</p>
+      )}
+      {!disabled && loading && <p className={styles.cardText}>Загружается…</p>}
+      {!disabled && !loading && error && (
+        <p className={styles.cardText}>Не удалось загрузить задания.</p>
+      )}
+      {!disabled && !loading && !error && items.length === 0 && (
+        <p className={styles.cardText}>Активных заданий нет.</p>
+      )}
+      {items.length > 0 && (
+        <ul className={styles.overviewList}>
+          {items.map((t) => (
+            <li key={t.uuid} className={styles.overviewItem}>
+              <span className={`${styles.overviewMain} ${styles.overviewClamp}`}>{t.text}</span>
+              {t.due_date && (
+                <span className={styles.overviewMeta}>до {formatDueDate(t.due_date)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!disabled && (
+        <Link to="/student/tasks" className={styles.cardAction}>
+          {hasMore ? 'Все задания' : 'Открыть задания'}
+        </Link>
+      )}
+    </section>
+  );
 }
 
 function plural(n) {
@@ -37,7 +106,7 @@ function getInsightText(count) {
 }
 
 export default function StudentHome() {
-  const { user } = useAuth();
+  const { isImpersonating } = useAuth();
   const [obs14d, setObs14d] = useState(null);
   const [todayEntry, setTodayEntry] = useState(undefined);
   const [emotionCatalog, setEmotionCatalog] = useState([]);
@@ -80,9 +149,7 @@ export default function StudentHome() {
   return (
     <div className={styles.page}>
       <div className={styles.labelTag}>{todayLabel}</div>
-      <h1 className={styles.pageTitle}>
-        Здравствуйте, <em>{getFirstName(user?.name)}</em>
-      </h1>
+      <h1 className={styles.pageTitle}>{NEUTRAL_GREETING}</h1>
 
       {/* ── Next step card ── */}
       <div className={styles.nextStepCard}>
@@ -134,6 +201,12 @@ export default function StudentHome() {
         )}
       </div>
 
+      {/* ── Встречи и задания ── */}
+      <div className={styles.overviewGrid}>
+        <UpcomingMeetings />
+        <ActiveTasks disabled={Boolean(isImpersonating)} />
+      </div>
+
       {/* ── Action cards ── */}
       <div className={styles.actionCardsGrid}>
 
@@ -141,7 +214,7 @@ export default function StudentHome() {
         <div className={styles.actionCard}>
           <div className={styles.cardTitle}>Психолог</div>
           <p className={styles.cardText}>
-            Связаться с психологом можно в чате. Информация о встречах появится здесь позже.
+            Связаться с психологом можно в чате.
           </p>
           <Link to="/student/chat" className={styles.cardAction}>
             Написать психологу

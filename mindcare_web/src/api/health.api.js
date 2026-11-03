@@ -1,13 +1,14 @@
 /**
- * Health API — GET /api/health
+ * Health API.
  *
- * Returns DB status, table count, and current Alembic revision.
- * Used by the /health debug page.
+ * Публичный GET /api/health — только {status} для мониторинга (не для UI).
+ * Подробная диагностика — GET /api/admin/health, только admin: ревизия и head
+ * Alembic, число таблиц; при сбое — только класс исключения.
  */
 
 import { apiFetch } from './client';
 
-/** GET /api/health → { status, db, tables, revision } */
-export function getHealth() {
-  return apiFetch('/api/health');
+/** GET /api/admin/health → { status, db, revision, head_revisions, revision_ok, tables } */
+export function getAdminHealth() {
+  return apiFetch('/api/admin/health');
 }

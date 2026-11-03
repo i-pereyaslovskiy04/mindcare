@@ -97,3 +97,11 @@ test('ошибка выдачи — диалог остаётся открыты
   expect(screen.getByRole('dialog', { name: 'Задание: Анна Смирнова' })).toBeInTheDocument();
 });
 
+
+test('«Встречи с клиентом» ведёт в раздел встреч карточки; заглушки «Расписание» нет', () => {
+  render(<PsychologistStudentsPage />);
+
+  const link = screen.getByRole('link', { name: /Встречи с клиентом/ });
+  expect(link).toHaveAttribute('href', '/psychologist/students/7#client-meetings');
+  expect(screen.queryByText('Расписание')).toBeNull();
+});

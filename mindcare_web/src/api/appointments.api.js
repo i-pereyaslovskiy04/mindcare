@@ -8,6 +8,11 @@ export const getMyAppointments = ({ page = 1, size = 50, status } = {}) => {
   return apiFetch(`/api/appointments/my?${p}`);
 };
 
+// Ближайшие будущие встречи (ожидает подтверждения/подтверждена), уже
+// отфильтрованные и отсортированные на сервере — для главной кабинета.
+export const getMyUpcomingAppointments = ({ limit = 3 } = {}) =>
+  apiFetch(`/api/appointments/my/upcoming?${new URLSearchParams({ limit })}`);
+
 // Доступные для записи индивидуальные типы встреч (выбор студентом).
 export const getStudentMeetingTypes = () =>
   apiFetch('/api/appointments/meeting-types');
@@ -85,6 +90,20 @@ export const declineAppointment = (uuid, data = {}) =>
     method: 'PATCH',
     body: JSON.stringify(data),
   });
+
+// Итог индивидуальной встречи (ADR-035): outcome — 'completed' | 'no_show'.
+export const markAppointmentOutcome = (uuid, outcome) =>
+  apiFetch(`/api/psychologist/appointments/${uuid}/outcome`, {
+    method: 'PATCH',
+    body: JSON.stringify({ outcome }),
+  });
+
+// Встречи выбранного клиента с текущим психологом (карточка клиента, keyset).
+export const getClientAppointments = (studentUuid, { view = 'upcoming', before, size = 20 } = {}) => {
+  const p = new URLSearchParams({ view, size });
+  if (before) p.set('before', before);
+  return apiFetch(`/api/psychologist/clients/${studentUuid}/appointments?${p}`);
+};
 
 // ── Supervisor ────────────────────────────────────────────────────────────────
 

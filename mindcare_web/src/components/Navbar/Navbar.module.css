@@ -140,7 +140,10 @@ a.navLogo:focus-visible {
   transform: translateY(-6px);
   opacity: 0;
   pointer-events: none;
-  transition: transform 0.22s ease, opacity 0.18s ease;
+  /* visibility скрывает ссылки от Tab и дерева доступности, но только после
+     того, как доиграла анимация закрытия (задержка 0.22s). */
+  visibility: hidden;
+  transition: transform 0.22s ease, opacity 0.18s ease, visibility 0s linear 0.22s;
   /* Hidden by default on desktop too — CSS controls via media query */
   display: none;
 }
@@ -149,6 +152,8 @@ a.navLogo:focus-visible {
   transform: translateY(0);
   opacity: 1;
   pointer-events: all;
+  visibility: visible;
+  transition: transform 0.22s ease, opacity 0.18s ease, visibility 0s linear 0s;
 }
 
 .mobileNavLinks {
@@ -234,7 +239,7 @@ a.navLogo:focus-visible {
   }
 
   .mobileMenu {
-    display: block; /* allow visibility toggle via opacity/pointer-events */
+    display: block; /* показ/скрытие — opacity, visibility и inert */
   }
 }
 

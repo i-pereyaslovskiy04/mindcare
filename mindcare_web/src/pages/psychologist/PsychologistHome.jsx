@@ -1,16 +1,14 @@
-import { useAuth } from '../../features/auth/AuthContext';
+import { Link } from 'react-router-dom';
 import Badge from '../../components/UI/Badge/Badge';
 import Icon from '../../components/Icon/Icon';
 import { usePsychologistCalendarRange } from '../../features/psychologist/hooks/usePsychologistCalendarRange';
 import {
   mskTodayKey, addDaysToKey, isHomeUpcomingEvent,
 } from '../../features/psychologist/calendar/calendarMappers';
+import useClientsTotal from '../../features/psychologist/hooks/useClientsTotal';
+import { useMessagesBadge } from '../../features/chat/hooks/useMessagesBadge';
+import { NEUTRAL_GREETING } from '../../shared/lib/greeting';
 import styles from '../../components/CabinetLayout/CabinetHome.module.css';
-
-function getFirstName(fullName) {
-  if (!fullName) return '';
-  return fullName.trim().split(/\s+/)[0];
-}
 
 const STATUS_TONE = {
   pending_confirmation: 'warning',
@@ -25,8 +23,8 @@ const STATUS_SHORT = {
   confirmed:            'Подтв.',
   cancelled:            'Отменена',
   declined:             'Отклонена',
-  completed:            'Завершена',
-  no_show:              'Не явился',
+  completed:            'Состоялась',
+  no_show:              'Неявка',
 };
 
 const _dayShortFmt = new Intl.DateTimeFormat('ru-RU', {
@@ -63,7 +61,6 @@ function HomeEventRow({ ev, showDate }) {
 }
 
 export default function PsychologistHome() {
-  const { user } = useAuth();
   const today    = new Date().toLocaleDateString('ru-RU', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
@@ -83,15 +80,15 @@ export default function PsychologistHome() {
     .flatMap(k => eventsByDay[k])
     .filter(isHomeUpcomingEvent)
     .slice(0, 5);
+  const clientsTotal = useClientsTotal();
+  const unreadDialogs = useMessagesBadge('psychologist');
 
   return (
     <div className={styles.page}>
       <div className={styles.labelTag}>{today}</div>
-      <h1 className={styles.pageTitle}>
-        Здравствуйте, <em>{getFirstName(user?.name)}</em>
-      </h1>
+      <h1 className={styles.pageTitle}>{NEUTRAL_GREETING}</h1>
       <p className={styles.pageSub}>
-        Добро пожаловать в кабинет психолога. Раздел активно развивается.
+        Кабинет психолога: клиенты, встречи, задания и сообщения.
       </p>
 
       {/* Welcome + hint */}
@@ -101,13 +98,16 @@ export default function PsychologistHome() {
             Ваш рабочий<br /><em>кабинет</em>
           </div>
           <div className={styles.darkCardSub}>
-            Здесь будут ваши клиенты, сессии и рабочие материалы.
-            Раздел находится в активной разработке.
+            Карточки клиентов с встречами, заданиями и заметками — в разделе
+            «Мои студенты».
           </div>
           <div className={styles.darkCardBtns}>
-            <button type="button" className={`${styles.btn} ${styles.btnLatte}`}>
+            <Link to="/psychologist/students" className={`${styles.btn} ${styles.btnLatte}`}>
+              Мои студенты
+            </Link>
+            <Link to="/psychologist/settings" className={`${styles.btn} ${styles.btnGhostDark}`}>
               Настройки профиля
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -140,29 +140,20 @@ export default function PsychologistHome() {
 
       {/* Stat cards */}
       <div className={`${styles.grid} ${styles.g3}`} style={{ marginBottom: 16 }}>
-        <div className={styles.statCard}>
-          <div className={styles.statLabel}>Сессий за месяц</div>
-          <div className={styles.statValue}>—</div>
-          <div className={styles.statDesc}>Данные будут доступны позже</div>
-        </div>
-        <div className={styles.statCard}>
+        <div className={styles.statCard} role="group" aria-label="Клиентов">
           <div className={styles.statLabel}>Клиентов</div>
-          <div className={styles.statValue}>—</div>
-          <div className={styles.statDesc}>Данные будут доступны позже</div>
+          <div className={styles.statValue}>{clientsTotal ?? '—'}</div>
+          <div className={styles.statDesc}>С активным сопровождением</div>
         </div>
-        <div className={styles.statCard}>
-          <div className={styles.statLabel}>Непрочитанных</div>
-          <div className={styles.statValue}>—</div>
-          <div className={styles.statDesc}>Сообщения недоступны</div>
+        <div className={styles.statCard} role="group" aria-label="Встреч сегодня">
+          <div className={styles.statLabel}>Встреч сегодня</div>
+          <div className={styles.statValue}>{calLoading ? '—' : todayEvents.length}</div>
+          <div className={styles.statDesc}>Ожидающие, подтверждённые и групповые</div>
         </div>
-      </div>
-
-      {/* Coming soon */}
-      <div className={styles.noticeCard}>
-        <div className={styles.noticeTitle}>Раздел находится в разработке</div>
-        <div className={styles.noticeText}>
-          Кабинет психолога скоро получит полный функционал: управление клиентами,
-          ведение сессий, рабочие материалы и статистику.
+        <div className={styles.statCard} role="group" aria-label="Диалогов с непрочитанным">
+          <div className={styles.statLabel}>Диалогов с непрочитанным</div>
+          <div className={styles.statValue}>{unreadDialogs}</div>
+          <div className={styles.statDesc}>Личные диалоги с клиентами</div>
         </div>
       </div>
     </div>
