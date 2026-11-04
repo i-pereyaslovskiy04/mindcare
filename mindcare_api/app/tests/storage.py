@@ -22,7 +22,7 @@ from app.db.models import (
     Question, Option, QuestionMedia, OptionMedia, MediaFile,
     TestResult, TestResultScale, StudentAnswer,
     Category, Tag, User, Role, UserRole,
-    Consent, ConsentRecord,
+    Consent, ConsentRecord, CampaignResponseAnswer,
 )
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
@@ -49,6 +49,20 @@ class TestHasResults(Exception):
     Определена здесь (а не в service), чтобы storage мог её поднять без
     циклического импорта; service её ре-экспортирует, routes → HTTP 409.
     """
+
+
+class TestCampaignOnly(TestHasResults):
+    """
+    Правка или удаление теста кампании (campaign_only, ADR-036) через
+    конструктор. Методика загружается seed-скриптом и не редактируется:
+    ответы кампаний ссылаются на её вопросы. Подкласс TestHasResults — routes,
+    уже мапящие TestHasResults на 409, обрабатывают и этот случай.
+    """
+
+    def __init__(self, msg: str = (
+        "Это методика кампаний — её нельзя менять или удалять в конструкторе."
+    )):
+        super().__init__(msg)
 
 
 # ── helpers: чтение ───────────────────────────────────────────────────────────
@@ -456,8 +470,17 @@ def create_test(
 
 
 def has_results(test_id: int, db) -> bool:
-    return db.query(
+    """Есть ли ответы, ссылающиеся на вопросы теста: результаты студентов
+    или ответы кампаний (ADR-036; оба держат questions/options через RESTRICT)."""
+    if db.query(
         db.query(TestResult.id).filter(TestResult.test_id == test_id).exists()
+    ).scalar():
+        return True
+    return db.query(
+        db.query(CampaignResponseAnswer.id)
+        .join(Question, Question.id == CampaignResponseAnswer.question_id)
+        .filter(Question.test_id == test_id)
+        .exists()
     ).scalar()
 
 
@@ -645,6 +668,8 @@ def update_test(
             return None
         if expected_status is not None and test.status != expected_status:
             raise TestStateChanged(test.status)
+        if test.campaign_only:
+            raise TestCampaignOnly()
 
         for field in ("title", "description", "scoring", "max_score",
                       "time_limit_min", "is_active",
@@ -721,6 +746,8 @@ def delete_test(
             return False
         if expected_status is not None and test.status != expected_status:
             raise TestStateChanged(test.status)
+        if test.campaign_only:
+            raise TestCampaignOnly()
         test.deleted_at = datetime.now(timezone.utc)
         test.is_active = False
         record_event(
@@ -843,11 +870,12 @@ def find_active_tests(
 ) -> tuple[list[dict], int]:
     """Список тестов для студента (без вопросов и баллов). Видимость (Этап F,
     ADR-016): status='published' И is_active=True — публично виден только
-    опубликованный и включённый тест."""
+    опубликованный и включённый тест. Тесты кампаний (campaign_only, ADR-036)
+    в каталог не попадают."""
     with SessionLocal() as db:
         q = db.query(Test).filter(
             Test.deleted_at.is_(None), Test.is_active.is_(True),
-            Test.status == "published",
+            Test.status == "published", Test.campaign_only.is_(False),
         )
         if search:
             q = q.filter(Test.title.ilike(f"%{search.strip()}%"))
@@ -889,6 +917,7 @@ def get_active_test_full(uuid_str: str) -> Optional[dict]:
             Test.deleted_at.is_(None),
             Test.is_active.is_(True),
             Test.status == "published",
+            Test.campaign_only.is_(False),   # ADR-036: только по ссылке кампании
         ).first()
         if not test:
             return None
@@ -931,6 +960,7 @@ def save_result(
             Test.deleted_at.is_(None),
             Test.is_active.is_(True),
             Test.status == "published",
+            Test.campaign_only.is_(False),   # ADR-036: только по ссылке кампании
         ).first()
         if not test:
             return None

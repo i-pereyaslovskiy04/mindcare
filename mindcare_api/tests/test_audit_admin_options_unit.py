@@ -57,7 +57,10 @@ def test_data_change_log_does_not_offer_system_today(options):
 
 
 def test_audit_log_offers_system_because_maintenance_jobs_write_it(options):
-    assert options.actor_kinds["audit_log"] == ["user", "system", "unavailable"]
+    # anonymous — с ADR-036: ответ по публичной ссылке кампании без аккаунта.
+    assert options.actor_kinds["audit_log"] == [
+        "user", "system", "anonymous", "unavailable",
+    ]
 
 
 def test_auth_log_offers_anonymous_but_not_system(options):
@@ -116,7 +119,7 @@ def test_event_groups_match_the_registry_partition(options):
 
     assert options.audit_events == sorted(audit)
     assert options.auth_events == sorted(auth)
-    assert len(options.audit_events) == 134
+    assert len(options.audit_events) == 144
     assert len(options.auth_events) == 7
 
 

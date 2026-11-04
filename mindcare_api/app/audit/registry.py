@@ -626,6 +626,40 @@ _ALL += [
           TxMode.INDEPENDENT, FailurePolicy.RAISE),
 ]
 
+# ── AUDIT_LOG: тестовые кампании по публичной ссылке (ADR-036) ─────────────────
+# Первое событие audit_log с анонимным актором: респондент без аккаунта.
+# ATOMIC/RAISE в транзакции сохранения ответа (сбой → ничего не сохранено, 503);
+# target — campaign_response; metadata пуста (ни ФИО, ни токена, ни баллов).
+# Отказы (404/409/422/429) событий не пишут: актора нет, а поток анонимный.
+_ALL += [
+    _spec("campaign_response_submitted", Destination.AUDIT_LOG,
+          ActorPolicy.ANONYMOUS_ONLY, frozenset(),
+          TargetPolicy.REQUIRED, "campaign_response",
+          {Outcome.SUCCESS}, frozenset(), _EMPTY,
+          TxMode.ATOMIC, FailurePolicy.RAISE),
+]
+
+# Кабинет супервизора (этап 4). Мутации — ATOMIC/RAISE в транзакции под
+# FOR UPDATE строки кампании. Чтение ФИО (страница ответов) и выгрузка xlsx —
+# INDEPENDENT/RAISE, fail-closed: событие ДО отдачи данных, сбой → 503.
+# Target удаления — id уже удалённой строки (история в журнале остаётся).
+_CAMPAIGN = "test_campaign"
+_ALL += [
+    _audit_ok("test_campaign_created", {"supervisor"}, _CAMPAIGN),
+    _audit_ok("test_campaign_closed", {"supervisor"}, _CAMPAIGN),
+    _audit_ok("test_campaign_reopened", {"supervisor"}, _CAMPAIGN),
+    _audit_ok("test_campaign_link_rotated", {"supervisor"}, _CAMPAIGN),
+    _audit_ok("test_campaign_deleted", {"supervisor"}, _CAMPAIGN),
+    _audit_ok("campaign_response_deleted", {"supervisor"}, "campaign_response"),
+    _audit_ok("campaign_responses_read", {"supervisor"}, _CAMPAIGN,
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+    _audit_ok("campaign_results_exported", {"supervisor"}, _CAMPAIGN,
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+    # Экран результатов (баллы, уровни, типы и ФИО всех участников).
+    _audit_ok("campaign_results_read", {"supervisor"}, _CAMPAIGN,
+              tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
+]
+
 
 # ── Валидация ────────────────────────────────────────────────────────────────
 

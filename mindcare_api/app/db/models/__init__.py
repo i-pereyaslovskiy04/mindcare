@@ -129,6 +129,14 @@ from app.db.models.assignments import Assignment  # noqa: F401
 # ── material favorites (FK → users, articles) — ADR-034 ──────────────────────
 from app.db.models.material_favorites import MaterialFavorite  # noqa: F401
 
+# ── test campaigns (FK → tests, questions, options, consent_records) — ADR-036
+from app.db.models.test_campaigns import (  # noqa: F401
+    TestCampaign,
+    CampaignResponse,
+    CampaignResponseScale,
+    CampaignResponseAnswer,
+)
+
 # ── audit ─────────────────────────────────────────────────────────────────────
 from app.db.models.audit import (  # noqa: F401
     AuditLog,

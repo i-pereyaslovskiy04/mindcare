@@ -93,6 +93,13 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     # Stage 8 read-only admin viewer: привилегированное чтение журналов
     # (target FORBIDDEN, success-only, INDEPENDENT + RAISE).
     "audit_logs_viewed",
+    # ADR-036: ответ по публичной ссылке кампании (ANONYMOUS_ONLY).
+    "campaign_response_submitted",
+    # ADR-036 этап 4: кабинет супервизора кампаний.
+    "test_campaign_created", "test_campaign_closed", "test_campaign_reopened",
+    "test_campaign_link_rotated", "test_campaign_deleted",
+    "campaign_response_deleted", "campaign_responses_read",
+    "campaign_results_exported", "campaign_results_read",
     # ADR-029: подтверждение статуса студента ДонГУ.
     "student_verification_submitted", "student_verification_approved",
     "student_verification_rejected", "student_verification_content_read",
@@ -126,8 +133,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 134
-    assert len(REGISTRY) == 141
+    assert len(audit_names) == 144
+    assert len(REGISTRY) == 151
 
 
 def test_unknown_event_rejected():
@@ -230,7 +237,13 @@ def test_registry_total_count_stage_5c3():
     # appointment_outcome_failed: +3 → 132 audit = 139.
     # ADR-035 (заметки): session_note_create_failed/session_note_update_failed
     # +2 → 134 audit = 141.
-    assert len(REGISTRY) == 141
+    # ADR-036 (тестовые кампании): campaign_response_submitted (анонимный
+    # актор) +1 → 135 audit = 142.
+    # ADR-036 этап 4 (кабинет супервизора): test_campaign_created/closed/
+    # reopened/link_rotated/deleted, campaign_response_deleted,
+    # campaign_responses_read, campaign_results_exported: +8 → 143 audit = 150.
+    # ADR-036 (экран результатов): campaign_results_read +1 → 144 audit = 151.
+    assert len(REGISTRY) == 151
 
 
 def test_role_metadata_enum_excludes_system():

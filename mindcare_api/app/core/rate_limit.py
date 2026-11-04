@@ -62,6 +62,12 @@ RULES: dict[str, tuple[int, float]] = {
     # Продолжение из письма (/register/social): только чтение, как preview.
     "oauth_registration_resume:ip":      (60, 300),
     "oauth_registration_resume:ticket":  (20, 300),
+    # Тестовые кампании по публичной ссылке (ADR-036). Только IP: аккаунта нет.
+    # За reverse-proxy без --proxy-headers это адрес прокси, в аудитории —
+    # один NAT, поэтому лимит — общий потолок на поток прохождений, а не на
+    # одного респондента (отправка ≈ 1 на человека, чтение — с перезагрузками).
+    "campaign_read:ip":                  (600, 600),
+    "campaign_submit:ip":                (300, 600),
 }
 
 

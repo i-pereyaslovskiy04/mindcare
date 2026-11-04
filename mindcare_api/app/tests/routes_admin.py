@@ -215,6 +215,8 @@ def delete_test(
             ip=ip,
             user_agent=ua,
         )
+    except TestHasResults as exc:   # TestCampaignOnly (ADR-036)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 

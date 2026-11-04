@@ -20,11 +20,11 @@ PREDECESSOR = "c8e2b5f7a3d1"
 REVISION = "e6c3a9f1d574"
 
 # Текущий global alembic head — обновляется каждой следующей миграцией
-# (последняя правка: f5a3c8d1e7b2_add_student_verification_and_message_intents).
+# (последняя правка: a3e7c1f9d5b2_add_test_campaigns, ADR-036).
 # REVISION выше — это собственная неизменная идентичность ревизии Stage 8,
 # а не текущий head; их совпадение было верно только до появления следующей
 # миграции.
-CURRENT_HEAD = "d0ee44dc2527"
+CURRENT_HEAD = "a3e7c1f9d5b2"
 
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 

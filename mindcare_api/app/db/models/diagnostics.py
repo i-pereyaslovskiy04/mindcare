@@ -8,7 +8,7 @@
 import uuid as _uuid
 
 from sqlalchemy import (
-    ARRAY, Boolean, Column, DateTime, ForeignKey,
+    ARRAY, Boolean, CheckConstraint, Column, DateTime, ForeignKey,
     Index, Integer, String, Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -18,8 +18,17 @@ from sqlalchemy.sql import func
 from app.db.base import Base
 
 
+TEST_SCORING_PROFILES = ("ito_sobchik",)
+
+
 class Test(Base):
     __tablename__ = "tests"
+    __table_args__ = (
+        CheckConstraint(
+            "scoring_profile IS NULL OR scoring_profile IN ('ito_sobchik')",
+            name="ck_tests_scoring_profile",
+        ),
+    )
 
     id             = Column(Integer, primary_key=True)
     uuid           = Column(
@@ -39,6 +48,13 @@ class Test(Base):
     shuffle_questions = Column(Boolean, default=False, nullable=False,
                                server_default="false")
     shuffle_options   = Column(Boolean, default=False, nullable=False,
+                               server_default="false")
+    # ADR-036: пост-обработка результата конкретной методики (достоверность,
+    # типы) — чистая функция профиля; NULL — обычный тест.
+    scoring_profile   = Column(String(30), nullable=True)
+    # ADR-036: тест только для кампаний по публичной ссылке — не показывается
+    # в каталоге студента и не проходится через /api/tests.
+    campaign_only     = Column(Boolean, default=False, nullable=False,
                                server_default="false")
     created_by     = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     is_active      = Column(Boolean, default=True)

@@ -10,3 +10,4 @@ alembic
 Pillow
 cryptography
 httpx
+openpyxl

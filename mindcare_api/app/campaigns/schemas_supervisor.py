@@ -1,0 +1,143 @@
+"""Схемы кабинета супервизора для кампаний (ADR-036, этап 4)."""
+import re
+import uuid as _uuid
+from datetime import datetime
+from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, field_validator
+
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+class CampaignTestOut(BaseModel):
+    uuid: str
+    title: str
+
+
+class CampaignCreateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    test_uuid: _uuid.UUID
+
+    @field_validator("title")
+    @classmethod
+    def _title(cls, v: str) -> str:
+        if _CONTROL_RE.search(v):
+            raise ValueError("недопустимые символы")
+        cleaned = " ".join(v.split())
+        if not (2 <= len(cleaned) <= 255):
+            raise ValueError("недопустимая длина")
+        return cleaned
+
+
+class CampaignStatusIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["open", "closed"]
+
+
+class CampaignOut(BaseModel):
+    uuid: str
+    title: str
+    status: Literal["open", "closed"]
+    test_title: Optional[str]
+    test_uuid: Optional[str]
+    responses_count: int
+    created_at: datetime
+    closed_at: Optional[datetime]
+
+
+class CampaignDetailOut(CampaignOut):
+    link_token: str
+    link_path: str
+    link_url: Optional[str]   # None — FRONTEND_PUBLIC_URL не задан
+
+
+class CampaignListOut(BaseModel):
+    items: list[CampaignDetailOut]
+    has_more: bool
+
+
+class CampaignResponseOut(BaseModel):
+    uuid: str
+    full_name: str
+    faculty_code: str
+    faculty_label: Optional[str]
+    specialty: str
+    age: int
+    gender: Literal["male", "female"]
+    submitted_at: datetime
+
+
+class CampaignResponseListOut(BaseModel):
+    items: list[CampaignResponseOut]
+    has_more: bool
+
+
+# ── результаты (первичная обработка) ─────────────────────────────────────────
+
+class ResultScaleOut(BaseModel):
+    code: str
+    label: str
+
+
+class ResultRowOut(BaseModel):
+    uuid: str
+    full_name: str
+    faculty_code: str
+    faculty_label: Optional[str]
+    specialty: str
+    age: int
+    gender: Literal["male", "female"]
+    submitted_at: datetime
+    scores: dict[str, int]
+    levels: dict[str, Optional[str]]
+    is_valid: Optional[bool]
+    types: list[str]
+
+
+class ScaleStatOut(BaseModel):
+    scale: str
+    label: str
+    mean: Optional[float]
+    min: Optional[int]
+    max: Optional[int]
+    levels: dict[str, int]
+
+
+class TypeStatOut(BaseModel):
+    name: str
+    count: int
+    invalid: int
+
+
+class GroupStatOut(BaseModel):
+    code: str
+    label: str
+    count: int
+    valid: int
+    with_type: int
+    means: dict[str, Optional[float]]
+
+
+class ResultsSummaryOut(BaseModel):
+    total: int
+    valid: Optional[int]
+    invalid: Optional[int]
+    with_type: int
+    scales: list[ScaleStatOut]
+    types: list[TypeStatOut]
+    by_faculty: list[GroupStatOut]
+    by_gender: list[GroupStatOut]
+
+
+class CampaignResultsOut(BaseModel):
+    profile: Optional[str]
+    scales: list[ResultScaleOut]
+    level_labels: dict[str, str]
+    type_names: list[str]
+    faculties: list[ResultScaleOut]   # факультеты всех участников (для фильтра)
+    total_all: int
+    items: list[ResultRowOut]
+    summary: ResultsSummaryOut

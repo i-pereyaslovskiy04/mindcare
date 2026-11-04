@@ -166,6 +166,8 @@ from app.banner_slides.routes_supervisor import router as supervisor_banner_slid
 from app.banner_slides.routes_public import router as public_banner_slides_router  # noqa: E402
 from app.service_cards.routes_supervisor import router as supervisor_service_cards_router  # noqa: E402
 from app.service_cards.routes_public import router as public_service_cards_router  # noqa: E402
+from app.campaigns.routes_public import router as public_campaigns_router  # noqa: E402
+from app.campaigns.routes_supervisor import router as supervisor_campaigns_router  # noqa: E402
 from app.student_verification.routes import router as student_verification_router  # noqa: E402
 from app.student_verification.routes import catalog_router as student_verification_catalog_router  # noqa: E402
 from app.student_verification.routes_supervisor import router as supervisor_student_verification_router  # noqa: E402
@@ -215,6 +217,8 @@ app.include_router(supervisor_banner_slides_router, prefix="/api")
 app.include_router(public_banner_slides_router,     prefix="/api")
 app.include_router(supervisor_service_cards_router, prefix="/api")
 app.include_router(public_service_cards_router,     prefix="/api")
+app.include_router(public_campaigns_router,          prefix="/api")
+app.include_router(supervisor_campaigns_router,      prefix="/api")
 app.include_router(student_verification_catalog_router,     prefix="/api")
 app.include_router(student_verification_router,             prefix="/api")
 app.include_router(supervisor_student_verification_router,  prefix="/api")
