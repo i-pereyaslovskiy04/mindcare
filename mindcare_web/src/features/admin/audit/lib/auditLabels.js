@@ -51,7 +51,7 @@ export const EVENT_CATEGORY_LABELS = {
   audit_access:  'Просмотр аудита',
 };
 
-// ── audit_log: 134 события (полнота сверяется с auditRegistry.snapshot.json) ──
+// ── audit_log: 144 события (полнота сверяется с auditRegistry.snapshot.json) ──
 
 export const AUDIT_EVENT_LABELS = {
   // Пользователи и роли (30, вкл. ADR-029). ADR-028: единый lifecycle отключения —
@@ -162,6 +162,16 @@ export const AUDIT_EVENT_LABELS = {
   test_published:            'Методика опубликована',
   test_returned_for_changes: 'Методика возвращена на доработку',
   test_unpublished_for_edit: 'Методика снята с публикации для правки',
+  campaign_response_submitted: 'Пройдено тестирование по ссылке кампании',
+  test_campaign_created:       'Создана кампания тестирования',
+  test_campaign_closed:        'Кампания тестирования закрыта',
+  test_campaign_reopened:      'Кампания тестирования открыта снова',
+  test_campaign_link_rotated:  'Перевыпущена ссылка кампании',
+  test_campaign_deleted:       'Кампания тестирования удалена',
+  campaign_response_deleted:   'Удалён ответ кампании',
+  campaign_responses_read:     'Просмотрен список участников кампании',
+  campaign_results_exported:   'Выгружены результаты кампании',
+  campaign_results_read:       'Просмотрены результаты кампании',
 
   // Задания (8)
   assignment_created:         'Задание выдано клиенту',
@@ -325,6 +335,16 @@ export const EVENT_CATEGORIES = {
   test_published: 'testing',
   test_returned_for_changes: 'testing',
   test_unpublished_for_edit: 'testing',
+  campaign_response_submitted: 'testing',
+  test_campaign_created: 'testing',
+  test_campaign_closed: 'testing',
+  test_campaign_reopened: 'testing',
+  test_campaign_link_rotated: 'testing',
+  test_campaign_deleted: 'testing',
+  campaign_response_deleted: 'testing',
+  campaign_responses_read: 'testing',
+  campaign_results_exported: 'testing',
+  campaign_results_read: 'testing',
 
   assignment_created: 'assignments',
   assignment_completed: 'assignments',
@@ -451,6 +471,7 @@ export const ENTITY_TYPE_LABELS = {
   article:                    'Материал',
   assignment:                 'Задание',
   banner_slide:               'Слайд баннера',
+  campaign_response:          'Ответ по ссылке кампании',
   category:                   'Тип материалов',
   chat_attachment:            'Вложение чата',
   chat_conversation:          'Беседа',
@@ -470,6 +491,7 @@ export const ENTITY_TYPE_LABELS = {
   student_verification_request: 'Заявка на подтверждение студента',
   tag:                        'Тема',
   test:                       'Методика',
+  test_campaign:              'Кампания тестирования',
   test_result:                'Результат теста',
   therapy_engagement:         'Сопровождение',
   unregistered_student_card:  'Карточка клиента без аккаунта',

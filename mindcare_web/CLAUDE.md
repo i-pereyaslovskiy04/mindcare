@@ -45,6 +45,12 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
    //host-пути — текст. Новый путь — только добавлением в allowlist. Тесты,
    рендерящие LinkifiedText, мокают react-router-dom виртуально (v7 не резолвится
    jest-резолвером)
+✅ Тестовые кампании (ADR-036): HTTP только через `api/campaigns.api.js`; публичная
+   страница `/c/:token` — `features/campaigns/ui/PublicCampaign` (черновик — только
+   `features/campaigns/lib/draft.js`, sessionStorage вкладки, `submission_key` один на
+   черновик); супервизор — `/supervisor/campaigns` (`useCampaigns`,
+   `useCampaignResponses`, `CampaignCard`). ФИО, ответы и токен ссылки не логировать;
+   ключ методики (баллы/шкалы) на клиент не приходит и не вычисляется
 ❌ Не добавлять fetch в components/ или pages/ напрямую
 ❌ Не фильтровать items на клиенте если список из БД
 ❌ Не использовать data/ как постоянный источник данных

@@ -32,6 +32,7 @@ import NewsItemPage      from '../pages/news/NewsItemPage';
 import MaterialsPage     from '../pages/materials/MaterialsPage';
 import MaterialsItemPage from '../pages/materials/MaterialsItemPage';
 import NotFound          from '../pages/not-found/NotFound';
+import CampaignPage      from '../pages/campaign/CampaignPage';
 import HealthPage        from '../pages/health/HealthPage';
 import ThemePreviewPage  from '../pages/theme-preview/ThemePreviewPage';
 
@@ -97,6 +98,7 @@ import GroupSessionsPage   from '../pages/supervisor/GroupSessionsPage';
 import SchedulePage        from '../pages/supervisor/SchedulePage';
 import BookingPage         from '../pages/supervisor/BookingPage';
 import StudentVerificationsPage from '../pages/supervisor/StudentVerificationsPage';
+import CampaignsPage from '../pages/supervisor/CampaignsPage';
 
 // ── Shared cabinet pages ──────────────────────────────────────────────────────
 import CabinetSettingsPage from '../components/CabinetLayout/CabinetSettingsPage';
@@ -114,6 +116,8 @@ export default function AppRouter() {
       <Route path="/news/:id"      element={<NewsItemPage />} />
       <Route path="/materials"     element={<MaterialsPage />} />
       <Route path="/materials/:id" element={<MaterialsItemPage />} />
+      {/* Тестирование по ссылке кампании без входа (ADR-036) */}
+      <Route path="/c/:token"      element={<CampaignPage />} />
       {process.env.NODE_ENV !== 'production' && (
         <Route path="/theme-preview" element={<ThemePreviewPage />} />
       )}
@@ -191,6 +195,7 @@ export default function AppRouter() {
         <Route path="booking"               element={<BookingPage />} />
         <Route path="group-sessions"        element={<GroupSessionsPage />} />
         <Route path="student-verifications" element={<StudentVerificationsPage />} />
+        <Route path="campaigns"             element={<CampaignsPage />} />
         <Route path="settings"              element={<CabinetSettingsPage cabinetRole="supervisor" />} />
       </Route>
 

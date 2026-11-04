@@ -12,6 +12,7 @@ const QUICK_LINKS = [
   { to: '/supervisor/engagements', icon: 'tasks', title: 'Назначение психологов', desc: 'Сопровождение студентов' },
   { to: '/supervisor/materials', icon: 'articles', title: 'Материалы', desc: 'Проверка и свои статьи' },
   { to: '/supervisor/tests', icon: 'tests', title: 'Тесты', desc: 'Проверка методик' },
+  { to: '/supervisor/campaigns', icon: 'tests', title: 'Тестирование по ссылке', desc: 'Кампании и выгрузка xlsx' },
   { to: '/supervisor/student-verifications', icon: 'check', title: 'Подтверждение студентов', desc: 'Заявки ДонГУ' },
 ];
 
