@@ -2,7 +2,22 @@
 
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
-Актуальный handoff (ветка `mindcare_alex`):
+Актуальный handoff (ветка `mindcare_vb`):
+`docs/HANDOFFS/2026-11-04-test-campaigns-ito.md` — тестовые кампании по
+публичной ссылке без аккаунта (**ADR-036**, миграция `a3e7c1f9d5b2`, REGISTRY
+141 → 151, новая зависимость `openpyxl`): ИТО Собчик (ключ методички с
+исправлением опечатки — 49 в II), одна ссылка `/c/<token>` на всех, анкета
+(ФИО `enc:v1:`, факультет, специальность, возраст, пол) + согласие
+`campaign_consent` (IP/UA — только `consent_records`), ответы в отдельных
+таблицах (не `test_results`), супервизор `/supervisor/campaigns`: ссылки,
+участники (fail-closed аудит), первичная обработка (экран «Результаты» с
+фильтрами и сводкой; xlsx в формате заказчика + листы «Уровни» и «Сводка»),
+физическое удаление.
+**Деплой: `pip install -r requirements.txt`, `alembic upgrade head`, перезапуск
+API, `scripts/seed_ito_sobchik.py`.** Спецификация —
+`docs/MODULES/test-campaigns-ito-spec.md`.
+
+Предыдущий handoff (ветка `mindcare_alex`):
 `docs/HANDOFFS/2026-11-02-corrective-pass-moderation-health-ui.md` — corrective
 pass без миграций (REGISTRY 141 без изменений): решения модерации тестов под
 `FOR UPDATE` с обязательным ожидаемым состоянием (409 `test_state_changed`,

@@ -963,7 +963,7 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
 
 ### База данных: схема
 
-60 таблиц в 15 доменных модулях. Схема управляется через Alembic.
+73 таблицы в ORM-метаданных (после ADR-036; `len(Base.metadata.tables)`). Схема управляется через Alembic.
 Миграции: `mindcare_api/alembic/versions/`.
 
 **Миграции (в порядке применения).** Полный rationale каждой ревизии — в
@@ -1041,7 +1041,8 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `a7d3f1c8e5b2` | add_user_contacts (ADR-032): `user_contacts` (user_id PK/FK CASCADE, `contacts_enc` TEXT NOT NULL только `enc:v1:`, `version` ≥ 1, created_at/updated_at). Backfill нет. Downgrade fail-closed при наличии строк |
 | `eb1460dc4954` | add_assignments (ADR-033): `assignments` (uuid UNIQUE, `engagement_id` FK CASCADE, `text_enc` TEXT NOT NULL только `enc:v1:`, `due_date` DATE NULL, `article_id` FK→articles RESTRICT NULL, `status` active/completed/cancelled + CHECK согласованности `completed_at`/`cancelled_at`, created_at/updated_at; индексы `(engagement_id, created_at)`, partial `(engagement_id) WHERE status='active'`, `(article_id)`). Backfill нет. Downgrade fail-closed при наличии строк |
 | `ffd5e761b87b` | add_material_favorites (ADR-034): `material_favorites` (PK user_id+article_id, FK users/articles CASCADE, created_at; индексы `(user_id, created_at)`, `(article_id)`). Backfill нет. Downgrade fail-closed при наличии строк |
-| `d0ee44dc2527` | add_article_moderation (ADR-034): `articles.status` (draft/in_review/needs_changes/published, NOT NULL default draft, CHECK), `review_comment_enc` (только `enc:v1:`), CHECK `ck_articles_status_published` (published ⇔ is_published), индекс `ix_articles_status`; backfill опубликованных → published. Downgrade fail-closed при статьях в модерации — **head** |
+| `d0ee44dc2527` | add_article_moderation (ADR-034): `articles.status` (draft/in_review/needs_changes/published, NOT NULL default draft, CHECK), `review_comment_enc` (только `enc:v1:`), CHECK `ck_articles_status_published` (published ⇔ is_published), индекс `ix_articles_status`; backfill опубликованных → published. Downgrade fail-closed при статьях в модерации |
+| `a3e7c1f9d5b2` | add_test_campaigns (ADR-036): `tests.scoring_profile` (NULL \| `ito_sobchik`, CHECK) и `tests.campaign_only` (NOT NULL default false); `test_campaigns` (test_id RESTRICT, title, status open/closed + closed_at CHECK, `link_token_hash` SHA-256 hex UNIQUE + `link_token_enc` только `enc:v1:`, created_by SET NULL); `campaign_responses` (campaign_id CASCADE, `submission_key` UNIQUE в кампании, test_version, `full_name_enc` только `enc:v1:`, faculty_code, specialty не пустая, age 14..100, gender male/female, consent_record_id RESTRICT UNIQUE); `campaign_response_scales` / `campaign_response_answers` (CASCADE от ответа, RESTRICT на questions/options). Backfill нет. Downgrade fail-closed при кампаниях или помеченных тестах — **head** |
 
 **Ключевые таблицы:**
 
@@ -1073,6 +1074,7 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `student_verification_requests` | Заявки на подтверждение статуса студента ДонГУ (ADR-029): статус, не роль; номер билета и пояснение отказа — только `enc:v1:`; одна pending и одна approved на пользователя; решённые строки неизменны (история) |
 | `user_contacts` | Контакты пользователя (ADR-032): основной телефон остаётся в `users.phone`, здесь до 10 дополнительных способов связи одним зашифрованным JSON-конвертом (`enc:v1:`); `version` — CAS оптимистичной конкурентности; пустой список = нет строки либо шифрованный `[]`; в общие DTO пользователя НЕ попадает |
 | `system_message_intents` | Outbox system-сообщений (ADR-029): намерение доставки (только message_code, без текста), пишется в транзакции операции; delivered_at — после успешного publisher; повтор — `scripts/deliver_system_message_intents.py` |
+| `test_campaigns`, `campaign_responses`, `campaign_response_scales`, `campaign_response_answers` | Тестовые кампании по публичной ссылке без аккаунта (ADR-036): отдельный от `test_results` контур (структурная изоляция от истории студента, Этапа E и карточки клиента); ФИО и токен ссылки — только `enc:v1:`; IP/UA — только в `consent_records` (`user_id = NULL`); удаление — физическое (исключение из soft delete), согласие удаляется тем же service-вызовом; достоверность/типы методики не хранятся — вычисляются при выгрузке |
 | `diary_entries` | Дневник студента: одна активная запись в день (partial UNIQUE по student_id + entry_date WHERE NOT deleted); mood_score_enc, entry_text_enc, emotions_enc — Fernet encrypted; только student |
 | `refresh_tokens`, `user_mfa_methods` | NOT IMPLEMENTED. Таблицы зарезервированы. |
 
@@ -1101,7 +1103,16 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 141 событие** (`AUTH_LOG=7`, `AUDIT_LOG=134`; ADR-016 дополнение
+**Event REGISTRY: 151 событие** (`AUTH_LOG=7`, `AUDIT_LOG=144`; ADR-036 добавил
+`campaign_results_read` ({supervisor}, INDEPENDENT/RAISE — экран результатов
+кампании с ФИО и баллами), а также
+`campaign_response_submitted` — первое событие `audit_log` с анонимным актором
+(`ANONYMOUS_ONLY`, респондент по публичной ссылке кампании без аккаунта),
+target `campaign_response`, ATOMIC/RAISE, metadata пустая; кабинет супервизора
+кампаний ({supervisor}, metadata пустая): `test_campaign_created`/`_closed`/
+`_reopened`/`_link_rotated`/`_deleted` и `campaign_response_deleted` —
+ATOMIC/RAISE, `campaign_responses_read` (страница участников с ФИО) и
+`campaign_results_exported` (xlsx) — INDEPENDENT/RAISE, fail-closed; ADR-016 дополнение
 2026-10-29 и ADR-035 (карточка клиента) добавили `test_result_read_failed`
 ({psychologist}, access_denied), `appointment_completed`/`appointment_no_show`
 ({psychologist}, ATOMIC/RAISE, target appointment), `appointment_outcome_failed`
