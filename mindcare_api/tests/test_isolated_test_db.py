@@ -397,3 +397,53 @@ def test_main_missing_test_url_fails_not_skips(monkeypatch, capsys):
     monkeypatch.setattr(h, "create_engine", ce)
     assert h.main([]) != 0
     ce.assert_not_called()
+
+
+# ── Сигналы остановки: временная БД удаляется и при SIGTERM ────────────────────
+
+def test_main_signal_during_pytest_drops_db_and_returns_128_plus_signum(monkeypatch):
+    parent, mgr = _patch_main_happy(monkeypatch)
+    parent.pytest.side_effect = h.TerminatedBySignal(15)
+    rc = h.main([])
+    assert rc == 128 + 15
+    mgr.drop.assert_called_once()
+    mgr.dispose_engines.assert_called_once()
+
+
+def test_signal_handler_raises_and_ignores_repeated_signals():
+    import signal as _signal
+    saved = {sig: _signal.getsignal(sig) for sig in h._STOP_SIGNALS}
+    try:
+        h.install_signal_handlers()
+        for sig in h._STOP_SIGNALS:
+            assert _signal.getsignal(sig) is h._raise_on_signal
+        with pytest.raises(h.TerminatedBySignal) as exc:
+            h._raise_on_signal(15, None)
+        assert exc.value.signum == 15
+        for sig in h._STOP_SIGNALS:
+            assert _signal.getsignal(sig) is _signal.SIG_IGN   # уборку не прервать
+    finally:
+        for sig, handler in saved.items():
+            _signal.signal(sig, handler)
+
+
+@pytest.mark.skipif(not hasattr(__import__("signal"), "SIGHUP"), reason="POSIX only")
+def test_real_sigterm_reaches_finally():
+    """Настоящий SIGTERM в отдельном процессе: finally выполняется (без БД)."""
+    import subprocess
+    code = (
+        "import os, signal, sys, time\n"
+        f"sys.path.insert(0, {str(Path(h.__file__).parent)!r})\n"
+        "import isolated_test_db as h\n"
+        "h.install_signal_handlers()\n"
+        "try:\n"
+        "    os.kill(os.getpid(), signal.SIGTERM)\n"
+        "    time.sleep(5)\n"
+        "except h.TerminatedBySignal as e:\n"
+        "    print('caught', e.signum)\n"
+        "finally:\n"
+        "    print('finally')\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                         text=True, timeout=30)
+    assert out.stdout.split() == ["caught", "15", "finally"], out.stderr

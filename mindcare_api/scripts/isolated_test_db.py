@@ -24,6 +24,7 @@ import base64
 import os
 import re
 import secrets
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -347,6 +348,36 @@ def _run_pytest(args: list, env: dict) -> int:
     ).returncode
 
 
+# ── Сигналы остановки ─────────────────────────────────────────────────────────
+# По умолчанию SIGTERM/SIGHUP убивают процесс сразу, минуя finally, и временная
+# БД остаётся (timeout, остановка задачи, закрытие терминала). Обработчик
+# превращает сигнал в исключение: subprocess.run убивает дочерний
+# alembic/pytest, main() попадает в finally и удаляет БД. Повторные сигналы во
+# время уборки игнорируются, чтобы не прервать DROP. SIGINT (Ctrl+C) — штатный
+# KeyboardInterrupt, finally выполняется и без обработчика.
+
+_STOP_SIGNALS = tuple(
+    getattr(signal, name) for name in ("SIGTERM", "SIGHUP") if hasattr(signal, name)
+)
+
+
+class TerminatedBySignal(Exception):
+    def __init__(self, signum: int):
+        super().__init__(signum)
+        self.signum = signum
+
+
+def _raise_on_signal(signum, _frame):
+    for sig in _STOP_SIGNALS:
+        signal.signal(sig, signal.SIG_IGN)
+    raise TerminatedBySignal(signum)
+
+
+def install_signal_handlers() -> None:
+    for sig in _STOP_SIGNALS:
+        signal.signal(sig, _raise_on_signal)
+
+
 # ── Точка входа ───────────────────────────────────────────────────────────────
 
 def main(argv: list) -> int:
@@ -380,6 +411,11 @@ def main(argv: list) -> int:
             result = arc or 1             # pytest НЕ запускаем
         else:
             result = _run_pytest(argv, env)   # сохраняем returncode pytest
+    except TerminatedBySignal as exc:
+        name = mgr.db_name if mgr is not None else "(not-created)"
+        print(f"[TERMINATED] db={name} signal={exc.signum} — удаляю временную БД",
+              file=sys.stderr)
+        result = 128 + exc.signum
     except Exception as exc:
         # Только класс исключения и безопасное имя — без str(exc)/repr(exc)/URL.
         name = mgr.db_name if mgr is not None else "(not-created)"
@@ -404,4 +440,5 @@ def main(argv: list) -> int:
 
 
 if __name__ == "__main__":
+    install_signal_handlers()
     sys.exit(main(sys.argv[1:]))
