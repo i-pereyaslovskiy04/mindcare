@@ -61,16 +61,6 @@ function validateCreate(values) {
   return errs;
 }
 
-/**
- * Backend разрешает ДОБАВЛЕНИЕ staff-роли только пользователю, у которого уже
- * есть активная staff-роль (`_apply_role_and_scalar_changes`: `added and not
- * current_staff` → 422). Student-only и roleless пользователи не могут
- * получить первую staff-роль через edit — только через POST /admin/users.
- */
-function canManageStaffRoles(initialStaffRoles) {
-  return initialStaffRoles.length > 0;
-}
-
 function validateEdit(values, initialStaffRoles, hasStudent, isSelf = false) {
   const errs = {};
   if (!values.full_name || values.full_name.trim().length < 2)
@@ -91,16 +81,6 @@ function validateEdit(values, initialStaffRoles, hasStudent, isSelf = false) {
   // пользователь) НЕ должен блокировать чисто скалярное редактирование.
   if (sameSet(values.roles, initialStaffRoles)) return errs;
 
-  const added = rolesToAdd(values.roles, initialStaffRoles);
-
-  if (added.length > 0 && !canManageStaffRoles(initialStaffRoles)) {
-    errs.roles =
-      'Назначение служебной роли доступно только пользователю, у которого ' +
-      'уже есть служебная роль. Новых сотрудников создавайте через ' +
-      '«Создать пользователя»';
-    return errs;
-  }
-
   // Нельзя оставить пользователя без активных ролей: пустой staff-набор
   // допустим только если у пользователя есть (сохраняемая) роль student.
   if (values.roles.length === 0 && !hasStudent)
@@ -108,7 +88,9 @@ function validateEdit(values, initialStaffRoles, hasStudent, isSelf = false) {
   if (values.roles.some((r) => !isStaffRole(r)))
     errs.roles = 'Через админку назначаются только служебные роли';
 
-  // Legal basis нужен только при добавлении новой staff-роли.
+  // Legal basis нужен только при добавлении новой staff-роли (в т.ч. первой —
+  // ADR-018, дополнение 2026-11-05: админ повышает пользователя до сотрудника).
+  const added = rolesToAdd(values.roles, initialStaffRoles);
   if (added.length > 0) {
     if (!values.legal_basis_confirmed)
       errs.legal_basis_confirmed =
@@ -224,9 +206,6 @@ export function useUserForm({ mode, uuid, onSuccess, currentUserId }) {
     // Self-admin guard: нельзя снять у себя роль admin (no-op, а не тихая
     // перезапись payload). Backend всё равно вернёт 422 при обходе фронта.
     if (!isCreate && isSelf && role === 'admin') return;
-    // Roleless/student-only: backend отклоняет добавление первой staff-роли
-    // через edit (422) — контрол должен быть недоступен ещё на фронте.
-    if (!isCreate && !canManageStaffRoles(initialStaffRoles)) return;
     setValues((prev) => {
       const has = prev.roles.includes(role);
       const roles = has
@@ -278,6 +257,5 @@ export function useUserForm({ mode, uuid, onSuccess, currentUserId }) {
         // показываем только для чистого студента (у которого нет staff-ролей),
         // иначе для каждого сотрудника висел бы ложный «назначена при регистрации».
         isPureStudent: hasStudent && initialStaffRoles.length === 0,
-        canManageStaffRoles: canManageStaffRoles(initialStaffRoles),
       };
 }

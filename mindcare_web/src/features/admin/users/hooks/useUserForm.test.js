@@ -173,7 +173,7 @@ test('edit submit sends phone in masked format', async () => {
   expect(payload).not.toHaveProperty('roles');
 });
 
-// ─── Staff-набор политика (backend: added-без-current_staff → 422) ───────────
+// ─── Staff-набор политика (ADR-018, дополнение 2026-11-05) ───────────────────
 
 test('student-only: scalar edit succeeds without touching roles', async () => {
   api.getUser.mockResolvedValueOnce({
@@ -185,7 +185,6 @@ test('student-only: scalar edit succeeds without touching roles', async () => {
   );
   await waitFor(() => expect(result.current.loading).toBe(false));
 
-  expect(result.current.canManageStaffRoles).toBe(false);
   set(result, 'full_name', 'Студент Иванов (обновлено)');
   submit(result);
 
@@ -198,7 +197,7 @@ test('student-only: scalar edit succeeds without touching roles', async () => {
   expect(payload).not.toHaveProperty('roles');
 });
 
-test('student-only: staff checkbox cannot be toggled, no request with a new role', async () => {
+test('student-only: admin assigns the first staff role with a legal basis', async () => {
   api.getUser.mockResolvedValueOnce({
     full_name: 'Студент Иванов', phone: '',
     roles: ['student'], is_active: true,
@@ -208,13 +207,22 @@ test('student-only: staff checkbox cannot be toggled, no request with a new role
   );
   await waitFor(() => expect(result.current.loading).toBe(false));
 
-  toggle(result, 'psychologist'); // guarded no-op: canManageStaffRoles === false
-  expect(result.current.values.roles).toEqual([]);
+  toggle(result, 'psychologist');
+  expect(result.current.values.roles).toEqual(['psychologist']);
+  expect(result.current.editNeedsBasis).toBe(true);
 
+  submit(result); // без основания — ошибка, запроса нет
+  await waitFor(() => expect(result.current.errors.basis_reference).toBeTruthy());
+  expect(result.current.errors.roles).toBeUndefined();
+  expect(api.updateUser).not.toHaveBeenCalled();
+
+  set(result, 'basis_reference', 'Приказ № 1');
+  set(result, 'legal_basis_confirmed', true);
   submit(result);
   await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
   const [, payload] = api.updateUser.mock.calls[0];
-  expect(payload).not.toHaveProperty('roles');
+  expect(payload.roles).toEqual(['psychologist']);
+  expect(payload.legal_basis_confirmed).toBe(true);
 });
 
 test('roleless user (roles: []) can perform a scalar-only edit', async () => {
@@ -226,7 +234,6 @@ test('roleless user (roles: []) can perform a scalar-only edit', async () => {
   );
   await waitFor(() => expect(result.current.loading).toBe(false));
 
-  expect(result.current.canManageStaffRoles).toBe(false);
   submit(result); // без изменений — unchanged empty roles не должен блокировать
 
   await waitFor(() => expect(api.updateUser).toHaveBeenCalledTimes(1));
@@ -245,7 +252,6 @@ test('student+staff can remove the last staff role, keeping student', async () =
   );
   await waitFor(() => expect(result.current.loading).toBe(false));
 
-  expect(result.current.canManageStaffRoles).toBe(true);
   toggle(result, 'psychologist'); // remove the only staff role
   submit(result);
 

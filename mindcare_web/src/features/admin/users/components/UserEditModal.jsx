@@ -18,7 +18,7 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
   const { user: authUser } = useAuth();
   const {
     values, errors, loading, submitting, handleChange, handleSubmit, toggleRole,
-    isPureStudent, editNeedsBasis, canManageStaffRoles, isSelf,
+    isPureStudent, editNeedsBasis, isSelf,
   } = useUserForm({
     mode: 'edit',
     uuid,
@@ -80,12 +80,6 @@ export default function UserEditModal({ open, uuid, userInfo, onClose, onUpdated
                 value={values.roles}
                 onToggle={toggleRole}
                 hasStudent={isPureStudent}
-                disabled={!canManageStaffRoles}
-                disabledHint={
-                  !canManageStaffRoles
-                    ? 'Назначение служебной роли доступно только пользователю, у которого уже есть служебная роль. Для нового сотрудника используйте «Создать пользователя».'
-                    : undefined
-                }
                 lockedRoles={isSelf ? ['admin'] : []}
                 lockedHint="Нельзя снять у себя роль администратора."
                 error={errors.roles}

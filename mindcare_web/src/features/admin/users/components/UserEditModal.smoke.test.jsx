@@ -56,17 +56,17 @@ test('staff role checkboxes are rendered; student shown read-only (no student ch
   expect(screen.queryByText('Студент')).toBeNull();
 });
 
-test('student-only: staff checkboxes are disabled with an explanation, no legal basis reveal', async () => {
+test('student-only: staff role can be assigned, legal basis section appears', async () => {
   renderModal();
   const psy = await screen.findByRole('checkbox', { name: 'Психолог' });
 
-  // backend разрешает добавление staff-роли только тому, у кого она уже есть —
-  // student-only пользователь не может назначить первую staff-роль через edit.
-  expect(psy).toBeDisabled();
-  expect(screen.getByText(/Назначение служебной роли доступно только/)).toBeInTheDocument();
+  // ADR-018, дополнение 2026-11-05: админ повышает пользователя до сотрудника.
+  expect(psy).not.toBeDisabled();
+  expect(screen.queryByText(/Назначение служебной роли доступно только/)).toBeNull();
 
   fireEvent.click(psy);
-  expect(screen.queryByText('Документ-основание')).toBeNull();
+  expect(psy).toBeChecked();
+  expect(screen.getByText('Документ-основание')).toBeInTheDocument();
   expect(api.updateUser).not.toHaveBeenCalled();
 });
 

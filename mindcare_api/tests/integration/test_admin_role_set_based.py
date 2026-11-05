@@ -252,11 +252,21 @@ class TestStudentReadOnly:
         assert roles == {"student", "psychologist", "supervisor"}
         assert "student" in r.json()["roles"]
 
-    def test_student_only_to_staff_rejected_422(self, client):
+    def test_student_only_to_staff_allowed(self, client):
+        """ADR-018, дополнение 2026-11-05: админ повышает пользователя до
+        сотрудника; student сохраняется, основание записывается."""
         token = _make_admin(client)
         uuid, uid = _make_user("student")
         r = _patch(client, token, uuid, {"roles": ["psychologist"], **BASIS_OK})
-        assert r.status_code == 422
+        assert r.status_code == 200, r.text
+        assert _roles_of(uid) == {"student", "psychologist"}
+        assert len(_basis_records(uid)) == 1
+
+    def test_student_only_to_staff_requires_basis(self, client):
+        token = _make_admin(client)
+        uuid, uid = _make_user("student")
+        r = _patch(client, token, uuid, {"roles": ["supervisor"]})
+        assert r.status_code == 400
         assert _roles_of(uid) == {"student"}
         assert len(_basis_records(uid)) == 0
 

@@ -354,9 +354,9 @@ def _target_staff_from_legacy_role(role: str, current: set[str]) -> set[str]:
     - multi-role пользователь → 409 (использовать `roles[]`);
     - `role == "student"`: разрешён только no-op (current == {student});
       иначе 422 (student не назначается/не снимается через admin role control);
-    - staff `role`: возвращает {role} как целевой staff-набор. student-only →
-      staff и bootstrap staff через PATCH отклоняются ядром (added при пустом
-      current_staff → 422).
+    - staff `role`: возвращает {role} как целевой staff-набор; первая staff-роль
+      (student-only / roleless) через этот адаптер не выдаётся → 422, только
+      через roles[].
     """
     if len(current) > 1:
         raise RoleChangeError(
@@ -369,6 +369,13 @@ def _target_staff_from_legacy_role(role: str, current: set[str]) -> set[str]:
         raise RoleChangeError(
             "Роль student не назначается и не снимается через admin role control",
             422, "role_policy_violation",
+        )
+    # Первая staff-роль (ADR-018, дополнение 2026-11-05) — только через roles[];
+    # устаревший single-role адаптер её не выдаёт.
+    if not (current & STAFF_ROLES):
+        raise RoleChangeError(
+            "Первая служебная роль назначается через roles[]", 422,
+            "role_policy_violation",
         )
     return {role}
 
@@ -520,16 +527,10 @@ def _apply_role_and_scalar_changes(
                 "role_policy_violation",
             )
 
-        # Назначение staff-роли доступно только тому, у кого уже есть
-        # staff-роль: student→staff и bootstrap staff через PATCH запрещены
-        # (новые сотрудники — через POST /api/admin/users).
-        if added and not current_staff:
-            raise RoleChangeError(
-                "Назначение служебной роли доступно только пользователю, у "
-                "которого уже есть служебная роль; новых сотрудников "
-                "создавайте через POST /api/admin/users",
-                422, "role_policy_violation",
-            )
+        # ADR-018, дополнение 2026-11-05: администратор может назначить
+        # служебную роль и пользователю без неё (зарегистрированный сам
+        # пользователь становится сотрудником); роль student сохраняется.
+        # Основание (legal basis) обязательно — ниже.
 
         # Legal basis обязателен при добавлении staff-ролей.
         if added:
