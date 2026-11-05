@@ -48,7 +48,7 @@ export default function CampaignCreateForm({ onCreated }) {
       <div className={styles.fields}>
         <TextField
           label="Название"
-          hint="Видят участники: например, группа или курс"
+          hint="Видят участники; из названия собирается адрес ссылки"
           value={title}
           onChange={(e) => { setTitle(e.target.value); setTitleError(null); }}
           error={titleError}

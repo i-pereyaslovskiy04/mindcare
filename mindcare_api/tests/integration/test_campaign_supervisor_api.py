@@ -149,7 +149,8 @@ def test_create_and_link_works_publicly(client, env):
     camp = _create(client, env, title="  integ   1 курс  ")
     assert camp["title"] == "integ 1 курс"
     assert camp["status"] == "open" and camp["responses_count"] == 0
-    assert camp["link_path"] == f"/c/{camp['link_token']}"
+    assert camp["link_path"] == f"/test/{camp['link_token']}"
+    assert camp["link_token"].startswith("integ-1-kurs-")
     assert _events("test_campaign_created", _campaign_id(camp["uuid"])) == 1
     assert client.get(f"/api/public/campaigns/{_token(camp)}").status_code == 200
 
@@ -199,6 +200,8 @@ def test_rotate_link_invalidates_old(client, env):
     assert r.status_code == 200
     new = r.json()["link_token"]
     assert new != camp["link_token"]
+    # Читаемая часть из названия сохраняется, меняется случайный хвост.
+    assert new.rsplit("-", 1)[0] == camp["link_token"].rsplit("-", 1)[0]
     assert client.get(f"/api/public/campaigns/{camp['link_token']}").status_code == 404
     assert client.get(f"/api/public/campaigns/{new}").status_code == 200
     assert _events("test_campaign_link_rotated", _campaign_id(camp["uuid"])) == 1
@@ -360,7 +363,7 @@ def test_list_keyset_newest_first(client, env):
     page = r.json()
     mine = [c["uuid"] for c in page["items"]]
     assert mine == [created[2], created[1]] and page["has_more"] is True
-    assert page["items"][0]["link_path"].startswith("/c/")
+    assert page["items"][0]["link_path"].startswith("/test/")
     r = client.get(BASE, headers=env["headers"], params={"size": 2, "before": mine[-1]})
     assert r.json()["items"][0]["uuid"] == created[0]
 

@@ -7,7 +7,7 @@ import PublicCampaign from '../../features/campaigns/ui/PublicCampaign';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import styles from './CampaignPage.module.css';
 
-/** /c/:token — тестирование по ссылке кампании без входа (ADR-036). */
+/** /test/:token (и прежний /c/:token) — тестирование по ссылке кампании без входа (ADR-036). */
 export default function CampaignPage() {
   const { token } = useParams();
   const [isAuthOpen, setIsAuthOpen] = useState(false);

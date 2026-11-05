@@ -76,3 +76,14 @@ test('ошибка — сообщение и повтор', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
   expect(await screen.findByText('Иванов Иван')).toBeInTheDocument();
 });
+
+test('пол и факультеты — отдельные таблицы', async () => {
+  getCampaignResults.mockResolvedValue(payload());
+  render(<CampaignResults campaignUuid="c-1" />);
+  const gender = await screen.findByRole('region', { name: 'По полу' });
+  expect(within(gender).getByRole('rowheader', { name: 'Муж' })).toBeInTheDocument();
+  expect(within(gender).queryByText('Юридический факультет')).toBeNull();
+  const faculty = screen.getByRole('region', { name: 'По факультетам' });
+  expect(within(faculty).getByRole('rowheader', { name: 'Юридический факультет' }))
+    .toBeInTheDocument();
+});

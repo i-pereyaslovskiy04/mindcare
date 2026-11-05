@@ -123,7 +123,7 @@ def create_campaign(*, title: str, test_uuid, actor_id: int, ip, user_agent) -> 
         test = db.query(Test).filter(Test.uuid == uid).first() if uid else None
         if test is None or test.deleted_at is not None or not test.campaign_only:
             raise TestNotAllowed()
-        token = tokens.generate_token()
+        token = tokens.generate_token(title)
         campaign = TestCampaign(
             test_id=test.id, title=title,
             link_token_hash=tokens.hash_token(token),
@@ -200,7 +200,7 @@ def rotate_link(campaign_uuid, *, actor_id: int, ip, user_agent) -> dict:
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     with SessionLocal() as db:
         campaign = _locked(db, campaign_uuid)
-        token = tokens.generate_token()
+        token = tokens.generate_token(campaign.title)
         campaign.link_token_hash = tokens.hash_token(token)
         campaign.link_token_enc = encrypt_text(token)
         campaign.updated_at = datetime.now(timezone.utc)

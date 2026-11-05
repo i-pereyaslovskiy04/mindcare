@@ -16,8 +16,8 @@ const CAMPAIGN = {
   created_at: '2026-11-04T10:00:00Z',
   closed_at: null,
   link_token: 'tok',
-  link_path: '/c/tok',
-  link_url: 'https://mindcare.example/c/tok',
+  link_path: '/test/ito-2026-k7m2xq',
+  link_url: 'https://mindcare.example/test/ito-2026-k7m2xq',
 };
 
 function setup(overrides = {}) {
@@ -31,9 +31,9 @@ function setup(overrides = {}) {
 beforeEach(() => jest.resetAllMocks());
 
 test('ссылка — из link_url, иначе origin + link_path', () => {
-  expect(campaignLink(CAMPAIGN)).toBe('https://mindcare.example/c/tok');
+  expect(campaignLink(CAMPAIGN)).toBe('https://mindcare.example/test/ito-2026-k7m2xq');
   expect(campaignLink({ ...CAMPAIGN, link_url: null }))
-    .toBe(`${window.location.origin}/c/tok`);
+    .toBe(`${window.location.origin}/test/ito-2026-k7m2xq`);
 });
 
 test('имя файла выгрузки без запрещённых символов', () => {
@@ -44,7 +44,7 @@ test('без ответов скачать нельзя; ссылка показ
   setup();
   expect(screen.getByRole('button', { name: 'Скачать xlsx' })).toBeDisabled();
   expect(screen.getByLabelText('Ссылка для участников'))
-    .toHaveValue('https://mindcare.example/c/tok');
+    .toHaveValue('https://mindcare.example/test/ito-2026-k7m2xq');
 });
 
 test('закрыть — ответ backend уходит в onChange', async () => {

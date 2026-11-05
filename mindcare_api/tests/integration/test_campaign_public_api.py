@@ -38,7 +38,7 @@ def campaign(client):
     """Тест ИТО + открытая кампания с известным токеном; полная уборка."""
     with SessionLocal() as db:
         test, created = ensure_ito_test(db)
-        token = tokens.generate_token()
+        token = tokens.generate_token("integ Кампания 1 курс")
         camp = TestCampaign(
             test_id=test.id, title="integ Кампания 1 курс",
             link_token_hash=tokens.hash_token(token),
@@ -126,11 +126,26 @@ def _no_store(r) -> None:
 
 # ─── GET ──────────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("token", ["short", "x" * 43, "Z" * 43])
+@pytest.mark.parametrize("token", ["short", "x" * 43, "Z" * 43,
+                                   "integ-kampaniia-1-kurs-zzzzzz",
+                                   "Ito-2026-k7m2xq", "ito-2026-k7m"])
 def test_unknown_or_malformed_token_404(client, token):
     r = client.get(_url(token))
     assert r.status_code == 404
     _no_store(r)
+
+
+def test_legacy_token_link_still_works(client, campaign):
+    """Ссылки, выданные до ЧПУ (43 символа base64url), не ломаются."""
+    import secrets
+    legacy = secrets.token_urlsafe(32)
+    with SessionLocal() as db:
+        camp = db.get(TestCampaign, campaign["campaign_id"])
+        camp.link_token_hash = tokens.hash_token(legacy)
+        camp.link_token_enc = encrypt_text(legacy)
+        db.commit()
+    assert client.get(_url(legacy)).status_code == 200
+    assert client.get(_url(campaign["token"])).status_code == 404
 
 
 def test_get_returns_form_without_key(client, campaign):

@@ -68,7 +68,7 @@ def _client(request: Request) -> tuple:
 
 
 def link_path(token: str) -> str:
-    return f"/c/{token}"
+    return f"/test/{token}"
 
 
 def _detail(data: dict) -> dict:

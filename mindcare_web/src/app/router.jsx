@@ -116,7 +116,9 @@ export default function AppRouter() {
       <Route path="/news/:id"      element={<NewsItemPage />} />
       <Route path="/materials"     element={<MaterialsPage />} />
       <Route path="/materials/:id" element={<MaterialsItemPage />} />
-      {/* Тестирование по ссылке кампании без входа (ADR-036) */}
+      {/* Тестирование по ссылке кампании без входа (ADR-036); /c/ — ссылки,
+          выданные до ЧПУ, продолжают работать */}
+      <Route path="/test/:token"   element={<CampaignPage />} />
       <Route path="/c/:token"      element={<CampaignPage />} />
       {process.env.NODE_ENV !== 'production' && (
         <Route path="/theme-preview" element={<ThemePreviewPage />} />

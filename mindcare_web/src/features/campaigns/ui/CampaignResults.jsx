@@ -29,6 +29,29 @@ function Stat({ label, value }) {
   );
 }
 
+function GroupTable({ id, title, firstCol, groups }) {
+  return (
+    <section aria-labelledby={id}>
+      <h4 id={id} className={styles.heading}>{title}</h4>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th scope="col">{firstCol}</th><th scope="col">Участников</th>
+            <th scope="col">Достоверных</th><th scope="col">С типом</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g) => (
+            <tr key={g.code}>
+              <th scope="row">{g.label}</th><td>{g.count}</td><td>{g.valid}</td><td>{g.with_type}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function fmt(value) {
   return value == null ? '—' : String(value).replace('.', ',');
 }
@@ -135,24 +158,10 @@ export default function CampaignResults({ campaignUuid }) {
             </tbody>
           </table>
         </section>
-        <section aria-labelledby={`${campaignUuid}-groups`}>
-          <h4 id={`${campaignUuid}-groups`} className={styles.heading}>По факультетам и полу</h4>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th scope="col">Группа</th><th scope="col">Участников</th>
-                <th scope="col">Достоверных</th><th scope="col">С типом</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...summary.by_faculty, ...summary.by_gender].map((g) => (
-                <tr key={`${g.code}`}>
-                  <th scope="row">{g.label}</th><td>{g.count}</td><td>{g.valid}</td><td>{g.with_type}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+        <GroupTable id={`${campaignUuid}-gender`} title="По полу" firstCol="Пол"
+          groups={summary.by_gender} />
+        <GroupTable id={`${campaignUuid}-faculty`} title="По факультетам" firstCol="Факультет"
+          groups={summary.by_faculty} />
       </div>
 
       <section aria-labelledby={`${campaignUuid}-rows`}>
