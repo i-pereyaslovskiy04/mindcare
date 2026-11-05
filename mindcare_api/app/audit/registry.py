@@ -644,19 +644,24 @@ _ALL += [
 # INDEPENDENT/RAISE, fail-closed: событие ДО отдачи данных, сбой → 503.
 # Target удаления — id уже удалённой строки (история в журнале остаётся).
 _CAMPAIGN = "test_campaign"
+# Вход администратора «под именем» супервизора (ADR-025): актор — супервизор,
+# действовавший администратор — impersonator_user_id (псевдонимный id, не ПДн).
+_CAMPAIGN_META = MappingProxyType({
+    "impersonator_user_id": FieldSpec(type="int", min_value=1),
+})
 _ALL += [
-    _audit_ok("test_campaign_created", {"supervisor"}, _CAMPAIGN),
-    _audit_ok("test_campaign_closed", {"supervisor"}, _CAMPAIGN),
-    _audit_ok("test_campaign_reopened", {"supervisor"}, _CAMPAIGN),
-    _audit_ok("test_campaign_link_rotated", {"supervisor"}, _CAMPAIGN),
-    _audit_ok("test_campaign_deleted", {"supervisor"}, _CAMPAIGN),
-    _audit_ok("campaign_response_deleted", {"supervisor"}, "campaign_response"),
-    _audit_ok("campaign_responses_read", {"supervisor"}, _CAMPAIGN,
+    _audit_ok("test_campaign_created", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
+    _audit_ok("test_campaign_closed", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
+    _audit_ok("test_campaign_reopened", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
+    _audit_ok("test_campaign_link_rotated", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
+    _audit_ok("test_campaign_deleted", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
+    _audit_ok("campaign_response_deleted", {"supervisor"}, "campaign_response", _CAMPAIGN_META),
+    _audit_ok("campaign_responses_read", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META,
               tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
-    _audit_ok("campaign_results_exported", {"supervisor"}, _CAMPAIGN,
+    _audit_ok("campaign_results_exported", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META,
               tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
     # Экран результатов (баллы, уровни, типы и ФИО всех участников).
-    _audit_ok("campaign_results_read", {"supervisor"}, _CAMPAIGN,
+    _audit_ok("campaign_results_read", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META,
               tx_mode=TxMode.INDEPENDENT, failure_policy=FailurePolicy.RAISE),
 ]
 

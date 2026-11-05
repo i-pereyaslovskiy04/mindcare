@@ -106,6 +106,8 @@ _METADATA_DTO_POLICY: Mapping[str, MetaPolicy] = {
     "filter_keys": MetaPolicy.PASS,
     # псевдонимный внутренний id субъекта: наружу только как UUID
     "linked_user_id": MetaPolicy.USER_ID_TO_UUID,
+    # администратор, вошедший «под именем» (события кампаний, ADR-036)
+    "impersonator_user_id": MetaPolicy.USER_ID_TO_UUID,
 }
 
 _ID_SUFFIX = "_id"

@@ -614,6 +614,7 @@ export const DETAIL_KEY_ORDER = [
   'mime_type',
   'file_size',
   'linked_user_uuid',
+  'impersonator_user_uuid',
 ];
 
 export const DETAIL_KEY_LABELS = {
@@ -627,6 +628,7 @@ export const DETAIL_KEY_LABELS = {
   mime_type:        'Тип файла',
   file_size:        'Размер файла',
   linked_user_uuid: 'Привязанный пользователь',
+  impersonator_user_uuid: 'Действовал администратор «под именем»',
 };
 
 /**

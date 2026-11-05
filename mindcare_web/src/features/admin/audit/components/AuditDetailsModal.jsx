@@ -61,6 +61,7 @@ function renderDetailValue(key, value) {
     case 'file_size':
       return formatFileSize(value);
     case 'linked_user_uuid':
+    case 'impersonator_user_uuid':
       return <code className={styles.code}>{value}</code>;
     default:
       return null;

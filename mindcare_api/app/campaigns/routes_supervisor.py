@@ -1,9 +1,10 @@
 """
 Кампании в кабинете супервизора (ADR-036, этап 4). Префикс: /api/supervisor/campaigns.
 
-Доступ (router-level): require_role("supervisor") + запрет impersonation
-(403 до handler, события нет — сам вход «под именем» уже записан). Admin без
-роли supervisor доступа не имеет. NoStoreRoute: no-store на любом ответе.
+Доступ (router-level): require_role("supervisor"). Вход администратора «под
+именем» супервизора разрешён (дополнение 2026-11-05): актор событий —
+супервизор, в metadata — impersonator_user_id. Admin без роли supervisor
+доступа не имеет. NoStoreRoute: no-store на любом ответе.
 
   GET    /tests                      — тесты для кампаний (campaign_only);
   GET    ""  ?size&before            — список (keyset, новые сверху);
@@ -36,21 +37,12 @@ from app.core.public_urls import frontend_url
 from app.student_verification.faculties import faculty_label
 
 
-def _forbid_impersonation(current_user: dict = Depends(get_current_user)) -> None:
-    if current_user.get("impersonator_user_id") is not None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Кампании недоступны при входе под именем пользователя",
-        )
-
-
 router = APIRouter(
     prefix="/supervisor/campaigns",
     tags=["supervisor: test campaigns"],
     route_class=NoStoreRoute,
     dependencies=[
         Depends(require_role("supervisor")),
-        Depends(_forbid_impersonation),
     ],
 )
 
@@ -103,7 +95,8 @@ def create_campaign(body: CampaignCreateIn, request: Request,
     ip, ua = _client(request)
     try:
         data = store.create_campaign(title=body.title, test_uuid=body.test_uuid,
-                                     actor_id=_actor(current_user), ip=ip,
+                                     actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip,
                                      user_agent=ua)
     except store.TestNotAllowed:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -125,7 +118,8 @@ def set_status(campaign_uuid: str, body: CampaignStatusIn, request: Request,
     ip, ua = _client(request)
     try:
         return _detail(store.set_status(campaign_uuid, target=body.status,
-                                        actor_id=_actor(current_user), ip=ip,
+                                        actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip,
                                         user_agent=ua))
     except store.NotFound:
         raise _not_found()
@@ -137,6 +131,7 @@ def rotate_link(campaign_uuid: str, request: Request,
     ip, ua = _client(request)
     try:
         return _detail(store.rotate_link(campaign_uuid, actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"),
                                          ip=ip, user_agent=ua))
     except store.NotFound:
         raise _not_found()
@@ -148,6 +143,7 @@ def delete_campaign(campaign_uuid: str, request: Request,
     ip, ua = _client(request)
     try:
         store.delete_campaign(campaign_uuid, actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"),
                               ip=ip, user_agent=ua)
     except store.NotFound:
         raise _not_found()
@@ -162,7 +158,8 @@ def list_responses(campaign_uuid: str, request: Request,
     ip, ua = _client(request)
     try:
         data = store.list_responses(campaign_uuid, size=size, after=after,
-                                    actor_id=_actor(current_user), ip=ip,
+                                    actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip,
                                     user_agent=ua)
     except store.NotFound:
         raise _not_found()
@@ -178,7 +175,8 @@ def delete_response(campaign_uuid: str, response_uuid: str, request: Request,
     ip, ua = _client(request)
     try:
         store.delete_response(campaign_uuid, response_uuid,
-                              actor_id=_actor(current_user), ip=ip, user_agent=ua)
+                              actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip, user_agent=ua)
     except store.NotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Ответ не найден")
@@ -201,6 +199,7 @@ def get_results(
     ip, ua = _client(request)
     try:
         data = store.results_data(campaign_uuid, actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"),
                                   ip=ip, user_agent=ua)
     except store.NotFound:
         raise _not_found()
@@ -235,6 +234,7 @@ def export_xlsx(campaign_uuid: str, request: Request,
     ip, ua = _client(request)
     try:
         data = store.export_data(campaign_uuid, actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"),
                                  ip=ip, user_agent=ua)
     except store.NotFound:
         raise _not_found()

@@ -1,5 +1,4 @@
 import Button from '../../components/UI/Button/Button';
-import { useAuth } from '../../features/auth/AuthContext';
 import useCampaigns from '../../features/campaigns/hooks/useCampaigns';
 import CampaignCard from '../../features/campaigns/ui/CampaignCard';
 import CampaignCreateForm from '../../features/campaigns/ui/CampaignCreateForm';
@@ -7,21 +6,12 @@ import styles from './CampaignsPage.module.css';
 
 /**
  * «Тестирование по ссылке» (ADR-036): кампании супервизора — одна ссылка на
- * всех участников без регистрации, выгрузка результатов в xlsx. В режиме
- * «под именем» раздел недоступен (backend отвечает 403) — запросов нет.
+ * всех участников без регистрации, выгрузка результатов в xlsx. Доступен и
+ * администратору «под именем» супервизора: backend пишет в события кампаний
+ * impersonator_user_id (ADR-036, дополнение 2026-11-05).
  */
 export default function CampaignsPage() {
-  const { isImpersonating } = useAuth();
-  const list = useCampaigns(!isImpersonating);
-
-  if (isImpersonating) {
-    return (
-      <div className={styles.page}>
-        <h1 className={styles.title}>Тестирование по ссылке</h1>
-        <p className={styles.muted}>Раздел недоступен при входе под именем пользователя.</p>
-      </div>
-    );
-  }
+  const list = useCampaigns();
 
   return (
     <div className={styles.page}>

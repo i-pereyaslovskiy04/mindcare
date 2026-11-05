@@ -2,7 +2,7 @@
 Integration: кампании в кабинете супервизора (ADR-036, этап 4).
 
 Покрывает: доступ (только supervisor; admin/psychologist/student → 403;
-impersonation → 403); создание только с campaign_only-тестом; ссылка
+impersonation — разрешено, атрибуция в metadata); создание только с campaign_only-тестом; ссылка
 работает публично; закрытие/открытие (повтор без события); перевыпуск ссылки
 (старая → 404); список участников с ФИО под fail-closed аудитом (пустая
 страница — без события; сбой аудита → 503 без ФИО); выгрузка xlsx (колонки
@@ -126,18 +126,37 @@ def test_student_and_anonymous_forbidden(client, env):
     assert client.get(BASE).status_code == 401
 
 
-def test_impersonated_supervisor_forbidden(client, env):
-    admin_token, _, _ = create_multi_role_user(client, ["admin"])
+def test_impersonated_supervisor_allowed_and_attributed(client, env):
+    """Админ «под именем» супервизора работает с кампаниями; в событиях —
+    актор супервизор + metadata.impersonator_user_id = админ."""
+    admin_token, admin_id, _ = create_multi_role_user(client, ["admin"])
     with SessionLocal() as db:
         sup_uuid = str(db.get(User, env["sup_id"]).uuid)
     r = client.post(f"/api/admin/users/{sup_uuid}/impersonate",
                     headers={"Authorization": f"Bearer {admin_token}"})
     assert r.status_code == 200, r.text
     imp = {"Authorization": f"Bearer {r.json()['session_token']}"}
-    assert client.get(BASE, headers=imp).status_code == 403
+    assert client.get(BASE, headers=imp).status_code == 200
     r = client.post(BASE, headers=imp,
-                    json={"title": "x x", "test_uuid": env["test_uuid"]})
-    assert r.status_code == 403
+                    json={"title": "integ imp", "test_uuid": env["test_uuid"]})
+    assert r.status_code == 201, r.text
+    cid = _campaign_id(r.json()["uuid"])
+    with SessionLocal() as db:
+        rows = db.query(AuditLog).filter(
+            AuditLog.event_type == "test_campaign_created",
+            AuditLog.entity_id == cid).all()
+    assert len(rows) == 1
+    assert rows[0].user_id == env["sup_id"]
+    assert rows[0].log_metadata == {"impersonator_user_id": admin_id}
+
+
+def test_own_session_events_have_no_impersonator(client, env):
+    camp = _create(client, env)
+    with SessionLocal() as db:
+        row = db.query(AuditLog).filter(
+            AuditLog.event_type == "test_campaign_created",
+            AuditLog.entity_id == _campaign_id(camp["uuid"])).one()
+    assert not row.log_metadata
 
 
 # ─── создание и ссылка ────────────────────────────────────────────────────────

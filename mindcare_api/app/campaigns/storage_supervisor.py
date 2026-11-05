@@ -49,13 +49,20 @@ def _uuid_or_none(value) -> Optional[_uuid.UUID]:
         return None
 
 
-def _event(db, name: str, actor_id: int, entity: str, entity_id: int, ctx) -> None:
+def _meta(impersonator_id: Optional[int]) -> dict:
+    """Вход администратора «под именем» супервизора (ADR-025): актор события —
+    супервизор, кто действовал на самом деле — impersonator_user_id."""
+    return {} if impersonator_id is None else {"impersonator_user_id": int(impersonator_id)}
+
+
+def _event(db, name: str, actor_id: int, entity: str, entity_id: int, ctx,
+           impersonator_id: Optional[int] = None) -> None:
     record_event(
         event=name,
         actor=Actor.user(actor_id, "supervisor"),
         target=Target(entity, entity_id),
         outcome=Outcome.SUCCESS,
-        metadata={},
+        metadata=_meta(impersonator_id),
         context=ctx,
         db=db,
     )
@@ -116,7 +123,8 @@ def list_campaign_tests() -> list[dict]:
 
 # ── кампании ──────────────────────────────────────────────────────────────────
 
-def create_campaign(*, title: str, test_uuid, actor_id: int, ip, user_agent) -> dict:
+def create_campaign(*, title: str, test_uuid, actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> dict:
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     uid = _uuid_or_none(test_uuid)
     with SessionLocal() as db:
@@ -132,7 +140,7 @@ def create_campaign(*, title: str, test_uuid, actor_id: int, ip, user_agent) -> 
         )
         db.add(campaign)
         db.flush()
-        _event(db, "test_campaign_created", actor_id, CAMPAIGN_ENTITY, campaign.id, ctx)
+        _event(db, "test_campaign_created", actor_id, CAMPAIGN_ENTITY, campaign.id, ctx, impersonator_id)
         db.commit()
         db.refresh(campaign)
         return _dto(campaign, test, 0, with_link=True)
@@ -178,7 +186,8 @@ def get_campaign(campaign_uuid) -> dict:
         return _dto(campaign, test, count, with_link=True)
 
 
-def set_status(campaign_uuid, *, target: str, actor_id: int, ip, user_agent) -> dict:
+def set_status(campaign_uuid, *, target: str, actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> dict:
     """open ↔ closed. Повтор текущего состояния — без изменений и события."""
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     with SessionLocal() as db:
@@ -189,14 +198,15 @@ def set_status(campaign_uuid, *, target: str, actor_id: int, ip, user_agent) -> 
                                   if target == "closed" else None)
             campaign.updated_at = datetime.now(timezone.utc)
             name = "test_campaign_closed" if target == "closed" else "test_campaign_reopened"
-            _event(db, name, actor_id, CAMPAIGN_ENTITY, campaign.id, ctx)
+            _event(db, name, actor_id, CAMPAIGN_ENTITY, campaign.id, ctx, impersonator_id)
             db.commit()
         test = db.get(Test, campaign.test_id)
         count = _counts(db, [campaign.id]).get(campaign.id, 0)
         return _dto(campaign, test, count, with_link=True)
 
 
-def rotate_link(campaign_uuid, *, actor_id: int, ip, user_agent) -> dict:
+def rotate_link(campaign_uuid, *, actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> dict:
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     with SessionLocal() as db:
         campaign = _locked(db, campaign_uuid)
@@ -205,14 +215,15 @@ def rotate_link(campaign_uuid, *, actor_id: int, ip, user_agent) -> dict:
         campaign.link_token_enc = encrypt_text(token)
         campaign.updated_at = datetime.now(timezone.utc)
         _event(db, "test_campaign_link_rotated", actor_id, CAMPAIGN_ENTITY,
-               campaign.id, ctx)
+               campaign.id, ctx, impersonator_id)
         db.commit()
         test = db.get(Test, campaign.test_id)
         count = _counts(db, [campaign.id]).get(campaign.id, 0)
         return _dto(campaign, test, count, with_link=True)
 
 
-def delete_campaign(campaign_uuid, *, actor_id: int, ip, user_agent) -> None:
+def delete_campaign(campaign_uuid, *, actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> None:
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     with SessionLocal() as db:
         campaign = _locked(db, campaign_uuid)
@@ -225,14 +236,15 @@ def delete_campaign(campaign_uuid, *, actor_id: int, ip, user_agent) -> None:
         if consent_ids:
             db.query(ConsentRecord).filter(ConsentRecord.id.in_(consent_ids)) \
                 .delete(synchronize_session=False)
-        _event(db, "test_campaign_deleted", actor_id, CAMPAIGN_ENTITY, campaign_id, ctx)
+        _event(db, "test_campaign_deleted", actor_id, CAMPAIGN_ENTITY, campaign_id, ctx, impersonator_id)
         db.commit()
 
 
 # ── ответы ────────────────────────────────────────────────────────────────────
 
 def list_responses(campaign_uuid, *, size: int, after: Optional[str],
-                   actor_id: int, ip, user_agent) -> dict:
+                   actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> dict:
     """Страница ответов с ФИО. Событие campaign_responses_read пишется ДО отдачи
     (INDEPENDENT/RAISE); пустая страница — без события (ФИО не раскрыты)."""
     ctx = build_request_context(ip=ip, user_agent=user_agent)
@@ -277,14 +289,14 @@ def list_responses(campaign_uuid, *, size: int, after: Optional[str],
             actor=Actor.user(actor_id, "supervisor"),
             target=Target(CAMPAIGN_ENTITY, campaign_id),
             outcome=Outcome.SUCCESS,
-            metadata={},
+            metadata=_meta(impersonator_id),
             context=ctx,
         )
     return {"items": items, "has_more": has_more}
 
 
 def delete_response(campaign_uuid, response_uuid, *, actor_id: int, ip,
-                    user_agent) -> None:
+                    user_agent, impersonator_id: Optional[int] = None) -> None:
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     rid = _uuid_or_none(response_uuid)
     with SessionLocal() as db:
@@ -300,7 +312,7 @@ def delete_response(campaign_uuid, response_uuid, *, actor_id: int, ip,
         db.query(ConsentRecord).filter(ConsentRecord.id == consent_id) \
             .delete(synchronize_session=False)
         _event(db, "campaign_response_deleted", actor_id, RESPONSE_ENTITY,
-               response_id, ctx)
+               response_id, ctx, impersonator_id)
         db.commit()
 
 
@@ -358,28 +370,31 @@ def _load_rows(db, campaign_uuid, *, with_answers: bool) -> dict:
     }
 
 
-def _record_read(event: str, actor_id: int, campaign_id: int, ctx) -> None:
+def _record_read(event: str, actor_id: int, campaign_id: int, ctx,
+                 impersonator_id: Optional[int] = None) -> None:
     record_event(
         event=event,
         actor=Actor.user(actor_id, "supervisor"),
         target=Target(CAMPAIGN_ENTITY, campaign_id),
         outcome=Outcome.SUCCESS,
-        metadata={},
+        metadata=_meta(impersonator_id),
         context=ctx,
     )
 
 
-def export_data(campaign_uuid, *, actor_id: int, ip, user_agent) -> dict:
+def export_data(campaign_uuid, *, actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> dict:
     """Данные для xlsx: событие campaign_results_exported (INDEPENDENT/RAISE)
     пишется ДО возврата; сбой → AuditError, файл не формируется."""
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     with SessionLocal() as db:
         result = _load_rows(db, campaign_uuid, with_answers=True)
-    _record_read("campaign_results_exported", actor_id, result["campaign_id"], ctx)
+    _record_read("campaign_results_exported", actor_id, result["campaign_id"], ctx, impersonator_id)
     return result
 
 
-def results_data(campaign_uuid, *, actor_id: int, ip, user_agent) -> dict:
+def results_data(campaign_uuid, *, actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> dict:
     """Баллы всех участников для экрана результатов (с ФИО). Событие
     campaign_results_read (INDEPENDENT/RAISE) — ДО возврата, если есть хотя бы
     один участник; сбой → AuditError, данные не отдаются."""
@@ -387,5 +402,5 @@ def results_data(campaign_uuid, *, actor_id: int, ip, user_agent) -> dict:
     with SessionLocal() as db:
         result = _load_rows(db, campaign_uuid, with_answers=False)
     if result["rows"]:
-        _record_read("campaign_results_read", actor_id, result["campaign_id"], ctx)
+        _record_read("campaign_results_read", actor_id, result["campaign_id"], ctx, impersonator_id)
     return result
