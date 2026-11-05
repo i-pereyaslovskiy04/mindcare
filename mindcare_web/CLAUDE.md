@@ -46,7 +46,7 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
    рендерящие LinkifiedText, мокают react-router-dom виртуально (v7 не резолвится
    jest-резолвером)
 ✅ Тестовые кампании (ADR-036): HTTP только через `api/campaigns.api.js`; публичная
-   страница `/c/:token` — `features/campaigns/ui/PublicCampaign` (черновик — только
+   страница `/test/:token` (и прежний `/c/:token`) — `features/campaigns/ui/PublicCampaign` (черновик — только
    `features/campaigns/lib/draft.js`, sessionStorage вкладки, `submission_key` один на
    черновик); супервизор — `/supervisor/campaigns` (`useCampaigns`,
    `useCampaignResponses`, `CampaignCard`). ФИО, ответы и токен ссылки не логировать;

@@ -210,7 +210,7 @@ VII Тревожность | VIII Лабильность | I Экстравер�
 
 ## 7. Frontend
 
-- Публичная страница `/c/:token` вне кабинетов: анкета → согласие →
+- Публичная страница `/test/:token` (ЧПУ `ito-ekonomfak-2026-k7m2xq`, ADR-036 «Дополнение 2026-11-05»; прежний `/c/:token` работает) вне кабинетов: анкета → согласие →
   91 вопрос (прогресс, «Да»/«Нет», всё обязательно, ответы держатся в
   `sessionStorage` до отправки) → «Спасибо». ГОСТ-режим и мобильная вёрстка.
 - Кабинет супервизора `/supervisor/campaigns`: создать, копировать ссылку,
@@ -259,7 +259,7 @@ VII Тревожность | VIII Лабильность | I Экстравер�
    (`tests/integration/test_campaign_supervisor_api.py`) — 2026-11-04.
    Детали — ADR-036 «Дополнение (этап 4)».
 5. ✅ Frontend — 2026-11-04: `api/campaigns.api.js`; публичная страница
-   `/c/:token` (`pages/campaign/CampaignPage` + `features/campaigns/ui/
+   `/test/:token` (`pages/campaign/CampaignPage` + `features/campaigns/ui/
    PublicCampaign`: анкета и согласие → 91 вопрос с прогрессом → «Спасибо»;
    черновик и `submission_key` — в sessionStorage вкладки, удаляются после
    отправки; 404/409/429 — понятные сообщения, ответы не теряются); раздел

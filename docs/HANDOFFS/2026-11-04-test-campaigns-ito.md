@@ -34,7 +34,7 @@
 | 2 | Профиль ИТО, seed, скрытие теста из каталога и `/api/tests`, запрет правки в конструкторе (409), `has_results` учитывает ответы кампаний | `app/tests/profiles/`, `scripts/seed_ito_sobchik.py`, `app/tests/storage.py` |
 | 3 | Публичный API + согласие `campaign_consent` v1 + `campaign_response_submitted` (анонимный актор) | `app/campaigns/routes_public.py`, `storage.py`, `app/db/seed.py` |
 | 4 | API супервизора, xlsx, удаление, 8 событий | `app/campaigns/routes_supervisor.py`, `storage_supervisor.py`, `export.py` |
-| 5 | Frontend: `/c/:token`, `/supervisor/campaigns` | `api/campaigns.api.js`, `features/campaigns/`, `pages/campaign/`, `pages/supervisor/CampaignsPage.jsx` |
+| 5 | Frontend: `/test/:token` (до 2026-11-05 — `/c/:token`, работает), `/supervisor/campaigns` | `api/campaigns.api.js`, `features/campaigns/`, `pages/campaign/`, `pages/supervisor/CampaignsPage.jsx` |
 
 Попутно: `scripts/isolated_test_db.py` ловит SIGTERM/SIGHUP и удаляет
 временную БД (раньше она оставалась при остановке прогона); закреплённый head
@@ -103,6 +103,17 @@ cd ../mindcare_web && npm run build
   `test_campaign_supervisor_api.py`, `ui/CampaignResults.test.jsx`.
   Backend (кампании/аудит/реестр) — 1490 passed; frontend — 2652 passed;
   lint, build — без ошибок. Демо-стенд пересобран и перезапущен.
+
+## 6b. ЧПУ ссылки (2026-11-05)
+
+- Ссылка: `https://<FRONTEND_PUBLIC_URL>/test/ito-ekonomfak-2026-k7m2xq` — slug
+  из названия (транслит) + 6 случайных символов (`app/campaigns/tokens.py`).
+  «Сменить ссылку» меняет только хвост. Старые `/c/<токен>` работают.
+- Прод: `FRONTEND_PUBLIC_URL=https://mindcare.donnu.ru` (deploy/README.md).
+- «Результаты»: таблицы «По полу» и «По факультетам» раздельно (раньше пол
+  терялся в конце общей таблицы).
+- Тесты: `tests/test_campaign_tokens.py` (24), интеграция кампаний — 145 passed;
+  frontend `features/campaigns` — 24 passed, lint чистый.
 
 ## 7. Открыто
 
