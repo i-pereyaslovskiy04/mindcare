@@ -45,3 +45,9 @@
 .dialogError  { font-size: 13px; color: var(--error); margin-bottom: 12px; }
 .dialogActions { display: flex; justify-content: flex-end; gap: 10px; }
 .previewError { font-size: 13px; color: var(--error); margin: 0 0 12px; }
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

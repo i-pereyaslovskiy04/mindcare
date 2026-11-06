@@ -1,0 +1,117 @@
+/* Оформление совпадает с диалогами кабинетов на общем Modal
+   (features/assignments/ui/ConfirmDialog.module.css). */
+.body {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 640px;
+}
+
+.title {
+  margin: 0;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--espresso);
+}
+
+.text,
+.ok p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.55;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.file {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.errors {
+  font-size: 13px;
+  color: var(--error);
+  background: var(--error-bg);
+  border-radius: 8px;
+  padding: 10px 14px;
+  line-height: 1.45;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.errors ul,
+.warnings {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.errorsTitle,
+.warnTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ok {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.warnTitle,
+.warnings {
+  font-size: 13px;
+  color: var(--warning);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--error);
+  background: var(--error-bg);
+  border-radius: 8px;
+  padding: 10px 14px;
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .body {
+    padding: 20px 18px 24px;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+}

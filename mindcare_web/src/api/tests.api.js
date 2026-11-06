@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, apiFetchBlob } from './client';
 
 // ── Student-facing (Этап B/D) ─────────────────────────────────────────────────
 
@@ -231,5 +231,34 @@ export function previewMyScore({
     body: JSON.stringify({
       scoring, questions, interpretations, answers, scoring_rules: scoringRules,
     }),
+  });
+}
+
+// ── ADR-037: шаблон xlsx, импорт и выгрузка методики ────────────────────────
+// base — '/api/admin/tests' (admin/supervisor) или '/api/psychologist/tests'.
+
+export const ADMIN_TESTS_BASE = '/api/admin/tests';
+export const MY_TESTS_BASE = '/api/psychologist/tests';
+
+/** → { blob, filename } */
+export function downloadMethodologyTemplate(base = ADMIN_TESTS_BASE) {
+  return apiFetchBlob(`${base}/methodology-template.xlsx`);
+}
+
+/** → { blob, filename } */
+export function exportMethodology(uuid, base = ADMIN_TESTS_BASE) {
+  return apiFetchBlob(`${base}/${uuid}/methodology.xlsx`);
+}
+
+/**
+ * dryRun=true → { ok, errors[{sheet,row,column,message}], warnings, summary };
+ * иначе → { ..., test_uuid } (черновик). 422 с отчётом — в err.body.
+ */
+export function importMethodology(file, { dryRun = false, base = ADMIN_TESTS_BASE } = {}) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiFetch(`${base}/import?dry_run=${dryRun ? 'true' : 'false'}`, {
+    method: 'POST',
+    body: form,
   });
 }

@@ -6,9 +6,11 @@ import TestPreviewModal from '../../../features/admin/tests/components/TestPrevi
 import { fromBackendQuestion } from '../../../features/admin/tests/lib/testShape';
 import {
   deleteMyTest, getMyTest, submitTestForReview, previewMyScore,
+  MY_TESTS_BASE,
 } from '../../../api/tests.api';
 import Select from '../../../components/UI/Select/Select';
 import Button from '../../../components/UI/Button/Button';
+import MethodologyImportDialog from '../../../features/admin/tests/components/MethodologyImportDialog';
 import styles from './PsychologistTestsPage.module.css';
 
 /** Тот же shape, что строит TestFormPage при загрузке — TestPreviewModal его и ждёт. */
@@ -53,6 +55,7 @@ export default function PsychologistTestsPage() {
   const { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch } =
     useMyTests();
 
+  const [importOpen, setImportOpen]     = useState(false);   // ADR-037
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]         = useState(false);
   const [deleteError, setDeleteError]   = useState('');
@@ -131,10 +134,21 @@ export default function PsychologistTestsPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Мои тесты</h1>
-        <Button variant="primary" onClick={() => navigate('/psychologist/tests/new')}>
-          + Создать тест
-        </Button>
+        <div className={styles.headerActions}>
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            Импорт из xlsx
+          </Button>
+          <Button variant="primary" onClick={() => navigate('/psychologist/tests/new')}>
+            + Создать тест
+          </Button>
+        </div>
       </div>
+      <MethodologyImportDialog
+        open={importOpen}
+        base={MY_TESTS_BASE}
+        onClose={() => setImportOpen(false)}
+        onCreated={(uuid) => { setImportOpen(false); navigate(`/psychologist/tests/${uuid}`); }}
+      />
 
       <div className={styles.toolbar}>
         <input

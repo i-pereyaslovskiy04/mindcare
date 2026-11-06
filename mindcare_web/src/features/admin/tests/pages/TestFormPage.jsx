@@ -18,7 +18,9 @@ import TestPreviewModal from '../components/TestPreviewModal';
 import { useTestAnalysis } from '../hooks/useTestAnalysis';
 import {
   getAdminTest, createTest, updateTest, duplicateTest, createNewVersion, correctTexts,
+  exportMethodology, ADMIN_TESTS_BASE,
 } from '../../../../api/tests.api';
+import { saveBlobToDisk } from '../../../../api/client';
 import { getAdminCategories } from '../../../../api/articles.api';
 import { getTagsPublic } from '../../../../api/tags.api';
 import styles from './TestFormPage.module.css';
@@ -86,6 +88,7 @@ function adminConfig(cabinetRole) {
     // ADR-037: версии методики и исправление опечаток.
     newVersionFn: createNewVersion,
     textsFn: correctTexts,
+    exportBase: ADMIN_TESTS_BASE,
   };
 }
 
@@ -110,6 +113,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
   const [meta, setMeta] = useState({ version: 1, superseded: false, updatedAt: null, count: 0 });
   const [versioning, setVersioning] = useState(false);
   const [savingTexts, setSavingTexts] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Исходное состояние дерева при загрузке — база для dirty-tracking.
   const loadedQuestionsRef = useRef(null);
@@ -286,6 +290,22 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
       setLocked(false);
       setError(err.message || 'Не удалось сохранить тексты');
       setSavingTexts(false);
+    }
+  }
+
+  async function handleExport() {
+    if (exporting || !effectiveConfig.exportBase) return;
+    setExporting(true);
+    setError('');
+    try {
+      await saveBlobToDisk(
+        async () => (await exportMethodology(uuid, effectiveConfig.exportBase)).blob,
+        `Методика_${(form.title || 'тест').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80)}.xlsx`,
+      );
+    } catch (err) {
+      if (err?.name !== 'AbortError') setError(err.message || 'Не удалось выгрузить методику');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -559,6 +579,11 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
         {isEdit && effectiveConfig.showDuplicate && (
           <Button variant="secondary" onClick={handleDuplicate} loading={duplicating}>
             Дублировать
+          </Button>
+        )}
+        {isEdit && effectiveConfig.exportBase && (
+          <Button variant="secondary" onClick={handleExport} loading={exporting}>
+            Выгрузить в xlsx
           </Button>
         )}
         {isEdit && effectiveConfig.newVersionFn && form.status === 'published' && !meta.superseded && (

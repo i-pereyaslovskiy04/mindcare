@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminTests } from '../hooks/useAdminTests';
 import TestsTable from '../components/TestsTable';
 import TestPreviewModal from '../components/TestPreviewModal';
+import MethodologyImportDialog from '../components/MethodologyImportDialog';
 import { fromBackendQuestion } from '../lib/testShape';
 import { deleteTest, getAdminTest, publishTest, returnTest, updateTest } from '../../../../api/tests.api';
 import { notifyReviewQueueChanged } from '../../../moderation/lib/reviewQueueEvents';
@@ -69,6 +70,7 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
   const { items, loading, error, total, page, setPage, query, setQuery, filters, setFilters, refetch } =
     useAdminTests();
 
+  const [importOpen, setImportOpen]     = useState(false);   // ADR-037
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]         = useState(false);
   const [deleteError, setDeleteError]   = useState('');
@@ -188,10 +190,20 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Тесты</h1>
-        <Button variant="primary" onClick={() => navigate(`${basePath}/new`)}>
-          + Создать тест
-        </Button>
+        <div className={styles.headerActions}>
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            Импорт из xlsx
+          </Button>
+          <Button variant="primary" onClick={() => navigate(`${basePath}/new`)}>
+            + Создать тест
+          </Button>
+        </div>
       </div>
+      <MethodologyImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onCreated={(uuid) => { setImportOpen(false); navigate(`${basePath}/${uuid}`); }}
+      />
 
       <div className={styles.toolbar}>
         <input

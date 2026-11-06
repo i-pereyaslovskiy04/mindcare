@@ -1,7 +1,7 @@
 import TestFormPage from '../../../features/admin/tests/pages/TestFormPage';
 import {
   getMyTest, createMyTest, updateMyTest, duplicateMyTest, analyzeMyTest, previewMyScore,
-  createMyNewVersion, correctMyTexts,
+  createMyNewVersion, correctMyTexts, MY_TESTS_BASE,
 } from '../../../api/tests.api';
 
 /**
@@ -34,6 +34,7 @@ const PSYCHOLOGIST_CONFIG = {
   // её с публикации (повторная модерация, как обычная правка F2.1).
   newVersionFn: createMyNewVersion,
   textsFn: correctMyTexts,
+  exportBase: MY_TESTS_BASE,
 };
 
 export default function PsychologistTestFormPage() {
