@@ -32,7 +32,7 @@ from app.core.no_store_route import NoStoreRoute, audit_unavailable_response
 from app.tests import service
 from app.tests.guards import forbid_impersonation
 from app.tests.schemas import (
-    PaginatedStaffResultsResponse, ResultRead, StaffResultAnswersRead,
+    PaginatedStaffResultsResponse, StaffResultAnswersRead, StaffResultRead,
 )
 
 router = APIRouter(
@@ -110,7 +110,7 @@ def get_staff_result_answers(
         return audit_unavailable_response()
 
 
-@router.get("/{result_uuid}", response_model=ResultRead)
+@router.get("/{result_uuid}", response_model=StaffResultRead)
 def get_staff_result(
     result_uuid:   UUID,
     request:       Request,

@@ -85,6 +85,33 @@
   font-weight: 500;
 }
 
+.rules {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.ruleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+
+.ruleRow dt {
+  color: var(--text-muted);
+}
+
+.ruleRow dd {
+  margin: 0;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.invalid {
+  color: var(--error);
+}
+
 .rec {
   font-size: 14px;
   color: var(--text-main);

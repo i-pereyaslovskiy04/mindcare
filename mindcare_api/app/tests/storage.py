@@ -27,6 +27,7 @@ from app.db.models import (
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
 from app.psychologist.client_scope import lock_client_scope
+from app.tests import rules as test_rules
 
 
 class TestStateChanged(Exception):
@@ -973,6 +974,12 @@ def save_result(
             max_possible=computed.get("max_possible"),
             scoring_used=computed.get("scoring_used"),
             recommendations=computed.get("recommendations"),
+            # ADR-037: снимок достоверности и типов по правилам этой версии
+            # методики; студенту не отдаётся (только staff, Этап E).
+            rule_summary=test_rules.summarize(
+                test_rules.parse(test.scoring_rules),
+                {s["scale_name"]: s["score"] for s in computed.get("scales", [])},
+            ),
         )
         db.add(result)
         db.flush()
@@ -1013,7 +1020,9 @@ def save_result(
         return _result_to_dict(result, db)
 
 
-def _result_to_dict(result: TestResult, db) -> dict:
+def _result_to_dict(result: TestResult, db, *, staff: bool = False) -> dict:
+    """staff=True — для Этапа E: добавляет rule_summary и подписи шкал из
+    правил (ADR-037). Студенту ни то, ни другое не отдаётся."""
     test = db.query(Test).filter(Test.id == result.test_id).first()
     scales = (
         db.query(TestResultScale)
@@ -1040,6 +1049,15 @@ def _result_to_dict(result: TestResult, db) -> dict:
             }
             for s in scales
         ],
+        **(_staff_extras(result, test) if staff else {}),
+    }
+
+
+def _staff_extras(result: TestResult, test: Optional[Test]) -> dict:
+    rules = test_rules.parse(test.scoring_rules) if test else None
+    return {
+        "rule_summary": result.rule_summary,
+        "scale_labels": {s.code: s.label for s in rules.scales} if rules else {},
     }
 
 
@@ -1355,7 +1373,8 @@ def read_result_for_staff(
         elif _pure_active_student_id(db, user_id=owner_id) is None:
             return None
         result = db.get(TestResult, result_id)
-        data = _answers_to_dict(result, db) if with_answers else _result_to_dict(result, db)
+        data = (_answers_to_dict(result, db) if with_answers
+                else _result_to_dict(result, db, staff=True))
         return {"result_id": result_id, "data": data}
 
     return _guarded("answers" if with_answers else "detail", _read)

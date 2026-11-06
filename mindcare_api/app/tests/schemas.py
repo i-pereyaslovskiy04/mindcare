@@ -369,6 +369,20 @@ class ResultRead(BaseModel):
     scales:          list[ScaleResultRead]
 
 
+class RuleSummaryRead(BaseModel):
+    """ADR-037: снимок правил на момент отправки. None у is_valid — у методики
+    нет правила достоверности."""
+    is_valid: Optional[bool]
+    types:    list[str]
+
+
+class StaffResultRead(ResultRead):
+    """Деталь результата для психолога/супервизора (Этап E): плюс снимок
+    достоверности и типов и подписи шкал из правил методики (ADR-037)."""
+    rule_summary: Optional[RuleSummaryRead] = None
+    scale_labels: dict[str, str] = Field(default_factory=dict)
+
+
 class ResultListItem(BaseModel):
     uuid:         str
     test_uuid:    Optional[str]

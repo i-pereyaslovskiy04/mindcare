@@ -16,9 +16,14 @@ function pct(score, max) {
   return Math.round((score / max) * 100);
 }
 
-/** Тело результата: итог/шкалы/интерпретации (тот же состав, что ResultDetailPage). */
+/**
+ * Тело результата: итог/шкалы/интерпретации (тот же состав, что ResultDetailPage)
+ * + для сотрудника — снимок правил методики: достоверность и типы (ADR-037).
+ */
 function ResultBody({ result }) {
   const overall = pct(result.total_score, result.max_possible);
+  const summary = result.rule_summary;
+  const labels = result.scale_labels || {};
   return (
     <div className={styles.body}>
       {result.total_score != null && (
@@ -31,12 +36,28 @@ function ResultBody({ result }) {
           </span>
         </div>
       )}
+      {summary && (
+        <dl className={styles.rules}>
+          {summary.is_valid != null && (
+            <div className={styles.ruleRow}>
+              <dt>Достоверность</dt>
+              <dd className={summary.is_valid ? undefined : styles.invalid}>
+                {summary.is_valid ? 'достоверно' : 'недостоверно'}
+              </dd>
+            </div>
+          )}
+          <div className={styles.ruleRow}>
+            <dt>Тип</dt>
+            <dd>{summary.types.length ? summary.types.join('; ') : 'не выражен'}</dd>
+          </div>
+        </dl>
+      )}
       {result.recommendations && <p className={styles.rec}>{result.recommendations}</p>}
       {result.scales?.length > 0 && (
         <ul className={styles.scales}>
           {result.scales.map((s) => (
             <li key={s.scale_name} className={styles.scale}>
-              <span className={styles.scaleName}>{s.scale_name}</span>
+              <span className={styles.scaleName}>{labels[s.scale_name] || s.scale_name}</span>
               <span className={styles.scaleScore}>
                 {s.score}{s.max_score != null && ` / ${s.max_score}`}
               </span>

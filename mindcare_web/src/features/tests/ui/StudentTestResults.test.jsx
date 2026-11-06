@@ -111,3 +111,23 @@ test('503 ответов: ответы не показаны, сообщение
   expect(screen.queryByText('Хорошо')).toBeNull();
   expect(screen.getByText('Исходная рекомендация')).toBeInTheDocument();
 });
+
+test('снимок правил методики: достоверность, тип и подписи шкал (ADR-037)', async () => {
+  getStudentTestResults.mockResolvedValueOnce({ items: [row(1)], total: 1 });
+  getStaffTestResult.mockResolvedValueOnce({
+    ...DETAIL,
+    scales: [{ scale_name: 'VII', score: 9, max_score: 9, interpretation: null, label: null }],
+    rule_summary: { is_valid: false, types: ['Неуравновешенный (недостоверно)'] },
+    scale_labels: { VII: 'VII Тревожность' },
+  });
+  render(<StudentTestResults studentUuid="c-1" activeRole="psychologist" />);
+  userEvent.click(await screen.findByRole('button', { name: /Тест 1/ }));
+  expect(await screen.findByText('недостоверно')).toBeInTheDocument();
+  expect(screen.getByText('Неуравновешенный (недостоверно)')).toBeInTheDocument();
+  expect(screen.getByText('VII Тревожность')).toBeInTheDocument();
+});
+
+test('без снимка правил блока достоверности нет', async () => {
+  await openFirst();
+  expect(screen.queryByText('Достоверность')).toBeNull();
+});

@@ -449,7 +449,7 @@ def test_save_result_audit_failure_propagates_no_commit(monkeypatch):
 
     db = MagicMock(name="db")
     db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(
-        id=1, version=1,
+        id=1, version=1, scoring_rules=None,
     )
     res_cls = MagicMock(name="TestResult")
     res_cls.return_value = SimpleNamespace(id=888)
@@ -535,7 +535,7 @@ def test_submit_maps_target_result_id_no_sensitive_data(monkeypatch):
     monkeypatch.setattr(tests_storage, "record_event", lambda **kw: calls.append(kw))
 
     db = MagicMock(name="db")
-    fake_test = SimpleNamespace(id=1, version=3)
+    fake_test = SimpleNamespace(id=1, version=3, scoring_rules=None)
     db.query.return_value.filter.return_value.first.return_value = fake_test
     fake_result = MagicMock(name="TestResult")
     fake_result.id = 888
