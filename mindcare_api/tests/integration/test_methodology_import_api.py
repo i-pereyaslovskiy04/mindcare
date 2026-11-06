@@ -105,7 +105,8 @@ def test_ito_roundtrip(client, created):
         events = [e.event_type for e in db.query(AuditLog).filter(
             AuditLog.entity_type == "test", AuditLog.entity_id == tid)]
         assert events == ["test_imported"]
-        assert db.query(AuditLog).filter(AuditLog.entity_id == tid).one().log_metadata == {}
+        assert db.query(AuditLog).filter(AuditLog.entity_type == "test",
+                                         AuditLog.entity_id == tid).one().log_metadata == {}
 
 
 def test_errors_have_address_without_cell_values(client):

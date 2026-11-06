@@ -589,6 +589,7 @@ def test_duplicate_target_is_new_copy(monkeypatch):
     src = SimpleNamespace(
         id=1, title="Src", description="d", scoring="sum", max_score=6,
         time_limit_min=None, shuffle_questions=False, shuffle_options=False,
+        scoring_rules=None, campaign_only=False,
         questions=[], interpretations=[],
     )
     db = MagicMock(name="db")
