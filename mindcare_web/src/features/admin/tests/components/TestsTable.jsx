@@ -91,6 +91,10 @@ export default function TestsTable({
             <Badge tone={item.is_active ? 'success' : 'warning'}>
               {item.is_active ? 'Активен' : 'Скрыт'}
             </Badge>
+            {/* ADR-037: версии методики и «только по ссылке» */}
+            {item.version > 1 && <Badge tone="neutral">{`Версия ${item.version}`}</Badge>}
+            {item.superseded_at && <Badge tone="warning">Заменена новой версией</Badge>}
+            {item.campaign_only && <Badge tone="neutral">Только по ссылке</Badge>}
           </>
         ),
       }}

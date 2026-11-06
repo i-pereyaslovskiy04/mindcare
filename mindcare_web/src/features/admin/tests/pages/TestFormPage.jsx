@@ -7,14 +7,18 @@ import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import Badge from '../../../../components/UI/Badge/Badge';
 import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
 import QuestionBuilder from '../components/QuestionBuilder';
-import { fromBackendQuestion, snapshotQuestions, snapshotInterps } from '../lib/testShape';
+import {
+  fromBackendQuestion, snapshotQuestions, snapshotInterps, toTextsPayload,
+} from '../lib/testShape';
 import InterpretationBuilder from '../components/InterpretationBuilder';
 import RulesBuilder from '../components/RulesBuilder';
 import { emptyRules, fromBackendRules, snapshotRules, toBackendRules } from '../lib/rulesShape';
 import TestAnalysisPanel from '../components/TestAnalysisPanel';
 import TestPreviewModal from '../components/TestPreviewModal';
 import { useTestAnalysis } from '../hooks/useTestAnalysis';
-import { getAdminTest, createTest, updateTest, duplicateTest } from '../../../../api/tests.api';
+import {
+  getAdminTest, createTest, updateTest, duplicateTest, createNewVersion, correctTexts,
+} from '../../../../api/tests.api';
 import { getAdminCategories } from '../../../../api/articles.api';
 import { getTagsPublic } from '../../../../api/tags.api';
 import styles from './TestFormPage.module.css';
@@ -79,6 +83,9 @@ function adminConfig(cabinetRole) {
     // одним флагом, т.к. баннер без рабочей кнопки был бы бесполезен.
     showDuplicate: true,
     duplicateFn: duplicateTest,
+    // ADR-037: версии методики и исправление опечаток.
+    newVersionFn: createNewVersion,
+    textsFn: correctTexts,
   };
 }
 
@@ -99,6 +106,10 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
   const [locked, setLocked]     = useState(false);   // 409: у теста есть результаты (admin)
   const [duplicating, setDuplicating] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // ADR-037: версия методики (номер, заменена ли) и токен для «исправить тексты».
+  const [meta, setMeta] = useState({ version: 1, superseded: false, updatedAt: null, count: 0 });
+  const [versioning, setVersioning] = useState(false);
+  const [savingTexts, setSavingTexts] = useState(false);
 
   // Исходное состояние дерева при загрузке — база для dirty-tracking.
   const loadedQuestionsRef = useRef(null);
@@ -151,6 +162,12 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
           recommendation: it.recommendation || '',
         }));
         loadedQuestionsRef.current = snapshotQuestions(questions);
+        setMeta({
+          version: t.version || 1,
+          superseded: Boolean(t.superseded_at),
+          updatedAt: t.updated_at,
+          count: questions.length,
+        });
         loadedInterpsRef.current   = snapshotInterps(interpretations);
         const rules = fromBackendRules(t.scoring_rules, nextKey);
         loadedRulesRef.current     = snapshotRules(rules);
@@ -233,6 +250,45 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
     }
   }
 
+  async function handleNewVersion() {
+    if (versioning || !effectiveConfig.newVersionFn) return;
+    setVersioning(true);
+    setError('');
+    try {
+      const next = await effectiveConfig.newVersionFn(uuid);
+      navigate(`${effectiveConfig.backPath}/${next.uuid}`);
+    } catch (err) {
+      setLocked(false);
+      setError(err.message || 'Не удалось создать новую версию');
+    } finally {
+      setVersioning(false);
+    }
+  }
+
+  async function handleSaveTexts() {
+    if (savingTexts || !effectiveConfig.textsFn) return;
+    const questions = toTextsPayload(form.questions, meta.count);
+    if (!questions) {
+      setLocked(false);
+      setError('Добавлены или удалены вопросы либо варианты — так исправить только тексты нельзя. Создайте новую версию методики.');
+      return;
+    }
+    setSavingTexts(true);
+    setError('');
+    try {
+      await effectiveConfig.textsFn(uuid, {
+        expected_updated_at: meta.updatedAt,
+        questions,
+        ...(form.rules.enabled ? { instruction: form.rules.instruction.trim() || null } : {}),
+      });
+      navigate(effectiveConfig.backPath);
+    } catch (err) {
+      setLocked(false);
+      setError(err.message || 'Не удалось сохранить тексты');
+      setSavingTexts(false);
+    }
+  }
+
   async function handleDuplicate() {
     if (duplicating) return;
     setDuplicating(true);
@@ -257,6 +313,14 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
       </button>
 
       <h1 className={styles.title}>{isEdit ? 'Редактирование теста' : 'Новый тест'}</h1>
+      {isEdit && (
+        <div className={styles.versionLine}>
+          <Badge tone="neutral">Версия {meta.version}</Badge>
+          {meta.superseded && (
+            <Badge tone="warning">Заменена новой версией - в каталоге и новых тестированиях не используется</Badge>
+          )}
+        </div>
+      )}
 
       {error && !locked && <p className={styles.error}>{error}</p>}
 
@@ -273,14 +337,29 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
       {locked && effectiveConfig.showDuplicate && (
         <div className={styles.lockedNotice} role="alert">
           <p className={styles.lockedText}>
-            По этому тесту уже есть пройденные результаты, поэтому его вопросы
-            изменить нельзя - иначе ответы студентов потеряли бы смысл.
-            Создайте копию методики и правьте её: копия сохранится черновиком
-            и не появится в каталоге, пока вы её не активируете.
+            По этой методике уже есть результаты, поэтому её вопросы, баллы и
+            правила обработки изменить нельзя - иначе прежние ответы потеряли бы
+            смысл. Создайте новую версию: она сохранится черновиком, а после
+            публикации заменит текущую в каталоге и новых тестированиях (прежние
+            результаты останутся на своей версии). Опечатки в текстах можно
+            исправить и без новой версии.
           </p>
-          <Button variant="primary" onClick={handleDuplicate} loading={duplicating}>
-            Создать копию и править её
-          </Button>
+          <div className={styles.lockedActions}>
+            {effectiveConfig.newVersionFn ? (
+              <Button variant="primary" onClick={handleNewVersion} loading={versioning}>
+                Создать новую версию
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={handleDuplicate} loading={duplicating}>
+                Создать копию и править её
+              </Button>
+            )}
+            {effectiveConfig.textsFn && (
+              <Button variant="secondary" onClick={handleSaveTexts} loading={savingTexts}>
+                Сохранить только тексты
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -480,6 +559,11 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
         {isEdit && effectiveConfig.showDuplicate && (
           <Button variant="secondary" onClick={handleDuplicate} loading={duplicating}>
             Дублировать
+          </Button>
+        )}
+        {isEdit && effectiveConfig.newVersionFn && form.status === 'published' && !meta.superseded && (
+          <Button variant="secondary" onClick={handleNewVersion} loading={versioning}>
+            Новая версия
           </Button>
         )}
         <Button variant="primary" onClick={handleSubmit} loading={submitting}>

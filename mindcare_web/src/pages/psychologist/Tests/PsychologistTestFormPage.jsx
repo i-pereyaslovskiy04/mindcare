@@ -1,6 +1,7 @@
 import TestFormPage from '../../../features/admin/tests/pages/TestFormPage';
 import {
   getMyTest, createMyTest, updateMyTest, duplicateMyTest, analyzeMyTest, previewMyScore,
+  createMyNewVersion, correctMyTexts,
 } from '../../../api/tests.api';
 
 /**
@@ -29,6 +30,10 @@ const PSYCHOLOGIST_CONFIG = {
   warnOnPublishedEdit: true,
   analyzeFn: analyzeMyTest,
   previewFn: previewMyScore,
+  // ADR-037: версии своей методики; исправление текстов опубликованной снимает
+  // её с публикации (повторная модерация, как обычная правка F2.1).
+  newVersionFn: createMyNewVersion,
+  textsFn: correctMyTexts,
 };
 
 export default function PsychologistTestFormPage() {

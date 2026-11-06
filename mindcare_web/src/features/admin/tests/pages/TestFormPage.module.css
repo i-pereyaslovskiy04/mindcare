@@ -143,3 +143,16 @@
     width: 100%;
   }
 }
+
+.versionLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 16px;
+}
+
+.lockedActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

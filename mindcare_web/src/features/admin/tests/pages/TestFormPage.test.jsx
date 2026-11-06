@@ -106,11 +106,11 @@ test('изменение текста вопроса отправляет questi
   expect(payload.questions[0].question_text).toContain('(уточнено)');
 });
 
-test('409 показывает объяснение и предлагает создать копию', async () => {
+test('409 объясняет запрет и предлагает новую версию (ADR-037)', async () => {
   const err = new Error('По этому тесту уже есть результаты');
   err.status = 409;
   testsApi.updateTest.mockRejectedValue(err);
-  testsApi.duplicateTest.mockResolvedValue({ uuid: 'copy-uuid' });
+  testsApi.createNewVersion.mockResolvedValue({ uuid: COPY_UUID });
 
   renderPage();
   const qText = await screen.findByDisplayValue('Как часто вам было плохо?');
@@ -118,17 +118,18 @@ test('409 показывает объяснение и предлагает со
   userEvent.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
 
   const notice = await screen.findByRole('alert');
-  expect(notice).toHaveTextContent(/вопросы изменить нельзя/i);
+  expect(notice).toHaveTextContent(/вопросы, баллы и правила обработки изменить нельзя/i);
 
-  userEvent.click(screen.getByRole('button', { name: /Создать копию и править её/ }));
-  await waitFor(() => expect(testsApi.duplicateTest).toHaveBeenCalledWith(TEST_UUID));
+  userEvent.click(screen.getByRole('button', { name: 'Создать новую версию' }));
+  await waitFor(() => expect(testsApi.createNewVersion).toHaveBeenCalledWith(TEST_UUID));
+  await waitFor(() => expect(mockRoute.uuid).toBe(COPY_UUID));
 });
 
-test('после перехода на копию баннер «есть результаты» пропадает', async () => {
+test('после перехода на новую версию баннер «есть результаты» пропадает', async () => {
   const err = new Error('По этому тесту уже есть результаты');
   err.status = 409;
   testsApi.updateTest.mockRejectedValue(err);
-  testsApi.duplicateTest.mockResolvedValue({ uuid: COPY_UUID });
+  testsApi.createNewVersion.mockResolvedValue({ uuid: COPY_UUID });
 
   const { rerender } = renderPage();
   const qText = await screen.findByDisplayValue('Как часто вам было плохо?');
@@ -136,13 +137,56 @@ test('после перехода на копию баннер «есть рез
   userEvent.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
   await screen.findByRole('alert');
 
-  // копия — тот же маршрут с другим :uuid, компонент не размонтируется
-  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, uuid: COPY_UUID, is_active: false });
-  userEvent.click(screen.getByRole('button', { name: /Создать копию и править её/ }));
+  // версия — тот же маршрут с другим :uuid, компонент не размонтируется
+  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, uuid: COPY_UUID, version: 2, status: 'draft' });
+  userEvent.click(screen.getByRole('button', { name: 'Создать новую версию' }));
   await waitFor(() => expect(mockRoute.uuid).toBe(COPY_UUID));
   rerender(<TestFormPage />);
 
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(await screen.findByText('Версия 2')).toBeInTheDocument();
+});
+
+test('«Сохранить только тексты» шлёт тексты по исходным номерам', async () => {
+  const err = new Error('По этому тесту уже есть результаты');
+  err.status = 409;
+  testsApi.updateTest.mockRejectedValue(err);
+  testsApi.correctTexts.mockResolvedValue({ uuid: TEST_UUID });
+  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, updated_at: '2026-11-06T10:00:00Z' });
+
+  renderPage();
+  const qText = await screen.findByDisplayValue('Как часто вам было плохо?');
+  userEvent.type(qText, ' (уточнено)');
+  userEvent.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
+  await screen.findByRole('alert');
+  userEvent.click(screen.getByRole('button', { name: 'Сохранить только тексты' }));
+
+  await waitFor(() => expect(testsApi.correctTexts).toHaveBeenCalled());
+  const [uuidArg, body] = testsApi.correctTexts.mock.calls[0];
+  expect(uuidArg).toBe(TEST_UUID);
+  expect(body).toEqual({
+    expected_updated_at: '2026-11-06T10:00:00Z',
+    questions: [{
+      question_order: 1,
+      question_text: 'Как часто вам было плохо? (уточнено)',
+      options: [{ option_order: 0, option_text: 'Никогда' }, { option_order: 1, option_text: 'Часто' }],
+    }],
+  });
+});
+
+test('опубликованная методика — кнопка «Новая версия»; заменённая — пометка', async () => {
+  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, status: 'published', version: 3 });
+  const { unmount } = renderPage();
+  expect(await screen.findByRole('button', { name: 'Новая версия' })).toBeInTheDocument();
+  expect(screen.getByText('Версия 3')).toBeInTheDocument();
+  unmount();
+
+  testsApi.getAdminTest.mockResolvedValue({
+    ...loadedTest, status: 'published', superseded_at: '2026-11-06T10:00:00Z',
+  });
+  renderPage();
+  expect(await screen.findByText(/Заменена новой версией/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Новая версия' })).toBeNull();
 });
 
 // ── ADR-037: правила обработки и «только по ссылке» ──────────────────────────

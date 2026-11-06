@@ -30,6 +30,8 @@ export function fromBackendQuestion(q, nextKey) {
   const cfg = q.config || {};
   return {
     _key: nextKey(),
+    // ADR-037: исходные номера — адрес вопроса/варианта для «исправить тексты».
+    _order: q.question_order,
     question_text: q.question_text || '',
     question_type: q.question_type,
     is_required: q.is_required,
@@ -45,6 +47,7 @@ export function fromBackendQuestion(q, nextKey) {
       .sort((a, b) => a.option_order - b.option_order)
       .map((o) => ({
         _key: nextKey(),
+        _order: o.option_order,
         option_text: o.option_text,
         value_score: o.value_score,
         media: mediaFromBackend(o.media),
@@ -206,4 +209,25 @@ export function toPreviewAnswers(previewQuestions, answers) {
           return { ...base, free_text_answer: v };
       }
     });
+}
+
+/**
+ * ADR-037: payload «исправить тексты» — только тексты по исходным номерам
+ * вопросов и вариантов. null — в форме добавлены/удалены вопросы или варианты
+ * (тогда нужна новая версия, а не исправление текстов).
+ */
+export function toTextsPayload(questions, loadedCount) {
+  if (questions.length !== loadedCount) return null;
+  const out = [];
+  for (const q of questions) {
+    if (q._order == null || q.options.some((o) => o._order == null)) return null;
+    out.push({
+      question_order: q._order,
+      question_text: q.question_text.trim(),
+      options: hasOptions(q.question_type)
+        ? q.options.map((o) => ({ option_order: o._order, option_text: o.option_text.trim() }))
+        : [],
+    });
+  }
+  return out;
 }
