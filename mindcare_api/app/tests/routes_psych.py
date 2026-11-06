@@ -26,7 +26,8 @@ routes_admin.py нельзя ослабить по одному роуту — �
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import JSONResponse, Response
 
 from app.auth.deps import require_role, resolve_role_or_403
 from app.tests import service
@@ -99,6 +100,81 @@ def list_my_tests(
         search=search, status=status_,
     )
     return {"items": items, "total": total, "page": page, "size": size}
+
+
+# ── ADR-037: шаблон xlsx, выгрузка и импорт методики ─────────────────────────
+# Объявлены ДО /{uuid}: иначе FastAPI примет «methodology-template.xlsx» за uuid.
+
+def _xlsx(content: bytes, filename_ascii: str, filename_utf8: str) -> Response:
+    from urllib.parse import quote
+    from app.tests.methodology_xlsx import XLSX_MEDIA_TYPE
+    return Response(content=content, media_type=XLSX_MEDIA_TYPE, headers={
+        "Content-Disposition": (f'attachment; filename="{filename_ascii}"; '
+                                f"filename*=UTF-8''{quote(filename_utf8)}"),
+        "Cache-Control": "no-store, private",
+    })
+
+
+def _read_upload(file: UploadFile) -> bytes:
+    from app.tests.methodology_xlsx import MAX_BYTES
+    content = file.file.read(MAX_BYTES + 1)
+    if len(content) > MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="Файл больше 2 МБ")
+    return content
+
+
+def _import(content: bytes, dry_run: bool, *, actor_id: int, actor_role: str, ip, ua):
+    from app.tests.methodology_xlsx import ImportFileInvalid
+    try:
+        if dry_run:
+            return service.import_preview(content)
+        created, report = service.import_methodology(
+            content, created_by=actor_id, actor_role=actor_role, ip=ip, user_agent=ua)
+    except ImportFileInvalid as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    if created is None:
+        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            content={"detail": "Файл содержит ошибки", **report})
+    return JSONResponse(status_code=status.HTTP_201_CREATED,
+                        content={**report, "test_uuid": created["uuid"]})
+
+
+def _export(test: dict) -> Response:
+    from app.tests.methodology_xlsx import NotRepresentable
+    try:
+        content = service.export_methodology(test)
+    except NotRepresentable as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return _xlsx(content, "methodology.xlsx", f"Методика_{test['title'][:80]}.xlsx")
+
+
+@router.get("/methodology-template.xlsx")
+def methodology_template(current_user: dict = Depends(require_role("psychologist"))):
+    return _xlsx(service.methodology_template(), "methodology-template.xlsx",
+                 "Шаблон_методики.xlsx")
+
+
+@router.post("/import")
+def import_my_methodology(
+    request: Request,
+    file: UploadFile = File(...),
+    dry_run: bool = Query(default=False),
+    current_user: dict = Depends(require_role("psychologist")),
+):
+    """Импорт своей методики — черновик (публикует супервизор/админ)."""
+    ip, ua = _client(request)
+    return _import(_read_upload(file), dry_run, actor_id=int(current_user["id"]),
+                   actor_role=_acting_role(current_user), ip=ip, ua=ua)
+
+
+@router.get("/{uuid}/methodology.xlsx")
+def export_my_methodology(uuid: str, current_user: dict = Depends(require_role("psychologist"))):
+    try:
+        test = service.get_my_test(uuid, author_id=int(current_user["id"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return _export(test)
 
 
 @router.get("/{uuid}", response_model=TestRead)

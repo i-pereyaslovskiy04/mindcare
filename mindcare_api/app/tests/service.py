@@ -1053,3 +1053,78 @@ def get_staff_result_answers(
         raise ResultNotAvailable()
     _record_content_read(current_user["id"], role, found["result_id"], ip, user_agent)
     return found["data"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Импорт и выгрузка методики в шаблоне xlsx (ADR-037, этап 5)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _import_check(content: bytes) -> tuple[Optional[dict], dict]:
+    """Разбор + те же проверки, что у конструктора (схема TestCreate,
+    _normalize, правила). → (данные | None, ответ dry_run)."""
+    from pydantic import ValidationError
+
+    from app.tests import methodology_xlsx as mx
+    from app.tests.schemas import TestCreate
+
+    data, errors = mx.parse_workbook(content)
+    report = {"ok": False, "errors": errors, "warnings": [], "summary": None}
+    if data is None:
+        return None, report
+    try:
+        model = TestCreate.model_validate({**data, "status": "draft"})
+        clean = _normalize(model.model_dump())
+    except ValidationError as exc:
+        report["errors"] = [{"sheet": None, "row": None, "column": None,
+                             "message": "Данные не прошли проверку: "
+                             + ".".join(str(p) for p in e["loc"]) + " — " + e["msg"]}
+                            for e in exc.errors()[:50]]
+        return None, report
+    except ValueError as exc:
+        report["errors"] = [{"sheet": None, "row": None, "column": None, "message": str(exc)}]
+        return None, report
+    rules = test_rules.parse(clean.get("scoring_rules"))
+    report["warnings"] = [test_rules.describe(i) for i in
+                          test_rules.check_against_bounds(rules, scoring.score_bounds(clean))]
+    report["ok"] = True
+    report["summary"] = {
+        "title": clean["title"],
+        "questions": len(clean["questions"]),
+        "options": len(clean["questions"][0]["options"]) if clean["questions"] else 0,
+        "scales": len(rules.scales) if rules else 0,
+        "levels": len(rules.levels) if rules else 0,
+        "types": len(rules.types.items) if rules and rules.types else 0,
+        "interpretations": len(clean["interpretations"]),
+    }
+    return clean, report
+
+
+def import_preview(content: bytes) -> dict:
+    """dry_run: ничего не сохраняет и не аудирует."""
+    return _import_check(content)[1]
+
+
+def import_methodology(
+    content: bytes, *, created_by: int, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> tuple[Optional[dict], dict]:
+    """Импорт — ВСЕГДА черновик (и для admin/supervisor: публикация — отдельным
+    решением после проверки в конструкторе). Событие test_imported."""
+    clean, report = _import_check(content)
+    if clean is None:
+        return None, report
+    created = storage.create_test(
+        {**clean, "status": "draft"}, created_by=created_by, event="test_imported",
+        actor_role=actor_role, ip=ip, user_agent=user_agent,
+    )
+    return created, report
+
+
+def export_methodology(test: dict) -> bytes:
+    from app.tests import methodology_xlsx as mx
+    return mx.build_workbook(test)
+
+
+def methodology_template() -> bytes:
+    from app.tests import methodology_xlsx as mx
+    return mx.build_workbook(None)
