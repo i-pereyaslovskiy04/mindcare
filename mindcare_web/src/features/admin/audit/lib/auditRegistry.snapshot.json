@@ -121,6 +121,7 @@
     "test_campaign_created",
     "test_campaign_deleted",
     "test_campaign_link_rotated",
+    "test_campaign_renamed",
     "test_campaign_reopened",
     "test_consent_accepted",
     "test_created",

@@ -115,6 +115,16 @@ cd ../mindcare_web && npm run build
 - Тесты: `tests/test_campaign_tokens.py` (24), интеграция кампаний — 145 passed;
   frontend `features/campaigns` — 24 passed, lint чистый.
 
+## 6c. Переименование (2026-11-06)
+
+- «Переименовать» в карточке кампании → `PATCH /api/supervisor/campaigns/{uuid}`
+  `{title}`. Адрес ссылки не меняется; участники видят новое название.
+- Событие `test_campaign_renamed` (REGISTRY 151 → 152, AUDIT_LOG 145),
+  снимок registry перегенерирован, подпись — «Кампания тестирования переименована».
+- Тесты: `test_rename_keeps_link`, `test_rename_validation_and_404`,
+  `test_rename_forbidden_for_other_staff`; frontend `CampaignCard.test.jsx` (+3),
+  `campaigns.api.test.js` (+1).
+
 ## 7. Открыто
 
 - Ручной smoke: прохождение с телефона, sticky-прогресс под шапкой сайта,

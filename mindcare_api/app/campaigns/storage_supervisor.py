@@ -205,6 +205,25 @@ def set_status(campaign_uuid, *, target: str, actor_id: int, ip, user_agent,
         return _dto(campaign, test, count, with_link=True)
 
 
+def rename_campaign(campaign_uuid, *, title: str, actor_id: int, ip, user_agent,
+        impersonator_id: Optional[int] = None) -> dict:
+    """Новое название. Токен ссылки не меняется: уже разосланный адрес
+    продолжает работать (slug в нём остаётся от прежнего названия).
+    То же название — без изменений и события."""
+    ctx = build_request_context(ip=ip, user_agent=user_agent)
+    with SessionLocal() as db:
+        campaign = _locked(db, campaign_uuid)
+        if campaign.title != title:
+            campaign.title = title
+            campaign.updated_at = datetime.now(timezone.utc)
+            _event(db, "test_campaign_renamed", actor_id, CAMPAIGN_ENTITY,
+                   campaign.id, ctx, impersonator_id)
+            db.commit()
+        test = db.get(Test, campaign.test_id)
+        count = _counts(db, [campaign.id]).get(campaign.id, 0)
+        return _dto(campaign, test, count, with_link=True)
+
+
 def rotate_link(campaign_uuid, *, actor_id: int, ip, user_agent,
         impersonator_id: Optional[int] = None) -> dict:
     ctx = build_request_context(ip=ip, user_agent=user_agent)

@@ -1103,7 +1103,7 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 151 событие** (`AUTH_LOG=7`, `AUDIT_LOG=144`; ADR-036 добавил
+**Event REGISTRY: 152 события** (`AUTH_LOG=7`, `AUDIT_LOG=145`; ADR-036 добавил `test_campaign_renamed` (дополнение 2026-11-06, {supervisor}, ATOMIC/RAISE),
 `campaign_results_read` ({supervisor}, INDEPENDENT/RAISE — экран результатов
 кампании с ФИО и баллами), а также
 `campaign_response_submitted` — первое событие `audit_log` с анонимным актором

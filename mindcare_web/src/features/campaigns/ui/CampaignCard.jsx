@@ -1,10 +1,12 @@
 import { useId, useState } from 'react';
 import {
-  deleteCampaign, downloadCampaignResults, rotateCampaignLink, setCampaignStatus,
+  deleteCampaign, downloadCampaignResults, renameCampaign, rotateCampaignLink,
+  setCampaignStatus,
 } from '../../../api/campaigns.api';
 import { saveBlobToDisk } from '../../../api/client';
 import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
+import TextField from '../../../components/UI/TextField/TextField';
 import ConfirmDialog from '../../assignments/ui/ConfirmDialog';
 import CampaignResponses from './CampaignResponses';
 import CampaignResults from './CampaignResults';
@@ -41,8 +43,8 @@ const DIALOGS = {
 };
 
 /**
- * Кампания: статус, ссылка (копировать), скачать xlsx, закрыть/открыть,
- * новая ссылка, участники, удаление. Без оптимистичного успеха: карточка
+ * Кампания: статус, ссылка (копировать), переименование (адрес ссылки не
+ * меняется), скачать xlsx, закрыть/открыть, новая ссылка, участники, удаление. Без оптимистичного успеха: карточка
  * обновляется ответом backend (onChange) или удаляется (onDeleted).
  */
 export default function CampaignCard({ campaign, onChange, onDeleted }) {
@@ -55,6 +57,9 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
   // Открытая панель: null | 'results' | 'responses'.
   const [panel, setPanel] = useState(null);
   const togglePanel = (name) => setPanel((p) => (p === name ? null : name));
+  // Переименование: null — не редактируется, строка — черновик названия.
+  const [draftTitle, setDraftTitle] = useState(null);
+  const [titleError, setTitleError] = useState(null);
   const link = campaignLink(campaign);
   const isOpen = campaign.status === 'open';
 
@@ -83,6 +88,36 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
       onChange(await setCampaignStatus(campaign.uuid, isOpen ? 'closed' : 'open'));
       setMessage(isOpen ? 'Кампания закрыта — ссылка больше не принимает ответы' : 'Кампания снова открыта');
     });
+  }
+
+  function startRename() {
+    setDraftTitle(campaign.title);
+    setTitleError(null);
+    setMessage(null);
+  }
+
+  async function saveTitle(e) {
+    e.preventDefault();
+    const title = draftTitle.split(/\s+/).filter(Boolean).join(' ');
+    if (title.length < 2) {
+      setTitleError('Минимум 2 символа');
+      return;
+    }
+    if (title === campaign.title) {
+      setDraftTitle(null);
+      return;
+    }
+    setBusy('rename');
+    setTitleError(null);
+    try {
+      onChange(await renameCampaign(campaign.uuid, title));
+      setDraftTitle(null);
+      setMessage('Название изменено, ссылка прежняя');
+    } catch (err) {
+      setTitleError(err?.message || 'Не удалось переименовать');
+    } finally {
+      setBusy(null);
+    }
   }
 
   function download() {
@@ -122,7 +157,30 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
     <article className={styles.card} aria-labelledby={titleId}>
       <header className={styles.header}>
         <div className={styles.headText}>
-          <h3 id={titleId} className={styles.title}>{campaign.title}</h3>
+          {draftTitle === null ? (
+            <h3 id={titleId} className={styles.title}>{campaign.title}</h3>
+          ) : (
+            <form className={styles.renameForm} onSubmit={saveTitle} noValidate>
+              <h3 id={titleId} className={styles.visuallyHidden}>{campaign.title}</h3>
+              <TextField
+                label="Название"
+                hint="Адрес ссылки не изменится"
+                value={draftTitle}
+                onChange={(e) => { setDraftTitle(e.target.value); setTitleError(null); }}
+                error={titleError}
+                maxLength={255}
+                appearance="field"
+                autoFocus
+              />
+              <div className={styles.renameActions}>
+                <Button type="submit" loading={busy === 'rename'}>Сохранить</Button>
+                <Button type="button" variant="secondary" disabled={busy === 'rename'}
+                  onClick={() => setDraftTitle(null)}>
+                  Отмена
+                </Button>
+              </div>
+            </form>
+          )}
           <p className={styles.meta}>
             {campaign.test_title} · создана {formatDate(campaign.created_at)}
             {campaign.closed_at && ` · закрыта ${formatDate(campaign.closed_at)}`}
@@ -161,6 +219,10 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
         <Button type="button" variant="secondary" onClick={toggleStatus}
           loading={busy === 'status'}>
           {isOpen ? 'Закрыть' : 'Открыть снова'}
+        </Button>
+        <Button type="button" variant="ghost" onClick={startRename}
+          disabled={draftTitle !== null}>
+          Переименовать
         </Button>
         <Button type="button" variant="ghost"
           onClick={() => { setDialogError(null); setDialog('rotate'); }}>

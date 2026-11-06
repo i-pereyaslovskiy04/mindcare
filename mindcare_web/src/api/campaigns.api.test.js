@@ -1,6 +1,6 @@
 import {
   createCampaign, deleteCampaignResponse, getCampaignResponses, getCampaigns,
-  getPublicCampaign, setCampaignStatus, submitPublicCampaign,
+  getPublicCampaign, renameCampaign, setCampaignStatus, submitPublicCampaign,
   downloadCampaignResults, getCampaignResults,
 } from './campaigns.api';
 import { apiFetch, apiFetchBlob } from './client';
@@ -36,6 +36,14 @@ test('создание — только title и test_uuid', () => {
   expect(apiFetch).toHaveBeenCalledWith('/api/supervisor/campaigns', {
     method: 'POST',
     body: JSON.stringify({ title: 'Т', test_uuid: 'u' }),
+  });
+});
+
+test('переименование — PATCH { title }', () => {
+  renameCampaign('u', 'Новое');
+  expect(apiFetch).toHaveBeenCalledWith('/api/supervisor/campaigns/u', {
+    method: 'PATCH',
+    body: JSON.stringify({ title: 'Новое' }),
   });
 });
 

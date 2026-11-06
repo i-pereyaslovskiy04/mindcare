@@ -98,6 +98,7 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     # ADR-036 этап 4: кабинет супервизора кампаний.
     "test_campaign_created", "test_campaign_closed", "test_campaign_reopened",
     "test_campaign_link_rotated", "test_campaign_deleted",
+    "test_campaign_renamed",
     "campaign_response_deleted", "campaign_responses_read",
     "campaign_results_exported", "campaign_results_read",
     # ADR-029: подтверждение статуса студента ДонГУ.
@@ -133,8 +134,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 144
-    assert len(REGISTRY) == 151
+    assert len(audit_names) == 145
+    assert len(REGISTRY) == 152
 
 
 def test_unknown_event_rejected():
@@ -243,7 +244,8 @@ def test_registry_total_count_stage_5c3():
     # reopened/link_rotated/deleted, campaign_response_deleted,
     # campaign_responses_read, campaign_results_exported: +8 → 143 audit = 150.
     # ADR-036 (экран результатов): campaign_results_read +1 → 144 audit = 151.
-    assert len(REGISTRY) == 151
+    # ADR-036, дополнение 2026-11-06: test_campaign_renamed +1 → 145 audit = 152.
+    assert len(REGISTRY) == 152
 
 
 def test_role_metadata_enum_excludes_system():

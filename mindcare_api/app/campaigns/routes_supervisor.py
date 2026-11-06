@@ -10,6 +10,8 @@
   GET    ""  ?size&before            — список (keyset, новые сверху);
   POST   ""                          — создать {title, test_uuid};
   GET    /{uuid}                     — карточка со ссылкой;
+  PATCH  /{uuid} {title}             — переименовать (адрес ссылки не меняется;
+                                       то же название — без события);
   PATCH  /{uuid}/status {status}     — закрыть / открыть (повтор — без события);
   POST   /{uuid}/rotate-link         — новая ссылка, старая перестаёт работать;
   DELETE /{uuid}                     — удалить кампанию со всеми ответами;
@@ -28,7 +30,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from app.auth.deps import get_current_user, require_role, resolve_role_or_403
 from app.campaigns import analytics, export, storage_supervisor as store
 from app.campaigns.schemas_supervisor import (
-    CampaignCreateIn, CampaignDetailOut, CampaignListOut, CampaignResponseListOut,
+    CampaignCreateIn, CampaignDetailOut, CampaignListOut, CampaignRenameIn,
+    CampaignResponseListOut,
     CampaignResultsOut, CampaignStatusIn, CampaignTestOut,
 )
 from app.tests.profiles import ito_sobchik
@@ -108,6 +111,19 @@ def create_campaign(body: CampaignCreateIn, request: Request,
 def get_campaign(campaign_uuid: str):
     try:
         return _detail(store.get_campaign(campaign_uuid))
+    except store.NotFound:
+        raise _not_found()
+
+
+@router.patch("/{campaign_uuid}", response_model=CampaignDetailOut)
+def rename_campaign(campaign_uuid: str, body: CampaignRenameIn, request: Request,
+                    current_user: dict = Depends(get_current_user)):
+    ip, ua = _client(request)
+    try:
+        return _detail(store.rename_campaign(campaign_uuid, title=body.title,
+                                             actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip,
+                                             user_agent=ua))
     except store.NotFound:
         raise _not_found()
 

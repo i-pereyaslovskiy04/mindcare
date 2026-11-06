@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CampaignCard, { campaignLink, exportFilename } from './CampaignCard';
 import {
-  deleteCampaign, rotateCampaignLink, setCampaignStatus,
+  deleteCampaign, renameCampaign, rotateCampaignLink, setCampaignStatus,
 } from '../../../api/campaigns.api';
 
 jest.mock('../../../api/campaigns.api');
@@ -76,4 +76,46 @@ test('удаление — подтверждение, затем onDeleted; о�
   expect(onDeleted).not.toHaveBeenCalled();
   await userEvent.click(screen.getAllByRole('button', { name: 'Удалить' }).at(-1));
   await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('c-1'));
+});
+
+test('переименование — новое название, ссылка прежняя', async () => {
+  renameCampaign.mockResolvedValue({ ...CAMPAIGN, title: '2 курс' });
+  const { onChange } = setup();
+  await userEvent.click(screen.getByRole('button', { name: 'Переименовать' }));
+  const field = screen.getByLabelText('Название');
+  expect(field).toHaveValue('1 курс');
+  expect(screen.getByText('Адрес ссылки не изменится')).toBeInTheDocument();
+  await userEvent.clear(field);
+  await userEvent.type(field, '  2   курс ');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+  expect(renameCampaign).toHaveBeenCalledWith('c-1', '2 курс');
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ title: '2 курс', link_token: 'tok' })));
+  expect(await screen.findByText('Название изменено, ссылка прежняя')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
+});
+
+test('переименование: короткое название не отправляется, то же — без запроса', async () => {
+  setup();
+  await userEvent.click(screen.getByRole('button', { name: 'Переименовать' }));
+  const field = screen.getByLabelText('Название');
+  await userEvent.clear(field);
+  await userEvent.type(field, 'x');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Минимум 2 символа');
+  await userEvent.clear(field);
+  await userEvent.type(field, '1 курс');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+  expect(renameCampaign).not.toHaveBeenCalled();
+  expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
+});
+
+test('переименование: ошибка backend показывается у поля', async () => {
+  renameCampaign.mockRejectedValue(new Error('Кампания не найдена'));
+  const { onChange } = setup();
+  await userEvent.click(screen.getByRole('button', { name: 'Переименовать' }));
+  await userEvent.type(screen.getByLabelText('Название'), ' 2026');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Кампания не найдена');
+  expect(onChange).not.toHaveBeenCalled();
 });

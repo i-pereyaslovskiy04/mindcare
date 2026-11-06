@@ -654,6 +654,8 @@ _ALL += [
     _audit_ok("test_campaign_closed", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
     _audit_ok("test_campaign_reopened", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
     _audit_ok("test_campaign_link_rotated", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
+    # Переименование (дополнение 2026-11-06): название в metadata не пишется.
+    _audit_ok("test_campaign_renamed", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
     _audit_ok("test_campaign_deleted", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META),
     _audit_ok("campaign_response_deleted", {"supervisor"}, "campaign_response", _CAMPAIGN_META),
     _audit_ok("campaign_responses_read", {"supervisor"}, _CAMPAIGN, _CAMPAIGN_META,

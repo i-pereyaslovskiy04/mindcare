@@ -14,6 +14,15 @@ class CampaignTestOut(BaseModel):
     title: str
 
 
+def _clean_title(v: str) -> str:
+    if _CONTROL_RE.search(v):
+        raise ValueError("недопустимые символы")
+    cleaned = " ".join(v.split())
+    if not (2 <= len(cleaned) <= 255):
+        raise ValueError("недопустимая длина")
+    return cleaned
+
+
 class CampaignCreateIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -23,12 +32,19 @@ class CampaignCreateIn(BaseModel):
     @field_validator("title")
     @classmethod
     def _title(cls, v: str) -> str:
-        if _CONTROL_RE.search(v):
-            raise ValueError("недопустимые символы")
-        cleaned = " ".join(v.split())
-        if not (2 <= len(cleaned) <= 255):
-            raise ValueError("недопустимая длина")
-        return cleaned
+        return _clean_title(v)
+
+
+class CampaignRenameIn(BaseModel):
+    """Переименование: меняется только название, адрес ссылки — нет."""
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+
+    @field_validator("title")
+    @classmethod
+    def _title(cls, v: str) -> str:
+        return _clean_title(v)
 
 
 class CampaignStatusIn(BaseModel):

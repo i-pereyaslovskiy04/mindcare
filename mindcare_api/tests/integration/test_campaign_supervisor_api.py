@@ -226,6 +226,60 @@ def test_rotate_link_invalidates_old(client, env):
     assert _events("test_campaign_link_rotated", _campaign_id(camp["uuid"])) == 1
 
 
+def test_rename_keeps_link(client, env):
+    """Переименование меняет название, но не адрес: разосланная ссылка
+    продолжает работать, участники видят новое название."""
+    camp = _create(client, env, title="integ Старое название")
+    cid = _campaign_id(camp["uuid"])
+    url = f"{BASE}/{camp['uuid']}"
+    r = client.patch(url, headers=env["headers"],
+                     json={"title": "  integ   Новое название "})
+    assert r.status_code == 200, r.text
+    _no_store(r)
+    body = r.json()
+    assert body["title"] == "integ Новое название"
+    assert body["link_token"] == camp["link_token"]
+    assert body["link_url"] == camp["link_url"]
+    pub = client.get(f"/api/public/campaigns/{camp['link_token']}")
+    assert pub.status_code == 200
+    assert pub.json()["title"] == "integ Новое название"
+    with SessionLocal() as db:
+        rows = db.query(AuditLog).filter(
+            AuditLog.event_type == "test_campaign_renamed",
+            AuditLog.entity_id == cid).all()
+    assert len(rows) == 1
+    assert rows[0].user_id == env["sup_id"]
+    # Название в журнал не попадает.
+    assert rows[0].log_metadata == {}
+
+    # То же название — без изменений и без второго события.
+    r = client.patch(url, headers=env["headers"], json={"title": "integ Новое название"})
+    assert r.status_code == 200
+    assert _events("test_campaign_renamed", cid) == 1
+
+
+def test_rename_validation_and_404(client, env):
+    camp = _create(client, env)
+    url = f"{BASE}/{camp['uuid']}"
+    for bad in ({"title": "x"}, {"title": "a\x00b"}, {"title": "x" * 256},
+                {}, {"title": "норм название", "status": "closed"}):
+        assert client.patch(url, headers=env["headers"], json=bad).status_code == 422
+    assert _events("test_campaign_renamed", _campaign_id(camp["uuid"])) == 0
+    for missing in (f"{BASE}/{_uuid.uuid4()}", f"{BASE}/not-a-uuid"):
+        r = client.patch(missing, headers=env["headers"], json={"title": "integ X"})
+        assert r.status_code == 404
+
+
+@pytest.mark.parametrize("role", ["psychologist", "admin"])
+def test_rename_forbidden_for_other_staff(client, env, role):
+    camp = _create(client, env, title="integ Не трогать")
+    headers, _ = _login(client, role)
+    r = client.patch(f"{BASE}/{camp['uuid']}", headers=headers, json={"title": "integ Чужое"})
+    assert r.status_code == 403
+    r = client.get(f"{BASE}/{camp['uuid']}", headers=env["headers"])
+    assert r.json()["title"] == "integ Не трогать"
+
+
 def test_unknown_campaign_404(client, env):
     for url in (f"{BASE}/{_uuid.uuid4()}", f"{BASE}/not-a-uuid",
                 f"{BASE}/{_uuid.uuid4()}/responses"):

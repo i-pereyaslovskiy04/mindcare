@@ -62,6 +62,14 @@ export function setCampaignStatus(uuid, status) {
   });
 }
 
+/** PATCH { title } → карточка. Адрес ссылки при переименовании не меняется. */
+export function renameCampaign(uuid, title) {
+  return apiFetch(`${SUPERVISOR_BASE}/${enc(uuid)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  });
+}
+
 export function rotateCampaignLink(uuid) {
   return apiFetch(`${SUPERVISOR_BASE}/${enc(uuid)}/rotate-link`, { method: 'POST' });
 }
