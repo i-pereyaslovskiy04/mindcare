@@ -144,3 +144,47 @@ test('после перехода на копию баннер «есть рез
 
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
 });
+
+// ── ADR-037: правила обработки и «только по ссылке» ──────────────────────────
+
+const RULES = {
+  version: 1, instruction: null,
+  scales: [{ code: 'A', label: 'Тревога', main: true }],
+  levels: [{ code: 'low', label: 'Низкий', min: 0, max: 3 }],
+  validity: null, types: null,
+};
+
+test('неизменённые правила не отправляются, campaign_only — отправляется', async () => {
+  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, scoring_rules: RULES, campaign_only: true });
+  renderPage();
+  const titleInput = await screen.findByDisplayValue('PHQ-9');
+  expect(screen.getByDisplayValue('Тревога')).toBeInTheDocument();
+  userEvent.type(titleInput, '!');
+  userEvent.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
+  await waitFor(() => expect(testsApi.updateTest).toHaveBeenCalled());
+  const [, payload] = testsApi.updateTest.mock.calls[0];
+  expect(payload).not.toHaveProperty('scoring_rules');
+  expect(payload.campaign_only).toBe(true);
+});
+
+test('изменённая подпись шкалы уходит в scoring_rules', async () => {
+  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, scoring_rules: RULES });
+  renderPage();
+  const label = await screen.findByDisplayValue('Тревога');
+  userEvent.type(label, ' (Т)');
+  userEvent.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
+  await waitFor(() => expect(testsApi.updateTest).toHaveBeenCalled());
+  const [, payload] = testsApi.updateTest.mock.calls[0];
+  expect(payload.scoring_rules.scales[0].label).toBe('Тревога (Т)');
+});
+
+test('снятие галочки правил отправляет scoring_rules: null', async () => {
+  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, scoring_rules: RULES });
+  renderPage();
+  await screen.findByDisplayValue('Тревога');
+  userEvent.click(screen.getByRole('checkbox', { name: /Задать правила обработки/ }));
+  userEvent.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
+  await waitFor(() => expect(testsApi.updateTest).toHaveBeenCalled());
+  const [, payload] = testsApi.updateTest.mock.calls[0];
+  expect(payload.scoring_rules).toBeNull();
+});

@@ -25,8 +25,12 @@ import styles from './TestPreviewModal.module.css';
  */
 export default function TestPreviewModal({
   title, description, scoring, questions, interpretations, onClose,
+  scoringRules = null,
   previewFn = previewScore,
 }) {
+  // ADR-037: подписи шкал и уровней — из правил обработки (если заданы).
+  const scaleLabel = (code) => scoringRules?.scales?.find((sc) => sc.code === code)?.label || code;
+  const levelLabel = (code) => scoringRules?.levels?.find((lv) => lv.code === code)?.label || code;
   const previewQuestions = useMemo(() => toPreviewQuestions(questions), [questions]);
   const skipped = questions.length - previewQuestions.length;
 
@@ -49,6 +53,7 @@ export default function TestPreviewModal({
         scoring,
         questions: questions.filter(isQuestionComplete).map(toBackendQuestion),
         interpretations: interpretations.filter((it) => it.label.trim()).map(toBackendInterp),
+        scoring_rules: scoringRules,
         answers: toPreviewAnswers(previewQuestions, answers),
       });
       setResult(data);
@@ -126,12 +131,25 @@ export default function TestPreviewModal({
                   <ul className={styles.scales}>
                     {result.scales.map((s) => (
                       <li key={s.scale_name}>
-                        <b>{s.scale_name}</b>: {s.score}
+                        <b>{scaleLabel(s.scale_name)}</b>: {s.score}
                         {s.max_score != null && <> из {s.max_score}</>}
                         {s.label && <> - {s.label}</>}
+                        {result.levels?.[s.scale_name] && (
+                          <> · уровень: {levelLabel(result.levels[s.scale_name])}</>
+                        )}
                       </li>
                     ))}
                   </ul>
+                )}
+                {result.rule_summary && (
+                  <p className={styles.interp}>
+                    {result.rule_summary.is_valid != null && (
+                      <>Достоверность: <b>{result.rule_summary.is_valid ? 'достоверно' : 'недостоверно'}</b>. </>
+                    )}
+                    Тип: <b>{result.rule_summary.types.length
+                      ? result.rule_summary.types.join('; ') : 'не выражен'}</b>
+                    <span className={styles.muted}> (видят только психолог и супервизор)</span>
+                  </p>
                 )}
                 {result.total_score == null && result.scales.length === 0 && (
                   <p className={styles.muted}>Подсчёт не дал результата.</p>

@@ -20,9 +20,11 @@ const DEBOUNCE_MS = 600;
  * умолчанию; psychologist передаёt `analyzeMyTest` → `/psychologist/tests/analyze`
  * — тот же service.analyze_test на бэке, другой роут ради ownership-изоляции).
  *
- * @returns { data, loading, error } — data: { score_bounds, issues } | null
+ * @returns { data, loading, error } — data: { score_bounds, issues, rule_issues } | null
  */
-export function useTestAnalysis({ scoring, questions, interpretations, analyzeFn = analyzeTest }) {
+export function useTestAnalysis({
+  scoring, questions, interpretations, scoringRules = null, analyzeFn = analyzeTest,
+}) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
@@ -38,6 +40,8 @@ export function useTestAnalysis({ scoring, questions, interpretations, analyzeFn
       interpretations: interpretations
         .filter((it) => it.label.trim())
         .map(toBackendInterp),
+      // ADR-037: правила обработки — backend сверяет их с вопросами (rule_issues).
+      scoring_rules: scoringRules,
     })
     : null;
 

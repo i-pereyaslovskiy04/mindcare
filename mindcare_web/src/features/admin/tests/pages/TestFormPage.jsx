@@ -9,6 +9,8 @@ import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
 import QuestionBuilder from '../components/QuestionBuilder';
 import { fromBackendQuestion, snapshotQuestions, snapshotInterps } from '../lib/testShape';
 import InterpretationBuilder from '../components/InterpretationBuilder';
+import RulesBuilder from '../components/RulesBuilder';
+import { emptyRules, fromBackendRules, snapshotRules, toBackendRules } from '../lib/rulesShape';
 import TestAnalysisPanel from '../components/TestAnalysisPanel';
 import TestPreviewModal from '../components/TestPreviewModal';
 import { useTestAnalysis } from '../hooks/useTestAnalysis';
@@ -50,6 +52,8 @@ const EMPTY = {
   tag_uuids: [],
   questions: [],
   interpretations: [],
+  campaign_only: false,
+  rules: emptyRules(),   // ADR-037: правила обработки
 };
 
 /**
@@ -99,6 +103,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
   // Исходное состояние дерева при загрузке — база для dirty-tracking.
   const loadedQuestionsRef = useRef(null);
   const loadedInterpsRef   = useRef(null);
+  const loadedRulesRef     = useRef(null);
 
   const keyRef = useRef(0);
   const nextKey = useCallback(() => `k${++keyRef.current}`, []);
@@ -108,6 +113,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
     scoring: form.scoring,
     questions: form.questions,
     interpretations: form.interpretations,
+    scoringRules: toBackendRules(form.rules),
     analyzeFn: effectiveConfig.analyzeFn,
   });
 
@@ -146,6 +152,8 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
         }));
         loadedQuestionsRef.current = snapshotQuestions(questions);
         loadedInterpsRef.current   = snapshotInterps(interpretations);
+        const rules = fromBackendRules(t.scoring_rules, nextKey);
+        loadedRulesRef.current     = snapshotRules(rules);
         setForm({
           title: t.title || '',
           description: t.description || '',
@@ -159,6 +167,8 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
           tag_uuids: t.tags?.map((tg) => tg.uuid) || [],
           questions,
           interpretations,
+          campaign_only: !!t.campaign_only,
+          rules,
         });
       })
       .catch((err) => { if (alive) setError(`Не удалось загрузить тест: ${err.message}`); })
@@ -187,6 +197,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
       ...(isEdit ? {} : { status: form.status }),
       shuffle_questions: !!form.shuffle_questions,
       shuffle_options: !!form.shuffle_options,
+      campaign_only: !!form.campaign_only,
       category_ids: form.category_ids,
       tag_uuids: form.tag_uuids,
     };
@@ -200,6 +211,12 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
     }
     if (!isEdit || interps !== loadedInterpsRef.current) {
       payload.interpretations = JSON.parse(interps);
+    }
+    // Правила — тоже только при изменении: после первых результатов backend
+    // их не меняет (409), а переименование методики должно проходить.
+    const rules = snapshotRules(form.rules);
+    if (!isEdit || rules !== loadedRulesRef.current) {
+      payload.scoring_rules = JSON.parse(rules);
     }
 
     try {
@@ -383,6 +400,13 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
             label="Перемешивать порядок вариантов ответа"
           />
         </div>
+        <div className={styles.field}>
+          <Checkbox
+            checked={form.campaign_only}
+            onChange={(checked) => set('campaign_only', checked)}
+            label="Только для тестирования по ссылке - не показывать в каталоге студента"
+          />
+        </div>
       </section>
 
       {/* ── Вопросы ── */}
@@ -418,6 +442,30 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
         />
       </section>
 
+      {/* ── Правила обработки (ADR-037) ── */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Правила обработки</h2>
+        <p className={styles.sectionHint}>
+          Подписи и порядок шкал, уровни, достоверность и типы. По ним строятся
+          результаты тестирования по ссылке и выгрузка; психолог и супервизор видят
+          достоверность и тип в результате студента. Студенту они не показываются.
+        </p>
+        <RulesBuilder
+          value={form.rules}
+          onChange={(r) => set('rules', r)}
+          questions={form.questions}
+          nextKey={nextKey}
+        />
+        {form.rules.enabled && (
+          <TestAnalysisPanel
+            data={analysis.data}
+            loading={analysis.loading}
+            error={analysis.error}
+            mode="rules"
+          />
+        )}
+      </section>
+
       <div className={styles.footer}>
         <Button variant="secondary" onClick={() => navigate(effectiveConfig.backPath)} disabled={submitting}>
           Отмена
@@ -446,6 +494,7 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
           scoring={form.scoring}
           questions={form.questions}
           interpretations={form.interpretations}
+          scoringRules={toBackendRules(form.rules)}
           onClose={() => setPreviewOpen(false)}
           previewFn={effectiveConfig.previewFn}
         />

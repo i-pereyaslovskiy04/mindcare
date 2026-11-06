@@ -24,7 +24,35 @@ function rangeLabel(min, max) {
   return min === max ? `${min}` : `${min}–${max}`;
 }
 
-export default function TestAnalysisPanel({ data, loading, error }) {
+/**
+ * mode="rules" (ADR-037) — несогласованность правил обработки с вопросами.
+ * На проверку и к публикации такую методику backend не пропустит (422).
+ */
+function RulesIssues({ data, loading, error }) {
+  if (error) return <p className={styles.muted}>Не удалось проверить правила: {error}</p>;
+  if (!data) return loading ? <p className={styles.muted}>Проверяем правила…</p> : null;
+  const issues = data.rule_issues || [];
+  if (!issues.length) {
+    return loading ? null : <p className={styles.ok}>Правила согласованы с вопросами.</p>;
+  }
+  return (
+    <div className={styles.panel}>
+      <ul className={styles.issues} role="alert">
+        {issues.map((i) => (
+          <li key={`${i.kind}-${i.scale_name}-${i.min_score ?? ''}`}>
+            {i.message[0].toUpperCase() + i.message.slice(1)}.
+          </li>
+        ))}
+      </ul>
+      <p className={styles.muted}>
+        Пока это исправлено, методику нельзя отправить на проверку или опубликовать.
+      </p>
+    </div>
+  );
+}
+
+export default function TestAnalysisPanel({ data, loading, error, mode = 'interpretations' }) {
+  if (mode === 'rules') return <RulesIssues data={data} loading={loading} error={error} />;
   if (error) {
     return <p className={styles.muted}>Не удалось проверить пороги: {error}</p>;
   }
