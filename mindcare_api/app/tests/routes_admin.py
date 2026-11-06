@@ -215,7 +215,7 @@ def delete_test(
             ip=ip,
             user_agent=ua,
         )
-    except TestHasResults as exc:   # TestCampaignOnly (ADR-036)
+    except TestHasResults as exc:   # TestUsedByCampaigns (ADR-037)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -268,6 +268,8 @@ def publish_test(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except TestTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except service.RulesNotReady as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -303,5 +305,7 @@ def return_test(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except TestTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except service.RulesNotReady as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

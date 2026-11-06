@@ -2,7 +2,7 @@
 Integration: кампании в кабинете супервизора (ADR-036, этап 4).
 
 Покрывает: доступ (только supervisor; admin/psychologist/student → 403;
-impersonation — разрешено, атрибуция в metadata); создание только с campaign_only-тестом; ссылка
+impersonation — разрешено, атрибуция в metadata); создание — по любой опубликованной методике последней версии (ADR-037); ссылка
 работает публично; закрытие/открытие (повтор без события); перевыпуск ссылки
 (старая → 404); список участников с ФИО под fail-closed аудитом (пустая
 страница — без события; сбой аудита → 503 без ФИО); выгрузка xlsx (колонки
@@ -178,19 +178,46 @@ def test_create_and_link_works_publicly(client, env):
     _no_store(r)
 
 
-def test_create_with_regular_test_rejected(client, env):
+def test_campaign_test_selection_rules(client, env):
+    """ADR-037: методики общие — подходит любая опубликованная и включённая
+    методика последней версии; черновик, выключенная, удалённая и заменённая
+    новой версией — нет (422)."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    cases = {
+        "published": dict(status="published", is_active=True),
+        "draft": dict(status="draft", is_active=True),
+        "inactive": dict(status="published", is_active=False),
+        "deleted": dict(status="published", is_active=True, deleted_at=now),
+        "superseded": dict(status="published", is_active=True, superseded_at=now),
+    }
+    ids = {}
     with SessionLocal() as db:
-        regular = TestModel(title=f"integ regular {_uuid.uuid4().hex[:6]}")
-        db.add(regular)
+        for name, fields in cases.items():
+            t = TestModel(title=f"integ sel {name} {_uuid.uuid4().hex[:6]}", **fields)
+            db.add(t)
+            db.flush()
+            ids[name] = (str(t.uuid), t.id)
         db.commit()
-        regular_uuid, regular_id = str(regular.uuid), regular.id
     try:
+        listed = {t["uuid"] for t in client.get(f"{BASE}/tests", headers=env["headers"]).json()}
+        assert ids["published"][0] in listed and env["test_uuid"] in listed
+        for name in ("draft", "inactive", "deleted", "superseded"):
+            assert ids[name][0] not in listed, name
+            r = client.post(BASE, headers=env["headers"],
+                            json={"title": "integ x", "test_uuid": ids[name][0]})
+            assert r.status_code == 422, name
         r = client.post(BASE, headers=env["headers"],
-                        json={"title": "integ x", "test_uuid": regular_uuid})
-        assert r.status_code == 422
+                        json={"title": "integ обычная методика",
+                              "test_uuid": ids["published"][0]})
+        assert r.status_code == 201, r.text
     finally:
         with SessionLocal() as db:
-            db.query(TestModel).filter(TestModel.id == regular_id).delete()
+            id_list = [i for _, i in ids.values()]
+            db.query(TestCampaign).filter(TestCampaign.test_id.in_(id_list)) \
+                .delete(synchronize_session=False)
+            db.query(TestModel).filter(TestModel.id.in_(id_list)) \
+                .delete(synchronize_session=False)
             db.commit()
 
 

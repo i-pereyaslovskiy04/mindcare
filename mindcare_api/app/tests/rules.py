@@ -252,3 +252,65 @@ def summarize(rules: Optional[ScoringRulesV1], scores: Mapping[str, int]) -> Opt
     if rules is None or (rules.validity is None and rules.types is None):
         return None
     return {"is_valid": is_valid(rules, scores), "types": types_of(rules, scores)}
+
+
+# ── согласованность с вопросами (analyze_test, гейт публикации) ──────────────
+
+def check_against_bounds(rules: Optional[ScoringRulesV1],
+                         bounds: list[dict]) -> list[dict]:
+    """Проблемы правил относительно вопросов теста. bounds —
+    scoring.score_bounds(test): [{scale_name, min_score, max_score}].
+
+    kind:
+      scale_missing — у вопросов есть шкала, которой нет в правилах;
+      scale_unused  — шкала правил не встречается ни в одном вопросе;
+      level_gap     — уровни не покрывают часть диапазона основной шкалы.
+    Пустой список — правила согласованы (или правил нет).
+    """
+    if rules is None:
+        return []
+    issues: list[dict] = []
+    by_scale = {b["scale_name"]: b for b in bounds if b["scale_name"] is not None}
+    declared = [s.code for s in rules.scales]
+    for code in by_scale:
+        if code not in declared:
+            issues.append({"kind": "scale_missing", "scale_name": code,
+                           "min_score": None, "max_score": None})
+    for code in declared:
+        if code not in by_scale:
+            issues.append({"kind": "scale_unused", "scale_name": code,
+                           "min_score": None, "max_score": None})
+    if rules.levels:
+        ordered = sorted(rules.levels, key=lambda lv: lv.min)
+        for code in main_scales(rules):
+            b = by_scale.get(code)
+            if b is None:
+                continue
+            cursor = b["min_score"]
+            for lv in ordered:
+                if lv.max < cursor:
+                    continue
+                if lv.min > cursor:
+                    issues.append({"kind": "level_gap", "scale_name": code,
+                                   "min_score": cursor,
+                                   "max_score": min(lv.min - 1, b["max_score"])})
+                cursor = max(cursor, lv.max + 1)
+                if cursor > b["max_score"]:
+                    break
+            if cursor <= b["max_score"]:
+                issues.append({"kind": "level_gap", "scale_name": code,
+                               "min_score": cursor, "max_score": b["max_score"]})
+    return [i for i in issues
+            if i["min_score"] is None or i["min_score"] <= i["max_score"]]
+
+
+ISSUE_TEXT = {
+    "scale_missing": "у вопросов есть шкала «{s}», которой нет в правилах",
+    "scale_unused": "шкала «{s}» из правил не встречается ни в одном вопросе",
+    "level_gap": "уровни не покрывают баллы {lo}–{hi} шкалы «{s}»",
+}
+
+
+def describe(issue: dict) -> str:
+    return ISSUE_TEXT[issue["kind"]].format(
+        s=issue["scale_name"], lo=issue["min_score"], hi=issue["max_score"])

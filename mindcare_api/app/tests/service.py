@@ -11,6 +11,7 @@ from typing import Optional
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
 from app.tests import notifications, storage, scoring
+from app.tests import rules as test_rules
 from app.tests.storage import TestHasResults, TestStateChanged  # noqa: F401  (ре-экспорт для routes)
 
 _CHOICE_TYPES = {"single_choice", "multiple_choice"}
@@ -91,6 +92,13 @@ def _scale_name(question: dict) -> Optional[str]:
     return name.strip() if isinstance(name, str) and name.strip() else None
 
 
+def _is_filler(question: dict) -> bool:
+    options = question.get("options") or []
+    return (question["question_type"] in ("single_choice", "multiple_choice")
+            and bool(options)
+            and all(int(o.get("value_score") or 0) == 0 for o in options))
+
+
 def _validate_scale_coverage(questions: list[dict]) -> None:
     """
     Правило «все шкалы или ни одной».
@@ -108,7 +116,11 @@ def _validate_scale_coverage(questions: list[dict]) -> None:
     if not scored:
         return
 
-    without = [idx for idx, q in scored if _scale_name(q) is None]
+    # Буферный вопрос (ADR-037; например, № 1 и 91 ИТО) — без шкалы и с нулевыми
+    # баллами всех вариантов: в подсчёт не входит ни в каком режиме, это не
+    # недосмотр автора.
+    without = [idx for idx, q in scored
+               if _scale_name(q) is None and not _is_filler(q)]
     if without and len(without) != len(scored):
         listed = ", ".join(f"#{i}" for i in without)
         raise ValueError(
@@ -151,7 +163,27 @@ def _normalize(data: dict) -> dict:
         _validate_questions(data["questions"])
     if "interpretations" in data and data["interpretations"] is not None:
         _validate_interpretations(data["interpretations"])
+    if data.get("scoring_rules") is not None:
+        # ADR-037: каноничная JSON-форма (кортежи → списки, нормализованные строки).
+        try:
+            data["scoring_rules"] = test_rules.dump(test_rules.parse(data["scoring_rules"]))
+        except test_rules.RulesInvalid:
+            raise ValueError("Правила обработки не соответствуют схеме") from None
     return data
+
+
+class RulesNotReady(ValueError):
+    """ADR-037: правила не согласованы с вопросами — на проверку и к публикации
+    такой тест не уходит (422). В черновике — только предупреждение."""
+
+
+def ensure_rules_ready(test: dict) -> None:
+    issues = test_rules.check_against_bounds(
+        test_rules.parse(test.get("scoring_rules")), scoring.score_bounds(test))
+    if issues:
+        raise RulesNotReady(
+            "Правила обработки не согласованы с вопросами: "
+            + "; ".join(test_rules.describe(i) for i in issues[:5]))
 
 
 # ── анализ порогов интерпретации ──────────────────────────────────────────────
@@ -177,8 +209,13 @@ def analyze_test(test: dict) -> dict:
     by_scale = {b["scale_name"]: b for b in bounds}
     issues: list[dict] = []
 
+    rules = test_rules.parse(test.get("scoring_rules"))
+    rule_issues = [{**i, "message": test_rules.describe(i)}
+                   for i in test_rules.check_against_bounds(rules, bounds)]
+
     if not bounds:
-        return {"score_bounds": [], "issues": []}   # черновик без скорящихся вопросов
+        # черновик без скорящихся вопросов
+        return {"score_bounds": [], "issues": [], "rule_issues": rule_issues}
 
     for i in interpretations:
         scale = i.get("scale_name")
@@ -225,6 +262,7 @@ def analyze_test(test: dict) -> dict:
     return {
         "score_bounds": bounds,
         "issues": [i for i in issues if i["min_score"] <= i["max_score"]],
+        "rule_issues": rule_issues,
     }
 
 
@@ -275,7 +313,7 @@ def preview_score(data: dict) -> dict:
             ans["free_text_answer"] = a["free_text_answer"]
         answers.append(ans)
 
-    return scoring.compute_result(
+    computed = scoring.compute_result(
         {
             "scoring": data.get("scoring", "sum"),
             "questions": prepared,
@@ -283,6 +321,13 @@ def preview_score(data: dict) -> dict:
         },
         answers,
     )
+    # ADR-037: автор видит уровни, достоверность и типы на пробном прохождении.
+    rules = test_rules.parse(data.get("scoring_rules"))
+    scores = {sc["scale_name"]: sc["score"] for sc in computed.get("scales", [])}
+    computed["levels"] = {code: test_rules.level_of(rules, scores.get(code))
+                          for code in test_rules.main_scales(rules)} if rules and rules.levels else {}
+    computed["rule_summary"] = test_rules.summarize(rules, scores)
+    return computed
 
 
 # ── public API ────────────────────────────────────────────────────────────────
@@ -326,6 +371,7 @@ def update_test(
     user_agent: Optional[str] = None,
 ) -> dict:
     data = _normalize(data)
+    # Правила (ADR-037) сверяет storage под блокировкой: то же значение — можно.
     if data.get("questions") is not None and storage.test_has_results(uuid):
         raise TestHasResults(
             "По этому тесту уже есть результаты — его вопросы изменить нельзя. "
@@ -443,7 +489,7 @@ def _apply_transition(
 
     found = storage.transition_atomic(
         uuid, target,
-        decide=decide,
+        decide=decide, ready_check=ensure_rules_ready,
         expected_status=expected_status, expected_updated_at=expected_updated_at,
         actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent,
     )

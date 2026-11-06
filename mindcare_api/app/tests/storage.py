@@ -22,7 +22,7 @@ from app.db.models import (
     Question, Option, QuestionMedia, OptionMedia, MediaFile,
     TestResult, TestResultScale, StudentAnswer,
     Category, Tag, User, Role, UserRole,
-    Consent, ConsentRecord, CampaignResponseAnswer,
+    Consent, ConsentRecord, CampaignResponseAnswer, TestCampaign,
 )
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
@@ -52,16 +52,17 @@ class TestHasResults(Exception):
     """
 
 
-class TestCampaignOnly(TestHasResults):
+class TestUsedByCampaigns(TestHasResults):
     """
-    Правка или удаление теста кампании (campaign_only, ADR-036) через
-    конструктор. Методика загружается seed-скриптом и не редактируется:
-    ответы кампаний ссылаются на её вопросы. Подкласс TestHasResults — routes,
+    Удаление методики, по которой созданы тестирования по ссылке (ADR-037):
+    кампании и их ответы ссылаются на неё. Подкласс TestHasResults — routes,
     уже мапящие TestHasResults на 409, обрабатывают и этот случай.
+    (До ADR-037 здесь был сплошной запрет правки campaign_only-тестов —
+    TestCampaignOnly; его заменили правила версий и has_results.)
     """
 
     def __init__(self, msg: str = (
-        "Это методика кампаний — её нельзя менять или удалять в конструкторе."
+        "Методика используется в тестировании по ссылке — удалить её нельзя."
     )):
         super().__init__(msg)
 
@@ -184,6 +185,8 @@ def _test_to_dict(test: Test, db) -> dict:
         "status":          test.status,
         "shuffle_questions": test.shuffle_questions,
         "shuffle_options":   test.shuffle_options,
+        "scoring_rules":   test.scoring_rules,          # ADR-037
+        "campaign_only":   bool(test.campaign_only),
         "created_at":      test.created_at,
         "updated_at":      test.updated_at,
         "created_by":      test.created_by,
@@ -447,6 +450,8 @@ def create_test(
             status=data.get("status", "published"),
             shuffle_questions=data.get("shuffle_questions", False),
             shuffle_options=data.get("shuffle_options", False),
+            scoring_rules=data.get("scoring_rules"),          # ADR-037
+            campaign_only=bool(data.get("campaign_only", False)),
             version=1,
             created_by=created_by,
         )
@@ -669,14 +674,22 @@ def update_test(
             return None
         if expected_status is not None and test.status != expected_status:
             raise TestStateChanged(test.status)
-        if test.campaign_only:
-            raise TestCampaignOnly()
-
         for field in ("title", "description", "scoring", "max_score",
                       "time_limit_min", "is_active",
-                      "shuffle_questions", "shuffle_options"):
+                      "shuffle_questions", "shuffle_options", "campaign_only"):
             if field in data and data[field] is not None:
                 setattr(test, field, data[field])
+
+        # ADR-037: правила обработки. Ключ передан — заменить (null — убрать).
+        # Как и вопросы, после первых ответов не меняются: по ним считаются
+        # результаты кампаний этой версии методики.
+        if "scoring_rules" in data and data["scoring_rules"] != test.scoring_rules:
+            if has_results(test.id, db):
+                raise TestHasResults(
+                    "По этой методике уже есть результаты — правила обработки "
+                    "изменить нельзя. Создайте новую версию методики."
+                )
+            test.scoring_rules = data["scoring_rules"]
 
         if "category_ids" in data and data["category_ids"] is not None:
             _sync_categories(test.id, data["category_ids"], db)
@@ -747,8 +760,9 @@ def delete_test(
             return False
         if expected_status is not None and test.status != expected_status:
             raise TestStateChanged(test.status)
-        if test.campaign_only:
-            raise TestCampaignOnly()
+        if db.query(db.query(TestCampaign.id)
+                    .filter(TestCampaign.test_id == test.id).exists()).scalar():
+            raise TestUsedByCampaigns()
         test.deleted_at = datetime.now(timezone.utc)
         test.is_active = False
         record_event(
@@ -810,6 +824,7 @@ def transition_atomic(
     new_status: str,
     *,
     decide: Callable[[str, Optional[int]], str],
+    ready_check: Optional[Callable[[dict], None]] = None,
     expected_status: Optional[str] = None,
     expected_updated_at: Optional[datetime] = None,
     actor_id: int,
@@ -846,6 +861,9 @@ def transition_atomic(
         if expected_updated_at is not None and test.updated_at != expected_updated_at:
             raise TestStateChanged(previous)
         event = decide(previous, test.created_by)
+        if ready_check is not None and new_status in ("in_review", "published"):
+            # ADR-037: правила согласованы с вопросами — под той же блокировкой.
+            ready_check(_test_to_dict(test, db))
         test.status = new_status
         test.updated_at = datetime.now(timezone.utc)
         record_event(

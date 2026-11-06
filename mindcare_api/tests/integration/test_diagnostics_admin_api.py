@@ -419,7 +419,7 @@ def test_analyze_route_not_shadowed_by_uuid_route(client, admin):
     """`analyze` не должен попасть в `/{uuid}` — иначе был бы 404/422."""
     r = client.post("/api/admin/tests/analyze", json=_analyze_body([], []), headers=admin)
     assert r.status_code == 200, r.text
-    assert r.json() == {"score_bounds": [], "issues": []}
+    assert r.json() == {"score_bounds": [], "issues": [], "rule_issues": []}
 
 
 def test_analyze_requires_staff_role(client, test_email):

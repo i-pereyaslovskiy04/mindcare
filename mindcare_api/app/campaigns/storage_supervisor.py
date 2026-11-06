@@ -38,7 +38,8 @@ class NotFound(Exception):
 
 
 class TestNotAllowed(Exception):
-    """Тест не предназначен для кампаний (не campaign_only или удалён) → 422."""
+    """Методика недоступна для кампании (не опубликована, выключена, удалена
+    или заменена новой версией) → 422."""
 
 
 def _uuid_or_none(value) -> Optional[_uuid.UUID]:
@@ -112,12 +113,18 @@ def _dto(campaign: TestCampaign, test: Optional[Test], count: int,
 
 # ── тесты для кампаний ────────────────────────────────────────────────────────
 
+def _selectable():
+    """ADR-037: методики общие — кампанию можно создать по любой опубликованной
+    и включённой методике последней версии (campaign_only не требуется)."""
+    return (Test.deleted_at.is_(None), Test.status == "published",
+            Test.is_active.is_(True), Test.superseded_at.is_(None))
+
+
 def list_campaign_tests() -> list[dict]:
     with SessionLocal() as db:
         tests = (
-            db.query(Test)
-            .filter(Test.campaign_only.is_(True), Test.deleted_at.is_(None))
-            .order_by(Test.title).all()
+            db.query(Test).filter(*_selectable())
+            .order_by(Test.title, Test.id).all()
         )
         return [{"uuid": str(t.uuid), "title": t.title} for t in tests]
 
@@ -129,8 +136,9 @@ def create_campaign(*, title: str, test_uuid, actor_id: int, ip, user_agent,
     ctx = build_request_context(ip=ip, user_agent=user_agent)
     uid = _uuid_or_none(test_uuid)
     with SessionLocal() as db:
-        test = db.query(Test).filter(Test.uuid == uid).first() if uid else None
-        if test is None or test.deleted_at is not None or not test.campaign_only:
+        test = (db.query(Test).filter(Test.uuid == uid, *_selectable()).first()
+                if uid else None)
+        if test is None:
             raise TestNotAllowed()
         token = tokens.generate_token(title)
         campaign = TestCampaign(

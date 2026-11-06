@@ -6,7 +6,8 @@ Integration: тест ИТО как методика кампаний (ADR-036, 
     расхождение структуры с ключом → ItoTestMismatch без изменений;
   - тест campaign_only НЕ виден студенту: нет в каталоге GET /api/tests,
     GET /api/tests/{uuid} и POST …/submit → 404 (хотя status=published);
-  - admin/supervisor не может изменить или удалить его в конструкторе → 409;
+  - после ответов кампании вопросы и правила не меняются, удаление методики
+    с кампаниями — 409 (ADR-037; сплошного запрета правки больше нет);
   - has_results учитывает ответы кампаний (вопросы теста с ответами кампании
     не заменяются);
   - обычный опубликованный тест по-прежнему виден (регресс фильтра).
@@ -209,19 +210,33 @@ def test_regular_published_test_still_visible(client):
 # ─── конструктор ──────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("role", ["admin", "supervisor"])
-def test_constructor_cannot_edit_or_delete(client, ito_test, role):
+def test_constructor_guards_after_campaign_answers(client, ito_test, role):
+    """ADR-037: сплошного запрета правки нет — после ответов кампании нельзя
+    менять вопросы и правила обработки, а удалить методику с кампаниями нельзя."""
     headers, _ = _staff_headers(client, role)
+    _add_campaign_answer(ito_test["id"])
+    url = f"/api/admin/tests/{ito_test['uuid']}"
+    current = client.get(url, headers=headers).json()
+    assert current["scoring_rules"]["types"]["threshold"] == 8
 
-    r = client.patch(f"/api/admin/tests/{ito_test['uuid']}", headers=headers,
-                     json={"title": "Изменено"})
+    changed = {**current["scoring_rules"], "instruction": "Другая инструкция"}
+    assert client.patch(url, headers=headers,
+                        json={"scoring_rules": changed}).status_code == 409
+    questions = [{k: q[k] for k in ("question_text", "question_order", "question_type",
+                                    "is_required", "config")}
+                 | {"options": [{k: o[k] for k in ("option_text", "option_order",
+                                                    "value_score")} for o in q["options"]]}
+                 for q in current["questions"]]
+    assert client.patch(url, headers=headers,
+                        json={"questions": questions}).status_code == 409
+    r = client.delete(url, headers=headers)
     assert r.status_code == 409, r.text
-
-    r = client.delete(f"/api/admin/tests/{ito_test['uuid']}", headers=headers)
-    assert r.status_code == 409, r.text
+    assert "тестировании по ссылке" in r.json()["detail"]
 
     with SessionLocal() as db:
         test = db.get(TestModel, ito_test["id"])
-        assert test.title != "Изменено" and test.deleted_at is None
+        assert test.deleted_at is None
+        assert test.scoring_rules["instruction"] != "Другая инструкция"
 
 
 # ─── has_results ──────────────────────────────────────────────────────────────

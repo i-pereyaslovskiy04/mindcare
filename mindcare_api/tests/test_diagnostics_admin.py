@@ -215,6 +215,19 @@ def test_free_text_not_required_to_have_scale():
     service._validate_questions([_scaled(1, "Тревога"), free])
 
 
+def test_zero_score_filler_question_allowed_without_scale():
+    # ADR-037: буферный вопрос (как № 1 и 91 ИТО) — все варианты по 0 баллов.
+    filler = _choice_question(2)
+    for o in filler["options"]:
+        o["value_score"] = 0
+    service._validate_questions([_scaled(1, "Тревога"), filler])
+
+
+def test_ito_structure_passes_validation():
+    from app.tests.profiles import ito_sobchik
+    service._validate_questions(ito_sobchik.questions())
+
+
 def test_scale_type_question_included_in_coverage_rule():
     scale_q = {
         "question_text": "Оцените", "question_order": 2, "question_type": "scale",
@@ -474,7 +487,7 @@ def test_analyze_without_interpretations_is_not_a_gap():
 
 def test_analyze_draft_without_questions_is_empty():
     test = {"scoring": "sum", "questions": [], "interpretations": [_interp(0, 5)]}
-    assert service.analyze_test(test) == {"score_bounds": [], "issues": []}
+    assert service.analyze_test(test) == {"score_bounds": [], "issues": [], "rule_issues": []}
 
 
 def test_analyze_multi_scale_gaps_are_per_scale():

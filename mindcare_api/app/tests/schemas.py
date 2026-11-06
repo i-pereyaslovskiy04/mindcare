@@ -18,6 +18,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from app.tests.rules import ScoringRulesV1
+
 # Подмножества значений свободных VARCHAR-колонок БД (ограничение только тут)
 ScoringMethod = Literal["sum", "average", "weighted"]
 QuestionType  = Literal["single_choice", "multiple_choice", "scale", "free_text"]
@@ -78,6 +80,9 @@ class TestCreate(BaseModel):
     status:         TestCreateStatus = "published"
     shuffle_questions: bool       = False
     shuffle_options:   bool       = False
+    # ADR-037: правила обработки и флаг «только по ссылке» (вне каталога).
+    scoring_rules:  Optional[ScoringRulesV1] = None
+    campaign_only:  bool          = False
     category_ids:   list[int]     = Field(default_factory=list)
     tag_uuids:      list[str]     = Field(default_factory=list)
     questions:      list[QuestionCreate]       = Field(default_factory=list)
@@ -94,6 +99,9 @@ class TestUpdate(BaseModel):
     is_active:      Optional[bool]          = None
     shuffle_questions: Optional[bool]       = None
     shuffle_options:   Optional[bool]       = None
+    # ADR-037: явный null — убрать правила; ключ не передан — не менять.
+    scoring_rules:  Optional[ScoringRulesV1] = None
+    campaign_only:  Optional[bool]          = None
     category_ids:   Optional[list[int]]     = None
     tag_uuids:      Optional[list[str]]     = None
     questions:      Optional[list[QuestionCreate]]       = None
@@ -159,6 +167,7 @@ class TestAnalyzeIn(BaseModel):
     scoring:         ScoringMethod              = "sum"
     questions:       list[QuestionCreate]       = Field(default_factory=list)
     interpretations: list[InterpretationCreate] = Field(default_factory=list)
+    scoring_rules:   Optional[ScoringRulesV1]   = None
 
 
 class PreviewAnswerIn(BaseModel):
@@ -191,9 +200,20 @@ class InterpretationIssueRead(BaseModel):
     label:      Optional[str] = None
 
 
+class RuleIssueRead(BaseModel):
+    """ADR-037: несогласованность правил с вопросами. Блокирует отправку на
+    проверку и публикацию (422), в черновике — предупреждение."""
+    kind:       Literal["scale_missing", "scale_unused", "level_gap"]
+    scale_name: str
+    min_score:  Optional[int] = None
+    max_score:  Optional[int] = None
+    message:    str
+
+
 class TestAnalysisRead(BaseModel):
     score_bounds: list[ScoreBoundsRead]
     issues:       list[InterpretationIssueRead]
+    rule_issues:  list[RuleIssueRead] = Field(default_factory=list)
 
 
 class TestRead(BaseModel):
@@ -208,6 +228,8 @@ class TestRead(BaseModel):
     status:         str
     shuffle_questions: bool
     shuffle_options:   bool
+    scoring_rules:  Optional[dict] = None
+    campaign_only:  bool = False
     created_at:     datetime
     updated_at:     datetime
     created_by_name: Optional[str]
@@ -355,6 +377,9 @@ class TestPreviewScoreRead(BaseModel):
     scoring_used:    str
     recommendations: Optional[str]
     scales:          list[ScaleResultRead]
+    # ADR-037: по правилам — уровень основных шкал, достоверность и типы.
+    levels:          dict[str, Optional[str]] = Field(default_factory=dict)
+    rule_summary:    Optional["RuleSummaryRead"] = None
 
 
 class ResultRead(BaseModel):
@@ -457,3 +482,7 @@ class ConsentStatusRead(BaseModel):
     title:       str
     content:     str
     accepted:    bool
+
+
+# Ссылка вперёд на RuleSummaryRead (ADR-037).
+TestPreviewScoreRead.model_rebuild()
