@@ -10,7 +10,7 @@
   - удаление кампании каскадно удаляет ответы, шкалы, ответы на вопросы;
     запись согласия остаётся (её удаляет service — ADR-036);
   - согласие, вопрос и вариант с ответами удалить нельзя (RESTRICT);
-  - tests.scoring_profile — только NULL | 'ito_sobchik'; campaign_only = false
+  - tests.campaign_only = false по умолчанию; scoring_rules NULL, lineage_uuid задан (ADR-037)
     по умолчанию.
 
 Каждый тест убирает свои строки сам (фикстура `campaign_env`).
@@ -164,19 +164,19 @@ def test_valid_campaign_response_scales_answers(campaign_env):
         assert resp.submitted_at is not None
 
 
-def test_tests_flags_defaults_and_profile_check(campaign_env):
+def test_tests_flags_defaults(campaign_env):
+    """ADR-037: CHECK на scoring_profile снят (код его не читает); правила —
+    scoring_rules, у каждого теста есть lineage_uuid."""
     test_id = campaign_env["test_ids"][0]
     with SessionLocal() as db:
         test = db.get(Test, test_id)
         assert test.campaign_only is False
         assert test.scoring_profile is None
-        test.scoring_profile = "ito_sobchik"
+        assert test.scoring_rules is None
+        assert test.superseded_at is None
+        assert test.lineage_uuid is not None
         test.campaign_only = True
         db.commit()
-
-    def bad(db):
-        db.get(Test, test_id).scoring_profile = "unknown_profile"
-    _expect_integrity_error(bad)
 
 
 # ─── Шифрование и формат ссылки ───────────────────────────────────────────────

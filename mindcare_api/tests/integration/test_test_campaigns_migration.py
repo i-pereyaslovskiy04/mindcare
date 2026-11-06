@@ -7,7 +7,7 @@ Round-trip migration test для a3e7c1f9d5b2 (ADR-036, тестовые кам�
       ENV=test, DATABASE_URL присутствует, current_database() ~ mindcare_test_<random>;
   - собственный engine для проверок; DDL — через Alembic;
   - ТОЧНЫЕ revision ID (не downgrade -1);
-  - после проверок БД возвращается на REVISION.
+  - перед проверками БД опускается до REVISION, после — на head.
 
 Отдельный запуск:
   ENV=test MINDCARE_MIGRATION_ROUNDTRIP=1 TEST_DATABASE_URL=... \
@@ -98,8 +98,10 @@ def safe_test_db():
         raise RuntimeError(
             "roundtrip: current_database() must be mindcare_test_<random>."
         )
+    # Следующие ревизии (ADR-037) меняют tests — проверки идут на REVISION.
+    _alembic("downgrade", REVISION)
     yield
-    _alembic("upgrade", REVISION)
+    _alembic("upgrade", "head")
 
 
 def _assert_upgraded() -> None:

@@ -74,6 +74,8 @@ def ensure_ito_test(db) -> tuple[Test, bool]:
             raise ItoTestMismatch("тест профиля ИТО не помечен campaign_only")
         if structure_of(db, existing.id) != expected_structure():
             raise ItoTestMismatch("вопросы теста ИТО в БД расходятся с ключом")
+        if existing.scoring_rules is None:   # ADR-037: тест до миграции правил
+            existing.scoring_rules = ito_sobchik.scoring_rules()
         return existing, False
 
     test = Test(
@@ -83,6 +85,7 @@ def ensure_ito_test(db) -> tuple[Test, bool]:
         status="published",
         is_active=True,
         scoring_profile=ito_sobchik.PROFILE,
+        scoring_rules=ito_sobchik.scoring_rules(),   # ADR-037
         campaign_only=True,
     )
     db.add(test)

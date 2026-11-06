@@ -8,7 +8,7 @@
 import uuid as _uuid
 
 from sqlalchemy import (
-    ARRAY, Boolean, CheckConstraint, Column, DateTime, ForeignKey,
+    ARRAY, Boolean, Column, DateTime, ForeignKey,
     Index, Integer, String, Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -18,16 +18,11 @@ from sqlalchemy.sql import func
 from app.db.base import Base
 
 
-TEST_SCORING_PROFILES = ("ito_sobchik",)
-
-
 class Test(Base):
     __tablename__ = "tests"
     __table_args__ = (
-        CheckConstraint(
-            "scoring_profile IS NULL OR scoring_profile IN ('ito_sobchik')",
-            name="ck_tests_scoring_profile",
-        ),
+        # ADR-037: версии одной методики.
+        Index("ix_tests_lineage_uuid", "lineage_uuid"),
     )
 
     id             = Column(Integer, primary_key=True)
@@ -49,9 +44,17 @@ class Test(Base):
                                server_default="false")
     shuffle_options   = Column(Boolean, default=False, nullable=False,
                                server_default="false")
-    # ADR-036: пост-обработка результата конкретной методики (достоверность,
-    # типы) — чистая функция профиля; NULL — обычный тест.
+    # ADR-036: legacy-метка профиля; с ADR-037 код её не читает — правила
+    # обработки хранятся в scoring_rules.
     scoring_profile   = Column(String(30), nullable=True)
+    # ADR-037: правила обработки (ScoringRulesV1, app/tests/rules.py); NULL —
+    # только баллы шкал и пороги интерпретации.
+    scoring_rules     = Column(JSONB, nullable=True)
+    # ADR-037: общий для всех версий одной методики; version — номер версии.
+    lineage_uuid      = Column(UUID(as_uuid=True), nullable=False,
+                               default=_uuid.uuid4)
+    # ADR-037: опубликована более новая версия — не в каталоге и не в выборе.
+    superseded_at     = Column(DateTime(timezone=True), nullable=True)
     # ADR-036: тест только для кампаний по публичной ссылке — не показывается
     # в каталоге студента и не проходится через /api/tests.
     campaign_only     = Column(Boolean, default=False, nullable=False,
@@ -213,6 +216,9 @@ class TestResult(Base):
     max_possible    = Column(Integer)
     scoring_used    = Column(String(20))
     recommendations = Column(Text)
+    # ADR-037: снимок правил на момент отправки {is_valid, types}; студенту
+    # не отдаётся (только staff, Этап E).
+    rule_summary    = Column(JSONB, nullable=True)
     submitted_at    = Column(DateTime(timezone=True), server_default=func.now())
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
