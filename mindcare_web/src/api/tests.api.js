@@ -90,10 +90,13 @@ export function updateTest(uuid, data) {
  * (дыры в покрытии, недостижимые пороги, ссылки на несуществующие шкалы).
  * Ничего не сохраняет — подсчёт остаётся единственным, на бэкенде.
  */
-export function analyzeTest({ scoring, questions, interpretations }) {
+export function analyzeTest({
+  scoring, questions, interpretations, scoring_rules: scoringRules = null,
+}) {
   return apiFetch('/api/admin/tests/analyze', {
     method: 'POST',
-    body: JSON.stringify({ scoring, questions, interpretations }),
+    // ADR-037: правила обработки — сверка с вопросами (rule_issues).
+    body: JSON.stringify({ scoring, questions, interpretations, scoring_rules: scoringRules }),
   });
 }
 
@@ -101,16 +104,30 @@ export function analyzeTest({ scoring, questions, interpretations }) {
  * Пробный подсчёт несохранённого дерева: тот же scoring, что у студента.
  * Ничего не сохраняет — ни результата, ни ответов.
  */
-export function previewScore({ scoring, questions, interpretations, answers }) {
+export function previewScore({
+  scoring, questions, interpretations, answers, scoring_rules: scoringRules = null,
+}) {
   return apiFetch('/api/admin/tests/preview-score', {
     method: 'POST',
-    body: JSON.stringify({ scoring, questions, interpretations, answers }),
+    body: JSON.stringify({
+      scoring, questions, interpretations, answers, scoring_rules: scoringRules,
+    }),
   });
 }
 
 /** Копия методики (черновик). Штатный путь правки теста, по которому есть результаты. */
 export function duplicateTest(uuid) {
   return apiFetch(`/api/admin/tests/${uuid}/duplicate`, { method: 'POST' });
+}
+
+/** ADR-037: новая версия методики — черновик с тем же lineage. */
+export function createNewVersion(uuid) {
+  return apiFetch(`/api/admin/tests/${uuid}/new-version`, { method: 'POST' });
+}
+
+/** ADR-037: исправление текстов без смены структуры (и при наличии результатов). */
+export function correctTexts(uuid, body) {
+  return apiFetch(`/api/admin/tests/${uuid}/texts`, { method: 'PATCH', body: JSON.stringify(body) });
 }
 
 export function deleteTest(uuid) {
@@ -183,21 +200,36 @@ export function duplicateMyTest(uuid) {
   return apiFetch(`/api/psychologist/tests/${uuid}/duplicate`, { method: 'POST' });
 }
 
+export function createMyNewVersion(uuid) {
+  return apiFetch(`/api/psychologist/tests/${uuid}/new-version`, { method: 'POST' });
+}
+
+export function correctMyTexts(uuid, body) {
+  return apiFetch(`/api/psychologist/tests/${uuid}/texts`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
 /** Автор отправляет свой draft/needs_changes тест на модерацию. */
 export function submitTestForReview(uuid) {
   return apiFetch(`/api/psychologist/tests/${uuid}/submit-for-review`, { method: 'POST' });
 }
 
-export function analyzeMyTest({ scoring, questions, interpretations }) {
+export function analyzeMyTest({
+  scoring, questions, interpretations, scoring_rules: scoringRules = null,
+}) {
   return apiFetch('/api/psychologist/tests/analyze', {
     method: 'POST',
-    body: JSON.stringify({ scoring, questions, interpretations }),
+    // ADR-037: правила обработки — сверка с вопросами (rule_issues).
+    body: JSON.stringify({ scoring, questions, interpretations, scoring_rules: scoringRules }),
   });
 }
 
-export function previewMyScore({ scoring, questions, interpretations, answers }) {
+export function previewMyScore({
+  scoring, questions, interpretations, answers, scoring_rules: scoringRules = null,
+}) {
   return apiFetch('/api/psychologist/tests/preview-score', {
     method: 'POST',
-    body: JSON.stringify({ scoring, questions, interpretations, answers }),
+    body: JSON.stringify({
+      scoring, questions, interpretations, answers, scoring_rules: scoringRules,
+    }),
   });
 }
