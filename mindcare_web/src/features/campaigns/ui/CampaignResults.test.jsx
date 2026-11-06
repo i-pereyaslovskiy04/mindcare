@@ -12,7 +12,16 @@ const LEVELS = {
 
 function payload(overrides = {}) {
   return {
-    profile: 'ito_sobchik',
+    has_rules: true,
+    has_validity: true,
+    validity_title: 'Недостоверных (L или F > 5)',
+    type_threshold: 8,
+    levels: [
+      { code: 'low', label: LEVELS.low, min: 0, max: 2, tone: 'low' },
+      { code: 'norm', label: LEVELS.norm, min: 3, max: 4, tone: 'norm' },
+      { code: 'accent', label: LEVELS.accent, min: 5, max: 7, tone: 'accent' },
+      { code: 'maladaptive', label: LEVELS.maladaptive, min: 8, max: 9, tone: 'maladaptive' },
+    ],
     scales: [{ code: 'L', label: 'L Ложь' }, { code: 'VIII', label: 'VIII Лабильность' }],
     level_labels: LEVELS,
     type_names: ['Неуравновешенный'],
@@ -86,4 +95,29 @@ test('пол и факультеты — отдельные таблицы', asy
   const faculty = screen.getByRole('region', { name: 'По факультетам' });
   expect(within(faculty).getByRole('rowheader', { name: 'Юридический факультет' }))
     .toBeInTheDocument();
+});
+
+test('методика без правил: нет достоверности, типов и уровней', async () => {
+  getCampaignResults.mockResolvedValue(payload({
+    has_rules: false, has_validity: false, validity_title: 'Недостоверных',
+    type_threshold: null, levels: [], level_labels: {}, type_names: [],
+    scales: [{ code: 'A', label: 'A' }],
+    items: [{
+      uuid: 'r1', full_name: 'Петров Пётр', faculty_code: 'law',
+      faculty_label: 'Юридический факультет', specialty: 'x', age: 19,
+      gender: 'male', submitted_at: '2026-11-04T10:00:00Z',
+      scores: { A: 5 }, levels: {}, is_valid: null, types: [],
+    }],
+    summary: {
+      total: 1, valid: null, invalid: null, with_type: 0,
+      scales: [{ scale: 'A', label: 'A', mean: 5, min: 5, max: 5, levels: {} }],
+      types: [], by_faculty: [], by_gender: [],
+    },
+  }));
+  render(<CampaignResults campaignUuid="c-1" />);
+  expect(await screen.findByText('Петров Пётр')).toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: 'Недостоверных' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Типы \(все шкалы/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('columnheader', { name: 'Достоверность' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Цвет балла:', { exact: false })).not.toBeInTheDocument();
 });

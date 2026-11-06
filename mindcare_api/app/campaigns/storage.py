@@ -71,7 +71,7 @@ def _test_structure(db, test: Test) -> dict:
         "description": test.description,
         "version": test.version or 1,
         "scoring": test.scoring or "sum",
-        "scoring_profile": test.scoring_profile,
+        "scoring_rules": test.scoring_rules,
         "questions": questions,
         "interpretations": [],
     }

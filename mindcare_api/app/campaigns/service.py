@@ -8,7 +8,7 @@ from app.campaigns import storage, tokens
 from app.campaigns.answers import AnswersInvalid  # noqa: F401  (ре-экспорт для routes)
 from app.campaigns.storage import CampaignNotFound, ConsentOutdated  # noqa: F401
 from app.student_verification.faculties import FACULTIES
-from app.tests.profiles import ito_sobchik
+from app.tests import rules as test_rules
 
 
 def _hash_or_404(token: str) -> str:
@@ -19,8 +19,9 @@ def _hash_or_404(token: str) -> str:
 
 
 def _instruction(test: dict) -> str:
-    if test["scoring_profile"] == ito_sobchik.PROFILE:
-        return ito_sobchik.INSTRUCTION
+    rules = test_rules.parse(test["scoring_rules"])
+    if rules is not None and rules.instruction:
+        return rules.instruction
     return test["description"] or ""
 
 

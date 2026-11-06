@@ -34,7 +34,7 @@ from app.campaigns.schemas_supervisor import (
     CampaignResponseListOut,
     CampaignResultsOut, CampaignStatusIn, CampaignTestOut,
 )
-from app.tests.profiles import ito_sobchik
+from app.tests import rules as test_rules
 from app.core.no_store_route import NoStoreRoute
 from app.core.public_urls import frontend_url
 from app.student_verification.faculties import faculty_label
@@ -219,20 +219,26 @@ def get_results(
                                   ip=ip, user_agent=ua)
     except store.NotFound:
         raise _not_found()
-    profile = data["profile"]
-    enriched = [analytics.enrich_row(r, profile) for r in data["rows"]]
-    rows = analytics.filter_rows(enriched, faculty_code=faculty_code, gender=gender,
-                                 validity=validity, type_name=type_name)
-    scales = analytics.scale_order(profile, enriched)
-    is_ito = profile == ito_sobchik.PROFILE
+    rules = data["rules"]
+    enriched = [analytics.enrich_row(r, rules) for r in data["rows"]]
+    rows = analytics.filter_rows(enriched, rules=rules, faculty_code=faculty_code,
+                                 gender=gender, validity=validity, type_name=type_name)
+    scales = analytics.scale_order(rules, enriched)
     return {
-        "profile": profile,
-        "scales": [{"code": s, "label": ito_sobchik.SCALE_LABELS.get(s, s)}
+        "has_rules": rules is not None,
+        "has_validity": bool(test_rules.validity_scales(rules)),
+        "scales": [{"code": s, "label": test_rules.scale_label(rules, s)}
                    for s in scales],
-        "level_labels": dict(analytics.LEVEL_LABELS) if is_ito else {},
-        "type_names": [name for name, _ in ito_sobchik.TYPES] if is_ito else [],
+        # Уровни по возрастанию с оттенком (low/norm/accent/maladaptive) для UI.
+        "levels": analytics.level_list(rules),
+        "level_labels": analytics.level_labels(rules),
+        "validity_title": analytics.validity_title(rules),
+        "type_threshold": rules.types.threshold
+        if rules is not None and rules.types else None,
+        "type_names": [t.name for t in rules.types.items]
+        if rules is not None and rules.types else [],
         "faculties": [{"code": g["code"], "label": g["label"]}
-                      for g in analytics.summarize(enriched, profile)["by_faculty"]],
+                      for g in analytics.summarize(enriched, rules)["by_faculty"]],
         "total_all": len(enriched),
         "items": [{
             **{k: r[k] for k in ("uuid", "full_name", "faculty_code", "specialty",
@@ -240,7 +246,7 @@ def get_results(
                                  "levels", "is_valid", "types")},
             "faculty_label": faculty_label(r["faculty_code"]),
         } for r in rows],
-        "summary": analytics.summarize(rows, profile),
+        "summary": analytics.summarize(rows, rules),
     }
 
 
@@ -254,7 +260,7 @@ def export_xlsx(campaign_uuid: str, request: Request,
                                  ip=ip, user_agent=ua)
     except store.NotFound:
         raise _not_found()
-    content = export.build_workbook(profile=data["profile"], rows=data["rows"],
+    content = export.build_workbook(rules=data["rules"], rows=data["rows"],
                                     question_numbers=data["question_numbers"])
     filename = f"campaign_{data['campaign_uuid'][:8]}.xlsx"
     return Response(

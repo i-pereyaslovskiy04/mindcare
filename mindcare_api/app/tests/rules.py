@@ -24,6 +24,8 @@ _LEVEL_CODE_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 MAX_SCALES = 50
 MAX_LEVELS = 10
 MAX_TYPES = 50
+# Коды достоверности в той же карте уровней участника (analytics.enrich_row).
+RESERVED_LEVEL_CODES = frozenset({"valid", "invalid"})
 
 
 def _text(v: str, max_len: int, *, multiline: bool = False) -> str:
@@ -68,6 +70,8 @@ class LevelRule(_Strict):
     def _code(cls, v: str) -> str:
         if not _LEVEL_CODE_RE.match(v):
             raise ValueError("код уровня: 1–30 строчных латинских букв, цифр или «_»")
+        if v in RESERVED_LEVEL_CODES:
+            raise ValueError("коды valid/invalid заняты под достоверность")
         return v
 
     @field_validator("label")

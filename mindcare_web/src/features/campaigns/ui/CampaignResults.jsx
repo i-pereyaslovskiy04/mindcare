@@ -3,22 +3,24 @@ import Select from '../../../components/UI/Select/Select';
 import useCampaignResults, { EMPTY_FILTERS } from '../hooks/useCampaignResults';
 import styles from './CampaignResults.module.css';
 
-const LEVEL_CLASS = {
+// Оттенок уровня приходит с backend (ADR-037: уровни — из правил методики).
+const TONE_CLASS = {
   low: styles.lvlLow,
   accent: styles.lvlAccent,
   maladaptive: styles.lvlMaladaptive,
-  invalid: styles.lvlMaladaptive,
 };
-const LEVEL_ORDER = ['low', 'norm', 'accent', 'maladaptive'];
 const GENDER = { male: 'Муж', female: 'Жен' };
 const GENDER_OPTIONS = [
   { value: '', label: 'Все' }, { value: 'female', label: 'Женский' },
   { value: 'male', label: 'Мужской' },
 ];
-const VALIDITY_OPTIONS = [
-  { value: '', label: 'Все' }, { value: 'valid', label: 'Достоверные' },
-  { value: 'invalid', label: 'Недостоверные (L или F > 5)' },
-];
+function validityOptions(title) {
+  // «Недостоверных (L или F > 5)» → «Недостоверные (L или F > 5)».
+  return [
+    { value: '', label: 'Все' }, { value: 'valid', label: 'Достоверные' },
+    { value: 'invalid', label: title.replace(/^Недостоверных/, 'Недостоверные') },
+  ];
+}
 
 function Stat({ label, value }) {
   return (
@@ -78,7 +80,12 @@ export default function CampaignResults({ campaignUuid }) {
   if (!data) return <p className={styles.muted} role="status">Загрузка результатов…</p>;
   if (!data.total_all) return <p className={styles.muted}>Пока никто не прошёл тестирование.</p>;
 
-  const { summary, scales, level_labels: levelLabels } = data;
+  const { summary, scales, level_labels: levelLabels, levels } = data;
+  const hasValidity = data.has_validity;
+  const hasTypes = data.type_names.length > 0;
+  const toneOf = Object.fromEntries(levels.map((lv) => [lv.code, lv.tone]));
+  const levelClass = (code) => (code === 'invalid'
+    ? styles.lvlMaladaptive : TONE_CLASS[toneOf[code]] || '');
   // Факультеты фильтра — всех участников кампании (backend, без учёта фильтров).
   const facultyOptions = data.faculties.map((f) => ({ value: f.code, label: f.label }));
   const typeOptions = [
@@ -95,10 +102,15 @@ export default function CampaignResults({ campaignUuid }) {
           onChange={(v) => setFilters({ faculty_code: v })} />
         <Select label="Пол" value={filters.gender} appearance="field"
           options={GENDER_OPTIONS} onChange={(v) => setFilters({ gender: v })} />
-        <Select label="Достоверность" value={filters.validity} appearance="field"
-          options={VALIDITY_OPTIONS} onChange={(v) => setFilters({ validity: v })} />
-        <Select label="Тип" value={filters.type} appearance="field"
-          options={typeOptions} onChange={(v) => setFilters({ type: v })} />
+        {hasValidity && (
+          <Select label="Достоверность" value={filters.validity} appearance="field"
+            options={validityOptions(data.validity_title)}
+            onChange={(v) => setFilters({ validity: v })} />
+        )}
+        {hasTypes && (
+          <Select label="Тип" value={filters.type} appearance="field"
+            options={typeOptions} onChange={(v) => setFilters({ type: v })} />
+        )}
         <Button type="button" variant="ghost" disabled={unfiltered}
           onClick={() => setFilters(EMPTY_FILTERS)}>
           Сбросить
@@ -107,9 +119,9 @@ export default function CampaignResults({ campaignUuid }) {
 
       <div className={styles.stats}>
         <Stat label={`Участников${unfiltered ? '' : ` (из ${data.total_all})`}`} value={summary.total} />
-        <Stat label="Достоверных" value={summary.valid} />
-        <Stat label="Недостоверных" value={summary.invalid} />
-        <Stat label="С выраженным типом" value={summary.with_type} />
+        {hasValidity && <Stat label="Достоверных" value={summary.valid} />}
+        {hasValidity && <Stat label="Недостоверных" value={summary.invalid} />}
+        {hasTypes && <Stat label="С выраженным типом" value={summary.with_type} />}
       </div>
 
       <section aria-labelledby={`${campaignUuid}-scales`}>
@@ -121,8 +133,8 @@ export default function CampaignResults({ campaignUuid }) {
                 <th scope="col">Шкала</th>
                 <th scope="col">Среднее</th>
                 <th scope="col">Мин–макс</th>
-                {LEVEL_ORDER.map((code) => (
-                  <th key={code} scope="col" className={LEVEL_CLASS[code]}>{levelLabels[code]}</th>
+                {levels.map((lv) => (
+                  <th key={lv.code} scope="col" className={levelClass(lv.code)}>{lv.label}</th>
                 ))}
               </tr>
             </thead>
@@ -133,10 +145,10 @@ export default function CampaignResults({ campaignUuid }) {
                   <td>{fmt(s.mean)}</td>
                   <td>{s.min == null ? '—' : `${s.min}–${s.max}`}</td>
                   {'valid' in s.levels ? (
-                    <td colSpan={4}>
+                    <td colSpan={Math.max(levels.length, 1)}>
                       достоверно: {s.levels.valid}; недостоверно: {s.levels.invalid}
                     </td>
-                  ) : LEVEL_ORDER.map((code) => <td key={code}>{s.levels[code] ?? 0}</td>)}
+                  ) : levels.map((lv) => <td key={lv.code}>{s.levels[lv.code] ?? 0}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -145,8 +157,11 @@ export default function CampaignResults({ campaignUuid }) {
       </section>
 
       <div className={styles.twoCol}>
+        {hasTypes && (
         <section aria-labelledby={`${campaignUuid}-types`}>
-          <h4 id={`${campaignUuid}-types`} className={styles.heading}>Типы (все шкалы типа ≥ 8)</h4>
+          <h4 id={`${campaignUuid}-types`} className={styles.heading}>
+            Типы (все шкалы типа ≥ {data.type_threshold})
+          </h4>
           <table className={styles.table}>
             <thead>
               <tr><th scope="col">Тип</th><th scope="col">Всего</th><th scope="col">Недостоверно</th></tr>
@@ -158,6 +173,7 @@ export default function CampaignResults({ campaignUuid }) {
             </tbody>
           </table>
         </section>
+        )}
         <GroupTable id={`${campaignUuid}-gender`} title="По полу" firstCol="Пол"
           groups={summary.by_gender} />
         <GroupTable id={`${campaignUuid}-faculty`} title="По факультетам" firstCol="Факультет"
@@ -168,14 +184,16 @@ export default function CampaignResults({ campaignUuid }) {
         <h4 id={`${campaignUuid}-rows`} className={styles.heading}>
           Участники ({data.items.length})
         </h4>
-        <p className={styles.legend}>
-          Цвет балла:{' '}
-          {['low', 'accent', 'maladaptive'].map((code) => (
-            <span key={code} className={`${styles.legendItem} ${LEVEL_CLASS[code]}`}>
-              {levelLabels[code]}
-            </span>
-          ))}
-        </p>
+        {levels.some((lv) => lv.tone !== 'norm') && (
+          <p className={styles.legend}>
+            Цвет балла:{' '}
+            {levels.filter((lv) => lv.tone !== 'norm').map((lv) => (
+              <span key={lv.code} className={`${styles.legendItem} ${levelClass(lv.code)}`}>
+                {lv.label}
+              </span>
+            ))}
+          </p>
+        )}
         <div className={styles.scroll}>
           <table className={`${styles.table} ${styles.rows}`}>
             <thead>
@@ -187,8 +205,8 @@ export default function CampaignResults({ campaignUuid }) {
                 {scales.map((s) => (
                   <th key={s.code} scope="col" title={s.label}>{s.code}</th>
                 ))}
-                <th scope="col">Достоверность</th>
-                <th scope="col">Тип</th>
+                {hasValidity && <th scope="col">Достоверность</th>}
+                {hasTypes && <th scope="col">Тип</th>}
               </tr>
             </thead>
             <tbody>
@@ -201,9 +219,9 @@ export default function CampaignResults({ campaignUuid }) {
                   {scales.map((s) => {
                     const code = r.levels[s.code];
                     return (
-                      <td key={s.code} className={`${styles.score} ${LEVEL_CLASS[code] || ''}`}>
+                      <td key={s.code} className={`${styles.score} ${levelClass(code)}`}>
                         {r.scores[s.code] ?? '—'}
-                        {code && code !== 'norm' && code !== 'valid' && (
+                        {code && toneOf[code] !== 'norm' && code !== 'valid' && (
                           <span className={styles.srOnly}>
                             {` (${code === 'invalid' ? 'недостоверно' : levelLabels[code]})`}
                           </span>
@@ -211,8 +229,10 @@ export default function CampaignResults({ campaignUuid }) {
                       </td>
                     );
                   })}
-                  <td>{r.is_valid === false ? 'недостоверно' : 'достоверно'}</td>
-                  <td className={styles.types}>{r.types.join('; ') || '—'}</td>
+                  {hasValidity && (
+                    <td>{r.is_valid === false ? 'недостоверно' : 'достоверно'}</td>
+                  )}
+                  {hasTypes && <td className={styles.types}>{r.types.join('; ') || '—'}</td>}
                 </tr>
               ))}
             </tbody>

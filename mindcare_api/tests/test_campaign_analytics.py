@@ -13,9 +13,10 @@ from openpyxl import load_workbook
 
 from app.campaigns import analytics
 from app.campaigns.export import build_workbook
+from app.tests import rules as R
 from app.tests.profiles import ito_sobchik as ito
 
-P = ito.PROFILE
+P = R.parse(ito.scoring_rules())   # ADR-037: правила ИТО как данные
 
 
 def _row(name, faculty="law", gender="male", **scores):
@@ -42,9 +43,9 @@ def _enriched():
 
 
 def test_level_codes():
-    assert [analytics.level_code(v) for v in (0, 2, 3, 4, 5, 7, 8, 9)] == [
+    assert [R.level_of(P, v) for v in (0, 2, 3, 4, 5, 7, 8, 9)] == [
         "low", "low", "norm", "norm", "accent", "accent", "maladaptive", "maladaptive"]
-    assert analytics.level_code(None) is None
+    assert R.level_of(P, None) is None
 
 
 def test_enrich_row_levels_validity_types():
@@ -63,15 +64,15 @@ def test_enrich_without_profile_has_no_levels():
 def test_filters():
     rows = _enriched()
     names = lambda rs: [r["full_name"] for r in rs]  # noqa: E731
-    assert names(analytics.filter_rows(rows, faculty_code="math_it")) == [
+    assert names(analytics.filter_rows(rows, rules=P, faculty_code="math_it")) == [
         "unbalanced_invalid", "low"]
-    assert names(analytics.filter_rows(rows, gender="male")) == ["norm", "unbalanced"]
-    assert names(analytics.filter_rows(rows, validity="invalid")) == ["unbalanced_invalid"]
+    assert names(analytics.filter_rows(rows, rules=P, gender="male")) == ["norm", "unbalanced"]
+    assert names(analytics.filter_rows(rows, rules=P, validity="invalid")) == ["unbalanced_invalid"]
     # тип ищется без пометки «(недостоверно)»
-    assert names(analytics.filter_rows(rows, type_name="Неуравновешенный")) == [
+    assert names(analytics.filter_rows(rows, rules=P, type_name="Неуравновешенный")) == [
         "unbalanced", "unbalanced_invalid"]
-    assert names(analytics.filter_rows(rows, type_name="__none__")) == ["norm", "low"]
-    assert analytics.filter_rows(rows, faculty_code="law", validity="invalid") == []
+    assert names(analytics.filter_rows(rows, rules=P, type_name="__none__")) == ["norm", "low"]
+    assert analytics.filter_rows(rows, rules=P, faculty_code="law", validity="invalid") == []
 
 
 def test_summary_totals_scales_types_groups():
@@ -108,7 +109,7 @@ def test_summary_empty():
 
 
 def test_workbook_has_levels_and_summary_sheets_with_fills():
-    data = build_workbook(profile=P, rows=ROWS, question_numbers=range(1, 92))
+    data = build_workbook(rules=P, rows=ROWS, question_numbers=range(1, 92))
     wb = load_workbook(io.BytesIO(data))
     assert wb.sheetnames == ["Результаты", "Уровни", "Сводка", "Ответы"]
     res = wb["Результаты"]

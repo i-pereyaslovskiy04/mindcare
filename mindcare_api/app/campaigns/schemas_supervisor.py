@@ -148,10 +148,23 @@ class ResultsSummaryOut(BaseModel):
     by_gender: list[GroupStatOut]
 
 
+class ResultLevelOut(BaseModel):
+    code: str
+    label: str
+    min: int
+    max: int
+    tone: Literal["low", "norm", "accent", "maladaptive"]
+
+
 class CampaignResultsOut(BaseModel):
-    profile: Optional[str]
+    # ADR-037: что считается — из правил теста кампании.
+    has_rules: bool
+    has_validity: bool
     scales: list[ResultScaleOut]
+    levels: list[ResultLevelOut]          # по возрастанию, с оттенком для UI
     level_labels: dict[str, str]
+    validity_title: str                   # «Недостоверных (L или F > 5)»
+    type_threshold: Optional[int]
     type_names: list[str]
     faculties: list[ResultScaleOut]   # факультеты всех участников (для фильтра)
     total_all: int

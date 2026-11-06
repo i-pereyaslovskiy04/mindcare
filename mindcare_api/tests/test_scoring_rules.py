@@ -86,6 +86,7 @@ def _base(**over):
     _base(levels=[{"code": "lo", "label": "x", "min": 0, "max": 3},
                   {"code": "hi", "label": "y", "min": 3, "max": 5}]),
     _base(levels=[{"code": "Lo", "label": "x", "min": 0, "max": 3}]),
+    _base(levels=[{"code": "invalid", "label": "x", "min": 0, "max": 3}]),
     _base(validity={"scales": [{"code": "Z", "max_valid": 5}]}),
     _base(validity={"scales": []}),
     _base(types={"threshold": 8, "items": [{"name": "Т", "scales": ["Z"]}]}),

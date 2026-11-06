@@ -27,6 +27,7 @@ from app.db.models import (
     ConsentRecord, Option, Question, Test, TestCampaign,
 )
 from app.db.session import SessionLocal
+from app.tests import rules as test_rules
 
 CAMPAIGN_ENTITY = "test_campaign"
 RESPONSE_ENTITY = "campaign_response"
@@ -383,7 +384,8 @@ def _load_rows(db, campaign_uuid, *, with_answers: bool) -> dict:
     return {
         "campaign_id": campaign.id,
         "campaign_uuid": str(campaign.uuid),
-        "profile": test.scoring_profile if test else None,
+        # ADR-037: правила обработки теста этой кампании (её версии методики).
+        "rules": test_rules.parse(test.scoring_rules) if test else None,
         "rows": rows,
         "question_numbers": numbers,
     }

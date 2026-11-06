@@ -466,7 +466,10 @@ def test_results_levels_types_summary_and_filters(client, env):
     assert r.status_code == 200, r.text
     _no_store(r)
     data = r.json()
-    assert data["profile"] == "ito_sobchik" and data["total_all"] == 3
+    assert data["has_rules"] is True and data["has_validity"] is True
+    assert data["total_all"] == 3
+    assert data["validity_title"] == "Недостоверных (L или F > 5)" and data["type_threshold"] == 8
+    assert [lv["tone"] for lv in data["levels"]] == ["low", "norm", "accent", "maladaptive"]
     assert [s["code"] for s in data["scales"]] == list(ito.EXPORT_SCALE_ORDER)
     assert len(data["type_names"]) == 6
     assert {f["code"] for f in data["faculties"]} == {"law", "accounting_finance"}
