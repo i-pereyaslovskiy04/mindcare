@@ -433,6 +433,7 @@ def create_test(
     data: dict,
     created_by: int,
     *,
+    event: str = "test_created",   # ADR-037: импорт из xlsx — test_imported
     actor_role: Optional[str] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
@@ -468,7 +469,7 @@ def create_test(
         _replace_questions(test.id, data.get("questions", []), db)
         _replace_interpretations(test.id, data.get("interpretations", []), db)
         record_event(
-            event="test_created",
+            event=event,
             actor=Actor.user(created_by, actor_role),
             target=Target("test", test.id),
             outcome=Outcome.SUCCESS,
