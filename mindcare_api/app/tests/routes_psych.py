@@ -32,6 +32,7 @@ from app.auth.deps import require_role, resolve_role_or_403
 from app.tests import service
 from app.tests.service import TestHasResults, TestNotEditable, TestTransitionError, TestTransitionForbidden
 from app.tests.schemas import (
+    TestTextsIn,
     TestCreate,
     TestUpdate,
     TestRead,
@@ -232,6 +233,49 @@ def submit_for_review(
     except TestTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except service.RulesNotReady as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ── ADR-037: версии СВОЕЙ методики и исправление текстов ─────────────────────
+
+@router.post("/{uuid}/new-version", response_model=TestRead,
+             status_code=status.HTTP_201_CREATED)
+def create_my_new_version(
+    uuid: str,
+    request: Request,
+    current_user: dict = Depends(require_role("psychologist")),
+):
+    ip, ua = _client(request)
+    try:
+        return service.create_my_new_version(
+            uuid, actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user), ip=ip, user_agent=ua)
+    except service.DraftVersionExists as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.patch("/{uuid}/texts", response_model=TestRead)
+def correct_my_texts(
+    uuid: str,
+    body: TestTextsIn,
+    request: Request,
+    current_user: dict = Depends(require_role("psychologist")),
+):
+    """Опечатки своей методики. На проверке — 409; опубликованная снимается с
+    публикации (повторная модерация)."""
+    ip, ua = _client(request)
+    try:
+        return service.correct_my_texts(
+            uuid, body.model_dump(exclude_unset=True),
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user), ip=ip, user_agent=ua)
+    except TestNotEditable as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except service.TextsStructureChanged as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

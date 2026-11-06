@@ -187,6 +187,8 @@ def _test_to_dict(test: Test, db) -> dict:
         "shuffle_options":   test.shuffle_options,
         "scoring_rules":   test.scoring_rules,          # ADR-037
         "campaign_only":   bool(test.campaign_only),
+        "lineage_uuid":    str(test.lineage_uuid) if test.lineage_uuid else None,
+        "superseded_at":   test.superseded_at,
         "created_at":      test.created_at,
         "updated_at":      test.updated_at,
         "created_by":      test.created_by,
@@ -355,6 +357,8 @@ def find_tests(
                 "created_at":      t.created_at,
                 "created_by_name": _author_name(t.created_by, db),
                 "updated_at":      t.updated_at,
+                "superseded_at":   t.superseded_at,     # ADR-037
+                "campaign_only":   bool(t.campaign_only),
             })
     return items, total
 
@@ -405,6 +409,8 @@ def find_my_tests(
                 "created_at":     t.created_at,
                 "created_by_name": _author_name(t.created_by, db),
                 "updated_at":      t.updated_at,
+                "superseded_at":   t.superseded_at,     # ADR-037
+                "campaign_only":   bool(t.campaign_only),
             })
     return items, total
 
@@ -505,6 +511,63 @@ def test_has_results(uuid_str: str) -> bool:
         return has_results(test.id, db)
 
 
+def _clone_tree(db, src: Test, copy: Test) -> None:
+    """Категории, темы, вопросы с вариантами и медиа, пороги — из src в copy
+    (copy уже flush-нут). Общий для «Дублировать» и «Новой версии»."""
+    for row in db.query(TestCategory).filter(TestCategory.test_id == src.id).all():
+        db.add(TestCategory(test_id=copy.id, category_id=row.category_id))
+    for row in db.query(TestTag).filter(TestTag.test_id == src.id).all():
+        db.add(TestTag(test_id=copy.id, tag_id=row.tag_id))
+
+    for q in sorted(src.questions, key=lambda x: x.question_order):
+        question = Question(
+            test_id=copy.id,
+            question_text=q.question_text,
+            question_order=q.question_order,
+            question_type=q.question_type,
+            is_required=q.is_required,
+            config=dict(q.config or {}),
+        )
+        db.add(question)
+        db.flush()
+        # медиа вопроса: тот же media_id (физический файл общий)
+        for qm in q.media:
+            db.add(QuestionMedia(
+                question_id=question.id,
+                media_id=qm.media_id,
+                media_role=qm.media_role,
+                display_order=qm.display_order,
+                caption=qm.caption,
+            ))
+        for o in sorted(q.options, key=lambda x: x.option_order):
+            option = Option(
+                question_id=question.id,
+                option_text=o.option_text,
+                option_order=o.option_order,
+                value_score=o.value_score,
+            )
+            db.add(option)
+            if o.media:
+                db.flush()   # нужен option.id
+                for om in o.media:
+                    db.add(OptionMedia(
+                        option_id=option.id,
+                        media_id=om.media_id,
+                        media_role=om.media_role,
+                        display_order=om.display_order,
+                    ))
+
+    for i in src.interpretations:
+        db.add(TestInterpretation(
+            test_id=copy.id,
+            scale_name=i.scale_name,
+            min_score=i.min_score,
+            max_score=i.max_score,
+            label=i.label,
+            recommendation=i.recommendation,
+        ))
+
+
 def duplicate_test(
     uuid_str: str,
     created_by: int,
@@ -546,6 +609,10 @@ def duplicate_test(
             time_limit_min=src.time_limit_min,
             shuffle_questions=src.shuffle_questions,
             shuffle_options=src.shuffle_options,
+            # ADR-037: правила обработки — часть методики; копия — новая
+            # методика (свой lineage_uuid), не версия исходной.
+            scoring_rules=src.scoring_rules,
+            campaign_only=src.campaign_only,
             is_active=False,
             status="draft",
             version=1,
@@ -554,58 +621,7 @@ def duplicate_test(
         db.add(copy)
         db.flush()
 
-        for row in db.query(TestCategory).filter(TestCategory.test_id == src.id).all():
-            db.add(TestCategory(test_id=copy.id, category_id=row.category_id))
-        for row in db.query(TestTag).filter(TestTag.test_id == src.id).all():
-            db.add(TestTag(test_id=copy.id, tag_id=row.tag_id))
-
-        for q in sorted(src.questions, key=lambda x: x.question_order):
-            question = Question(
-                test_id=copy.id,
-                question_text=q.question_text,
-                question_order=q.question_order,
-                question_type=q.question_type,
-                is_required=q.is_required,
-                config=dict(q.config or {}),
-            )
-            db.add(question)
-            db.flush()
-            # медиа вопроса: тот же media_id (физический файл общий)
-            for qm in q.media:
-                db.add(QuestionMedia(
-                    question_id=question.id,
-                    media_id=qm.media_id,
-                    media_role=qm.media_role,
-                    display_order=qm.display_order,
-                    caption=qm.caption,
-                ))
-            for o in sorted(q.options, key=lambda x: x.option_order):
-                option = Option(
-                    question_id=question.id,
-                    option_text=o.option_text,
-                    option_order=o.option_order,
-                    value_score=o.value_score,
-                )
-                db.add(option)
-                if o.media:
-                    db.flush()   # нужен option.id
-                    for om in o.media:
-                        db.add(OptionMedia(
-                            option_id=option.id,
-                            media_id=om.media_id,
-                            media_role=om.media_role,
-                            display_order=om.display_order,
-                        ))
-
-        for i in src.interpretations:
-            db.add(TestInterpretation(
-                test_id=copy.id,
-                scale_name=i.scale_name,
-                min_score=i.min_score,
-                max_score=i.max_score,
-                label=i.label,
-                recommendation=i.recommendation,
-            ))
+        _clone_tree(db, src, copy)
 
         # target — НОВАЯ копия (copy.id после flush), не source.
         record_event(
@@ -620,6 +636,163 @@ def duplicate_test(
         db.commit()
         db.refresh(copy)
         return _test_to_dict(copy, db)
+
+
+class DraftVersionExists(Exception):
+    """У методики уже есть неопубликованная версия (draft/in_review/
+    needs_changes) — вторую не создаём (ADR-037) → 409."""
+
+    def __init__(self, draft_uuid: str):
+        super().__init__("У методики уже есть черновик новой версии — продолжите его.")
+        self.draft_uuid = draft_uuid
+
+
+def create_new_version(
+    uuid_str: str,
+    *,
+    actor_id: int,
+    actor_role: str,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
+    """
+    ADR-037: новая версия методики — копия с тем же lineage_uuid, version =
+    max по линии + 1, статус draft. Прежние версии, их результаты и кампании не
+    меняются; при публикации новой версии предыдущие получают superseded_at
+    (transition_atomic). Все строки линии берутся FOR UPDATE в порядке id —
+    две параллельные «новые версии» не создадут два черновика.
+    """
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+    uuid_obj = _parse_uuid(uuid_str)
+    if uuid_obj is None:
+        return None
+    with SessionLocal() as db:
+        src = db.query(Test).filter(Test.uuid == uuid_obj, Test.deleted_at.is_(None)).first()
+        if src is None:
+            return None
+        line = (db.query(Test)
+                .filter(Test.lineage_uuid == src.lineage_uuid, Test.deleted_at.is_(None))
+                .order_by(Test.id).with_for_update().populate_existing().all())
+        pending = [t for t in line if t.status != "published"]
+        if pending:
+            raise DraftVersionExists(str(pending[0].uuid))
+        copy = Test(
+            title=src.title,
+            description=src.description,
+            scoring=src.scoring,
+            max_score=src.max_score,
+            time_limit_min=src.time_limit_min,
+            shuffle_questions=src.shuffle_questions,
+            shuffle_options=src.shuffle_options,
+            scoring_rules=src.scoring_rules,
+            campaign_only=src.campaign_only,
+            lineage_uuid=src.lineage_uuid,
+            version=max((t.version or 1) for t in line) + 1,
+            is_active=src.is_active,
+            status="draft",
+            created_by=actor_id,
+        )
+        db.add(copy)
+        db.flush()
+        _clone_tree(db, src, copy)
+        record_event(
+            event="test_version_created",
+            actor=Actor.user(actor_id, actor_role),
+            target=Target("test", copy.id),
+            outcome=Outcome.SUCCESS,
+            metadata={},
+            context=safe_ctx,
+            db=db,
+        )
+        db.commit()
+        db.refresh(copy)
+        return _test_to_dict(copy, db)
+
+
+class TextsStructureChanged(ValueError):
+    """Исправление текстов прислало другой состав вопросов/вариантов → 422."""
+
+
+def correct_texts(
+    uuid_str: str,
+    data: dict,
+    *,
+    actor_id: int,
+    actor_role: str,
+    expected_updated_at: datetime,
+    expected_status: Optional[str] = None,
+    unpublish_event: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Optional[dict]:
+    """
+    ADR-037: опечатки — без новой версии и при наличии ответов. Меняются ТОЛЬКО
+    question_text, option_text и rules.instruction. Под FOR UPDATE: состояние
+    (updated_at, при необходимости статус) — как видел автор; набор номеров
+    вопросов и вариантов — точно как в БД (иначе TextsStructureChanged).
+    Баллы, шкалы, порядок, типы вопросов и прочие правила не трогаются.
+    Ничего не изменилось — без события и без updated_at.
+    """
+    safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
+    uuid_obj = _parse_uuid(uuid_str)
+    if uuid_obj is None:
+        return None
+    with SessionLocal() as db:
+        test = _lock_test(db, uuid_obj)
+        if not test:
+            return None
+        if test.updated_at != expected_updated_at or (
+                expected_status is not None and test.status != expected_status):
+            raise TestStateChanged(test.status)
+        questions = {q.question_order: q for q in test.questions}
+        incoming = {q["question_order"]: q for q in data.get("questions") or []}
+        if set(incoming) != set(questions) or len(incoming) != len(data.get("questions") or []):
+            raise TextsStructureChanged("Состав вопросов изменился — обновите страницу")
+        changed = False
+        for order, q in questions.items():
+            new_q = incoming[order]
+            options = {o.option_order: o for o in q.options}
+            new_opts = {o["option_order"]: o for o in new_q.get("options") or []}
+            if set(new_opts) != set(options) or len(new_opts) != len(new_q.get("options") or []):
+                raise TextsStructureChanged(
+                    f"Варианты вопроса {order} изменились — обновите страницу")
+            if q.question_text != new_q["question_text"]:
+                q.question_text = new_q["question_text"]
+                changed = True
+            for o_order, o in options.items():
+                if o.option_text != new_opts[o_order]["option_text"]:
+                    o.option_text = new_opts[o_order]["option_text"]
+                    changed = True
+        if "instruction" in data:
+            rules = test_rules.parse(test.scoring_rules)
+            if rules is None:
+                if data["instruction"]:
+                    raise TextsStructureChanged("У методики нет правил обработки для инструкции")
+            else:
+                new_rules = test_rules.dump(rules.model_copy(update={"instruction": None}))
+                new_rules["instruction"] = data["instruction"]
+                new_rules = test_rules.dump(test_rules.parse(new_rules))
+                if new_rules != test_rules.dump(rules):
+                    test.scoring_rules = new_rules
+                    changed = True
+        if not changed:
+            return _test_to_dict(test, db)
+        if unpublish_event is not None:
+            test.status = "draft"
+            record_event(
+                event=unpublish_event, actor=Actor.user(actor_id, actor_role),
+                target=Target("test", test.id), outcome=Outcome.SUCCESS,
+                metadata={}, context=safe_ctx, db=db,
+            )
+        test.updated_at = datetime.now(timezone.utc)
+        record_event(
+            event="test_texts_corrected", actor=Actor.user(actor_id, actor_role),
+            target=Target("test", test.id), outcome=Outcome.SUCCESS,
+            metadata={}, context=safe_ctx, db=db,
+        )
+        db.commit()
+        db.refresh(test)
+        return _test_to_dict(test, db)
 
 
 def update_test(
@@ -866,6 +1039,15 @@ def transition_atomic(
             ready_check(_test_to_dict(test, db))
         test.status = new_status
         test.updated_at = datetime.now(timezone.utc)
+        if new_status == "published":
+            # ADR-037: прежние опубликованные версии этой методики заменены —
+            # их нет в каталоге и в выборе методики кампании; результаты и
+            # действующие кампании остаются на своих версиях.
+            (db.query(Test)
+             .filter(Test.lineage_uuid == test.lineage_uuid, Test.id != test.id,
+                     Test.status == "published", Test.superseded_at.is_(None),
+                     Test.version < test.version)
+             .update({Test.superseded_at: test.updated_at}, synchronize_session=False))
         record_event(
             event=event,
             actor=Actor.user(actor_id, actor_role),
@@ -895,6 +1077,7 @@ def find_active_tests(
         q = db.query(Test).filter(
             Test.deleted_at.is_(None), Test.is_active.is_(True),
             Test.status == "published", Test.campaign_only.is_(False),
+            Test.superseded_at.is_(None),    # ADR-037: только последняя версия
         )
         if search:
             q = q.filter(Test.title.ilike(f"%{search.strip()}%"))
@@ -937,6 +1120,7 @@ def get_active_test_full(uuid_str: str) -> Optional[dict]:
             Test.is_active.is_(True),
             Test.status == "published",
             Test.campaign_only.is_(False),   # ADR-036: только по ссылке кампании
+            Test.superseded_at.is_(None),    # ADR-037: только последняя версия
         ).first()
         if not test:
             return None
@@ -980,6 +1164,7 @@ def save_result(
             Test.is_active.is_(True),
             Test.status == "published",
             Test.campaign_only.is_(False),   # ADR-036: только по ссылке кампании
+            Test.superseded_at.is_(None),    # ADR-037: только последняя версия
         ).first()
         if not test:
             return None

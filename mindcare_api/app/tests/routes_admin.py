@@ -11,6 +11,7 @@ from app.tests.service import (
     TestHasResults, TestStateChanged, TestTransitionError, TestTransitionForbidden,
 )
 from app.tests.schemas import (
+    TestTextsIn,
     TestCreate,
     TestUpdate,
     TestRead,
@@ -306,6 +307,51 @@ def return_test(
     except TestTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except service.RulesNotReady as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ── ADR-037: версии методики и исправление текстов ───────────────────────────
+
+@router.post("/{uuid}/new-version", response_model=TestRead,
+             status_code=status.HTTP_201_CREATED)
+def create_new_version(
+    uuid: str,
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "supervisor")),
+):
+    """Новая версия методики — черновик с тем же lineage; прежние версии,
+    результаты и кампании не меняются. Неопубликованная версия уже есть → 409."""
+    ip, ua = _client(request)
+    try:
+        return service.create_new_version(
+            uuid, actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user), ip=ip, user_agent=ua)
+    except service.DraftVersionExists as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.patch("/{uuid}/texts", response_model=TestRead)
+def correct_texts(
+    uuid: str,
+    body: TestTextsIn,
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "supervisor")),
+):
+    """Опечатки в текстах вопросов, вариантов и инструкции — в любом статусе и
+    при наличии результатов. Состав и баллы не меняются."""
+    ip, ua = _client(request)
+    try:
+        return service.correct_texts(
+            uuid, body.model_dump(exclude_unset=True),
+            actor_id=int(current_user["id"]),
+            actor_role=_acting_role(current_user), ip=ip, user_agent=ua)
+    except TestStateChanged as exc:
+        return _state_changed(exc)
+    except service.TextsStructureChanged as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

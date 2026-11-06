@@ -13,6 +13,7 @@ from app.audit.request_context import build_request_context
 from app.tests import notifications, storage, scoring
 from app.tests import rules as test_rules
 from app.tests.storage import TestHasResults, TestStateChanged  # noqa: F401  (ре-экспорт для routes)
+from app.tests.storage import DraftVersionExists, TextsStructureChanged  # noqa: F401
 
 _CHOICE_TYPES = {"single_choice", "multiple_choice"}
 # Типы, участвующие в подсчёте баллов (free_text — не участвует).
@@ -386,6 +387,34 @@ def update_test(
     return result
 
 
+def create_new_version(
+    uuid: str, *, actor_id: int, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """ADR-037: новая версия методики (admin/supervisor — любой; психолог —
+    своей, см. create_my_new_version). DraftVersionExists → 409."""
+    result = storage.create_new_version(
+        uuid, actor_id=actor_id, actor_role=actor_role, ip=ip, user_agent=user_agent)
+    if result is None:
+        raise ValueError("Тест не найден")
+    return result
+
+
+def correct_texts(
+    uuid: str, data: dict, *, actor_id: int, actor_role: str,
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """ADR-037: исправление опечаток admin/supervisor — в любом статусе и при
+    наличии результатов; статус не меняется."""
+    payload = {k: v for k, v in data.items() if k != "expected_updated_at"}
+    result = storage.correct_texts(
+        uuid, payload, actor_id=actor_id, actor_role=actor_role,
+        expected_updated_at=data["expected_updated_at"], ip=ip, user_agent=user_agent)
+    if result is None:
+        raise ValueError("Тест не найден")
+    return result
+
+
 def duplicate_test(
     uuid: str,
     created_by: int,
@@ -684,6 +713,42 @@ def _own_test_uuid(uuid: str, actor_id: int) -> None:
     found = storage.get_status_and_author(uuid)
     if found is None or found["created_by"] != actor_id:
         raise ValueError("Тест не найден")
+
+
+def create_my_new_version(
+    uuid: str, *, actor_id: int, actor_role: str = "psychologist",
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Новая версия СВОЕЙ методики (ADR-037): та же ownership-семантика 404,
+    что у дублирования; версия — черновик автора, публикует супервизор/админ."""
+    _own_test_uuid(uuid, actor_id)
+    return create_new_version(uuid, actor_id=actor_id, actor_role=actor_role,
+                              ip=ip, user_agent=user_agent)
+
+
+def correct_my_texts(
+    uuid: str, data: dict, *, actor_id: int, actor_role: str = "psychologist",
+    ip: Optional[str] = None, user_agent: Optional[str] = None,
+) -> dict:
+    """Исправление текстов СВОЕЙ методики: гейт как у правки (F2.1) — на
+    проверке нельзя, опубликованная снимается с публикации и уходит на
+    повторную модерацию (иначе автор менял бы видимый студентам текст в обход
+    проверки)."""
+    found = _own_updatable_test(uuid, actor_id)
+    payload = {k: v for k, v in data.items() if k != "expected_updated_at"}
+    try:
+        result = storage.correct_texts(
+            uuid, payload, actor_id=actor_id, actor_role=actor_role,
+            expected_updated_at=data["expected_updated_at"],
+            expected_status=found["status"],
+            unpublish_event=("test_unpublished_for_edit"
+                             if found["status"] == "published" else None),
+            ip=ip, user_agent=user_agent)
+    except TestStateChanged:
+        raise TestNotEditable("Методика изменилась — обновите страницу и повторите")
+    if result is None:
+        raise ValueError("Тест не найден")
+    return result
 
 
 def duplicate_my_test(

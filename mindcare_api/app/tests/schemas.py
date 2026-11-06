@@ -16,7 +16,7 @@ Pydantic-схемы модуля психодиагностики (Этап A �
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import field_validator, BaseModel, Field
 
 from app.tests.rules import ScoringRulesV1
 
@@ -230,6 +230,8 @@ class TestRead(BaseModel):
     shuffle_options:   bool
     scoring_rules:  Optional[dict] = None
     campaign_only:  bool = False
+    lineage_uuid:   Optional[str] = None       # ADR-037: общий для версий
+    superseded_at:  Optional[datetime] = None  # вышла новая опубликованная версия
     created_at:     datetime
     updated_at:     datetime
     created_by_name: Optional[str]
@@ -255,6 +257,9 @@ class TestListItem(BaseModel):
     # Токен версии для решений модерации (expected_updated_at): меняется при
     # каждой правке и смене статуса.
     updated_at:      Optional[datetime] = None
+    # ADR-037: вышла более новая опубликованная версия; «только по ссылке».
+    superseded_at:   Optional[datetime] = None
+    campaign_only:   bool = False
 
 
 class PaginatedTestsResponse(BaseModel):
@@ -272,6 +277,45 @@ class TestPendingCountOut(BaseModel):
 
 
 ModerationStatus = Literal["draft", "in_review", "needs_changes", "published"]
+
+
+class _TextOptionIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    option_order: int
+    option_text:  str = Field(min_length=1, max_length=2000)
+
+    @field_validator("option_text")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("пустой текст")
+        return v
+
+
+class _TextQuestionIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    question_order: int
+    question_text:  str = Field(min_length=1, max_length=5000)
+    options:        list[_TextOptionIn] = Field(default_factory=list)
+
+    @field_validator("question_text")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("пустой текст")
+        return v
+
+
+class TestTextsIn(BaseModel):
+    """ADR-037: исправление опечаток без смены структуры. Состав вопросов и
+    вариантов — ровно как в методике; меняются только тексты и инструкция
+    (ключ instruction не передан — не менять)."""
+    model_config = {"extra": "forbid"}
+    expected_updated_at: datetime
+    questions:   list[_TextQuestionIn] = Field(max_length=1000)
+    instruction: Optional[str] = Field(default=None, max_length=2000)
 
 
 class TestDecisionIn(BaseModel):
