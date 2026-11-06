@@ -170,6 +170,29 @@ def interpretations() -> list[dict]:
     return rows
 
 
+LEVEL_CODES: tuple[str, ...] = ("low", "norm", "accent", "maladaptive")
+
+
+def scoring_rules() -> dict:
+    """Правила обработки ИТО как данные (ADR-037, ScoringRulesV1). Порядок шкал —
+    порядок выгрузки заказчика; основные — I–VIII."""
+    main = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII"}
+    return {
+        "version": 1,
+        "instruction": INSTRUCTION,
+        "scales": [{"code": s, "label": SCALE_LABELS[s], "main": s in main}
+                   for s in EXPORT_SCALE_ORDER],
+        "levels": [{"code": code, "label": label, "min": lo, "max": hi}
+                   for code, (lo, hi, label) in zip(LEVEL_CODES, LEVELS)],
+        "validity": {"scales": [{"code": s, "max_valid": VALIDITY_LIMIT}
+                                for s in VALIDITY_SCALES],
+                     "invalid_mark": INVALID_MARK},
+        "types": {"threshold": TYPE_THRESHOLD,
+                  "items": [{"name": name, "scales": list(scales)}
+                            for name, scales in TYPES]},
+    }
+
+
 def questions() -> list[dict]:
     """91 вопрос «Да/Нет»: значимый вариант — value_score 1, другой — 0;
     1 и 91 — без шкалы (оба варианта 0)."""
