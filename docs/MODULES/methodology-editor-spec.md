@@ -120,7 +120,7 @@
 | Типы | Название, Шкалы (через запятую), Порог | порог одинаков для всех строк |
 
 **Эндпоинты** (admin/supervisor — `/api/admin/tests`, психолог — `/api/psychologist/tests`):
-- `GET /methodology-template.xlsx` — пустой шаблон и лист «Пример» с ИТО;
+- `GET /methodology-template.xlsx` — пустой шаблон с листом «Как заполнить» (пример заполнения — выгрузка ИТО);
 - `GET /{uuid}/methodology.xlsx` — методика в шаблоне;
 - `POST /import?dry_run=true` multipart → `{ok, errors: [{sheet, row, column, message}], summary: {questions, scales, levels, types}}`;
 - `POST /import` → `TestRead` черновика, событие `test_imported`.
@@ -156,6 +156,6 @@
 | 1 | ADR-037, это ТЗ | ✅ 2026-11-06 |
 | 2 | Миграция, `ScoringRulesV1`, `rules.py`, перенос ИТО, analytics/export на rules, `rule_summary`, эталонный тест | ✅ 2026-11-06: миграция `b6d2e8f4a1c3`; `tests/test_scoring_rules.py`, `test_campaign_golden_ito.py` (эталон `tests/fixtures/ito_campaign_golden.json`), `integration/test_rule_summary_results.py`, gated `test_methodology_rules_migration.py`. API результатов кампании: `profile` → `has_rules`/`has_validity`/`levels[{tone}]`/`validity_title`/`type_threshold` |
 | 3 | UI «Правила обработки», `campaign_only`, analyze/preview, выбор методики кампании | ✅ 2026-11-06: `RulesBuilder`, `lib/rulesShape`; API `rule_issues`, preview `levels`/`rule_summary`; 422 при публикации/отправке с несогласованными правилами; `TestCampaignOnly` снят досрочно (вместо него `TestUsedByCampaigns` на удаление); буферный вопрос без шкалы (все варианты 0) разрешён — иначе ИТО не сохранялся в конструкторе. Демо: миграция применена, сервис перезапущен |
-| 4 | Новая версия, `superseded_at`, исправление текстов, снятие `TestCampaignOnly` | |
-| 5 | Шаблон, импорт с проверкой, выгрузка методики, UI импорта | |
-| 6 | Handoff, CLAUDE.md, деплой на демо, руководство (по согласию) | |
+| 4 | Новая версия, `superseded_at`, исправление текстов, снятие `TestCampaignOnly` | ✅ 2026-11-06: `test_methodology_versions_api.py`; UI — «Новая версия», «Сохранить только тексты», бейджи версии |
+| 5 | Шаблон, импорт с проверкой, выгрузка методики, UI импорта | ✅ 2026-11-06: `methodology_xlsx.py`, `test_methodology_import_api.py` (туда-обратно ИТО), `MethodologyImportDialog`. Отдельного листа «Пример» нет — пример = выгрузка ИТО |
+| 6 | Handoff, CLAUDE.md, деплой на демо, руководство (по согласию) | ✅ 2026-11-06: `docs/HANDOFFS/2026-11-06-methodology-editor.md`, демо обновлено; руководство заказчика — по запросу |

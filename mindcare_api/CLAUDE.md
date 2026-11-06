@@ -948,6 +948,27 @@ cleanup_orphan_attachments, test_smtp), `db/sql/` (legacy bootstrap-схема).
    status в generic PATCH психолога (переходы — только через
    submit-for-review/publish/return/duplicate); has_results-проверка в
    update_my_test ДОСТИЖИМА начиная с F2.1 — не считать её мёртвым кодом
+✅ ADR-037: правила обработки — `tests.scoring_rules` (ScoringRulesV1,
+   `app/tests/rules.py`, чистые функции). `analytics`/`export` кампаний берут
+   правила ТЕСТА ЭТОЙ КАМПАНИИ; `scoring_profile` код не читает. Снимок
+   `{is_valid, types}` — `test_results.rule_summary` при submit; отдаётся только
+   в staff-детали (`StaffResultRead`), студенту — нет. Согласованность правил с
+   вопросами (`rules.check_against_bounds`) — предупреждение в analyze, 422 при
+   submit-for-review/publish (под той же блокировкой). После результатов
+   правила не меняются (409; то же значение — можно). Буферный вопрос без
+   шкалы (все варианты 0) допустим
+✅ ADR-037: версии — `lineage_uuid` + `version`; `new-version` блокирует строки
+   линии FOR UPDATE, одна неопубликованная версия на линию (409); публикация
+   ставит прежним `superseded_at` — гейт каталога (find_active_tests,
+   get_active_test_full, save_result) и выбора методики кампании включает
+   `superseded_at IS NULL`. `PATCH …/texts` — только тексты и инструкция,
+   состав сверяется под FOR UPDATE; психолог — гейт как у правки (F2.1)
+✅ ADR-037: импорт xlsx (`methodology_xlsx.py`) — только черновик через
+   TestCreate + `_normalize`, ошибки «лист/строка/колонка» без значений ячеек,
+   ≤ 2 МБ, zip-сигнатура, openpyxl read_only/data_only; файл не сохраняется.
+   Маршруты шаблона/импорта объявлены ДО `/{uuid}`
+❌ Не возвращать код-профили методик (if profile == …): новая методика — данные
+❌ Не отдавать `rule_summary`/типы студенту без отдельного решения
 ✅ Health (2026-11-02): публичный `/api/health` — только `{"status"}` (200 ok /
    503 unavailable, no-store); подробности — `/api/admin/health`
    (require_role admin, при сбое только класс исключения). Скрипты запуска и
@@ -1042,7 +1063,8 @@ docstring файла миграции (`alembic/versions/<rev>_*.py`); поря�
 | `eb1460dc4954` | add_assignments (ADR-033): `assignments` (uuid UNIQUE, `engagement_id` FK CASCADE, `text_enc` TEXT NOT NULL только `enc:v1:`, `due_date` DATE NULL, `article_id` FK→articles RESTRICT NULL, `status` active/completed/cancelled + CHECK согласованности `completed_at`/`cancelled_at`, created_at/updated_at; индексы `(engagement_id, created_at)`, partial `(engagement_id) WHERE status='active'`, `(article_id)`). Backfill нет. Downgrade fail-closed при наличии строк |
 | `ffd5e761b87b` | add_material_favorites (ADR-034): `material_favorites` (PK user_id+article_id, FK users/articles CASCADE, created_at; индексы `(user_id, created_at)`, `(article_id)`). Backfill нет. Downgrade fail-closed при наличии строк |
 | `d0ee44dc2527` | add_article_moderation (ADR-034): `articles.status` (draft/in_review/needs_changes/published, NOT NULL default draft, CHECK), `review_comment_enc` (только `enc:v1:`), CHECK `ck_articles_status_published` (published ⇔ is_published), индекс `ix_articles_status`; backfill опубликованных → published. Downgrade fail-closed при статьях в модерации |
-| `a3e7c1f9d5b2` | add_test_campaigns (ADR-036): `tests.scoring_profile` (NULL \| `ito_sobchik`, CHECK) и `tests.campaign_only` (NOT NULL default false); `test_campaigns` (test_id RESTRICT, title, status open/closed + closed_at CHECK, `link_token_hash` SHA-256 hex UNIQUE + `link_token_enc` только `enc:v1:`, created_by SET NULL); `campaign_responses` (campaign_id CASCADE, `submission_key` UNIQUE в кампании, test_version, `full_name_enc` только `enc:v1:`, faculty_code, specialty не пустая, age 14..100, gender male/female, consent_record_id RESTRICT UNIQUE); `campaign_response_scales` / `campaign_response_answers` (CASCADE от ответа, RESTRICT на questions/options). Backfill нет. Downgrade fail-closed при кампаниях или помеченных тестах — **head** |
+| `a3e7c1f9d5b2` | add_test_campaigns (ADR-036): `tests.scoring_profile` (NULL \| `ito_sobchik`, CHECK) и `tests.campaign_only` (NOT NULL default false); `test_campaigns` (test_id RESTRICT, title, status open/closed + closed_at CHECK, `link_token_hash` SHA-256 hex UNIQUE + `link_token_enc` только `enc:v1:`, created_by SET NULL); `campaign_responses` (campaign_id CASCADE, `submission_key` UNIQUE в кампании, test_version, `full_name_enc` только `enc:v1:`, faculty_code, specialty не пустая, age 14..100, gender male/female, consent_record_id RESTRICT UNIQUE); `campaign_response_scales` / `campaign_response_answers` (CASCADE от ответа, RESTRICT на questions/options). Backfill нет. Downgrade fail-closed при кампаниях или помеченных тестах |
+| `b6d2e8f4a1c3` | methodology_rules_as_data (ADR-037): `tests.scoring_rules` JSONB NULL (ScoringRulesV1), `tests.lineage_uuid` UUID NOT NULL (backfill = uuid, индекс), `tests.superseded_at`, `test_results.rule_summary` JSONB NULL; CHECK `ck_tests_scoring_profile` снят; ИТО получает правила data-миграцией. Downgrade fail-closed при правилах без профиля, версиях одной методики или снимках — **head** |
 
 **Ключевые таблицы:**
 
@@ -1103,7 +1125,7 @@ generic paired events), но несут непересекающуюся инф�
 | `audit_log` | Семантические события: **кто** (actor: `user_id`/`user_role`), **над чем** (target: `entity_type`/`entity_id`), **с каким исходом** (`outcome`/`failure_reason_code`). Четыре Stage 6 generic paired events (`meeting_type_updated`, `group_session_updated`, `admin_user_updated`, `unregistered_student_card_updated`) пишут `metadata={}` и получают field-level дополнение через `data_change_log`. Некоторые ДРУГИЕ semantic-события несут минимизированную allowlisted metadata (например `profile_updated.metadata.fields` — имена self-profile полей `users.full_name`/`users.phone`, `admin_role_add/remove/update.metadata` — role diff) | Plaintext content; произвольные ПДн в metadata (только явно allowlisted значения) |
 | `data_change_log` | Минимизированный field-level журнал для четырёх generic UPDATE-потоков: **имена каких allowlisted полей** изменились (значения — только per-field opt-in для нечувствительных enum/bool/int; name-only поле может обозначать ПДн, но само значение не копируется) | Семантика действия (она в `audit_log`); значения по умолчанию; свободный текст; ПДн-значения |
 
-**Event REGISTRY: 152 события** (`AUTH_LOG=7`, `AUDIT_LOG=145`; ADR-036 добавил `test_campaign_renamed` (дополнение 2026-11-06, {supervisor}, ATOMIC/RAISE),
+**Event REGISTRY: 155 событий** (`AUTH_LOG=7`, `AUDIT_LOG=148`; ADR-037 добавил `test_version_created`/`test_texts_corrected`/`test_imported` ({admin,supervisor,psychologist}, ATOMIC/RAISE, metadata пустая); ADR-036 добавил `test_campaign_renamed` (дополнение 2026-11-06, {supervisor}, ATOMIC/RAISE),
 `campaign_results_read` ({supervisor}, INDEPENDENT/RAISE — экран результатов
 кампании с ФИО и баллами), а также
 `campaign_response_submitted` — первое событие `audit_log` с анонимным актором

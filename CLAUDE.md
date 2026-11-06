@@ -3,6 +3,17 @@
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
 Актуальный handoff (ветка `mindcare_vb`):
+`docs/HANDOFFS/2026-11-06-methodology-editor.md` — общий редактор методик
+(**ADR-037**, миграция `b6d2e8f4a1c3`, REGISTRY 152 → 155): правила обработки
+(шкалы, уровни, достоверность, типы, инструкция) — данные теста
+`tests.scoring_rules` для каталога и тестирования по ссылке (снимок
+`test_results.rule_summary` — только staff); раздел «Правила обработки» в
+конструкторе; версии методики (`new-version`, `superseded_at`) и исправление
+опечаток (`PATCH …/texts`); импорт/выгрузка методики в шаблоне xlsx
+(`app/tests/methodology_xlsx.py`, всегда черновик). ТЗ —
+`docs/MODULES/methodology-editor-spec.md`. **Деплой: `alembic upgrade head`.**
+
+Предыдущий handoff (ветка `mindcare_vb`):
 `docs/HANDOFFS/2026-11-04-test-campaigns-ito.md` — тестовые кампании по
 публичной ссылке без аккаунта (**ADR-036**, миграция `a3e7c1f9d5b2`, REGISTRY
 141 → 152, новая зависимость `openpyxl`): ИТО Собчик (ключ методички с
