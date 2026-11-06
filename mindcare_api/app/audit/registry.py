@@ -322,6 +322,15 @@ for _op in ("created", "updated", "deleted"):
 for _op in ("created", "updated", "deleted"):
     _ALL.append(_audit_ok(f"test_{_op}", {"admin", "supervisor", "psychologist"}, "test"))
 _ALL.append(_audit_ok("test_duplicated", {"admin", "supervisor", "psychologist"}, "test"))
+# ADR-037: методики как данные. ATOMIC/RAISE, target — новая/исправленная
+# методика, metadata пустая (ни текстов, ни имени файла импорта).
+#   test_version_created — новая версия методики (копия с общим lineage_uuid);
+#   test_texts_corrected — исправление опечаток в текстах без смены структуры;
+#   test_imported        — черновик методики из шаблона xlsx.
+_ALL += [
+    _audit_ok(f"test_{_op}", {"admin", "supervisor", "psychologist"}, "test")
+    for _op in ("version_created", "texts_corrected", "imported")
+]
 
 # ── AUDIT_LOG: психодиагностика (student) ────────────────────────────────────
 _ALL += [
