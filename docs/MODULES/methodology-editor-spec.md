@@ -154,7 +154,7 @@
 | № | Содержание | Статус |
 |---|---|---|
 | 1 | ADR-037, это ТЗ | ✅ 2026-11-06 |
-| 2 | Миграция, `ScoringRulesV1`, `rules.py`, перенос ИТО, analytics/export на rules, `rule_summary`, эталонный тест | |
+| 2 | Миграция, `ScoringRulesV1`, `rules.py`, перенос ИТО, analytics/export на rules, `rule_summary`, эталонный тест | ✅ 2026-11-06: миграция `b6d2e8f4a1c3`; `tests/test_scoring_rules.py`, `test_campaign_golden_ito.py` (эталон `tests/fixtures/ito_campaign_golden.json`), `integration/test_rule_summary_results.py`, gated `test_methodology_rules_migration.py`. API результатов кампании: `profile` → `has_rules`/`has_validity`/`levels[{tone}]`/`validity_title`/`type_threshold` |
 | 3 | UI «Правила обработки», `campaign_only`, analyze/preview, выбор методики кампании | |
 | 4 | Новая версия, `superseded_at`, исправление текстов, снятие `TestCampaignOnly` | |
 | 5 | Шаблон, импорт с проверкой, выгрузка методики, UI импорта | |
