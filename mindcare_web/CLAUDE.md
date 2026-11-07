@@ -51,6 +51,12 @@ HTTP-вызовы), `features/` (домены), `components/UI/` (shared-при�
    черновик); супервизор — `/supervisor/campaigns` (`useCampaigns`,
    `useCampaignResponses`, `CampaignCard`). ФИО, ответы и токен ссылки не логировать;
    ключ методики (баллы/шкалы) на клиент не приходит и не вычисляется
+✅ Руководства пользователя (2026-11-07): источник — `help-src/*.md` (+ `img/`,
+   `template.html`, `help.css`), сборка `bash scripts/build_help.sh` (pandoc +
+   chromium) → `public/help/<guide>.html` и `.pdf` (результат коммитится). Кнопка
+   «Справка» — только `components/HelpButton` (`guide` + `section` = id раздела
+   `{#…}` в md, новая вкладка). Изменили экран из руководства — обновите текст и
+   снимок и пересоберите справку
 ❌ Не добавлять fetch в components/ или pages/ напрямую
 ❌ Не фильтровать items на клиенте если список из БД
 ❌ Не использовать data/ как постоянный источник данных

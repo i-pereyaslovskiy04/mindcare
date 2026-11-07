@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getCampaign } from '../../api/campaigns.api';
 import Icon from '../../components/Icon/Icon';
 import Button from '../../components/UI/Button/Button';
 import HelpButton from '../../components/HelpButton/HelpButton';
+import useCampaign from '../../features/campaigns/hooks/useCampaign';
 import CampaignCard from '../../features/campaigns/ui/CampaignCard';
 import styles from './CampaignsPage.module.css';
 
@@ -15,19 +14,7 @@ import styles from './CampaignsPage.module.css';
 export default function SupervisorCampaignPage() {
   const { uuid } = useParams();
   const navigate = useNavigate();
-  const [campaign, setCampaign] = useState(null);
-  const [error, setError] = useState(null);
-
-  const load = useCallback(() => {
-    setError(null);
-    getCampaign(uuid)
-      .then(setCampaign)
-      .catch((err) => setError(err?.status === 404
-        ? 'Кампания не найдена — возможно, её удалили.'
-        : err?.message || 'Не удалось загрузить кампанию'));
-  }, [uuid]);
-
-  useEffect(() => { setCampaign(null); load(); }, [load]);
+  const { data: campaign, error, refetch, setData: setCampaign } = useCampaign(uuid);
 
   return (
     <div className={styles.page}>
@@ -40,7 +27,7 @@ export default function SupervisorCampaignPage() {
       {error && (
         <div className={styles.errorRow}>
           <p className={styles.error} role="alert">{error}</p>
-          <Button type="button" variant="secondary" onClick={load}>Повторить</Button>
+          <Button type="button" variant="secondary" onClick={refetch}>Повторить</Button>
         </div>
       )}
       {!error && !campaign && <p className={styles.muted} role="status">Загрузка…</p>}

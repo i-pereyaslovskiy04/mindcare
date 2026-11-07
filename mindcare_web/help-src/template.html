@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title$ — Психологическая служба ДонГУ</title>
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Психология ДонГУ · Справка</a>
+  <nav class="actions">
+$if(pdf)$
+    <a class="btn" href="$pdf$" download>Скачать PDF</a>
+$endif$
+    <button class="btn ghost" type="button" onclick="window.print()">Печать</button>
+  </nav>
+</header>
+<main>
+<div class="titleblock">
+  <h1>$title$</h1>
+$if(subtitle)$
+  <p class="subtitle">$subtitle$</p>
+$endif$
+$if(audience)$
+  <p class="audience">$audience$</p>
+$endif$
+  <p class="updated">Платформа MindCare · обновлено $date$</p>
+</div>
+$if(toc)$
+<nav class="toc" aria-label="Содержание">
+<h2>Содержание</h2>
+$table-of-contents$
+</nav>
+$endif$
+$body$
+</main>
+<footer class="foot">Центр психологической помощи ДонГУ · psychology.center@donnu.ru</footer>
+</body>
+</html>

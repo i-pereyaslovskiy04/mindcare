@@ -127,7 +127,7 @@ export default function MethodologyImportDialog({ open, onClose, onCreated, base
           {report?.ok && summary && (
             <div className={styles.ok}>
               <p>
-                Файл в порядке: <b>{summary.title}</b> — вопросов {summary.questions},
+                Файл в порядке: <b>{summary.title}</b> — вопросов {summary.questions},{' '}
                 {summary.options != null
                   ? `вариантов ответа ${summary.options}`
                   : `наборов вариантов ответа ${summary.option_sets}`}, шкал {summary.scales}, уровней {summary.levels},
