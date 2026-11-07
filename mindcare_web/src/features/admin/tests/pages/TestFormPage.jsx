@@ -110,7 +110,9 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
   const [duplicating, setDuplicating] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   // ADR-037: версия методики (номер, заменена ли) и токен для «исправить тексты».
-  const [meta, setMeta] = useState({ version: 1, superseded: false, updatedAt: null, count: 0 });
+  const [meta, setMeta] = useState({
+    version: 1, superseded: false, updatedAt: null, count: 0, hasResults: false, campaignsCount: 0,
+  });
   const [versioning, setVersioning] = useState(false);
   const [savingTexts, setSavingTexts] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -171,6 +173,9 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
           superseded: Boolean(t.superseded_at),
           updatedAt: t.updated_at,
           count: questions.length,
+          // Известно сразу при открытии: правка структуры — только новой версией.
+          hasResults: Boolean(t.has_results),
+          campaignsCount: t.campaigns_count || 0,
         });
         loadedInterpsRef.current   = snapshotInterps(interpretations);
         const rules = fromBackendRules(t.scoring_rules, nextKey);
@@ -354,16 +359,32 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
         </div>
       )}
 
-      {locked && effectiveConfig.showDuplicate && (
-        <div className={styles.lockedNotice} role="alert">
-          <p className={styles.lockedText}>
-            По этой методике уже есть результаты, поэтому её вопросы, баллы и
-            правила обработки изменить нельзя - иначе прежние ответы потеряли бы
-            смысл. Создайте новую версию: она сохранится черновиком, а после
-            публикации заменит текущую в каталоге и новых тестированиях (прежние
-            результаты останутся на своей версии). Опечатки в текстах можно
-            исправить и без новой версии.
+      {(locked || meta.hasResults) && effectiveConfig.showDuplicate && (
+        <div className={locked ? styles.lockedNotice : `${styles.lockedNotice} ${styles.lockedSoft}`}
+          role={locked ? 'alert' : 'note'}>
+          <p className={styles.lockedTitle}>
+            По этой методике уже есть ответы
+            {meta.campaignsCount > 0 && ` · используется в кампаниях: ${meta.campaignsCount}`}
           </p>
+          <p className={styles.lockedText}>
+            Вопросы, баллы и правила обработки этой версии не меняются — иначе прежние
+            ответы потеряли бы смысл. Что можно сделать:
+          </p>
+          <ul className={styles.lockedList}>
+            <li>
+              <b>Исправить опечатку</b> в вопросе, варианте ответа или инструкции — поправьте
+              текст ниже и нажмите «Сохранить только тексты».
+            </li>
+            <li>
+              <b>Изменить вопросы, баллы или правила</b> — «Создать новую версию»: откроется
+              копия-черновик. После публикации она заменит текущую в каталоге и новых
+              кампаниях; прежние кампании и результаты останутся на этой версии.
+            </li>
+            <li>
+              <b>Название, описание, видимость</b> — правьте как обычно и нажмите
+              «Сохранить изменения».
+            </li>
+          </ul>
           <div className={styles.lockedActions}>
             {effectiveConfig.newVersionFn ? (
               <Button variant="primary" onClick={handleNewVersion} loading={versioning}>
@@ -380,6 +401,13 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
               </Button>
             )}
           </div>
+        </div>
+      )}
+
+      {isEdit && !meta.hasResults && !locked && meta.campaignsCount > 0 && (
+        <div className={styles.infoNotice} role="note">
+          Методика выбрана в кампаниях: {meta.campaignsCount}. Ответов пока нет, поэтому
+          правки сразу применятся и к этим кампаниям.
         </div>
       )}
 

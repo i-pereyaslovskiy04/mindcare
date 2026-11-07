@@ -5,7 +5,7 @@ import TestsTable from '../../../features/admin/tests/components/TestsTable';
 import TestPreviewModal from '../../../features/admin/tests/components/TestPreviewModal';
 import { fromBackendQuestion } from '../../../features/admin/tests/lib/testShape';
 import {
-  deleteMyTest, getMyTest, submitTestForReview, previewMyScore,
+  createMyNewVersion, deleteMyTest, getMyTest, submitTestForReview, previewMyScore,
   MY_TESTS_BASE,
 } from '../../../api/tests.api';
 import Select from '../../../components/UI/Select/Select';
@@ -130,6 +130,21 @@ export default function PsychologistTestsPage() {
     setEditWarnTarget(null);
   }
 
+  const [versioningUuid, setVersioningUuid] = useState(null);
+
+  async function handleNewVersion(item) {
+    if (versioningUuid) return;
+    setActionError('');
+    setVersioningUuid(item.uuid);
+    try {
+      const next = await createMyNewVersion(item.uuid);
+      navigate(`/psychologist/tests/${next.uuid}`);
+    } catch (err) {
+      setActionError(err.message || 'Не удалось создать новую версию');
+      setVersioningUuid(null);
+    }
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -143,6 +158,11 @@ export default function PsychologistTestsPage() {
           </Button>
         </div>
       </div>
+      <p className={styles.hint}>
+        Если по методике уже есть ответы (значок «Есть ответы»), вопросы, баллы и правила
+        меняются через «⋮» → «Новая версия»; опечатки исправляются в форме кнопкой
+        «Сохранить только тексты».
+      </p>
       <MethodologyImportDialog
         open={importOpen}
         base={MY_TESTS_BASE}
@@ -174,11 +194,12 @@ export default function PsychologistTestsPage() {
         loading={loading}
         error={error}
         context="author"
-        pending={{ preview: previewLoadingUuid, submit: submittingUuid }}
+        pending={{ preview: previewLoadingUuid, submit: submittingUuid, new_version: versioningUuid }}
         onPreview={handlePreview}
         onEdit={handleEditClick}
         onDelete={(item) => { setDeleteTarget(item); setDeleteError(''); }}
         onSubmitForReview={handleSubmitForReview}
+        onNewVersion={handleNewVersion}
       />
 
       {pageCount > 1 && (

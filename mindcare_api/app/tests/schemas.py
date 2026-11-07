@@ -232,6 +232,10 @@ class TestRead(BaseModel):
     campaign_only:  bool = False
     lineage_uuid:   Optional[str] = None       # ADR-037: общий для версий
     superseded_at:  Optional[datetime] = None  # вышла новая опубликованная версия
+    # Подсказки интерфейса: есть ответы (правка структуры — новой версией) и
+    # число кампаний, где выбрана методика.
+    has_results:    bool = False
+    campaigns_count: int = 0
     created_at:     datetime
     updated_at:     datetime
     created_by_name: Optional[str]
@@ -260,6 +264,8 @@ class TestListItem(BaseModel):
     # ADR-037: вышла более новая опубликованная версия; «только по ссылке».
     superseded_at:   Optional[datetime] = None
     campaign_only:   bool = False
+    has_results:     bool = False
+    campaigns_count: int = 0
 
 
 class PaginatedTestsResponse(BaseModel):

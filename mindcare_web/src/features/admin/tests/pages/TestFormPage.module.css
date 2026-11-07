@@ -156,3 +156,37 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Предупреждение «есть ответы» — заголовок и варианты действий. */
+.lockedTitle {
+  margin: 0;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.lockedList {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  line-height: 1.45;
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.infoNotice {
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--on-surface);
+  background: var(--warm-white);
+}
+
+/* Показано заранее (а не после отказа сохранения) — без цвета ошибки. */
+.lockedSoft {
+  background: var(--warm-white);
+  border-color: var(--nav-border);
+}

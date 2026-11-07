@@ -130,3 +130,19 @@ test('без обработчика действие не показываетс
   expect(summary(getTestActions(test_('published'), { context: 'moderator', ...rest })).menu)
     .toEqual(['Предпросмотр', 'Удалить']);
 });
+
+
+test('«Новая версия» — только опубликованной последней версии с ответами и при обработчике', () => {
+  const onNewVersion = jest.fn();
+  const labels = (extra, ctx = 'moderator', h = moderatorHandlers()) => getTestActions(
+    test_('published', extra), { context: ctx, ...h, onNewVersion },
+  ).menu.map((a) => a.label);
+  expect(labels({ has_results: true })).toContain('Новая версия');
+  expect(labels({ has_results: false })).not.toContain('Новая версия');
+  expect(labels({ has_results: true, superseded_at: '2026-11-01' })).not.toContain('Новая версия');
+  expect(labels({ has_results: true }, 'author', authorHandlers())).toContain('Новая версия');
+  const { menu } = getTestActions(test_('published', { has_results: true }),
+    { context: 'moderator', ...moderatorHandlers(), onNewVersion });
+  menu.find((a) => a.label === 'Новая версия').onSelect();
+  expect(onNewVersion).toHaveBeenCalled();
+});

@@ -18,6 +18,10 @@
  *   - «Удалить» — draft и needs_changes. На проверке (in_review) решение не
  *     за автором (ADR-016): ни правки, ни удаления.
  *
+ * «Новая версия» (ADR-037) — обоим контекстам, если передан onNewVersion:
+ * опубликованная последняя версия, по которой уже есть ответы (её вопросы и
+ * правила меняются только так).
+ *
  * Основное действие — кнопкой, остальные — в меню «⋮»:
  *   moderator: in_review — «Опубликовать» (решение по очереди модерации),
  *              иначе «Редактировать»;
@@ -34,6 +38,7 @@ export const AUTHOR_DELETABLE_STATUSES = ['draft', 'needs_changes'];
 export function getTestActions(test, {
   context, pending = {},
   onPreview, onEdit, onDelete, onPublish, onReturn, onSubmitForReview, onToggleActive,
+  onNewVersion,
 }) {
   const { status } = test;
   const isModerator = context === 'moderator';
@@ -53,6 +58,8 @@ export function getTestActions(test, {
       : action('toggle', 'Показать в каталоге', onToggleActive, { tone: 'success' })),
     (isModerator || (isAuthor && AUTHOR_EDITABLE_STATUSES.includes(status)))
       && action('edit', 'Редактировать', onEdit),
+    test.has_results && status === 'published' && !test.superseded_at
+      && action('new_version', 'Новая версия', onNewVersion),
     (isModerator || (isAuthor && AUTHOR_DELETABLE_STATUSES.includes(status)))
       && action('delete', 'Удалить', onDelete, { tone: 'danger' }),
   ].filter(Boolean);

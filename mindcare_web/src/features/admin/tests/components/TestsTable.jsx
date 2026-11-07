@@ -53,9 +53,11 @@ function Types({ item }) {
 export default function TestsTable({
   items, loading, error, context, pending,
   onPreview, onEdit, onDelete, onPublish, onReturn, onSubmitForReview, onToggleActive,
+  onNewVersion,
 }) {
   const actionsOf = (item) => getTestActions(item, {
     context, pending, onPreview, onEdit, onDelete, onPublish, onReturn, onSubmitForReview, onToggleActive,
+    onNewVersion,
   });
 
   return (
@@ -95,6 +97,11 @@ export default function TestsTable({
             {item.version > 1 && <Badge tone="neutral">{`Версия ${item.version}`}</Badge>}
             {item.superseded_at && <Badge tone="warning">Заменена новой версией</Badge>}
             {item.campaign_only && <Badge tone="neutral">Только по ссылке</Badge>}
+            {/* Где используется: с ответами вопросы меняются только новой версией. */}
+            {item.has_results && <Badge tone="neutral">Есть ответы</Badge>}
+            {item.campaigns_count > 0 && (
+              <Badge tone="neutral">{`В кампаниях: ${item.campaigns_count}`}</Badge>
+            )}
           </>
         ),
       }}

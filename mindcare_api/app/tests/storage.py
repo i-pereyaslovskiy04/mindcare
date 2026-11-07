@@ -167,6 +167,17 @@ def _interpretation_to_dict(i: TestInterpretation) -> dict:
     }
 
 
+def _usage(test_id: int, db) -> dict:
+    """Где используется методика (для подсказок интерфейса): есть ли ответы
+    (тогда вопросы, баллы и правила меняются только новой версией) и в скольких
+    кампаниях она выбрана."""
+    return {
+        "has_results": has_results(test_id, db),
+        "campaigns_count": db.query(func.count(TestCampaign.id))
+        .filter(TestCampaign.test_id == test_id).scalar() or 0,
+    }
+
+
 def _test_to_dict(test: Test, db) -> dict:
     questions = sorted(test.questions, key=lambda q: q.question_order)
     interpretations = sorted(
@@ -197,6 +208,7 @@ def _test_to_dict(test: Test, db) -> dict:
         "tags":            _tags_of(test.id, db),
         "questions":       [_question_to_dict(q) for q in questions],
         "interpretations": [_interpretation_to_dict(i) for i in interpretations],
+        **_usage(test.id, db),
     }
 
 
@@ -358,6 +370,7 @@ def find_tests(
                 "created_by_name": _author_name(t.created_by, db),
                 "updated_at":      t.updated_at,
                 "superseded_at":   t.superseded_at,     # ADR-037
+                **_usage(t.id, db),
                 "campaign_only":   bool(t.campaign_only),
             })
     return items, total
@@ -410,6 +423,7 @@ def find_my_tests(
                 "created_by_name": _author_name(t.created_by, db),
                 "updated_at":      t.updated_at,
                 "superseded_at":   t.superseded_at,     # ADR-037
+                **_usage(t.id, db),
                 "campaign_only":   bool(t.campaign_only),
             })
     return items, total

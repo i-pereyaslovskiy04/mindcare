@@ -118,7 +118,7 @@ test('409 объясняет запрет и предлагает новую в�
   userEvent.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
 
   const notice = await screen.findByRole('alert');
-  expect(notice).toHaveTextContent(/вопросы, баллы и правила обработки изменить нельзя/i);
+  expect(notice).toHaveTextContent(/Вопросы, баллы и правила обработки этой версии не меняются/);
 
   userEvent.click(screen.getByRole('button', { name: 'Создать новую версию' }));
   await waitFor(() => expect(testsApi.createNewVersion).toHaveBeenCalledWith(TEST_UUID));
@@ -231,4 +231,23 @@ test('снятие галочки правил отправляет scoring_rule
   await waitFor(() => expect(testsApi.updateTest).toHaveBeenCalled());
   const [, payload] = testsApi.updateTest.mock.calls[0];
   expect(payload.scoring_rules).toBeNull();
+});
+
+
+test('есть ответы — подсказка с вариантами видна сразу при открытии', async () => {
+  testsApi.getAdminTest.mockResolvedValue({
+    ...loadedTest, status: 'published', has_results: true, campaigns_count: 2,
+  });
+  renderPage();
+  const note = await screen.findByRole('note');
+  expect(note).toHaveTextContent('По этой методике уже есть ответы · используется в кампаниях: 2');
+  expect(note).toHaveTextContent(/Исправить опечатку/);
+  expect(screen.getByRole('button', { name: 'Создать новую версию' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Сохранить только тексты' })).toBeInTheDocument();
+});
+
+test('в кампаниях без ответов — предупреждение, что правки применятся к ним', async () => {
+  testsApi.getAdminTest.mockResolvedValue({ ...loadedTest, has_results: false, campaigns_count: 1 });
+  renderPage();
+  expect(await screen.findByRole('note')).toHaveTextContent(/правки сразу применятся и к этим кампаниям/);
 });

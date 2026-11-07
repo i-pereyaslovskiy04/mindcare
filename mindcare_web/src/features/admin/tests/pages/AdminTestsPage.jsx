@@ -5,7 +5,9 @@ import TestsTable from '../components/TestsTable';
 import TestPreviewModal from '../components/TestPreviewModal';
 import MethodologyImportDialog from '../components/MethodologyImportDialog';
 import { fromBackendQuestion } from '../lib/testShape';
-import { deleteTest, getAdminTest, publishTest, returnTest, updateTest } from '../../../../api/tests.api';
+import {
+  createNewVersion, deleteTest, getAdminTest, publishTest, returnTest, updateTest,
+} from '../../../../api/tests.api';
 import { notifyReviewQueueChanged } from '../../../moderation/lib/reviewQueueEvents';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
@@ -88,6 +90,20 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
   const [returnError, setReturnError]   = useState('');
 
   const pageCount = Math.ceil(total / 20);
+  const [versioningUuid, setVersioningUuid] = useState(null);
+
+  async function handleNewVersion(item) {
+    if (versioningUuid) return;
+    setActionError('');
+    setVersioningUuid(item.uuid);
+    try {
+      const next = await createNewVersion(item.uuid);
+      navigate(`${basePath}/${next.uuid}`);
+    } catch (err) {
+      setActionError(err.message || 'Не удалось создать новую версию');
+      setVersioningUuid(null);
+    }
+  }
 
   async function handlePreview(item) {
     if (previewLoadingUuid) return;
@@ -199,6 +215,11 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
           </Button>
         </div>
       </div>
+      <p className={styles.hint}>
+        Чтобы изменить методику, нажмите «Редактировать». Если по ней уже есть ответы
+        (значок «Есть ответы»), вопросы, баллы и правила меняются через «⋮» → «Новая
+        версия»; опечатки можно исправить прямо в форме кнопкой «Сохранить только тексты».
+      </p>
       <MethodologyImportDialog
         open={importOpen}
         onClose={() => setImportOpen(false)}
@@ -240,13 +261,17 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
         loading={loading}
         error={error}
         context="moderator"
-        pending={{ preview: previewLoadingUuid, publish: publishingUuid, toggle: togglingUuid }}
+        pending={{
+          preview: previewLoadingUuid, publish: publishingUuid, toggle: togglingUuid,
+          new_version: versioningUuid,
+        }}
         onPreview={handlePreview}
         onEdit={(item) => navigate(`${basePath}/${item.uuid}`)}
         onDelete={(item) => { setDeleteTarget(item); setDeleteError(''); }}
         onPublish={handlePublish}
         onReturn={openReturnDialog}
         onToggleActive={handleToggleActive}
+        onNewVersion={handleNewVersion}
       />
 
       {pageCount > 1 && (

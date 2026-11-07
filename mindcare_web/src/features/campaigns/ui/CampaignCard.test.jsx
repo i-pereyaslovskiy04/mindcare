@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import CampaignCard, { campaignLink, exportFilename } from './CampaignCard';
 import {
@@ -24,8 +25,12 @@ const CAMPAIGN = {
 function setup(overrides = {}) {
   const onChange = jest.fn();
   const onDeleted = jest.fn();
-  render(<CampaignCard campaign={{ ...CAMPAIGN, ...overrides }}
-    onChange={onChange} onDeleted={onDeleted} />);
+  render(
+    <MemoryRouter>
+      <CampaignCard campaign={{ ...CAMPAIGN, ...overrides }}
+        onChange={onChange} onDeleted={onDeleted} />
+    </MemoryRouter>,
+  );
   return { onChange, onDeleted };
 }
 
@@ -149,4 +154,10 @@ test('сроки и кодовое слово: сохранение и снят�
   await waitFor(() => expect(setCampaignSchedule).toHaveBeenCalledWith(
     'c-1', { opens_at: null, closes_at: null }));
   expect(onChange).toHaveBeenCalledTimes(3);
+});
+
+test('ссылка «Открыть методику» ведёт в редактор методики кампании', () => {
+  setup({ test_uuid: 't-1' });
+  expect(screen.getByRole('link', { name: 'Открыть методику' }))
+    .toHaveAttribute('href', '/supervisor/tests/t-1');
 });

@@ -6,6 +6,7 @@ import {
 import { saveBlobToDisk } from '../../../api/client';
 import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
+import ButtonLink from '../../../components/UI/Button/ButtonLink';
 import TextField from '../../../components/UI/TextField/TextField';
 import ConfirmDialog from '../../assignments/ui/ConfirmDialog';
 import CampaignAccessPanel from './CampaignAccessPanel';
@@ -249,6 +250,12 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
           loading={busy === 'status'}>
           {isOpen ? 'Закрыть' : 'Открыть снова'}
         </Button>
+        {campaign.test_uuid && (
+          <ButtonLink to={`/supervisor/tests/${campaign.test_uuid}`} variant="ghost"
+            title="Вопросы и правила обработки методики этой кампании">
+            Открыть методику
+          </ButtonLink>
+        )}
         <Button type="button" variant="ghost" onClick={startRename}
           disabled={draftTitle !== null}>
           Переименовать
