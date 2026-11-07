@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Button from '../../../components/UI/Button/Button';
+import HelpButton from '../../../components/HelpButton/HelpButton';
 import useCampaignForm from '../hooks/useCampaignForm';
 import usePublicCampaign from '../hooks/usePublicCampaign';
 import CampaignCodeStep from './CampaignCodeStep';
@@ -91,6 +92,7 @@ export default function PublicCampaign({ token }) {
       <div className={styles.wrap}>
         <header className={styles.header}>
           <p className={styles.kicker}>{data.test_title}</p>
+          <HelpButton guide="participant" variant="link" label="Как пройти тестирование" />
           <h1 ref={headingRef} tabIndex={-1} className={styles.title}>{data.title}</h1>
         </header>
         <CampaignCodeStep unlock={unlock} notice={form.submitError} />
@@ -105,6 +107,7 @@ export default function PublicCampaign({ token }) {
     <div className={styles.wrap}>
       <header className={styles.header}>
         <p className={styles.kicker}>{data.test_title}</p>
+          <HelpButton guide="participant" variant="link" label="Как пройти тестирование" />
         <h1 ref={headingRef} tabIndex={-1} className={styles.title}>{data.title}</h1>
         <p className={styles.step}>{stepLabel}</p>
         {closesAt && <p className={styles.kicker}>Пройти можно до {closesAt}</p>}

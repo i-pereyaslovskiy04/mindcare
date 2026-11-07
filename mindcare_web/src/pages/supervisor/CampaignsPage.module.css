@@ -68,3 +68,12 @@
 .back:focus-visible {
   color: var(--coffee);
 }
+
+/* Заголовок и «Справка» в одну строку. */
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}

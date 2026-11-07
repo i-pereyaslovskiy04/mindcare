@@ -10,6 +10,7 @@ import {
 } from '../../../api/tests.api';
 import Select from '../../../components/UI/Select/Select';
 import Button from '../../../components/UI/Button/Button';
+import HelpButton from '../../../components/HelpButton/HelpButton';
 import MethodologyImportDialog from '../../../features/admin/tests/components/MethodologyImportDialog';
 import styles from './PsychologistTestsPage.module.css';
 
@@ -150,6 +151,7 @@ export default function PsychologistTestsPage() {
       <div className={styles.header}>
         <h1 className={styles.title}>Мои тесты</h1>
         <div className={styles.headerActions}>
+          <HelpButton guide="methodologies" section="list" />
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
             Импорт из xlsx
           </Button>

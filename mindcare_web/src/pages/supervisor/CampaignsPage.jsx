@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import Button from '../../components/UI/Button/Button';
+import HelpButton from '../../components/HelpButton/HelpButton';
 import useCampaigns from '../../features/campaigns/hooks/useCampaigns';
 import CampaignCreateForm from '../../features/campaigns/ui/CampaignCreateForm';
 import CampaignsTable, { campaignPath } from '../../features/campaigns/ui/CampaignsTable';
@@ -19,7 +20,10 @@ export default function CampaignsPage() {
   return (
     <div className={styles.page}>
       <div className={styles.intro}>
-        <h1 className={styles.title}>Тестирование по ссылке</h1>
+        <div className={styles.titleRow}>
+          <h1 className={styles.title}>Тестирование по ссылке</h1>
+          <HelpButton guide="campaigns" />
+        </div>
         <p className={styles.muted}>
           Создайте кампанию и отправьте ссылку студентам: они проходят методику без
           регистрации, указав ФИО, факультет, специальность, возраст и пол. Результат

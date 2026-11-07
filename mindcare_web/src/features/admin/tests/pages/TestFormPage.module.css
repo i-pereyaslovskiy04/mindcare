@@ -190,3 +190,11 @@
   background: var(--warm-white);
   border-color: var(--nav-border);
 }
+
+/* «К списку тестов» слева, «Справка» справа. */
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}

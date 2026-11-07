@@ -11,6 +11,7 @@ import {
 import { notifyReviewQueueChanged } from '../../../moderation/lib/reviewQueueEvents';
 import Select from '../../../../components/UI/Select/Select';
 import Button from '../../../../components/UI/Button/Button';
+import HelpButton from '../../../../components/HelpButton/HelpButton';
 import styles from './AdminTestsPage.module.css';
 
 /**
@@ -207,6 +208,7 @@ export default function AdminTestsPage({ cabinetRole = 'admin' }) {
       <div className={styles.header}>
         <h1 className={styles.title}>Тесты</h1>
         <div className={styles.headerActions}>
+          <HelpButton guide="methodologies" section="list" />
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
             Импорт из xlsx
           </Button>

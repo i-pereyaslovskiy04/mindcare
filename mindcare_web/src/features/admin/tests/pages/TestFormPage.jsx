@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import HelpButton from '../../../../components/HelpButton/HelpButton';
 import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Select from '../../../../components/UI/Select/Select';
@@ -333,9 +334,12 @@ export default function TestFormPage({ config, cabinetRole = 'admin' }) {
 
   return (
     <div className={styles.page}>
-      <button className={styles.back} type="button" onClick={() => navigate(effectiveConfig.backPath)}>
-        <Icon name="chevron-left" size={14} /> К списку тестов
-      </button>
+      <div className={styles.topRow}>
+        <button className={styles.back} type="button" onClick={() => navigate(effectiveConfig.backPath)}>
+          <Icon name="chevron-left" size={14} /> К списку тестов
+        </button>
+        <HelpButton guide="methodologies" section={isEdit ? 'edit' : 'create'} />
+      </div>
 
       <h1 className={styles.title}>{isEdit ? 'Редактирование теста' : 'Новый тест'}</h1>
       {isEdit && (
