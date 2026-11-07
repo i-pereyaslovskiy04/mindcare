@@ -199,3 +199,44 @@ class CampaignResultsOut(BaseModel):
     total_all: int
     items: list[ResultRowOut]
     summary: ResultsSummaryOut
+
+
+# ── статистика (ТЗ редактора методик, этап 2, §7) ─────────────────────────────
+
+class StatDayOut(BaseModel):
+    date: str          # YYYY-MM-DD (Москва)
+    count: int
+
+
+class StatOptionOut(BaseModel):
+    text: str
+    count: int
+    percent: float
+
+
+class StatQuestionOut(BaseModel):
+    number: int
+    text: str
+    answered: int
+    options: list[StatOptionOut]
+
+
+class StatBinOut(BaseModel):
+    score: int
+    count: int
+
+
+class StatScaleOut(BaseModel):
+    scale: str
+    label: str
+    bins: list[StatBinOut]
+
+
+class CampaignStatisticsOut(BaseModel):
+    """Без ФИО. too_few — участников меньше min_group: распределений нет."""
+    total: int
+    min_group: int
+    too_few: bool
+    by_day: list[StatDayOut]
+    questions: list[StatQuestionOut]
+    scales: list[StatScaleOut]

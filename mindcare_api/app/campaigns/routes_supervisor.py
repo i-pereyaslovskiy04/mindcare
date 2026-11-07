@@ -27,6 +27,10 @@
   GET    /{uuid}/results ?faculty_code&gender&validity&type
                                      — первичная обработка: баллы, уровни,
                                        типы + сводка (fail-closed аудит);
+  GET    /{uuid}/statistics ?те же фильтры
+                                     — статистика без ФИО: по дням, по вопросам,
+                                       распределение баллов; меньше 5 участников —
+                                       без распределений (аудит как у results);
   GET    /{uuid}/export.xlsx         — выгрузка (fail-closed аудит до файла).
 Сбой обязательного аудита → 503 без данных (NoStoreRoute).
 """
@@ -40,7 +44,7 @@ from app.campaigns.schemas_supervisor import (
     CampaignAccessCodeIn, CampaignScheduleIn,
     CampaignCreateIn, CampaignDetailOut, CampaignListOut, CampaignRenameIn,
     CampaignResponseListOut,
-    CampaignResultsOut, CampaignStatusIn, CampaignTestOut,
+    CampaignResultsOut, CampaignStatisticsOut, CampaignStatusIn, CampaignTestOut,
 )
 from app.tests import rules as test_rules
 from app.core.no_store_route import NoStoreRoute
@@ -305,6 +309,32 @@ def get_results(
     }
 
 
+@router.get("/{campaign_uuid}/statistics", response_model=CampaignStatisticsOut)
+def get_statistics(
+    campaign_uuid: str,
+    request: Request,
+    faculty_code: Optional[str] = Query(default=None, max_length=64),
+    gender: Optional[Literal["male", "female"]] = Query(default=None),
+    validity: Optional[Literal["valid", "invalid"]] = Query(default=None),
+    type_name: Optional[str] = Query(default=None, alias="type", max_length=200),
+    current_user: dict = Depends(get_current_user),
+):
+    """Статистика по отфильтрованному набору (те же фильтры, что у results).
+    ФИО не загружаются и не отдаются; аудит campaign_results_read — до отдачи."""
+    ip, ua = _client(request)
+    try:
+        data = store.statistics_data(campaign_uuid, actor_id=_actor(current_user),
+                                     impersonator_id=current_user.get("impersonator_user_id"),
+                                     ip=ip, user_agent=ua)
+    except store.NotFound:
+        raise _not_found()
+    rules = data["rules"]
+    enriched = [analytics.enrich_row(r, rules) for r in data["rows"]]
+    rows = analytics.filter_rows(enriched, rules=rules, faculty_code=faculty_code,
+                                 gender=gender, validity=validity, type_name=type_name)
+    return analytics.statistics(rows, rules, data["questions"])
+
+
 @router.get("/{campaign_uuid}/export.xlsx")
 def export_xlsx(campaign_uuid: str, request: Request,
                 current_user: dict = Depends(get_current_user)):
@@ -316,7 +346,8 @@ def export_xlsx(campaign_uuid: str, request: Request,
     except store.NotFound:
         raise _not_found()
     content = export.build_workbook(rules=data["rules"], rows=data["rows"],
-                                    question_numbers=data["question_numbers"])
+                                    question_numbers=data["question_numbers"],
+                                    questions=data["questions"])
     filename = f"campaign_{data['campaign_uuid'][:8]}.xlsx"
     return Response(
         content=content, media_type=export.XLSX_MEDIA_TYPE,

@@ -139,6 +139,19 @@ export function getCampaignResults(uuid, filters = {}) {
   return apiFetch(`${SUPERVISOR_BASE}/${enc(uuid)}/results${query ? `?${query}` : ''}`);
 }
 
+/**
+ * GET статистики (без ФИО): { total, min_group, too_few, by_day, questions,
+ * scales }. Те же фильтры, что у getCampaignResults.
+ */
+export function getCampaignStatistics(uuid, filters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  const query = params.toString();
+  return apiFetch(`${SUPERVISOR_BASE}/${enc(uuid)}/statistics${query ? `?${query}` : ''}`);
+}
+
 /** GET xlsx → { blob, filename } */
 export function downloadCampaignResults(uuid) {
   return apiFetchBlob(`${SUPERVISOR_BASE}/${enc(uuid)}/export.xlsx`);

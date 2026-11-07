@@ -389,9 +389,10 @@ def delete_response(campaign_uuid, response_uuid, *, actor_id: int, ip,
 
 # ── выгрузка ──────────────────────────────────────────────────────────────────
 
-def _load_rows(db, campaign_uuid, *, with_answers: bool) -> dict:
+def _load_rows(db, campaign_uuid, *, with_answers: bool, with_names: bool = True) -> dict:
     """Все ответы кампании (по времени прохождения) с баллами шкал и, по
-    запросу, ответами на вопросы. ФИО расшифровывается здесь."""
+    запросу, ответами на вопросы (+ структура вопросов). ФИО расшифровывается
+    здесь, только если with_names (статистике имена не нужны)."""
     uid = _uuid_or_none(campaign_uuid)
     campaign = (db.query(TestCampaign).filter(TestCampaign.uuid == uid).first()
                 if uid else None)
@@ -419,14 +420,21 @@ def _load_rows(db, campaign_uuid, *, with_answers: bool) -> dict:
             )
             for response_id, number, text in pairs:
                 answers[response_id][number] = text
-    numbers = []
+    numbers, questions = [], []
     if with_answers:
-        numbers = [n for (n,) in db.query(Question.question_order)
-                   .filter(Question.test_id == campaign.test_id)
-                   .order_by(Question.question_order)]
+        qs = (db.query(Question).filter(Question.test_id == campaign.test_id)
+              .order_by(Question.question_order, Question.id).all())
+        numbers = [q.question_order for q in qs]
+        opts: dict[int, list[str]] = {q.id: [] for q in qs}
+        if qs:
+            for o in (db.query(Option).filter(Option.question_id.in_(opts))
+                      .order_by(Option.question_id, Option.option_order, Option.id)):
+                opts[o.question_id].append(o.option_text)
+        questions = [{"number": q.question_order, "text": q.question_text,
+                      "options": opts[q.id]} for q in qs]
     rows = [{
         "uuid": str(r.uuid),
-        "full_name": decrypt_text(r.full_name_enc),
+        "full_name": decrypt_text(r.full_name_enc) if with_names else None,
         "age": r.age, "gender": r.gender,
         "faculty_code": r.faculty_code, "specialty": r.specialty,
         "submitted_at": r.submitted_at,
@@ -439,6 +447,7 @@ def _load_rows(db, campaign_uuid, *, with_answers: bool) -> dict:
         "rules": test_rules.parse(test.scoring_rules) if test else None,
         "rows": rows,
         "question_numbers": numbers,
+        "questions": questions,
     }
 
 
@@ -462,6 +471,19 @@ def export_data(campaign_uuid, *, actor_id: int, ip, user_agent,
     with SessionLocal() as db:
         result = _load_rows(db, campaign_uuid, with_answers=True)
     _record_read("campaign_results_exported", actor_id, result["campaign_id"], ctx, impersonator_id)
+    return result
+
+
+def statistics_data(campaign_uuid, *, actor_id: int, ip, user_agent,
+                    impersonator_id: Optional[int] = None) -> dict:
+    """Ответы на вопросы и баллы для статистики (без ФИО). Тот же доступ и то
+    же событие, что у экрана результатов (campaign_results_read,
+    INDEPENDENT/RAISE, до возврата, если есть участники)."""
+    ctx = build_request_context(ip=ip, user_agent=user_agent)
+    with SessionLocal() as db:
+        result = _load_rows(db, campaign_uuid, with_answers=True, with_names=False)
+    if result["rows"]:
+        _record_read("campaign_results_read", actor_id, result["campaign_id"], ctx, impersonator_id)
     return result
 
 

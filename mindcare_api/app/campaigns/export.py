@@ -235,8 +235,28 @@ def _summary_sheet(ws, summary, scales, rules):
         ws.column_dimensions[get_column_letter(c)].width = 16
 
 
+def _question_stats_sheet(ws, stats: list[dict]) -> None:
+    """Вопрос × вариант: число и доля выбравших (ТЗ этапа 2, §7)."""
+    _header(ws, ["№", "Вопрос", "Ответили", "Вариант", "Выбрали", "%"])
+    r = 2
+    for q in stats:
+        for i, o in enumerate(q["options"]):
+            if i == 0:
+                _set(ws, r, 1, q["number"])
+                _set(ws, r, 2, q["text"])
+                _set(ws, r, 3, q["answered"])
+            _set(ws, r, 4, o["text"])
+            _set(ws, r, 5, o["count"])
+            _set(ws, r, 6, o["percent"])
+            r += 1
+    ws.freeze_panes = "A2"
+    ws.column_dimensions["B"].width = 70
+    ws.column_dimensions["D"].width = 30
+
+
 def build_workbook(*, rules: Optional[ScoringRulesV1], rows: list[dict],
-                   question_numbers: Iterable[int]) -> bytes:
+                   question_numbers: Iterable[int],
+                   questions: Optional[list[dict]] = None) -> bytes:
     """rows: [{full_name, age, gender, faculty_code, specialty, submitted_at,
     scores: {scale: int}, answers: {номер: 'Да'|'Нет'}}] в порядке выгрузки."""
     enriched = [analytics.enrich_row(r, rules) for r in rows]
@@ -259,6 +279,10 @@ def build_workbook(*, rules: Optional[ScoringRulesV1], rows: list[dict],
         for col, n in enumerate(numbers, start=3):
             _set(ws, i + 1, col, r["answers"].get(n, ""))
     ws.column_dimensions["B"].width = 36
+
+    if questions:
+        _question_stats_sheet(wb.create_sheet("Статистика по вопросам"),
+                              analytics.question_stats(enriched, questions))
 
     buf = io.BytesIO()
     wb.save(buf)

@@ -6,13 +6,18 @@
   * enrich_row   — уровни по шкалам, достоверность, типы одного участника;
   * filter_rows  — серверные фильтры (факультет, пол, достоверность, тип);
   * summarize    — сводка по набору участников: средние, распределение
-                   уровней, частоты типов, разбивки по факультетам и полу.
+                   уровней, частоты типов, разбивки по факультетам и полу;
+  * statistics   — статистика (ТЗ этапа 2, §7): прохождения по дням, ответы
+                   по вопросам, распределение баллов шкал. Распределения
+                   скрываются, если участников меньше MIN_GROUP (защита от
+                   узнавания по маленькой группе).
 
 Правила обработки — `tests.scoring_rules` теста этой кампании
 (ScoringRulesV1, app/tests/rules.py). Нет правил — уровни/типы не считаются,
 сводка содержит только средние. Нет блока достоверности — is_valid = None.
 """
 from collections import Counter
+from datetime import timedelta, timezone
 from statistics import mean
 from typing import Optional
 
@@ -21,6 +26,9 @@ from app.tests import rules as R
 from app.tests.rules import ScoringRulesV1
 
 VALIDITY_CODES = ("valid", "invalid")
+# Меньше участников — распределения ответов и баллов не показываются.
+MIN_GROUP = 5
+_MSK = timezone(timedelta(hours=3))
 GENDER_LABELS = {"male": "Муж", "female": "Жен"}
 # Оттенки уровней для UI и xlsx — по рангу уровня (по возрастанию min):
 # крайние — «низкий»/«высокий риск», середина — норма и выраженные черты.
@@ -208,3 +216,58 @@ def validity_title(rules: Optional[ScoringRulesV1]) -> str:
 
 def faculty_name(code: str) -> str:
     return faculty_label(code) or code
+
+
+# ── статистика (ТЗ этапа 2, §7) ──────────────────────────────────────────────
+
+def _percent(count: int, total: int) -> float:
+    return round(100 * count / total, 1) if total else 0.0
+
+
+def by_day(rows: list[dict]) -> list[dict]:
+    """Прохождения по датам (московским), по возрастанию."""
+    counts = Counter(r["submitted_at"].astimezone(_MSK).date().isoformat() for r in rows)
+    return [{"date": d, "count": counts[d]} for d in sorted(counts)]
+
+
+def question_stats(rows: list[dict], questions: list[dict]) -> list[dict]:
+    """По каждому вопросу — сколько выбрали каждый вариант. rows[].answers —
+    {номер вопроса: текст варианта}; questions — [{number, text, options}]."""
+    out = []
+    for q in questions:
+        counts = Counter(r["answers"].get(q["number"]) for r in rows)
+        answered = sum(c for text, c in counts.items() if text is not None)
+        out.append({
+            "number": q["number"], "text": q["text"], "answered": answered,
+            "options": [{"text": t, "count": counts.get(t, 0),
+                         "percent": _percent(counts.get(t, 0), answered)}
+                        for t in q["options"]],
+        })
+    return out
+
+
+def scale_histograms(rows: list[dict], rules: Optional[ScoringRulesV1]) -> list[dict]:
+    """Распределение сырых баллов каждой шкалы: все значения от наименьшего
+    до наибольшего встретившегося (пустые — 0)."""
+    out = []
+    for s in scale_order(rules, rows):
+        values = Counter(r["scores"][s] for r in rows if r["scores"].get(s) is not None)
+        bins = ([{"score": v, "count": values.get(v, 0)}
+                 for v in range(min(values), max(values) + 1)] if values else [])
+        out.append({"scale": s, "label": R.scale_label(rules, s), "bins": bins})
+    return out
+
+
+def statistics(rows: list[dict], rules: Optional[ScoringRulesV1],
+               questions: list[dict]) -> dict:
+    """rows — обогащённые enrich_row и отфильтрованные. При числе участников
+    меньше MIN_GROUP — только total и by_day (too_few=True)."""
+    too_few = len(rows) < MIN_GROUP
+    return {
+        "total": len(rows),
+        "min_group": MIN_GROUP,
+        "too_few": too_few,
+        "by_day": by_day(rows),
+        "questions": [] if too_few else question_stats(rows, questions),
+        "scales": [] if too_few else scale_histograms(rows, rules),
+    }

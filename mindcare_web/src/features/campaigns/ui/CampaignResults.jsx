@@ -1,7 +1,12 @@
+import { useState } from 'react';
 import Button from '../../../components/UI/Button/Button';
+import Tabs, { tabButtonId, tabPanelId } from '../../../components/UI/Tabs/Tabs';
 import Select from '../../../components/UI/Select/Select';
 import useCampaignResults, { EMPTY_FILTERS } from '../hooks/useCampaignResults';
+import CampaignStatistics from './CampaignStatistics';
 import styles from './CampaignResults.module.css';
+
+const VIEWS = [{ id: 'summary', label: 'Сводка и участники' }, { id: 'stats', label: 'Статистика' }];
 
 // Оттенок уровня приходит с backend (ADR-037: уровни — из правил методики).
 const TONE_CLASS = {
@@ -68,6 +73,8 @@ export default function CampaignResults({ campaignUuid }) {
   const { data, loading, error, filters, setFilters, refetch } =
     useCampaignResults(campaignUuid, true);
   const unfiltered = Object.values(filters).every((v) => !v);
+  const [view, setView] = useState('summary');
+  const tabsPrefix = `res-${campaignUuid}`;
 
   if (error) {
     return (
@@ -126,6 +133,20 @@ export default function CampaignResults({ campaignUuid }) {
         </Button>
       </div>
 
+      <Tabs tabs={VIEWS} active={view} onChange={setView} label="Вид результатов"
+        idPrefix={tabsPrefix} />
+
+      {/* Статистика грузится только на своей вкладке: каждый запрос — событие аудита. */}
+      {view === 'stats' && (
+        <div role="tabpanel" id={tabPanelId(tabsPrefix, 'stats')}
+          aria-labelledby={tabButtonId(tabsPrefix, 'stats')}>
+          <CampaignStatistics campaignUuid={campaignUuid} filters={filters} />
+        </div>
+      )}
+
+      <div role="tabpanel" id={tabPanelId(tabsPrefix, 'summary')}
+        aria-labelledby={tabButtonId(tabsPrefix, 'summary')} hidden={view !== 'summary'}
+        className={styles.wrap}>
       <div className={styles.stats}>
         <Stat label={`Участников${unfiltered ? '' : ` (из ${data.total_all})`}`} value={summary.total} />
         {hasValidity && <Stat label="Достоверных" value={summary.valid} />}
@@ -254,6 +275,7 @@ export default function CampaignResults({ campaignUuid }) {
           </table>
         </div>
       </section>
+      </div>
     </div>
   );
 }
