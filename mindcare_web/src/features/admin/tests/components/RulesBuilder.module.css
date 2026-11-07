@@ -44,6 +44,15 @@
   gap: 10px;
 }
 
+/* Свои уровни шкалы — вложенный блок карточки шкалы */
+.ownLevels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 3px solid var(--nav-border);
+}
+
 .row4 {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr) 150px auto;

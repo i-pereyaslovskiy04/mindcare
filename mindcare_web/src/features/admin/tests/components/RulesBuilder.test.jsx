@@ -44,3 +44,17 @@ test('удаление и перемещение шкалы', () => {
   userEvent.click(screen.getByRole('button', { name: 'Удалить шкалу A' }));
   expect(toBackendRules(onValue.mock.calls.at(-1)[0]).scales.map((s) => s.code)).toEqual(['B']);
 });
+
+test('свои уровни у основной шкалы', () => {
+  const onValue = jest.fn();
+  render(<Harness questions={[{ scale: 'A' }]} onValue={onValue} />);
+  userEvent.click(screen.getByRole('checkbox', { name: /Задать правила обработки/ }));
+  userEvent.click(screen.getByRole('button', { name: /Добавить шкалы из вопросов/ }));
+  userEvent.click(screen.getByRole('checkbox', { name: 'Свои уровни' }));
+  expect(screen.getByText(/Уровни шкалы «A» — вместо общих/)).toBeInTheDocument();
+  const codes = screen.getAllByLabelText('Код (латиница)');
+  userEvent.type(codes[0], 'norm');
+  const rules = toBackendRules(onValue.mock.calls.at(-1)[0]);
+  expect(rules.scales[0].levels).toEqual([{ code: 'norm', label: 'norm', min: 0, max: 0 }]);
+  expect(rules.levels).toEqual([]);
+});

@@ -121,3 +121,26 @@ test('методика без правил: нет достоверности, �
   expect(screen.queryByRole('columnheader', { name: 'Достоверность' })).not.toBeInTheDocument();
   expect(screen.queryByText('Цвет балла:', { exact: false })).not.toBeInTheDocument();
 });
+
+test('свои уровни шкалы: подписи в сводке, легенде и строке участника', async () => {
+  const own = [
+    { code: 'norm', label: 'Норма A', min: 0, max: 7, tone: 'low' },
+    { code: 'sub', label: 'Субклиническая', min: 8, max: 10, tone: 'norm' },
+    { code: 'clin', label: 'Клиническая', min: 11, max: 21, tone: 'maladaptive' },
+  ];
+  const base = payload();
+  getCampaignResults.mockResolvedValue(payload({
+    scale_levels: { VIII: own },
+    items: [{ ...base.items[0], scores: { L: 7, VIII: 12 }, levels: { L: 'invalid', VIII: 'clin' } }],
+    summary: {
+      ...base.summary,
+      scales: [base.summary.scales[0],
+        { ...base.summary.scales[1], levels: { norm: 0, sub: 0, clin: 1 } }],
+    },
+  }));
+  render(<CampaignResults campaignUuid="c-1" />);
+  expect(await screen.findByText('Норма A: 0; Субклиническая: 0; Клиническая: 1')).toBeInTheDocument();
+  expect(screen.getByText('VIII: Клиническая')).toBeInTheDocument();
+  const row = screen.getByRole('row', { name: /Иванов Иван/ });
+  expect(within(row).getByText('(Клиническая)', { exact: false })).toBeInTheDocument();
+});

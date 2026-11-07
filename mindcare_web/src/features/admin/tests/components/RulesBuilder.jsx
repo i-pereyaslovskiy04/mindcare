@@ -37,7 +37,7 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
 
   const addScales = () => set({
     scales: [...value.scales, ...missing.map((code) => ({
-      _key: nextKey(), code, label: code, main: true, max_valid: '',
+      _key: nextKey(), code, label: code, main: true, max_valid: '', own_levels: false, levels: [],
     }))],
   });
 
@@ -86,6 +86,17 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
             <div className={styles.actions}>
               <Checkbox checked={s.main} label="Основная"
                 onChange={(checked) => set({ scales: patchAt(value.scales, idx, { main: checked }) })} />
+              {s.main && (
+                <Checkbox checked={Boolean(s.own_levels)} label="Свои уровни"
+                  onChange={(checked) => set({
+                    scales: patchAt(value.scales, idx, {
+                      own_levels: checked,
+                      levels: checked && !(s.levels || []).length
+                        ? [{ _key: nextKey(), code: '', label: '', min: '0', max: '0' }]
+                        : (s.levels || []),
+                    }),
+                  })} />
+              )}
               <Button variant="icon" size="sm" aria-label={`Выше: ${s.code || 'шкала'}`} title="Выше"
                 disabled={idx === 0}
                 onClick={() => {
@@ -102,11 +113,22 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
               </Button>
             </div>
           </div>
+          {s.main && s.own_levels && (
+            <div className={styles.ownLevels}>
+              <p className={styles.hint}>
+                Уровни шкалы «{s.label || s.code}» — вместо общих уровней.
+              </p>
+              <LevelRows levels={s.levels || []} nextKey={nextKey} id={id} prefix={`s${s._key}`}
+                onChange={(levels) => set({ scales: patchAt(value.scales, idx, { levels }) })} />
+            </div>
+          )}
         </div>
       ))}
       <div className={styles.buttons}>
         <Button variant="secondary" onClick={() => set({
-          scales: [...value.scales, { _key: nextKey(), code: '', label: '', main: true, max_valid: '' }],
+          scales: [...value.scales, {
+            _key: nextKey(), code: '', label: '', main: true, max_valid: '', own_levels: false, levels: [],
+          }],
         })}>
           + Шкала
         </Button>
@@ -126,50 +148,11 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
 
       <h3 className={styles.subTitle}>Уровни основных шкал</h3>
       <p className={styles.hint}>
-        Общие для всех основных шкал диапазоны баллов (включительно), по возрастанию.
+        Общие для основных шкал диапазоны баллов (включительно), по возрастанию.
+        Если у шкалы свои пороги, отметьте у неё «Свои уровни».
       </p>
-      {value.levels.map((lv, idx) => (
-        <div key={lv._key} className={styles.card}>
-          <div className={styles.row4}>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor={id(`lc-${lv._key}`)}>Код (латиница)</label>
-              <input id={id(`lc-${lv._key}`)} className={styles.input} value={lv.code} placeholder="norm"
-                onChange={(e) => set({ levels: patchAt(value.levels, idx, { code: e.target.value }) })} />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor={id(`ll-${lv._key}`)}>Название</label>
-              <input id={id(`ll-${lv._key}`)} className={styles.input} value={lv.label} placeholder="Норма"
-                onChange={(e) => set({ levels: patchAt(value.levels, idx, { label: e.target.value }) })} />
-            </div>
-            <div className={styles.pair}>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor={id(`lf-${lv._key}`)}>От</label>
-                <input id={id(`lf-${lv._key}`)} className={styles.inputNum} type="number" value={lv.min}
-                  onChange={(e) => set({ levels: patchAt(value.levels, idx, { min: e.target.value }) })} />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor={id(`lt-${lv._key}`)}>До</label>
-                <input id={id(`lt-${lv._key}`)} className={styles.inputNum} type="number" value={lv.max}
-                  onChange={(e) => set({ levels: patchAt(value.levels, idx, { max: e.target.value }) })} />
-              </div>
-            </div>
-            <div className={styles.actions}>
-              <Button variant="icon" size="sm" tone="danger" aria-label={`Удалить уровень ${lv.label || idx + 1}`}
-                title="Удалить уровень"
-                onClick={() => set({ levels: value.levels.filter((_, i) => i !== idx) })}>
-                <Icon name="trash" size={14} />
-              </Button>
-            </div>
-          </div>
-        </div>
-      ))}
-      <div className={styles.buttons}>
-        <Button variant="secondary" onClick={() => set({
-          levels: [...value.levels, { _key: nextKey(), code: '', label: '', min: '0', max: '0' }],
-        })}>
-          + Уровень
-        </Button>
-      </div>
+      <LevelRows levels={value.levels} onChange={(levels) => set({ levels })}
+        nextKey={nextKey} id={id} prefix="common" />
 
       <h3 className={styles.subTitle}>Типы</h3>
       <p className={styles.hint}>
@@ -211,5 +194,56 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
         </Button>
       </div>
     </fieldset>
+  );
+}
+
+/** Строки уровней (общих или своих у шкалы): код, название, от, до. */
+function LevelRows({ levels, onChange, nextKey, id, prefix }) {
+  const patchAt = (idx, patch) => onChange(levels.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  return (
+    <>
+      {levels.map((lv, idx) => (
+        <div key={lv._key} className={styles.card}>
+          <div className={styles.row4}>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor={id(`${prefix}-lc-${lv._key}`)}>Код (латиница)</label>
+              <input id={id(`${prefix}-lc-${lv._key}`)} className={styles.input} value={lv.code} placeholder="norm"
+                onChange={(e) => patchAt(idx, { code: e.target.value })} />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor={id(`${prefix}-ll-${lv._key}`)}>Название</label>
+              <input id={id(`${prefix}-ll-${lv._key}`)} className={styles.input} value={lv.label} placeholder="Норма"
+                onChange={(e) => patchAt(idx, { label: e.target.value })} />
+            </div>
+            <div className={styles.pair}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor={id(`${prefix}-lf-${lv._key}`)}>От</label>
+                <input id={id(`${prefix}-lf-${lv._key}`)} className={styles.inputNum} type="number" value={lv.min}
+                  onChange={(e) => patchAt(idx, { min: e.target.value })} />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor={id(`${prefix}-lt-${lv._key}`)}>До</label>
+                <input id={id(`${prefix}-lt-${lv._key}`)} className={styles.inputNum} type="number" value={lv.max}
+                  onChange={(e) => patchAt(idx, { max: e.target.value })} />
+              </div>
+            </div>
+            <div className={styles.actions}>
+              <Button variant="icon" size="sm" tone="danger" aria-label={`Удалить уровень ${lv.label || idx + 1}`}
+                title="Удалить уровень"
+                onClick={() => onChange(levels.filter((_, i) => i !== idx))}>
+                <Icon name="trash" size={14} />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ))}
+      <div className={styles.buttons}>
+        <Button variant="secondary" onClick={() => onChange([
+          ...levels, { _key: nextKey(), code: '', label: '', min: '0', max: '0' },
+        ])}>
+          + Уровень
+        </Button>
+      </div>
+    </>
   );
 }

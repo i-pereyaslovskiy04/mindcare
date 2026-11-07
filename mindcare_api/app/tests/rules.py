@@ -41,24 +41,6 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-class ScaleRule(_Strict):
-    code: str
-    label: str
-    main: bool = False
-
-    @field_validator("code")
-    @classmethod
-    def _code(cls, v: str) -> str:
-        if not _SCALE_CODE_RE.match(v):
-            raise ValueError("код шкалы: 1–20 букв, цифр или «_»")
-        return v
-
-    @field_validator("label")
-    @classmethod
-    def _label(cls, v: str) -> str:
-        return _text(v, 100)
-
-
 class LevelRule(_Strict):
     code: str
     label: str
@@ -84,6 +66,41 @@ class LevelRule(_Strict):
         if self.min > self.max:
             raise ValueError("нижняя граница уровня больше верхней")
         return self
+
+
+class ScaleRule(_Strict):
+    code: str
+    label: str
+    main: bool = False
+    # Свои уровни шкалы (ТЗ этапа 2, §4.1); пусто — общие `levels` правил.
+    levels: tuple["LevelRule", ...] = Field(default=(), max_length=MAX_LEVELS)
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        if not _SCALE_CODE_RE.match(v):
+            raise ValueError("код шкалы: 1–20 букв, цифр или «_»")
+        return v
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, v: str) -> str:
+        return _text(v, 100)
+
+    @model_validator(mode="after")
+    def _own_levels(self):
+        _check_levels(self.levels)
+        return self
+
+
+def _check_levels(levels) -> None:
+    codes = [lv.code for lv in levels]
+    if len(set(codes)) != len(codes):
+        raise ValueError("коды уровней повторяются")
+    ordered = sorted(levels, key=lambda lv: lv.min)
+    for a, b in zip(ordered, ordered[1:]):
+        if b.min <= a.max:
+            raise ValueError("диапазоны уровней пересекаются")
 
 
 class ValidityScale(_Strict):
@@ -135,13 +152,10 @@ class ScoringRulesV1(_Strict):
         if len(set(codes)) != len(codes):
             raise ValueError("коды шкал повторяются")
         known = set(codes)
-        level_codes = [lv.code for lv in self.levels]
-        if len(set(level_codes)) != len(level_codes):
-            raise ValueError("коды уровней повторяются")
-        ordered = sorted(self.levels, key=lambda lv: lv.min)
-        for a, b in zip(ordered, ordered[1:]):
-            if b.min <= a.max:
-                raise ValueError("диапазоны уровней пересекаются")
+        _check_levels(self.levels)
+        for sc in self.scales:
+            if sc.levels and not sc.main:
+                raise ValueError("свои уровни задаются только у основной шкалы")
         if self.validity:
             vcodes = [v.code for v in self.validity.scales]
             if len(set(vcodes)) != len(vcodes):
@@ -175,7 +189,15 @@ def parse(raw: Any) -> Optional[ScoringRulesV1]:
 
 
 def dump(rules: Optional[ScoringRulesV1]) -> Optional[dict]:
-    return None if rules is None else rules.model_dump(mode="json")
+    """Модель → JSONB. Пустые `scales[].levels` не пишутся: правила без своих
+    уровней сохраняются в прежнем виде (ИТО, эталоны)."""
+    if rules is None:
+        return None
+    out = rules.model_dump(mode="json")
+    for sc in out["scales"]:
+        if not sc.get("levels"):
+            sc.pop("levels", None)
+    return out
 
 
 # ── вычисления ────────────────────────────────────────────────────────────────
@@ -211,11 +233,33 @@ def invalid_mark(rules: Optional[ScoringRulesV1]) -> str:
     return rules.validity.invalid_mark
 
 
-def level_of(rules: Optional[ScoringRulesV1], score: Optional[int]) -> Optional[str]:
-    """Код уровня по общему набору уровней; None — вне диапазонов или нет уровней."""
+def levels_for(rules: Optional[ScoringRulesV1], scale: Optional[str] = None) -> tuple:
+    """Уровни шкалы: свои, если заданы, иначе общие."""
+    if rules is None:
+        return ()
+    if scale is not None:
+        for sc in rules.scales:
+            if sc.code == scale and sc.levels:
+                return sc.levels
+    return rules.levels
+
+
+def own_levels(rules: Optional[ScoringRulesV1]) -> dict[str, tuple]:
+    """{шкала: свои уровни} — только шкалы, где они заданы."""
+    return {} if rules is None else {sc.code: sc.levels for sc in rules.scales if sc.levels}
+
+
+def has_levels(rules: Optional[ScoringRulesV1]) -> bool:
+    """Считается ли уровень хоть у одной шкалы (общие или свои уровни)."""
+    return rules is not None and (bool(rules.levels) or bool(own_levels(rules)))
+
+
+def level_of(rules: Optional[ScoringRulesV1], score: Optional[int],
+             scale: Optional[str] = None) -> Optional[str]:
+    """Код уровня (своего у шкалы или общего); None — вне диапазонов или нет уровней."""
     if rules is None or score is None:
         return None
-    for lv in rules.levels:
+    for lv in levels_for(rules, scale):
         if lv.min <= score <= lv.max:
             return lv.code
     return None
@@ -280,26 +324,25 @@ def check_against_bounds(rules: Optional[ScoringRulesV1],
         if code not in by_scale:
             issues.append({"kind": "scale_unused", "scale_name": code,
                            "min_score": None, "max_score": None})
-    if rules.levels:
-        ordered = sorted(rules.levels, key=lambda lv: lv.min)
-        for code in main_scales(rules):
-            b = by_scale.get(code)
-            if b is None:
+    for code in main_scales(rules):
+        ordered = sorted(levels_for(rules, code), key=lambda lv: lv.min)
+        b = by_scale.get(code)
+        if b is None or not ordered:
+            continue
+        cursor = b["min_score"]
+        for lv in ordered:
+            if lv.max < cursor:
                 continue
-            cursor = b["min_score"]
-            for lv in ordered:
-                if lv.max < cursor:
-                    continue
-                if lv.min > cursor:
-                    issues.append({"kind": "level_gap", "scale_name": code,
-                                   "min_score": cursor,
-                                   "max_score": min(lv.min - 1, b["max_score"])})
-                cursor = max(cursor, lv.max + 1)
-                if cursor > b["max_score"]:
-                    break
-            if cursor <= b["max_score"]:
+            if lv.min > cursor:
                 issues.append({"kind": "level_gap", "scale_name": code,
-                               "min_score": cursor, "max_score": b["max_score"]})
+                               "min_score": cursor,
+                               "max_score": min(lv.min - 1, b["max_score"])})
+            cursor = max(cursor, lv.max + 1)
+            if cursor > b["max_score"]:
+                break
+        if cursor <= b["max_score"]:
+            issues.append({"kind": "level_gap", "scale_name": code,
+                           "min_score": cursor, "max_score": b["max_score"]})
     return [i for i in issues
             if i["min_score"] is None or i["min_score"] <= i["max_score"]]
 

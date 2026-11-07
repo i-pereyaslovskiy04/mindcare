@@ -101,7 +101,7 @@ def _fill(tones: dict, code: Optional[str]):
 def _results_sheet(ws, rows, scales, rules):
     has_validity = bool(R.validity_scales(rules))
     has_types = rules is not None and rules.types is not None
-    tones = analytics.level_tones(rules)
+    tones = {s: analytics.level_tones(rules, s) for s in scales}
     titles = [*_PERSON_TITLES, *[R.scale_label(rules, s) for s in scales]]
     if has_validity:
         titles.append("Достоверность")
@@ -117,7 +117,7 @@ def _results_sheet(ws, rows, scales, rules):
             _set(ws, row, col, value)
         for j, s in enumerate(scales):
             _set(ws, row, first_scale_col + j, r["scores"].get(s),
-                 fill=_fill(tones, r["levels"].get(s)))
+                 fill=_fill(tones[s], r["levels"].get(s)))
         col = first_scale_col + len(scales)
         if has_validity:
             _set(ws, row, col, "достоверно" if r["is_valid"] else R.invalid_mark(rules))
@@ -134,9 +134,9 @@ def _results_sheet(ws, rows, scales, rules):
 
 
 def _levels_sheet(ws, rows, scales, rules):
-    text = {**analytics.level_labels(rules), "valid": "Достоверно",
-            "invalid": "Недостоверно"}
-    tones = analytics.level_tones(rules)
+    validity_text = {"valid": "Достоверно", "invalid": "Недостоверно"}
+    text = {s: {**analytics.level_labels(rules, s), **validity_text} for s in scales}
+    tones = {s: analytics.level_tones(rules, s) for s in scales}
     _header(ws, [*_PERSON_TITLES, *[R.scale_label(rules, s) for s in scales]])
     ws.freeze_panes = "C2"
     first = len(_PERSON_TITLES) + 1
@@ -145,7 +145,7 @@ def _levels_sheet(ws, rows, scales, rules):
             _set(ws, i + 1, col, value)
         for j, s in enumerate(scales):
             code = r["levels"].get(s)
-            _set(ws, i + 1, first + j, text.get(code, ""), fill=_fill(tones, code))
+            _set(ws, i + 1, first + j, text[s].get(code, ""), fill=_fill(tones[s], code))
     ws.column_dimensions["B"].width = 36
     ws.column_dimensions["E"].width = 40
     for j in range(len(scales)):
@@ -154,7 +154,8 @@ def _levels_sheet(ws, rows, scales, rules):
 
 def _summary_sheet(ws, summary, scales, rules):
     levels = analytics.level_list(rules)
-    main = set(R.main_scales(rules)) if levels else set()
+    own = analytics.scale_levels(rules)
+    main = set(R.main_scales(rules)) if R.has_levels(rules) else set()
     r = 1
     _set(ws, r, 1, "Первичная обработка результатов", bold=True)
     r += 2
@@ -171,14 +172,19 @@ def _summary_sheet(ws, summary, scales, rules):
     r += 1
     _set(ws, r, 1, "По шкалам", bold=True)
     r += 1
-    _header(ws, ["Шкала", "Среднее", "Мин", "Макс", *[lv["label"] for lv in levels]],
+    _header(ws, ["Шкала", "Среднее", "Мин", "Макс",
+                 *([lv["label"] for lv in levels] or (["Уровни"] if own else []))],
             row=r)
     for col, lv in enumerate(levels, start=5):
         ws.cell(row=r, column=col).fill = _FILL[lv["tone"]] or PatternFill()
     r += 1
     for item in summary["scales"]:
         values = [item["label"], item["mean"], item["min"], item["max"]]
-        if item["scale"] in main:
+        if item["scale"] in own:
+            # свои уровни шкалы — «название: число» в колонках уровней
+            values += [f"{lv['label']}: {item['levels'].get(lv['code'], 0)}"
+                       for lv in own[item["scale"]]]
+        elif item["scale"] in main:
             values += [item["levels"].get(lv["code"], 0) for lv in levels]
         elif item["levels"]:
             values += [f"достоверно: {item['levels'].get('valid', 0)}",
@@ -213,12 +219,14 @@ def _summary_sheet(ws, summary, scales, rules):
                 _set(ws, r, col, value)
             r += 1
 
-    if levels:
+    common_scales = [s for s in R.main_scales(rules) if s not in own]
+    legends = ([(common_scales, levels)] if levels and common_scales else []) + \
+        [([code], items) for code, items in own.items()]
+    for codes, items in legends:
         r += 1
-        _set(ws, r, 1, f"Уровни (шкалы {_scales_caption(R.main_scales(rules))})",
-             bold=True)
+        _set(ws, r, 1, f"Уровни (шкалы {_scales_caption(codes)})", bold=True)
         r += 1
-        for lv in levels:
+        for lv in items:
             _set(ws, r, 1, f"{lv['min']}–{lv['max']}", fill=_FILL[lv["tone"]])
             _set(ws, r, 2, lv["label"])
             r += 1
@@ -237,7 +245,7 @@ def build_workbook(*, rules: Optional[ScoringRulesV1], rows: list[dict],
     wb = Workbook()
     _results_sheet(wb.active, enriched, scales, rules)
     wb.active.title = "Результаты"
-    if rules is not None and (rules.levels or rules.validity):
+    if rules is not None and (R.has_levels(rules) or rules.validity):
         _levels_sheet(wb.create_sheet("Уровни"), enriched, scales, rules)
     _summary_sheet(wb.create_sheet("Сводка"),
                    analytics.summarize(enriched, rules), scales, rules)

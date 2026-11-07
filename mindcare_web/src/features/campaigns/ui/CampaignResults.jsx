@@ -80,12 +80,21 @@ export default function CampaignResults({ campaignUuid }) {
   if (!data) return <p className={styles.muted} role="status">Загрузка результатов…</p>;
   if (!data.total_all) return <p className={styles.muted}>Пока никто не прошёл тестирование.</p>;
 
-  const { summary, scales, level_labels: levelLabels, levels } = data;
+  const { summary, scales, levels } = data;
+  const scaleLevels = data.scale_levels || {};
   const hasValidity = data.has_validity;
   const hasTypes = data.type_names.length > 0;
-  const toneOf = Object.fromEntries(levels.map((lv) => [lv.code, lv.tone]));
-  const levelClass = (code) => (code === 'invalid'
-    ? styles.lvlMaladaptive : TONE_CLASS[toneOf[code]] || '');
+  // Уровни шкалы: свои (ТЗ этапа 2, §4.1) или общие.
+  const levelsOf = (scale) => scaleLevels[scale] || levels;
+  const levelOf = (scale, code) => levelsOf(scale).find((lv) => lv.code === code);
+  const levelClass = (scale, code) => (code === 'invalid'
+    ? styles.lvlMaladaptive : TONE_CLASS[levelOf(scale, code)?.tone] || '');
+  const ownScales = Object.keys(scaleLevels);
+  const legend = [
+    ...(ownScales.length < scales.length ? levels.map((lv) => ({ scale: null, ...lv })) : []),
+    ...ownScales.flatMap((sc) => scaleLevels[sc].map((lv) => ({ scale: sc, ...lv }))),
+  ].filter((lv) => lv.tone !== 'norm');
+  const levelColumns = levels.length ? levels : (ownScales.length ? [{ code: '__own', label: 'Уровни' }] : []);
   // Факультеты фильтра — всех участников кампании (backend, без учёта фильтров).
   const facultyOptions = data.faculties.map((f) => ({ value: f.code, label: f.label }));
   const typeOptions = [
@@ -133,8 +142,8 @@ export default function CampaignResults({ campaignUuid }) {
                 <th scope="col">Шкала</th>
                 <th scope="col">Среднее</th>
                 <th scope="col">Мин–макс</th>
-                {levels.map((lv) => (
-                  <th key={lv.code} scope="col" className={levelClass(lv.code)}>{lv.label}</th>
+                {levelColumns.map((lv) => (
+                  <th key={lv.code} scope="col" className={levelClass(null, lv.code)}>{lv.label}</th>
                 ))}
               </tr>
             </thead>
@@ -145,8 +154,12 @@ export default function CampaignResults({ campaignUuid }) {
                   <td>{fmt(s.mean)}</td>
                   <td>{s.min == null ? '—' : `${s.min}–${s.max}`}</td>
                   {'valid' in s.levels ? (
-                    <td colSpan={Math.max(levels.length, 1)}>
+                    <td colSpan={Math.max(levelColumns.length, 1)}>
                       достоверно: {s.levels.valid}; недостоверно: {s.levels.invalid}
+                    </td>
+                  ) : scaleLevels[s.scale] ? (
+                    <td colSpan={Math.max(levelColumns.length, 1)}>
+                      {scaleLevels[s.scale].map((lv) => `${lv.label}: ${s.levels[lv.code] ?? 0}`).join('; ')}
                     </td>
                   ) : levels.map((lv) => <td key={lv.code}>{s.levels[lv.code] ?? 0}</td>)}
                 </tr>
@@ -184,12 +197,13 @@ export default function CampaignResults({ campaignUuid }) {
         <h4 id={`${campaignUuid}-rows`} className={styles.heading}>
           Участники ({data.items.length})
         </h4>
-        {levels.some((lv) => lv.tone !== 'norm') && (
+        {legend.length > 0 && (
           <p className={styles.legend}>
             Цвет балла:{' '}
-            {levels.filter((lv) => lv.tone !== 'norm').map((lv) => (
-              <span key={lv.code} className={`${styles.legendItem} ${levelClass(lv.code)}`}>
-                {lv.label}
+            {legend.map((lv) => (
+              <span key={`${lv.scale || ''}:${lv.code}`}
+                className={`${styles.legendItem} ${TONE_CLASS[lv.tone] || ''}`}>
+                {lv.scale ? `${lv.scale}: ${lv.label}` : lv.label}
               </span>
             ))}
           </p>
@@ -218,12 +232,13 @@ export default function CampaignResults({ campaignUuid }) {
                   <td>{r.age}</td>
                   {scales.map((s) => {
                     const code = r.levels[s.code];
+                    const lv = levelOf(s.code, code);
                     return (
-                      <td key={s.code} className={`${styles.score} ${levelClass(code)}`}>
+                      <td key={s.code} className={`${styles.score} ${levelClass(s.code, code)}`}>
                         {r.scores[s.code] ?? '—'}
-                        {code && toneOf[code] !== 'norm' && code !== 'valid' && (
+                        {code && code !== 'valid' && (code === 'invalid' || lv?.tone !== 'norm') && (
                           <span className={styles.srOnly}>
-                            {` (${code === 'invalid' ? 'недостоверно' : levelLabels[code]})`}
+                            {` (${code === 'invalid' ? 'недостоверно' : lv?.label})`}
                           </span>
                         )}
                       </td>

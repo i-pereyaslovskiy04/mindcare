@@ -57,3 +57,21 @@ test('шкалы из вопросов, которых нет в правила�
   const questions = [{ scale: 'I' }, { scale: 'II' }, { scale: ' II ' }, { scale: '' }, { scale: 'F' }];
   expect(missingScaleCodes(form, questions)).toEqual(['II', 'F']);
 });
+
+test('свои уровни шкалы — туда-обратно; у не основной шкалы не отправляются', () => {
+  const rules = {
+    ...ITO_LIKE,
+    scales: [
+      ITO_LIKE.scales[0],
+      { ...ITO_LIKE.scales[1], levels: [{ code: 'norm', label: 'Норма', min: 0, max: 7 }] },
+    ],
+  };
+  const form = fromBackendRules(rules, nextKey);
+  expect(form.scales[1].own_levels).toBe(true);
+  expect(form.scales[0].own_levels).toBe(false);
+  expect(toBackendRules(form)).toEqual(rules);
+  const off = { ...form, scales: form.scales.map((s) => ({ ...s, own_levels: false })) };
+  expect(toBackendRules(off).scales[1]).not.toHaveProperty('levels');
+  const notMain = { ...form, scales: form.scales.map((s) => ({ ...s, main: false })) };
+  expect(toBackendRules(notMain).scales[1]).not.toHaveProperty('levels');
+});

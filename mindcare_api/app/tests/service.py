@@ -325,8 +325,9 @@ def preview_score(data: dict) -> dict:
     # ADR-037: автор видит уровни, достоверность и типы на пробном прохождении.
     rules = test_rules.parse(data.get("scoring_rules"))
     scores = {sc["scale_name"]: sc["score"] for sc in computed.get("scales", [])}
-    computed["levels"] = {code: test_rules.level_of(rules, scores.get(code))
-                          for code in test_rules.main_scales(rules)} if rules and rules.levels else {}
+    computed["levels"] = {code: test_rules.level_of(rules, scores.get(code), code)
+                          for code in test_rules.main_scales(rules)} \
+        if test_rules.has_levels(rules) else {}
     computed["rule_summary"] = test_rules.summarize(rules, scores)
     return computed
 
@@ -1096,7 +1097,8 @@ def _import_check(content: bytes) -> tuple[Optional[dict], dict]:
         "options": (len(clean["questions"][0]["options"]) if len(option_sets) == 1 else None),
         "option_sets": len(option_sets),
         "scales": len(rules.scales) if rules else 0,
-        "levels": len(rules.levels) if rules else 0,
+        "levels": (len(rules.levels) + sum(len(v) for v in test_rules.own_levels(rules).values())
+                   if rules else 0),
         "types": len(rules.types.items) if rules and rules.types else 0,
         "interpretations": len(clean["interpretations"]),
     }

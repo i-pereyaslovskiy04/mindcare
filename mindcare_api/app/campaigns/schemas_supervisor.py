@@ -163,6 +163,7 @@ class CampaignResultsOut(BaseModel):
     scales: list[ResultScaleOut]
     levels: list[ResultLevelOut]          # по возрастанию, с оттенком для UI
     level_labels: dict[str, str]
+    scale_levels: dict[str, list[ResultLevelOut]] = {}   # свои уровни шкал
     validity_title: str                   # «Недостоверных (L или F > 5)»
     type_threshold: Optional[int]
     type_names: list[str]

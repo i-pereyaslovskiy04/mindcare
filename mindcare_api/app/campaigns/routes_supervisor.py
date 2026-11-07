@@ -232,6 +232,8 @@ def get_results(
         # Уровни по возрастанию с оттенком (low/norm/accent/maladaptive) для UI.
         "levels": analytics.level_list(rules),
         "level_labels": analytics.level_labels(rules),
+        # Свои уровни шкал (ТЗ этапа 2, §4.1): {шкала: [{code, label, min, max, tone}]}.
+        "scale_levels": analytics.scale_levels(rules),
         "validity_title": analytics.validity_title(rules),
         "type_threshold": rules.types.threshold
         if rules is not None and rules.types else None,

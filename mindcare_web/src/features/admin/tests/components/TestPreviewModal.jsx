@@ -30,7 +30,12 @@ export default function TestPreviewModal({
 }) {
   // ADR-037: подписи шкал и уровней — из правил обработки (если заданы).
   const scaleLabel = (code) => scoringRules?.scales?.find((sc) => sc.code === code)?.label || code;
-  const levelLabel = (code) => scoringRules?.levels?.find((lv) => lv.code === code)?.label || code;
+  // Подпись уровня: свои уровни шкалы, иначе общие (ТЗ этапа 2, §4.1).
+  const levelLabel = (scale, code) => {
+    const own = scoringRules?.scales?.find((s) => s.code === scale)?.levels;
+    const list = own?.length ? own : scoringRules?.levels;
+    return list?.find((lv) => lv.code === code)?.label || code;
+  };
   const previewQuestions = useMemo(() => toPreviewQuestions(questions), [questions]);
   const skipped = questions.length - previewQuestions.length;
 
@@ -135,7 +140,7 @@ export default function TestPreviewModal({
                         {s.max_score != null && <> из {s.max_score}</>}
                         {s.label && <> - {s.label}</>}
                         {result.levels?.[s.scale_name] && (
-                          <> · уровень: {levelLabel(result.levels[s.scale_name])}</>
+                          <> · уровень: {levelLabel(s.scale_name, result.levels[s.scale_name])}</>
                         )}
                       </li>
                     ))}

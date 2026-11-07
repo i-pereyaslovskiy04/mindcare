@@ -27,11 +27,14 @@ GENDER_LABELS = {"male": "Муж", "female": "Жен"}
 TONES = ("low", "norm", "accent", "maladaptive")
 
 
-def level_tones(rules: Optional[ScoringRulesV1]) -> dict[str, Optional[str]]:
-    """Код уровня → оттенок. 4 уровня ИТО: low/norm/accent/maladaptive."""
-    if rules is None or not rules.levels:
+def level_tones(rules: Optional[ScoringRulesV1],
+                scale: Optional[str] = None) -> dict[str, Optional[str]]:
+    """Код уровня → оттенок (уровни шкалы: свои или общие). 4 уровня ИТО:
+    low/norm/accent/maladaptive."""
+    levels = R.levels_for(rules, scale)
+    if not levels:
         return {}
-    ordered = [lv.code for lv in sorted(rules.levels, key=lambda lv: lv.min)]
+    ordered = [lv.code for lv in sorted(levels, key=lambda lv: lv.min)]
     n = len(ordered)
     if n == 1:
         tones = ["norm"]
@@ -44,22 +47,27 @@ def level_tones(rules: Optional[ScoringRulesV1]) -> dict[str, Optional[str]]:
     return dict(zip(ordered, tones))
 
 
-def level_list(rules: Optional[ScoringRulesV1]) -> list[dict]:
-    """Уровни в порядке возрастания: [{code, label, min, max, tone}]."""
-    if rules is None:
-        return []
-    tones = level_tones(rules)
+def level_list(rules: Optional[ScoringRulesV1],
+               scale: Optional[str] = None) -> list[dict]:
+    """Уровни шкалы (без scale — общие) по возрастанию: [{code, label, min, max, tone}]."""
+    tones = level_tones(rules, scale)
     return [{"code": lv.code, "label": lv.label, "min": lv.min, "max": lv.max,
              "tone": tones[lv.code]}
-            for lv in sorted(rules.levels, key=lambda lv: lv.min)]
+            for lv in sorted(R.levels_for(rules, scale), key=lambda lv: lv.min)]
 
 
-def level_codes(rules: Optional[ScoringRulesV1]) -> list[str]:
-    return [lv["code"] for lv in level_list(rules)]
+def level_codes(rules: Optional[ScoringRulesV1], scale: Optional[str] = None) -> list[str]:
+    return [lv["code"] for lv in level_list(rules, scale)]
 
 
-def level_labels(rules: Optional[ScoringRulesV1]) -> dict[str, str]:
-    return {lv["code"]: lv["label"] for lv in level_list(rules)}
+def level_labels(rules: Optional[ScoringRulesV1], scale: Optional[str] = None) -> dict[str, str]:
+    return {lv["code"]: lv["label"] for lv in level_list(rules, scale)}
+
+
+def scale_levels(rules: Optional[ScoringRulesV1]) -> dict[str, list[dict]]:
+    """Свои уровни основных шкал: {шкала: level_list}. Шкалы с общими уровнями
+    сюда не входят — для них верхнеуровневый level_list(rules)."""
+    return {code: level_list(rules, code) for code in R.own_levels(rules)}
 
 
 def scale_order(rules: Optional[ScoringRulesV1], rows: list[dict]) -> list[str]:
@@ -74,8 +82,8 @@ def enrich_row(row: dict, rules: Optional[ScoringRulesV1]) -> dict:
     if rules is None:
         return {**row, "levels": {}, "is_valid": None, "types": []}
     levels: dict = {}
-    if rules.levels:
-        levels = {s: R.level_of(rules, scores.get(s)) for s in R.main_scales(rules)}
+    if R.has_levels(rules):
+        levels = {s: R.level_of(rules, scores.get(s), s) for s in R.main_scales(rules)}
     for code, limit in R.validity_scales(rules).items():
         value = scores.get(code)
         levels[code] = None if value is None else (
@@ -111,9 +119,8 @@ def filter_rows(rows: list[dict], *, rules: Optional[ScoringRulesV1] = None,
 
 def _scale_stats(rows: list[dict], scales: list[str],
                  rules: Optional[ScoringRulesV1]) -> list[dict]:
-    main = set(R.main_scales(rules)) if rules is not None and rules.levels else set()
+    main = set(R.main_scales(rules)) if R.has_levels(rules) else set()
     validity = R.validity_scales(rules)
-    codes = level_codes(rules)
     stats = []
     for s in scales:
         values = [r["scores"][s] for r in rows if r["scores"].get(s) is not None]
@@ -127,7 +134,7 @@ def _scale_stats(rows: list[dict], scales: list[str],
         }
         if s in main:
             counts = Counter(r["levels"].get(s) for r in rows)
-            item["levels"] = {c: counts.get(c, 0) for c in codes}
+            item["levels"] = {c: counts.get(c, 0) for c in level_codes(rules, s)}
         elif s in validity:
             counts = Counter(r["levels"].get(s) for r in rows)
             item["levels"] = {c: counts.get(c, 0) for c in VALIDITY_CODES}

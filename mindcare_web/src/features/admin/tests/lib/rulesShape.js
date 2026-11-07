@@ -3,7 +3,8 @@
  *
  * Форма:
  *   { enabled, instruction, invalid_mark, type_threshold,
- *     scales: [{ _key, code, label, main, max_valid }],   // max_valid '' — не шкала достоверности
+ *     scales: [{ _key, code, label, main, max_valid,       // max_valid '' — не шкала достоверности
+ *                own_levels, levels: [{ _key, code, label, min, max }] }], // свои уровни основной шкалы
  *     levels: [{ _key, code, label, min, max }],
  *     types:  [{ _key, name, scales: [code] }] }
  *
@@ -25,6 +26,23 @@ export function emptyRules() {
   };
 }
 
+const levelFromBackend = (lv, nextKey) => ({
+  _key: nextKey(),
+  code: lv.code,
+  label: lv.label,
+  min: String(lv.min),
+  max: String(lv.max),
+});
+
+const levelsToBackend = (levels) => levels
+  .filter((lv) => lv.code.trim())
+  .map((lv) => ({
+    code: lv.code.trim(),
+    label: lv.label.trim() || lv.code.trim(),
+    min: Number(lv.min),
+    max: Number(lv.max),
+  }));
+
 export function fromBackendRules(rules, nextKey) {
   if (!rules) return emptyRules();
   const limits = Object.fromEntries(
@@ -41,14 +59,10 @@ export function fromBackendRules(rules, nextKey) {
       label: s.label,
       main: Boolean(s.main),
       max_valid: s.code in limits ? String(limits[s.code]) : '',
+      own_levels: Boolean(s.levels?.length),
+      levels: (s.levels || []).map((lv) => levelFromBackend(lv, nextKey)),
     })),
-    levels: (rules.levels || []).map((lv) => ({
-      _key: nextKey(),
-      code: lv.code,
-      label: lv.label,
-      min: String(lv.min),
-      max: String(lv.max),
-    })),
+    levels: (rules.levels || []).map((lv) => levelFromBackend(lv, nextKey)),
     types: (rules.types?.items || []).map((t) => ({
       _key: nextKey(),
       name: t.name,
@@ -66,19 +80,16 @@ export function toBackendRules(form) {
   const out = {
     version: 1,
     instruction: form.instruction.trim() || null,
-    scales: scales.map((s) => ({
-      code: s.code.trim(),
-      label: s.label.trim() || s.code.trim(),
-      main: Boolean(s.main),
-    })),
-    levels: form.levels
-      .filter((lv) => lv.code.trim())
-      .map((lv) => ({
-        code: lv.code.trim(),
-        label: lv.label.trim() || lv.code.trim(),
-        min: Number(lv.min),
-        max: Number(lv.max),
-      })),
+    scales: scales.map((s) => {
+      const own = s.main && s.own_levels ? levelsToBackend(s.levels || []) : [];
+      return {
+        code: s.code.trim(),
+        label: s.label.trim() || s.code.trim(),
+        main: Boolean(s.main),
+        ...(own.length ? { levels: own } : {}),
+      };
+    }),
+    levels: levelsToBackend(form.levels),
     validity: null,
     types: null,
   };

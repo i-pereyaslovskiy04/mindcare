@@ -51,7 +51,7 @@ HEADERS = {
     SHEET_QUESTIONS: ["№", "Текст вопроса"],
     SHEET_KEY: ["Шкала", "№ вопроса", "Вариант (порядок)", "Балл"],
     SHEET_SCALES: ["Код", "Подпись", "Основная (да/нет)", "Предел достоверности"],
-    SHEET_LEVELS: ["Код (латиница)", "Название", "От", "До"],
+    SHEET_LEVELS: ["Код (латиница)", "Название", "От", "До", "Шкала (пусто — общий уровень)"],
     SHEET_TYPES: ["Название типа", "Шкалы (через запятую)", "Порог"],
     SHEET_INTERP: ["Шкала (пусто — итоговый балл)", "От", "До", "Название", "Рекомендация"],
 }
@@ -84,8 +84,9 @@ HELP_TEXT = (
     "«Шкалы»: код (как в ключе), подпись, основная (да — для неё считается уровень), "
     "предел достоверности — только для шкал достоверности (балл выше предела делает "
     "результат недостоверным). Порядок строк — порядок колонок в выгрузке.",
-    "«Уровни»: общие для основных шкал диапазоны баллов включительно; код — латиницей "
-    "(low, norm …), без пересечений.",
+    "«Уровни»: диапазоны баллов включительно; код — латиницей (low, norm …), без "
+    "пересечений. Колонка «Шкала» пустая — уровень общий для основных шкал; с кодом "
+    "основной шкалы — свой уровень этой шкалы (заменяет общие для неё).",
     "«Типы»: название, шкалы через запятую, порог (одинаковый для всех строк). Тип "
     "выражен, если все его шкалы набрали не меньше порога.",
     "«Интерпретация»: необязательные пороги с текстом по шкале или по итоговому баллу "
@@ -184,7 +185,9 @@ def build_workbook(test: Optional[dict] = None) -> bytes:
         [s["code"], s["label"], "да" if s.get("main") else "нет", limits.get(s["code"])]
         for s in rules.get("scales") or []])
     _rows(sheets[SHEET_LEVELS], [
-        [lv["code"], lv["label"], lv["min"], lv["max"]] for lv in rules.get("levels") or []])
+        [lv["code"], lv["label"], lv["min"], lv["max"]] for lv in rules.get("levels") or []] + [
+        [lv["code"], lv["label"], lv["min"], lv["max"], s["code"]]
+        for s in rules.get("scales") or [] for lv in s.get("levels") or []])
     types = rules.get("types") or {}
     _rows(sheets[SHEET_TYPES], [
         [t["name"], ", ".join(t["scales"]), types.get("threshold")]
@@ -395,14 +398,26 @@ def _parse(wb) -> tuple[Optional[dict], list[dict]]:
     if len(scales) > MAX_SCALES:
         errors.add(SHEET_SCALES, None, None, f"не больше {MAX_SCALES} шкал")
 
-    levels = []
+    levels, own_levels = [], {}
+    by_code = {s["code"]: s for s in scales}
     for row, v in _read_rows(wb, SHEET_LEVELS, errors, required=False):
         lo, hi = _int(v[2]), _int(v[3])
         if lo is None or hi is None:
             errors.add(SHEET_LEVELS, row, "C" if lo is None else "D", "граница — целое число")
             continue
-        levels.append({"code": _text(v[0]), "label": _text(v[1]) or _text(v[0]),
-                       "min": lo, "max": hi})
+        item = {"code": _text(v[0]), "label": _text(v[1]) or _text(v[0]), "min": lo, "max": hi}
+        scale = _text(v[4])
+        if not scale:
+            levels.append(item)
+        elif scale not in by_code:
+            errors.add(SHEET_LEVELS, row, "E", "нет такой шкалы на листе «Шкалы»")
+        elif not by_code[scale]["main"]:
+            errors.add(SHEET_LEVELS, row, "E", "свои уровни — только у основной шкалы")
+        else:
+            own_levels.setdefault(scale, []).append(item)
+    for s in scales:
+        if s["code"] in own_levels:
+            s["levels"] = own_levels[s["code"]]
 
     types, thresholds = [], set()
     for row, v in _read_rows(wb, SHEET_TYPES, errors, required=False):
