@@ -20,6 +20,18 @@ for guide in campaigns methodologies participant; do
     --print-to-pdf="$PWD/$OUT/$guide.pdf" "file://$PWD/$OUT/$guide.html" 2>/dev/null
   echo "built $guide"
 done
+# Полное руководство (все части одним документом) — для печати и заказчика.
+python3 scripts/combine_help.py "$SRC" > "$SRC/.full.md"
+pandoc "$SRC/.full.md" -f markdown -t html5 --standalone --template="$SRC/template.html" \
+  --toc --toc-depth=2 --resource-path="$SRC" -M date="$DATE" -M pdf=full.pdf -o "$OUT/full.html"
+"$CHROME" --headless --no-sandbox --disable-gpu --no-pdf-header-footer \
+  --print-to-pdf="$PWD/$OUT/full.pdf" "file://$PWD/$OUT/full.html" 2>/dev/null
+if [ -n "${HELP_DOCX:-}" ]; then      # Word-версия для заказчика (по запросу)
+  pandoc "$SRC/.full.md" -f markdown -t docx --toc --toc-depth=2 --resource-path="$SRC" \
+    -M date="$DATE" -o "$HELP_DOCX"
+fi
+rm -f "$SRC/.full.md"
+echo "built full"
 pandoc "$SRC/index.md" -f markdown -t html5 --standalone --template="$SRC/template.html" \
   -M date="$DATE" -o "$OUT/index.html"
 echo "built index"
