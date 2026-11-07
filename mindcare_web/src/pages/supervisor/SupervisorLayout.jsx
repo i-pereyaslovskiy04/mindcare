@@ -68,6 +68,7 @@ const CRUMB_LABELS = {
 // parent — раздел из CRUMB_LABELS, промежуточная крошка-ссылка.
 const DYNAMIC_CRUMBS = [
   { prefix: '/supervisor/tests/', label: 'Тест', parent: '/supervisor/tests' },
+  { prefix: '/supervisor/campaigns/', label: 'Кампания', parent: '/supervisor/campaigns' },
 ];
 
 export default function SupervisorLayout() {

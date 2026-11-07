@@ -25,18 +25,18 @@ export function exportFilename(title) {
   return `Результаты_${safe}.xlsx`;
 }
 
-function formatDate(value) {
+export function formatDate(value) {
   return value ? new Date(value).toLocaleDateString('ru-RU') : '';
 }
 
-const MSK = { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+export const MSK = { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
 
-function formatMsk(value) {
+export function formatMsk(value) {
   return new Date(value).toLocaleString('ru-RU', MSK);
 }
 
 // Что сейчас видит участник по ссылке (link_state с backend).
-const LINK_STATE = {
+export const LINK_STATE = {
   open: { label: 'Открыта', tone: 'success' },
   scheduled: { label: 'Ещё не началась', tone: 'warning' },
   expired: { label: 'Срок истёк', tone: 'neutral' },
@@ -63,7 +63,9 @@ const DIALOGS = {
  * меняется), скачать xlsx, закрыть/открыть, новая ссылка, участники, удаление. Без оптимистичного успеха: карточка
  * обновляется ответом backend (onChange) или удаляется (onDeleted).
  */
-export default function CampaignCard({ campaign, onChange, onDeleted }) {
+export default function CampaignCard({ campaign, onChange, onDeleted, asPage = false }) {
+  // На своей странице название — заголовок страницы (h1).
+  const Heading = asPage ? 'h1' : 'h3';
   const baseId = useId();
   const [busy, setBusy] = useState(null);
   const [message, setMessage] = useState(null);
@@ -175,10 +177,10 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
       <header className={styles.header}>
         <div className={styles.headText}>
           {draftTitle === null ? (
-            <h3 id={titleId} className={styles.title}>{campaign.title}</h3>
+            <Heading id={titleId} className={styles.title}>{campaign.title}</Heading>
           ) : (
             <form className={styles.renameForm} onSubmit={saveTitle} noValidate>
-              <h3 id={titleId} className={styles.visuallyHidden}>{campaign.title}</h3>
+              <Heading id={titleId} className={styles.visuallyHidden}>{campaign.title}</Heading>
               <TextField
                 label="Название"
                 hint="Адрес ссылки не изменится"
