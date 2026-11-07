@@ -254,8 +254,11 @@ def _bar(title: str, x_title: str, y_title: str, *, horizontal: bool = False,
     chart = BarChart()
     chart.type = "bar" if horizontal else "col"
     chart.title = title
-    chart.x_axis.title = x_title
-    chart.y_axis.title = y_title
+    chart.title.overlay = False          # заголовок над областью построения
+    if x_title:
+        chart.x_axis.title = x_title
+    if y_title:
+        chart.y_axis.title = y_title
     chart.y_axis.majorGridlines = None
     chart.x_axis.delete = False
     chart.y_axis.delete = False
@@ -263,6 +266,9 @@ def _bar(title: str, x_title: str, y_title: str, *, horizontal: bool = False,
     if stacked:
         chart.grouping = "stacked"
         chart.overlap = 100
+        # Легенда снизу и не поверх столбцов: подписи уровней бывают длинными.
+        chart.legend.position = "b"
+        chart.legend.overlay = False
     else:
         chart.legend = None          # одна серия — подпись в заголовке
     chart.gapWidth = 40
@@ -318,7 +324,9 @@ def _charts_sheet(ws, rows: list[dict], scales: list[str],
             _set(ws, r + i, 1, R.scale_label(rules, s))
             for j, lv in enumerate(levels, start=2):
                 _set(ws, r + i, j, summary[s]["levels"].get(lv["code"], 0))
-        chart = _bar(title, "Шкала", "Участников", horizontal=True, stacked=True)
+        # Названия шкал — подписи категорий, отдельная подпись оси не нужна
+        # (в Excel она наезжала на названия).
+        chart = _bar(title, None, "Участников", horizontal=True, stacked=True)
         data = Reference(ws, min_col=2, max_col=1 + len(levels), min_row=r, max_row=r + len(codes))
         chart.add_data(data, titles_from_data=True)
         chart.set_categories(Reference(ws, min_col=1, min_row=r + 1, max_row=r + len(codes)))
@@ -326,7 +334,17 @@ def _charts_sheet(ws, rows: list[dict], scales: list[str],
             color = _TONE_COLOR.get(lv["tone"], _BAR_COLOR)
             series.graphicalProperties.solidFill = color
             series.graphicalProperties.line.solidFill = "FFFFFF"
-        chart.height = max(7.5, 1.2 + 0.8 * len(codes))
+        # Шкала участников — ровно до их числа (иначе Excel тянет до «круглого»).
+        chart.y_axis.scaling.min = 0
+        chart.y_axis.scaling.max = len(rows)
+        # Шкалы сверху вниз, как в таблице (Excel по умолчанию рисует снизу
+        # вверх); ось значений при этом остаётся внизу.
+        chart.x_axis.scaling.orientation = "maxMin"
+        chart.y_axis.crosses = "max"
+        # Высота: полосы шкал + место под заголовок и легенду снизу.
+        legend_lines = sum(1 + len(lv["label"]) // 40 for lv in levels)
+        chart.height = max(8.0, 3.0 + 1.0 * len(codes) + 0.5 * legend_lines)
+        chart.width = 24
         ws.add_chart(chart, f"{get_column_letter(len(levels) + 3)}{r}")
         r += max(len(codes) + 3, int(chart.height * 2) + 3, _CHART_ROWS)
 
@@ -343,6 +361,8 @@ def _charts_sheet(ws, rows: list[dict], scales: list[str],
         ws.add_chart(chart, f"E{r}")
         r += max(len(h["bins"]) + 3, _CHART_ROWS)
     ws.column_dimensions["A"].width = 28
+    for col in range(2, 7):            # подписи уровней в таблицах данных
+        ws.column_dimensions[get_column_letter(col)].width = 16
 
 
 def _question_stats_sheet(ws, stats: list[dict]) -> None:
