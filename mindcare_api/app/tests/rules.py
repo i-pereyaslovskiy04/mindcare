@@ -11,9 +11,15 @@
   * достоверность — все шкалы validity.scales не выше max_valid; нет блока — None;
   * тип — все его шкалы ≥ threshold; при недостоверности — с пометкой
     « (<invalid_mark>)», типы всё равно определяются.
+
+Нормы (ТЗ редактора методик, этап 2, §5): `scales[].norms` — таблицы «сырой
+балл → стандартный балл» по группам с условиями на поля анкеты кампании
+(пол, возраст, факультет). Применяются только в тестировании по ссылке:
+в каталоге студента пола и возраста нет. Группа — первая подходящая; нет
+подходящей или балл вне таблицы — значение не считается (None).
 """
 import re
-from typing import Any, Mapping, Optional
+from typing import Any, Literal, Mapping, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -24,6 +30,15 @@ _LEVEL_CODE_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 MAX_SCALES = 50
 MAX_LEVELS = 10
 MAX_TYPES = 50
+MAX_NORM_GROUPS = 20
+MAX_NORM_ROWS = 200
+# Поля анкеты кампании, по которым выбирается группа норм. Новое поле анкеты —
+# добавить сюда (и в NORM_FIELD_KIND): схема правил при этом не меняется.
+NORM_FIELDS = ("gender", "age", "faculty_code")
+NORM_FIELD_KIND = {"gender": "eq", "faculty_code": "eq", "age": "range"}
+NORM_KIND_LABELS = {"sten": "Стены", "t": "T-баллы", "stanine": "Станайны",
+                    "percentile": "Процентили", "custom": "Стандартный балл"}
+_NORM_KIND_RE = re.compile(r"^[a-z_]{1,20}$")
 # Коды достоверности в той же карте уровней участника (analytics.enrich_row).
 RESERVED_LEVEL_CODES = frozenset({"valid", "invalid"})
 
@@ -68,12 +83,103 @@ class LevelRule(_Strict):
         return self
 
 
+class NormRow(_Strict):
+    min: int = Field(ge=-100000, le=100000)
+    max: int = Field(ge=-100000, le=100000)
+    value: int = Field(ge=-100000, le=100000)
+
+    @model_validator(mode="after")
+    def _range(self):
+        if self.min > self.max:
+            raise ValueError("нижняя граница строки нормы больше верхней")
+        return self
+
+
+class NormCondition(_Strict):
+    field: Literal["gender", "age", "faculty_code"]
+    eq: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    min: Optional[int] = Field(default=None, ge=0, le=200)
+    max: Optional[int] = Field(default=None, ge=0, le=200)
+
+    @model_validator(mode="after")
+    def _shape(self):
+        if NORM_FIELD_KIND[self.field] == "eq":
+            if self.eq is None or self.min is not None or self.max is not None:
+                raise ValueError("условие по полу или факультету — точное значение")
+        else:
+            if self.eq is not None or (self.min is None and self.max is None):
+                raise ValueError("условие по возрасту — от и/или до")
+            if self.min is not None and self.max is not None and self.min > self.max:
+                raise ValueError("возраст «от» больше «до»")
+        return self
+
+    def matches(self, profile: Mapping[str, Any]) -> bool:
+        value = profile.get(self.field)
+        if value is None:
+            return False
+        if self.eq is not None:
+            return str(value) == self.eq
+        return (self.min is None or value >= self.min) and (self.max is None or value <= self.max)
+
+
+class NormGroup(_Strict):
+    when: tuple[NormCondition, ...] = Field(default=(), max_length=len(NORM_FIELDS))
+    table: tuple[NormRow, ...] = Field(min_length=1, max_length=MAX_NORM_ROWS)
+
+    @model_validator(mode="after")
+    def _check(self):
+        fields = [c.field for c in self.when]
+        if len(set(fields)) != len(fields):
+            raise ValueError("поле условия нормы указано дважды")
+        ordered = sorted(self.table, key=lambda r: r.min)
+        for a, b in zip(ordered, ordered[1:]):
+            if b.min <= a.max:
+                raise ValueError("строки таблицы норм пересекаются")
+        return self
+
+    def value_of(self, score: int) -> Optional[int]:
+        for row in self.table:
+            if row.min <= score <= row.max:
+                return row.value
+        return None
+
+
+class ScaleNorms(_Strict):
+    kind: str = "custom"
+    label: Optional[str] = None
+    groups: tuple[NormGroup, ...] = Field(min_length=1, max_length=MAX_NORM_GROUPS)
+
+    @field_validator("kind")
+    @classmethod
+    def _kind(cls, v: str) -> str:
+        if not _NORM_KIND_RE.match(v):
+            raise ValueError("тип норм: строчные латинские буквы")
+        return v
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None or not v.strip() else _text(v, 50)
+
+    @property
+    def title(self) -> str:
+        return self.label or NORM_KIND_LABELS.get(self.kind, "Стандартный балл")
+
+    def group_for(self, profile: Mapping[str, Any]) -> Optional[NormGroup]:
+        for g in self.groups:
+            if all(c.matches(profile) for c in g.when):
+                return g
+        return None
+
+
 class ScaleRule(_Strict):
     code: str
     label: str
     main: bool = False
     # Свои уровни шкалы (ТЗ этапа 2, §4.1); пусто — общие `levels` правил.
     levels: tuple["LevelRule", ...] = Field(default=(), max_length=MAX_LEVELS)
+    # Нормы (ТЗ этапа 2, §5): только тестирование по ссылке.
+    norms: Optional[ScaleNorms] = None
 
     @field_validator("code")
     @classmethod
@@ -197,6 +303,13 @@ def dump(rules: Optional[ScoringRulesV1]) -> Optional[dict]:
     for sc in out["scales"]:
         if not sc.get("levels"):
             sc.pop("levels", None)
+        if sc.get("norms") is None:
+            sc.pop("norms", None)
+        else:
+            if sc["norms"].get("label") is None:
+                sc["norms"].pop("label", None)
+            for g in sc["norms"]["groups"]:
+                g["when"] = [{k: v for k, v in c.items() if v is not None} for c in g["when"]]
     return out
 
 
@@ -263,6 +376,22 @@ def level_of(rules: Optional[ScoringRulesV1], score: Optional[int],
         if lv.min <= score <= lv.max:
             return lv.code
     return None
+
+
+def norms_of(rules: Optional[ScoringRulesV1]) -> dict[str, ScaleNorms]:
+    """{шкала: нормы} — только шкалы с нормами, в порядке шкал."""
+    return {} if rules is None else {sc.code: sc.norms for sc in rules.scales if sc.norms}
+
+
+def norm_value(rules: Optional[ScoringRulesV1], scale: str, score: Optional[int],
+               profile: Mapping[str, Any]) -> Optional[int]:
+    """Стандартный балл по нормам шкалы и анкете участника (пол, возраст,
+    факультет); None — норм нет, группа не подошла или балл вне таблицы."""
+    norms = norms_of(rules).get(scale)
+    if norms is None or score is None:
+        return None
+    group = norms.group_for(profile)
+    return None if group is None else group.value_of(int(score))
 
 
 def is_valid(rules: Optional[ScoringRulesV1], scores: Mapping[str, int]) -> Optional[bool]:
@@ -343,14 +472,40 @@ def check_against_bounds(rules: Optional[ScoringRulesV1],
         if cursor <= b["max_score"]:
             issues.append({"kind": "level_gap", "scale_name": code,
                            "min_score": cursor, "max_score": b["max_score"]})
-    return [i for i in issues
-            if i["min_score"] is None or i["min_score"] <= i["max_score"]]
+    for code, norms in norms_of(rules).items():
+        b = by_scale.get(code)
+        if b is None:
+            continue
+        for g in norms.groups:
+            cursor = b["min_score"]
+            for row in sorted(g.table, key=lambda r: r.min):
+                if row.max < cursor:
+                    continue
+                if row.min > cursor:
+                    issues.append({"kind": "norm_gap", "scale_name": code,
+                                   "min_score": cursor,
+                                   "max_score": min(row.min - 1, b["max_score"])})
+                cursor = max(cursor, row.max + 1)
+                if cursor > b["max_score"]:
+                    break
+            if cursor <= b["max_score"]:
+                issues.append({"kind": "norm_gap", "scale_name": code,
+                               "min_score": cursor, "max_score": b["max_score"]})
+    seen, out = set(), []
+    for i in issues:
+        key = (i["kind"], i["scale_name"], i["min_score"], i["max_score"])
+        if key in seen or (i["min_score"] is not None and i["min_score"] > i["max_score"]):
+            continue
+        seen.add(key)
+        out.append(i)
+    return out
 
 
 ISSUE_TEXT = {
     "scale_missing": "у вопросов есть шкала «{s}», которой нет в правилах",
     "scale_unused": "шкала «{s}» из правил не встречается ни в одном вопросе",
     "level_gap": "уровни не покрывают баллы {lo}–{hi} шкалы «{s}»",
+    "norm_gap": "таблица норм не покрывает баллы {lo}–{hi} шкалы «{s}»",
 }
 
 

@@ -102,7 +102,9 @@ def _results_sheet(ws, rows, scales, rules):
     has_validity = bool(R.validity_scales(rules))
     has_types = rules is not None and rules.types is not None
     tones = {s: analytics.level_tones(rules, s) for s in scales}
-    titles = [*_PERSON_TITLES, *[R.scale_label(rules, s) for s in scales]]
+    norm_scales = [s for s in scales if s in R.norms_of(rules)]
+    titles = [*_PERSON_TITLES, *[R.scale_label(rules, s) for s in scales],
+              *[f"{R.scale_label(rules, s)} ({R.norms_of(rules)[s].title})" for s in norm_scales]]
     if has_validity:
         titles.append("Достоверность")
     if has_types:
@@ -119,6 +121,9 @@ def _results_sheet(ws, rows, scales, rules):
             _set(ws, row, first_scale_col + j, r["scores"].get(s),
                  fill=_fill(tones[s], r["levels"].get(s)))
         col = first_scale_col + len(scales)
+        for s in norm_scales:
+            _set(ws, row, col, r["norms"].get(s))
+            col += 1
         if has_validity:
             _set(ws, row, col, "достоверно" if r["is_valid"] else R.invalid_mark(rules))
             col += 1

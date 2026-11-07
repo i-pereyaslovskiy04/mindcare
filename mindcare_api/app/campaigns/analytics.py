@@ -85,10 +85,11 @@ def scale_order(rules: Optional[ScoringRulesV1], rows: list[dict]) -> list[str]:
 
 
 def enrich_row(row: dict, rules: Optional[ScoringRulesV1]) -> dict:
-    """Добавляет levels {шкала: код}, is_valid, types [str]."""
+    """Добавляет levels {шкала: код}, is_valid, types [str], norms {шкала:
+    стандартный балл} (по анкете участника: пол, возраст, факультет)."""
     scores = row["scores"]
     if rules is None:
-        return {**row, "levels": {}, "is_valid": None, "types": []}
+        return {**row, "levels": {}, "is_valid": None, "types": [], "norms": {}}
     levels: dict = {}
     if R.has_levels(rules):
         levels = {s: R.level_of(rules, scores.get(s), s) for s in R.main_scales(rules)}
@@ -96,8 +97,10 @@ def enrich_row(row: dict, rules: Optional[ScoringRulesV1]) -> dict:
         value = scores.get(code)
         levels[code] = None if value is None else (
             "valid" if value <= limit else "invalid")
+    profile = {f: row.get(f) for f in R.NORM_FIELDS}
+    norms = {s: R.norm_value(rules, s, scores.get(s), profile) for s in R.norms_of(rules)}
     return {**row, "levels": levels, "is_valid": R.is_valid(rules, scores),
-            "types": R.types_of(rules, scores)}
+            "types": R.types_of(rules, scores), "norms": norms}
 
 
 def filter_rows(rows: list[dict], *, rules: Optional[ScoringRulesV1] = None,

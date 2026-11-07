@@ -218,6 +218,12 @@ export default function CampaignResults({ campaignUuid }) {
         <h4 id={`${campaignUuid}-rows`} className={styles.heading}>
           Участники ({data.items.length})
         </h4>
+        {scales.some((s) => s.norm_title) && (
+          <p className={styles.legend}>
+            В скобках после балла — стандартный балл по нормам:{' '}
+            {scales.filter((s) => s.norm_title).map((s) => `${s.code} — ${s.norm_title}`).join(', ')}.
+          </p>
+        )}
         {legend.length > 0 && (
           <p className={styles.legend}>
             Цвет балла:{' '}
@@ -238,7 +244,10 @@ export default function CampaignResults({ campaignUuid }) {
                 <th scope="col">Пол</th>
                 <th scope="col">Возраст</th>
                 {scales.map((s) => (
-                  <th key={s.code} scope="col" title={s.label}>{s.code}</th>
+                  <th key={s.code} scope="col"
+                    title={s.norm_title ? `${s.label}; в скобках — ${s.norm_title}` : s.label}>
+                    {s.code}
+                  </th>
                 ))}
                 {hasValidity && <th scope="col">Достоверность</th>}
                 {hasTypes && <th scope="col">Тип</th>}
@@ -257,6 +266,12 @@ export default function CampaignResults({ campaignUuid }) {
                     return (
                       <td key={s.code} className={`${styles.score} ${levelClass(s.code, code)}`}>
                         {r.scores[s.code] ?? '—'}
+                        {r.norms?.[s.code] != null && (
+                          <span className={styles.norm} title={s.norm_title}>
+                            {` (${r.norms[s.code]})`}
+                            <span className={styles.srOnly}>{` ${s.norm_title}`}</span>
+                          </span>
+                        )}
                         {code && code !== 'valid' && (code === 'invalid' || lv?.tone !== 'norm') && (
                           <span className={styles.srOnly}>
                             {` (${code === 'invalid' ? 'недостоверно' : lv?.label})`}

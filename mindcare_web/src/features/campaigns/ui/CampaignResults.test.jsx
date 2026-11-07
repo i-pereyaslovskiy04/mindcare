@@ -144,3 +144,15 @@ test('свои уровни шкалы: подписи в сводке, леге
   const row = screen.getByRole('row', { name: /Иванов Иван/ });
   expect(within(row).getByText('(Клиническая)', { exact: false })).toBeInTheDocument();
 });
+
+test('нормы: стандартный балл в скобках и пояснение', async () => {
+  const base = payload();
+  getCampaignResults.mockResolvedValue(payload({
+    scales: [base.scales[0], { ...base.scales[1], norm_title: 'Стены' }],
+    items: [{ ...base.items[0], norms: { VIII: 7 } }],
+  }));
+  render(<CampaignResults campaignUuid="c-1" />);
+  expect(await screen.findByText(/стандартный балл по нормам: VIII — Стены/)).toBeInTheDocument();
+  const row = screen.getByRole('row', { name: /Иванов Иван/ });
+  expect(within(row).getByText('(7)', { exact: false })).toBeInTheDocument();
+});

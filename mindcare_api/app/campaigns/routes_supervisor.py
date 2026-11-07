@@ -284,7 +284,8 @@ def get_results(
     return {
         "has_rules": rules is not None,
         "has_validity": bool(test_rules.validity_scales(rules)),
-        "scales": [{"code": s, "label": test_rules.scale_label(rules, s)}
+        "scales": [{"code": s, "label": test_rules.scale_label(rules, s),
+                    "norm_title": (n.title if (n := test_rules.norms_of(rules).get(s)) else None)}
                    for s in scales],
         # Уровни по возрастанию с оттенком (low/norm/accent/maladaptive) для UI.
         "levels": analytics.level_list(rules),
@@ -302,7 +303,7 @@ def get_results(
         "items": [{
             **{k: r[k] for k in ("uuid", "full_name", "faculty_code", "specialty",
                                  "age", "gender", "submitted_at", "scores",
-                                 "levels", "is_valid", "types")},
+                                 "levels", "is_valid", "types", "norms")},
             "faculty_label": faculty_label(r["faculty_code"]),
         } for r in rows],
         "summary": analytics.summarize(rows, rules),

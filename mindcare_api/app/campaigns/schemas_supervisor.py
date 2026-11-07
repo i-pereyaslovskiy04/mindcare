@@ -124,6 +124,7 @@ class CampaignResponseListOut(BaseModel):
 class ResultScaleOut(BaseModel):
     code: str
     label: str
+    norm_title: Optional[str] = None     # «Стены» — у шкал с нормами
 
 
 class ResultRowOut(BaseModel):
@@ -139,6 +140,7 @@ class ResultRowOut(BaseModel):
     levels: dict[str, Optional[str]]
     is_valid: Optional[bool]
     types: list[str]
+    norms: dict[str, Optional[int]] = {}   # стандартные баллы (ТЗ этапа 2, §5)
 
 
 class ScaleStatOut(BaseModel):

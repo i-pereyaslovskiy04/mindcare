@@ -3,7 +3,8 @@ import Icon from '../../../../components/Icon/Icon';
 import Button from '../../../../components/UI/Button/Button';
 import Checkbox from '../../../../components/UI/Checkbox/Checkbox';
 import MultiSelect from '../../../../components/UI/MultiSelect/MultiSelect';
-import { missingScaleCodes } from '../lib/rulesShape';
+import Select from '../../../../components/UI/Select/Select';
+import { NORM_KINDS, emptyNormGroup, missingScaleCodes } from '../lib/rulesShape';
 import styles from './RulesBuilder.module.css';
 
 /**
@@ -38,6 +39,7 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
   const addScales = () => set({
     scales: [...value.scales, ...missing.map((code) => ({
       _key: nextKey(), code, label: code, main: true, max_valid: '', own_levels: false, levels: [],
+      norms: { enabled: false, kind: 'sten', label: '', groups: [] },
     }))],
   });
 
@@ -113,6 +115,22 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
               </Button>
             </div>
           </div>
+          <Checkbox checked={Boolean(s.norms?.enabled)} label="Нормы (стандартные баллы)"
+            onChange={(checked) => set({
+              scales: patchAt(value.scales, idx, {
+                norms: {
+                  ...(s.norms || { kind: 'sten', label: '', groups: [] }),
+                  enabled: checked,
+                  groups: checked && !(s.norms?.groups || []).length
+                    ? [emptyNormGroup(nextKey)] : (s.norms?.groups || []),
+                },
+              }),
+            })} />
+          {s.norms?.enabled && (
+            <NormsEditor norms={s.norms} scaleName={s.label || s.code} nextKey={nextKey} id={id}
+              prefix={`n${s._key}`}
+              onChange={(norms) => set({ scales: patchAt(value.scales, idx, { norms }) })} />
+          )}
           {s.main && s.own_levels && (
             <div className={styles.ownLevels}>
               <p className={styles.hint}>
@@ -128,6 +146,7 @@ export default function RulesBuilder({ value, onChange, questions, nextKey, disa
         <Button variant="secondary" onClick={() => set({
           scales: [...value.scales, {
             _key: nextKey(), code: '', label: '', main: true, max_valid: '', own_levels: false, levels: [],
+            norms: { enabled: false, kind: 'sten', label: '', groups: [] },
           }],
         })}>
           + Шкала
@@ -245,5 +264,111 @@ function LevelRows({ levels, onChange, nextKey, id, prefix }) {
         </Button>
       </div>
     </>
+  );
+}
+
+const GENDERS = [
+  { value: '', label: 'Любой' }, { value: 'female', label: 'Женский' }, { value: 'male', label: 'Мужской' },
+];
+
+/**
+ * Нормы шкалы (ТЗ этапа 2, §5): тип, подпись, группы (пол, возраст) с
+ * таблицами «сырой балл → стандартный». Применяются только в тестировании по
+ * ссылке; группа — первая подходящая по анкете участника.
+ */
+function NormsEditor({ norms, onChange, nextKey, id, prefix, scaleName }) {
+  const set = (patch) => onChange({ ...norms, ...patch });
+  const setGroup = (gi, patch) => set({
+    groups: norms.groups.map((g, i) => (i === gi ? { ...g, ...patch } : g)),
+  });
+  const setRow = (gi, ri, patch) => setGroup(gi, {
+    table: norms.groups[gi].table.map((r, i) => (i === ri ? { ...r, ...patch } : r)),
+  });
+  return (
+    <div className={styles.ownLevels}>
+      <p className={styles.hint}>
+        Нормы шкалы «{scaleName}» — только для тестирования по ссылке. Группа выбирается
+        по анкете участника, первая подходящая; группа без условий — для остальных.
+      </p>
+      <div className={styles.row4}>
+        <Select label="Тип" value={norms.kind} appearance="field" options={NORM_KINDS}
+          onChange={(v) => set({ kind: v })} />
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor={id(`${prefix}-label`)}>Подпись (необязательно)</label>
+          <input id={id(`${prefix}-label`)} className={styles.input} value={norms.label}
+            onChange={(e) => set({ label: e.target.value })} />
+        </div>
+      </div>
+      {norms.groups.map((g, gi) => (
+        <div key={g._key} className={styles.card}>
+          <div className={styles.row4}>
+            <Select label={`Группа ${gi + 1}: пол`} value={g.gender} appearance="field" options={GENDERS}
+              onChange={(v) => setGroup(gi, { gender: v })} />
+            <div className={styles.pair}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor={id(`${prefix}-${g._key}-amin`)}>Возраст от</label>
+                <input id={id(`${prefix}-${g._key}-amin`)} className={styles.inputNum} type="number"
+                  value={g.age_min} onChange={(e) => setGroup(gi, { age_min: e.target.value })} />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor={id(`${prefix}-${g._key}-amax`)}>до</label>
+                <input id={id(`${prefix}-${g._key}-amax`)} className={styles.inputNum} type="number"
+                  value={g.age_max} onChange={(e) => setGroup(gi, { age_max: e.target.value })} />
+              </div>
+            </div>
+            <div className={styles.actions}>
+              <Button variant="icon" size="sm" tone="danger" aria-label={`Удалить группу норм ${gi + 1}`}
+                title="Удалить группу"
+                onClick={() => set({ groups: norms.groups.filter((_, i) => i !== gi) })}>
+                <Icon name="trash" size={14} />
+              </Button>
+            </div>
+          </div>
+          {g.extra?.length > 0 && (
+            <p className={styles.hint}>
+              Дополнительные условия из файла: {g.extra.map((c) => `${c.field} = ${c.eq ?? ''}`).join(', ')}
+            </p>
+          )}
+          {g.table.map((r, ri) => (
+            <div key={r._key} className={styles.row4}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor={id(`${prefix}-${r._key}-min`)}>Сырой от</label>
+                <input id={id(`${prefix}-${r._key}-min`)} className={styles.inputNum} type="number"
+                  value={r.min} onChange={(e) => setRow(gi, ri, { min: e.target.value })} />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor={id(`${prefix}-${r._key}-max`)}>Сырой до</label>
+                <input id={id(`${prefix}-${r._key}-max`)} className={styles.inputNum} type="number"
+                  value={r.max} onChange={(e) => setRow(gi, ri, { max: e.target.value })} />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor={id(`${prefix}-${r._key}-val`)}>Значение</label>
+                <input id={id(`${prefix}-${r._key}-val`)} className={styles.inputNum} type="number"
+                  value={r.value} onChange={(e) => setRow(gi, ri, { value: e.target.value })} />
+              </div>
+              <div className={styles.actions}>
+                <Button variant="icon" size="sm" tone="danger" aria-label="Удалить строку нормы"
+                  title="Удалить строку"
+                  onClick={() => setGroup(gi, { table: g.table.filter((_, i) => i !== ri) })}>
+                  <Icon name="trash" size={14} />
+                </Button>
+              </div>
+            </div>
+          ))}
+          <div className={styles.buttons}>
+            <Button variant="secondary" onClick={() => setGroup(gi, {
+              table: [...g.table, { _key: nextKey(), min: '', max: '', value: '' }],
+            })}>
+              + Строка
+            </Button>
+          </div>
+        </div>
+      ))}
+      <div className={styles.buttons}>
+        <Button variant="secondary" onClick={() => set({ groups: [...norms.groups, emptyNormGroup(nextKey)] })}>
+          + Группа норм
+        </Button>
+      </div>
+    </div>
   );
 }

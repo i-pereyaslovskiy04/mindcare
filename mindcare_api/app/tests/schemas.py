@@ -203,7 +203,7 @@ class InterpretationIssueRead(BaseModel):
 class RuleIssueRead(BaseModel):
     """ADR-037: несогласованность правил с вопросами. Блокирует отправку на
     проверку и публикацию (422), в черновике — предупреждение."""
-    kind:       Literal["scale_missing", "scale_unused", "level_gap"]
+    kind:       Literal["scale_missing", "scale_unused", "level_gap", "norm_gap"]
     scale_name: str
     min_score:  Optional[int] = None
     max_score:  Optional[int] = None

@@ -43,6 +43,7 @@ SHEET_SCALES = "Шкалы"
 SHEET_LEVELS = "Уровни"
 SHEET_TYPES = "Типы"
 SHEET_INTERP = "Интерпретация"
+SHEET_NORMS = "Нормы"
 
 HEADERS = {
     SHEET_META: ["Поле", "Значение"],
@@ -50,16 +51,22 @@ HEADERS = {
     SHEET_QOPTIONS: ["№ вопроса", "Порядок", "Текст варианта"],
     SHEET_QUESTIONS: ["№", "Текст вопроса"],
     SHEET_KEY: ["Шкала", "№ вопроса", "Вариант (порядок)", "Балл"],
-    SHEET_SCALES: ["Код", "Подпись", "Основная (да/нет)", "Предел достоверности"],
+    SHEET_SCALES: ["Код", "Подпись", "Основная (да/нет)", "Предел достоверности",
+                   "Нормы: тип (sten, t, stanine, percentile, custom)", "Нормы: подпись"],
     SHEET_LEVELS: ["Код (латиница)", "Название", "От", "До", "Шкала (пусто — общий уровень)"],
     SHEET_TYPES: ["Название типа", "Шкалы (через запятую)", "Порог"],
     SHEET_INTERP: ["Шкала (пусто — итоговый балл)", "От", "До", "Название", "Рекомендация"],
+    SHEET_NORMS: ["Шкала", "Пол (муж/жен, пусто — любой)", "Возраст от", "Возраст до",
+                  "Факультет (код, пусто — любой)", "Сырой балл от", "Сырой балл до", "Значение"],
 }
 META_FIELDS = ("Название", "Описание", "Инструкция", "Подсчёт", "Только по ссылке")
 SCORING = {"сумма": "sum", "sum": "sum", "среднее": "average", "average": "average",
            "взвешенная": "weighted", "weighted": "weighted"}
 SCORING_OUT = {"sum": "сумма", "average": "среднее", "weighted": "взвешенная"}
 YES = {"да", "yes", "1", "true", "+"}
+_GENDER_IN = {"муж": "male", "м": "male", "male": "male", "мужской": "male",
+              "жен": "female", "ж": "female", "female": "female", "женский": "female"}
+_GENDER_OUT = {"male": "муж", "female": "жен"}
 NO = {"нет", "no", "0", "false", "-", ""}
 
 HELP_TEXT = (
@@ -91,6 +98,11 @@ HELP_TEXT = (
     "выражен, если все его шкалы набрали не меньше порога.",
     "«Интерпретация»: необязательные пороги с текстом по шкале или по итоговому баллу "
     "— то, что видит студент в своём результате.",
+    "«Нормы»: необязательный перевод сырого балла шкалы в стандартный (стены, T-баллы …) "
+    "— только для тестирования по ссылке. Строка — диапазон сырых баллов и значение; "
+    "строки с одинаковыми шкалой, полом, возрастом и факультетом — одна группа. Группа "
+    "выбирается по анкете участника, первая подходящая; группа без условий — для всех "
+    "остальных. Тип и подпись норм — колонки E и F листа «Шкалы».",
     "",
     "Пример заполненного шаблона — выгрузка любой методики кнопкой «Выгрузить в xlsx» "
     "(например, ИТО).",
@@ -182,8 +194,20 @@ def build_workbook(test: Optional[dict] = None) -> bytes:
 
     limits = {v["code"]: v["max_valid"] for v in (rules.get("validity") or {}).get("scales", [])}
     _rows(sheets[SHEET_SCALES], [
-        [s["code"], s["label"], "да" if s.get("main") else "нет", limits.get(s["code"])]
+        [s["code"], s["label"], "да" if s.get("main") else "нет", limits.get(s["code"]),
+         (s.get("norms") or {}).get("kind"), (s.get("norms") or {}).get("label")]
         for s in rules.get("scales") or []])
+    norm_rows = []
+    for s in rules.get("scales") or []:
+        for g in (s.get("norms") or {}).get("groups") or []:
+            cond = {c["field"]: c for c in g.get("when") or []}
+            gender = _GENDER_OUT.get((cond.get("gender") or {}).get("eq"))
+            age = cond.get("age") or {}
+            faculty = (cond.get("faculty_code") or {}).get("eq")
+            for row in g["table"]:
+                norm_rows.append([s["code"], gender, age.get("min"), age.get("max"), faculty,
+                                  row["min"], row["max"], row["value"]])
+    _rows(sheets[SHEET_NORMS], norm_rows)
     _rows(sheets[SHEET_LEVELS], [
         [lv["code"], lv["label"], lv["min"], lv["max"]] for lv in rules.get("levels") or []] + [
         [lv["code"], lv["label"], lv["min"], lv["max"], s["code"]]
@@ -397,6 +421,10 @@ def _parse(wb) -> tuple[Optional[dict], list[dict]]:
         scales.append({"code": code, "label": _text(v[1]) or code, "main": main in YES})
     if len(scales) > MAX_SCALES:
         errors.add(SHEET_SCALES, None, None, f"не больше {MAX_SCALES} шкал")
+    norm_meta = {}
+    for row, v in _read_rows(wb, SHEET_SCALES, errors, required=False):
+        if _text(v[0]) and (_text(v[4]) or _text(v[5])):
+            norm_meta[_text(v[0])] = (row, _text(v[4]).lower() or "custom", _text(v[5]) or None)
 
     levels, own_levels = [], {}
     by_code = {s["code"]: s for s in scales}
@@ -418,6 +446,50 @@ def _parse(wb) -> tuple[Optional[dict], list[dict]]:
     for s in scales:
         if s["code"] in own_levels:
             s["levels"] = own_levels[s["code"]]
+
+    from app.student_verification.faculties import FACULTY_CODES
+    norm_groups: dict[str, dict] = {}          # шкала → {условия: группа}
+    for row, v in _read_rows(wb, SHEET_NORMS, errors, required=False):
+        scale = _text(v[0])
+        if scale not in by_code:
+            errors.add(SHEET_NORMS, row, "A", "нет такой шкалы на листе «Шкалы»")
+            continue
+        when = []
+        gender_raw = _text(v[1]).lower()
+        if gender_raw:
+            if gender_raw not in _GENDER_IN:
+                errors.add(SHEET_NORMS, row, "B", "пол: «муж», «жен» или пусто")
+                continue
+            when.append({"field": "gender", "eq": _GENDER_IN[gender_raw]})
+        age_lo, age_hi = _int(v[2]), _int(v[3])
+        if (_text(v[2]) and age_lo is None) or (_text(v[3]) and age_hi is None):
+            errors.add(SHEET_NORMS, row, "C" if _text(v[2]) and age_lo is None else "D",
+                       "возраст — целое число")
+            continue
+        if age_lo is not None or age_hi is not None:
+            when.append({"field": "age", "min": age_lo, "max": age_hi})
+        faculty = _text(v[4])
+        if faculty:
+            if faculty not in FACULTY_CODES:
+                errors.add(SHEET_NORMS, row, "E", "нет такого кода факультета")
+                continue
+            when.append({"field": "faculty_code", "eq": faculty})
+        lo, hi, value = _int(v[5]), _int(v[6]), _int(v[7])
+        if lo is None or hi is None or value is None:
+            col = "F" if lo is None else ("G" if hi is None else "H")
+            errors.add(SHEET_NORMS, row, col, "целое число")
+            continue
+        key = repr(when)
+        group = norm_groups.setdefault(scale, {}).setdefault(key, {"when": when, "table": []})
+        group["table"].append({"min": lo, "max": hi, "value": value})
+    for s in scales:
+        if s["code"] in norm_groups:
+            _, kind, label = norm_meta.get(s["code"], (None, "custom", None))
+            s["norms"] = {"kind": kind, "label": label,
+                          "groups": list(norm_groups[s["code"]].values())}
+    for code, (row, _, _) in norm_meta.items():
+        if code not in norm_groups:
+            errors.add(SHEET_SCALES, row, "E", "тип норм указан, но на листе «Нормы» нет строк")
 
     types, thresholds = [], set()
     for row, v in _read_rows(wb, SHEET_TYPES, errors, required=False):

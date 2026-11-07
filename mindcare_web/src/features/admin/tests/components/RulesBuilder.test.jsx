@@ -58,3 +58,19 @@ test('свои уровни у основной шкалы', () => {
   expect(rules.scales[0].levels).toEqual([{ code: 'norm', label: 'norm', min: 0, max: 0 }]);
   expect(rules.levels).toEqual([]);
 });
+
+test('нормы шкалы: группа и строка таблицы', () => {
+  const onValue = jest.fn();
+  render(<Harness questions={[{ scale: 'A' }]} onValue={onValue} />);
+  userEvent.click(screen.getByRole('checkbox', { name: /Задать правила обработки/ }));
+  userEvent.click(screen.getByRole('button', { name: /Добавить шкалы из вопросов/ }));
+  userEvent.click(screen.getByRole('checkbox', { name: 'Нормы (стандартные баллы)' }));
+  userEvent.type(screen.getByLabelText('Возраст от'), '17');
+  userEvent.type(screen.getByLabelText('Сырой от'), '0');
+  userEvent.type(screen.getByLabelText('Сырой до'), '5');
+  userEvent.type(screen.getByLabelText('Значение'), '4');
+  const rules = toBackendRules(onValue.mock.calls.at(-1)[0]);
+  expect(rules.scales[0].norms).toEqual({
+    kind: 'sten', groups: [{ when: [{ field: 'age', min: 17 }], table: [{ min: 0, max: 5, value: 4 }] }],
+  });
+});

@@ -4,7 +4,9 @@
  * Форма:
  *   { enabled, instruction, invalid_mark, type_threshold,
  *     scales: [{ _key, code, label, main, max_valid,       // max_valid '' — не шкала достоверности
- *                own_levels, levels: [{ _key, code, label, min, max }] }], // свои уровни основной шкалы
+ *                own_levels, levels: [{ _key, code, label, min, max }],    // свои уровни основной шкалы
+ *                norms: { enabled, kind, label, groups: [{ _key, gender, age_min, age_max,
+ *                         extra: [условия backend как есть], table: [{ _key, min, max, value }] }] } }],
  *     levels: [{ _key, code, label, min, max }],
  *     types:  [{ _key, name, scales: [code] }] }
  *
@@ -43,6 +45,71 @@ const levelsToBackend = (levels) => levels
     max: Number(lv.max),
   }));
 
+export const NORM_KINDS = [
+  { value: 'sten', label: 'Стены' },
+  { value: 't', label: 'T-баллы' },
+  { value: 'stanine', label: 'Станайны' },
+  { value: 'percentile', label: 'Процентили' },
+  { value: 'custom', label: 'Другое' },
+];
+
+export function emptyNormGroup(nextKey) {
+  return {
+    _key: nextKey(), gender: '', age_min: '', age_max: '', extra: [],
+    table: [{ _key: nextKey(), min: '', max: '', value: '' }],
+  };
+}
+
+function normsFromBackend(norms, nextKey) {
+  if (!norms) return { enabled: false, kind: 'sten', label: '', groups: [] };
+  return {
+    enabled: true,
+    kind: norms.kind || 'custom',
+    label: norms.label || '',
+    groups: (norms.groups || []).map((g) => {
+      const by = Object.fromEntries((g.when || []).map((c) => [c.field, c]));
+      return {
+        _key: nextKey(),
+        gender: by.gender?.eq || '',
+        age_min: by.age?.min != null ? String(by.age.min) : '',
+        age_max: by.age?.max != null ? String(by.age.max) : '',
+        // Условия, которых нет в форме (например, факультет), сохраняются как есть.
+        extra: (g.when || []).filter((c) => c.field !== 'gender' && c.field !== 'age'),
+        table: (g.table || []).map((r) => ({
+          _key: nextKey(), min: String(r.min), max: String(r.max), value: String(r.value),
+        })),
+      };
+    }),
+  };
+}
+
+function normsToBackend(norms) {
+  if (!norms?.enabled) return null;
+  const groups = norms.groups.map((g) => {
+    const when = [];
+    if (g.gender) when.push({ field: 'gender', eq: g.gender });
+    if (!isBlankValue(g.age_min) || !isBlankValue(g.age_max)) {
+      when.push({
+        field: 'age',
+        ...(isBlankValue(g.age_min) ? {} : { min: Number(g.age_min) }),
+        ...(isBlankValue(g.age_max) ? {} : { max: Number(g.age_max) }),
+      });
+    }
+    return {
+      when: [...when, ...(g.extra || [])],
+      table: g.table
+        .filter((r) => !isBlankValue(r.min) && !isBlankValue(r.max) && !isBlankValue(r.value))
+        .map((r) => ({ min: Number(r.min), max: Number(r.max), value: Number(r.value) })),
+    };
+  }).filter((g) => g.table.length);
+  if (!groups.length) return null;
+  return { kind: norms.kind || 'custom', ...(norms.label.trim() ? { label: norms.label.trim() } : {}), groups };
+}
+
+function isBlankValue(v) {
+  return v === '' || v == null;
+}
+
 export function fromBackendRules(rules, nextKey) {
   if (!rules) return emptyRules();
   const limits = Object.fromEntries(
@@ -61,6 +128,7 @@ export function fromBackendRules(rules, nextKey) {
       max_valid: s.code in limits ? String(limits[s.code]) : '',
       own_levels: Boolean(s.levels?.length),
       levels: (s.levels || []).map((lv) => levelFromBackend(lv, nextKey)),
+      norms: normsFromBackend(s.norms, nextKey),
     })),
     levels: (rules.levels || []).map((lv) => levelFromBackend(lv, nextKey)),
     types: (rules.types?.items || []).map((t) => ({
@@ -82,11 +150,13 @@ export function toBackendRules(form) {
     instruction: form.instruction.trim() || null,
     scales: scales.map((s) => {
       const own = s.main && s.own_levels ? levelsToBackend(s.levels || []) : [];
+      const norms = normsToBackend(s.norms);
       return {
         code: s.code.trim(),
         label: s.label.trim() || s.code.trim(),
         main: Boolean(s.main),
         ...(own.length ? { levels: own } : {}),
+        ...(norms ? { norms } : {}),
       };
     }),
     levels: levelsToBackend(form.levels),

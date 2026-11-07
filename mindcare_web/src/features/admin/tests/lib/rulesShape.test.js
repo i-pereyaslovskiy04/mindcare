@@ -75,3 +75,30 @@ test('свои уровни шкалы — туда-обратно; у не ос
   const notMain = { ...form, scales: form.scales.map((s) => ({ ...s, main: false })) };
   expect(toBackendRules(notMain).scales[1]).not.toHaveProperty('levels');
 });
+
+test('нормы шкалы — туда-обратно, условия из файла сохраняются', () => {
+  const rules = {
+    ...ITO_LIKE,
+    scales: [
+      ITO_LIKE.scales[0],
+      {
+        ...ITO_LIKE.scales[1],
+        norms: {
+          kind: 'sten',
+          groups: [
+            { when: [{ field: 'gender', eq: 'female' }, { field: 'age', min: 17, max: 25 },
+              { field: 'faculty_code', eq: 'law' }],
+            table: [{ min: 0, max: 4, value: 3 }] },
+            { when: [], table: [{ min: 0, max: 9, value: 5 }] },
+          ],
+        },
+      },
+    ],
+  };
+  const form = fromBackendRules(rules, nextKey);
+  expect(form.scales[1].norms.enabled).toBe(true);
+  expect(form.scales[1].norms.groups[0].extra).toEqual([{ field: 'faculty_code', eq: 'law' }]);
+  expect(toBackendRules(form)).toEqual(rules);
+  const off = { ...form, scales: form.scales.map((s) => ({ ...s, norms: { ...s.norms, enabled: false } })) };
+  expect(toBackendRules(off).scales[1]).not.toHaveProperty('norms');
+});
