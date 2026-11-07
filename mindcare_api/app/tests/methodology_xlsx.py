@@ -7,10 +7,11 @@
                                 «лист / строка / колонка».
 
 Листы: «Методика», «Варианты ответа», «Вопросы», «Ключ», «Шкалы», «Уровни»,
-«Типы», «Интерпретация». Все вопросы — single_choice с ОБЩИМ набором вариантов
-(«Да/Нет», шкала Лайкерта); вопрос — не больше одной шкалы (ограничение
-движка app/tests/scoring.py). Вопрос без строк ключа — буферный (все варианты
-0 баллов).
+«Типы», «Интерпретация» и необязательный «Варианты вопросов». Все вопросы —
+single_choice. Варианты — общий набор («Варианты ответа»: «Да/Нет», шкала
+Лайкерта) или свой у вопроса («Варианты вопросов»: HADS и подобные; свой набор
+важнее общего). Вопрос — не больше одной шкалы (ограничение движка
+app/tests/scoring.py). Вопрос без строк ключа — буферный (все варианты 0 баллов).
 
 Безопасность: только .xlsx (zip), ≤ MAX_BYTES; openpyxl read_only + data_only
 (формулы не исполняются, берётся закэшированное значение); лимиты строк;
@@ -35,6 +36,7 @@ MAX_ROWS = 5000            # на любой лист (ключ: вопросы 
 SHEET_HELP = "Как заполнить"
 SHEET_META = "Методика"
 SHEET_OPTIONS = "Варианты ответа"
+SHEET_QOPTIONS = "Варианты вопросов"
 SHEET_QUESTIONS = "Вопросы"
 SHEET_KEY = "Ключ"
 SHEET_SCALES = "Шкалы"
@@ -45,6 +47,7 @@ SHEET_INTERP = "Интерпретация"
 HEADERS = {
     SHEET_META: ["Поле", "Значение"],
     SHEET_OPTIONS: ["Порядок", "Текст варианта"],
+    SHEET_QOPTIONS: ["№ вопроса", "Порядок", "Текст варианта"],
     SHEET_QUESTIONS: ["№", "Текст вопроса"],
     SHEET_KEY: ["Шкала", "№ вопроса", "Вариант (порядок)", "Балл"],
     SHEET_SCALES: ["Код", "Подпись", "Основная (да/нет)", "Предел достоверности"],
@@ -68,8 +71,13 @@ HELP_TEXT = (
     "перед вопросами), Подсчёт: сумма | среднее | взвешенная, Только по ссылке: да/нет.",
     "«Варианты ответа»: общий набор для всех вопросов по порядку (1, 2, …), например "
     "«Да», «Нет» или шкала 1–5.",
+    "«Варианты вопросов»: если у вопроса свои варианты (как в HADS) — строки «№ вопроса, "
+    "порядок (1, 2, … у каждого вопроса заново), текст». Свой набор заменяет общий; "
+    "вопросы без строк здесь получают общий набор. Если свои варианты у всех вопросов, "
+    "лист «Варианты ответа» можно не заполнять.",
     "«Вопросы»: № по порядку без пропусков (1, 2, 3 …) и текст.",
-    "«Ключ»: строка на каждый значимый ответ — шкала, № вопроса, порядок варианта и "
+    "«Ключ»: строка на каждый значимый ответ — шкала, № вопроса, порядок варианта "
+    "(в наборе этого вопроса) и "
     "балл. Вопрос относится не больше чем к одной шкале. Вопрос без строк ключа "
     "в подсчёте не участвует. Пустая шкала — подсчёт по итоговому баллу (тогда пустая "
     "у всех строк).",
@@ -91,8 +99,8 @@ HELP_TEXT = (
 # ── выгрузка ──────────────────────────────────────────────────────────────────
 
 class NotRepresentable(ValueError):
-    """Методику нельзя выразить шаблоном (разные наборы вариантов, не
-    single_choice) — выгрузка невозможна → 422."""
+    """Методику нельзя выразить шаблоном (не single_choice, медиа) —
+    выгрузка невозможна → 422."""
 
 
 def _set(ws, row: int, col: int, value) -> None:
@@ -146,17 +154,13 @@ def build_workbook(test: Optional[dict] = None) -> bytes:
         return buf.getvalue()
 
     questions = sorted(test.get("questions") or [], key=lambda q: q["question_order"])
-    option_texts: Optional[list[str]] = None
+    sets: list[list[str]] = []
     key_rows, question_rows = [], []
     for n, q in enumerate(questions, start=1):
         if q["question_type"] != "single_choice":
             raise NotRepresentable("В шаблоне — только вопросы с одним выбором ответа")
         opts = sorted(q.get("options") or [], key=lambda o: o["option_order"])
-        texts = [o["option_text"] for o in opts]
-        if option_texts is None:
-            option_texts = texts
-        elif texts != option_texts:
-            raise NotRepresentable("У вопросов разные наборы вариантов ответа")
+        sets.append([o["option_text"] for o in opts])
         if q.get("media"):
             raise NotRepresentable("Медиа в вопросах шаблоном не переносятся")
         question_rows.append([n, q["question_text"]])
@@ -166,7 +170,12 @@ def build_workbook(test: Optional[dict] = None) -> bytes:
             scored = [(1, 0)]       # шкала без баллов — сохраняем принадлежность
         for i, score in scored:
             key_rows.append([scale, n, i, score])
-    _rows(sheets[SHEET_OPTIONS], [[i, t] for i, t in enumerate(option_texts or [], start=1)])
+    if sets and all(s == sets[0] for s in sets):
+        # общий набор (ИТО, Лайкерт) — как раньше, лист «Варианты вопросов» пуст
+        _rows(sheets[SHEET_OPTIONS], [[i, t] for i, t in enumerate(sets[0], start=1)])
+    else:
+        _rows(sheets[SHEET_QOPTIONS], [[n, i, t] for n, texts in enumerate(sets, start=1)
+                                       for i, t in enumerate(texts, start=1)])
     _rows(sheets[SHEET_QUESTIONS], question_rows)
     _rows(sheets[SHEET_KEY], key_rows)
 
@@ -290,13 +299,13 @@ def _parse(wb) -> tuple[Optional[dict], list[dict]]:
         errors.add(SHEET_META, meta.get("Только по ссылке", (None,))[0], "B", "нужно «да» или «нет»")
 
     options: list[str] = []
-    for i, (row, v) in enumerate(_read_rows(wb, SHEET_OPTIONS, errors, required=True), start=1):
+    for i, (row, v) in enumerate(_read_rows(wb, SHEET_OPTIONS, errors, required=False), start=1):
         if _int(v[0]) != i:
             errors.add(SHEET_OPTIONS, row, "A", f"порядок должен идти подряд: ожидалось {i}")
         if not _text(v[1]):
             errors.add(SHEET_OPTIONS, row, "B", "пустой текст варианта")
         options.append(_text(v[1]))
-    if len(options) < 2:
+    if len(options) == 1:
         errors.add(SHEET_OPTIONS, None, None, "нужно не меньше двух вариантов ответа")
     if len(options) > MAX_OPTIONS:
         errors.add(SHEET_OPTIONS, None, None, f"не больше {MAX_OPTIONS} вариантов")
@@ -313,6 +322,38 @@ def _parse(wb) -> tuple[Optional[dict], list[dict]]:
     if len(questions) > MAX_QUESTIONS:
         errors.add(SHEET_QUESTIONS, None, None, f"не больше {MAX_QUESTIONS} вопросов")
 
+    own: dict[int, list[str]] = {}        # № вопроса → свой набор вариантов
+    first_row: dict[int, int] = {}
+    for row, v in _read_rows(wb, SHEET_QOPTIONS, errors, required=False):
+        number, order = _int(v[0]), _int(v[1])
+        if number is None or not 1 <= number <= len(questions):
+            errors.add(SHEET_QOPTIONS, row, "A", "нет такого вопроса")
+            continue
+        texts = own.setdefault(number, [])
+        first_row.setdefault(number, row)
+        if order != len(texts) + 1:
+            errors.add(SHEET_QOPTIONS, row, "B",
+                       f"порядок у вопроса {number} должен идти подряд: ожидалось {len(texts) + 1}")
+        if not _text(v[2]):
+            errors.add(SHEET_QOPTIONS, row, "C", "пустой текст варианта")
+        texts.append(_text(v[2]))
+    for number, texts in own.items():
+        if len(texts) < 2:
+            errors.add(SHEET_QOPTIONS, first_row[number], "A",
+                       f"у вопроса {number} нужно не меньше двух вариантов")
+        if len(texts) > MAX_OPTIONS:
+            errors.add(SHEET_QOPTIONS, first_row[number], "A",
+                       f"у вопроса {number} не больше {MAX_OPTIONS} вариантов")
+    if not options and len(own) < len(questions):
+        missing = [n for n in range(1, len(questions) + 1) if n not in own]
+        errors.add(SHEET_OPTIONS, None, None,
+                   "нет вариантов ответа у вопросов " + ", ".join(map(str, missing[:10]))
+                   + (" …" if len(missing) > 10 else "")
+                   + ": заполните «Варианты ответа» или «Варианты вопросов»")
+
+    def options_of(number: int) -> list[str]:
+        return own.get(number) or options
+
     scale_of: dict[int, str] = {}
     scores: dict[tuple[int, int], int] = {}
     for row, v in _read_rows(wb, SHEET_KEY, errors, required=True):
@@ -320,8 +361,8 @@ def _parse(wb) -> tuple[Optional[dict], list[dict]]:
         if number is None or not 1 <= number <= len(questions):
             errors.add(SHEET_KEY, row, "B", "нет такого вопроса")
             continue
-        if option is None or not 1 <= option <= len(options):
-            errors.add(SHEET_KEY, row, "C", "нет такого варианта")
+        if option is None or not 1 <= option <= len(options_of(number)):
+            errors.add(SHEET_KEY, row, "C", "нет такого варианта у этого вопроса")
             continue
         if score is None:
             errors.add(SHEET_KEY, row, "D", "балл — целое число")
@@ -405,7 +446,7 @@ def _parse(wb) -> tuple[Optional[dict], list[dict]]:
             "is_required": True, "config": config, "media": [],
             "options": [{"option_text": o, "option_order": i - 1,
                          "value_score": scores.get((n, i), 0), "media": []}
-                        for i, o in enumerate(options, start=1)],
+                        for i, o in enumerate(options_of(n), start=1)],
         })
     rules = None
     if scales:

@@ -1087,10 +1087,14 @@ def _import_check(content: bytes) -> tuple[Optional[dict], dict]:
     report["warnings"] = [test_rules.describe(i) for i in
                           test_rules.check_against_bounds(rules, scoring.score_bounds(clean))]
     report["ok"] = True
+    option_sets = {tuple(o["option_text"] for o in sorted(q["options"], key=lambda o: o["option_order"]))
+                   for q in clean["questions"]}
     report["summary"] = {
         "title": clean["title"],
         "questions": len(clean["questions"]),
-        "options": len(clean["questions"][0]["options"]) if clean["questions"] else 0,
+        # общий набор — число вариантов; свои наборы у вопросов — None и число наборов
+        "options": (len(clean["questions"][0]["options"]) if len(option_sets) == 1 else None),
+        "option_sets": len(option_sets),
         "scales": len(rules.scales) if rules else 0,
         "levels": len(rules.levels) if rules else 0,
         "types": len(rules.types.items) if rules and rules.types else 0,

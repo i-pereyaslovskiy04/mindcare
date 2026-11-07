@@ -49,3 +49,13 @@ test('проверенный файл — сводка, замечания и с
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith('new-uuid'));
   expect(testsApi.importMethodology).toHaveBeenLastCalledWith(expect.any(File), { base: '/api/admin/tests' });
 });
+
+test('свои варианты у вопросов — в сводке число наборов', async () => {
+  testsApi.importMethodology.mockResolvedValueOnce({
+    ok: true, errors: [], warnings: [],
+    summary: { title: 'HADS', questions: 14, options: null, option_sets: 9, scales: 2, levels: 3, types: 0, interpretations: 0 },
+  });
+  setup();
+  userEvent.upload(screen.getByLabelText(/Файл методики/), file());
+  expect(await screen.findByText(/наборов вариантов ответа 9/)).toBeInTheDocument();
+});
