@@ -96,6 +96,8 @@ def submit_campaign(token: str, body: CampaignSubmitIn, request: Request,
                     response: Response):
     ip, ua = _client(request)
     _limit("campaign_submit", ip)
+    if body.access_code is not None:
+        _limit("campaign_code", ip)     # отправка — тоже попытка слова
     payload = body.model_dump()
     payload["answers"] = [a.model_dump() for a in body.answers]
     try:

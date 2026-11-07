@@ -7,11 +7,15 @@
   - длина после нормализации 4–64, без управляющих символов;
   - хранится только bcrypt (как пароли); открытый текст не хранится, не
     логируется и не попадает в аудит. Проверка — bcrypt.checkpw (постоянное
-    время сравнения внутри bcrypt).
+    время сравнения внутри bcrypt);
+  - в bcrypt подаётся SHA-256 hex нормализованного слова (64 ASCII-байта):
+    bcrypt принимает не больше 72 байт, а 64 кириллических символа — 128
+    байт (bcrypt 5 бросает ValueError, 4.x молча обрезал бы хвост).
 
 Сроки: время сервера (UTC в БД). До opens_at анкета не открывается, начиная с
 closes_at ссылка ведёт себя как закрытая кампания.
 """
+import hashlib
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -36,9 +40,13 @@ def normalize_code(code: str) -> str:
     return cleaned
 
 
+def _prehash(normalized: str) -> bytes:
+    return hashlib.sha256(normalized.encode()).hexdigest().encode()
+
+
 def hash_code(code: str) -> str:
     """Хеш нормализованного слова. Вызывать ВНЕ транзакции (bcrypt медленный)."""
-    return bcrypt.hashpw(normalize_code(code).encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(_prehash(normalize_code(code)), bcrypt.gensalt()).decode()
 
 
 def code_matches(code: Optional[str], hashed: str) -> bool:
@@ -46,7 +54,7 @@ def code_matches(code: Optional[str], hashed: str) -> bool:
         normalized = normalize_code(code or "")
     except AccessCodeInvalid:
         return False
-    return bcrypt.checkpw(normalized.encode(), hashed.encode())
+    return bcrypt.checkpw(_prehash(normalized), hashed.encode())
 
 
 def now() -> datetime:

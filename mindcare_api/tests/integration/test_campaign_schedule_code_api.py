@@ -212,3 +212,15 @@ def test_other_staff_cannot_set_code_or_schedule(client, env):
                       json={"access_code": CODE}).status_code == 403
     assert client.patch(f"{BASE}/{c['uuid']}/schedule", headers=headers,
                         json={"opens_at": None, "closes_at": None}).status_code == 403
+
+
+def test_long_cyrillic_code(client, env):
+    """64 кириллических символа (128 байт) — больше лимита bcrypt в 72 байта."""
+    c = _create(client, env)
+    word = "ж" * 64
+    r = client.put(f"{BASE}/{c['uuid']}/access-code", headers=env["headers"],
+                   json={"access_code": word})
+    assert r.status_code == 200, r.text
+    url = _public(_token(c), "/unlock")
+    assert client.post(url, json={"access_code": word}).status_code == 200
+    assert client.post(url, json={"access_code": "ж" * 63 + "з"}).status_code == 403
