@@ -75,3 +75,31 @@ def test_export_has_question_stats_sheet():
     assert rows[2][3:] == ["Нет", 2, 33.3]
     assert "Статистика по вопросам" not in load_workbook(io.BytesIO(
         build_workbook(rules=RULES, rows=raw, question_numbers=[1, 2]))).sheetnames
+
+
+def test_charts_sheet_has_native_charts():
+    """Лист «Графики»: по дням, уровни (общие и свои у шкалы), распределения
+    баллов — нативные диаграммы Excel, ссылающиеся на таблицы листа."""
+    import zipfile
+    rules = R.parse({"version": 1, "scales": [
+        {"code": "A", "label": "Тревога", "main": True,
+         "levels": [{"code": "n", "label": "Норма", "min": 0, "max": 4},
+                    {"code": "h", "label": "Высокая", "min": 5, "max": 9}]},
+        {"code": "B", "label": "Бодрость", "main": True}],
+        "levels": [{"code": "lo", "label": "Низкая", "min": 0, "max": 4},
+                   {"code": "hi", "label": "Высокая", "min": 5, "max": 9}]})
+    raw = [{"uuid": f"u{i}", "full_name": "Участник", "faculty_code": "law", "gender": "male",
+            "age": 19, "specialty": "x",
+            "submitted_at": datetime(2026, 11, 7, 9, tzinfo=timezone.utc),
+            "scores": {"A": i, "B": 9 - i}, "answers": {}} for i in range(6)]
+    content = build_workbook(rules=rules, rows=raw, question_numbers=[])
+    wb = load_workbook(io.BytesIO(content))
+    ws = wb["Графики"]
+    texts = [c for r in ws.iter_rows(values_only=True) for c in r if isinstance(c, str)]
+    assert {"Дата", "Шкала", "Балл", "Норма", "Низкая"} <= set(texts)
+    charts = [n for n in zipfile.ZipFile(io.BytesIO(content)).namelist()
+              if n.startswith("xl/charts/chart")]
+    # по дням + уровни общие (B) + свои уровни (A) + 2 распределения
+    assert len(charts) == 5
+    xml = zipfile.ZipFile(io.BytesIO(content)).read(charts[1]).decode()
+    assert "Графики" in xml or "'Графики'" in xml      # ссылки на ячейки листа

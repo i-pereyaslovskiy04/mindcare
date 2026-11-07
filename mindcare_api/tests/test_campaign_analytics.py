@@ -111,7 +111,7 @@ def test_summary_empty():
 def test_workbook_has_levels_and_summary_sheets_with_fills():
     data = build_workbook(rules=P, rows=ROWS, question_numbers=range(1, 92))
     wb = load_workbook(io.BytesIO(data))
-    assert wb.sheetnames == ["Результаты", "Уровни", "Сводка", "Ответы"]
+    assert wb.sheetnames == ["Результаты", "Уровни", "Сводка", "Ответы", "Графики"]
     res = wb["Результаты"]
     header = [c.value for c in res[1]]
     viii = header.index("VIII Лабильность") + 1

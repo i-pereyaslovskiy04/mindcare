@@ -25,6 +25,7 @@ from typing import Iterable, Optional
 from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -240,6 +241,110 @@ def _summary_sheet(ws, summary, scales, rules):
         ws.column_dimensions[get_column_letter(c)].width = 16
 
 
+# Цвета диаграмм: одна серия — основной цвет интерфейса; уровни — по оттенку
+# (как заливки ячеек, но насыщеннее, чтобы столбцы различались).
+_BAR_COLOR = "2453A6"
+_TONE_COLOR = {"low": "6FA8DC", "norm": "93C47D", "accent": "F6B26B",
+               "maladaptive": "CC4125"}
+_CHART_ROWS = 18          # высота блока «таблица + диаграмма» в строках
+
+
+def _bar(title: str, x_title: str, y_title: str, *, horizontal: bool = False,
+         stacked: bool = False) -> BarChart:
+    chart = BarChart()
+    chart.type = "bar" if horizontal else "col"
+    chart.title = title
+    chart.x_axis.title = x_title
+    chart.y_axis.title = y_title
+    chart.y_axis.majorGridlines = None
+    chart.x_axis.delete = False
+    chart.y_axis.delete = False
+    chart.height, chart.width = 7.5, 16
+    if stacked:
+        chart.grouping = "stacked"
+        chart.overlap = 100
+    else:
+        chart.legend = None          # одна серия — подпись в заголовке
+    chart.gapWidth = 40
+    return chart
+
+
+def _single_series(ws, chart, *, col: int, first: int, last: int) -> None:
+    """Значения — колонка col+1, подписи — col; строка first — заголовок."""
+    data = Reference(ws, min_col=col + 1, min_row=first, max_row=last)
+    cats = Reference(ws, min_col=col, min_row=first + 1, max_row=last)
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(cats)
+    chart.series[0].graphicalProperties.solidFill = _BAR_COLOR
+    chart.series[0].graphicalProperties.line.solidFill = _BAR_COLOR
+
+
+def _charts_sheet(ws, rows: list[dict], scales: list[str],
+                  rules: Optional[ScoringRulesV1]) -> None:
+    """Лист «Графики» (нативные диаграммы Excel): прохождения по дням,
+    уровни основных шкал, распределение баллов по каждой шкале. Данные
+    каждой диаграммы — таблицей слева от неё (диаграмма ссылается на ячейки)."""
+    r = 1
+    _set(ws, r, 1, "Графики по всем участникам кампании", bold=True)
+    r += 2
+
+    # ── по дням ──
+    days = analytics.by_day(rows)
+    if days:
+        _header(ws, ["Дата", "Прошли"], row=r)
+        for i, d in enumerate(days, start=1):
+            y, m, dd = d["date"].split("-")
+            _set(ws, r + i, 1, f"{dd}.{m}.{y}")
+            _set(ws, r + i, 2, d["count"])
+        chart = _bar("Прохождения по дням", "Дата", "Участников")
+        _single_series(ws, chart, col=1, first=r, last=r + len(days))
+        ws.add_chart(chart, f"E{r}")
+        r += max(len(days) + 3, _CHART_ROWS)
+
+    # ── уровни основных шкал ──
+    main = [s for s in R.main_scales(rules) if s in scales] if R.has_levels(rules) else []
+    summary = {i["scale"]: i for i in analytics.summarize(rows, rules)["scales"]}
+    own = analytics.scale_levels(rules)
+    groups = []
+    common_scales = [s for s in main if s not in own]
+    if common_scales and analytics.level_list(rules):
+        groups.append(("Уровни по основным шкалам", common_scales, analytics.level_list(rules)))
+    for s in main:
+        if s in own:
+            groups.append((f"Уровни: {R.scale_label(rules, s)}", [s], own[s]))
+    for title, codes, levels in groups:
+        _header(ws, ["Шкала", *[lv["label"] for lv in levels]], row=r)
+        for i, s in enumerate(codes, start=1):
+            _set(ws, r + i, 1, R.scale_label(rules, s))
+            for j, lv in enumerate(levels, start=2):
+                _set(ws, r + i, j, summary[s]["levels"].get(lv["code"], 0))
+        chart = _bar(title, "Шкала", "Участников", horizontal=True, stacked=True)
+        data = Reference(ws, min_col=2, max_col=1 + len(levels), min_row=r, max_row=r + len(codes))
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(Reference(ws, min_col=1, min_row=r + 1, max_row=r + len(codes)))
+        for series, lv in zip(chart.series, levels):
+            color = _TONE_COLOR.get(lv["tone"], _BAR_COLOR)
+            series.graphicalProperties.solidFill = color
+            series.graphicalProperties.line.solidFill = "FFFFFF"
+        chart.height = max(7.5, 1.2 + 0.8 * len(codes))
+        ws.add_chart(chart, f"{get_column_letter(len(levels) + 3)}{r}")
+        r += max(len(codes) + 3, int(chart.height * 2) + 3, _CHART_ROWS)
+
+    # ── распределение баллов ──
+    for h in analytics.scale_histograms(rows, rules):
+        if not h["bins"]:
+            continue
+        _header(ws, ["Балл", h["label"]], row=r)
+        for i, b in enumerate(h["bins"], start=1):
+            _set(ws, r + i, 1, b["score"])
+            _set(ws, r + i, 2, b["count"])
+        chart = _bar(f"Распределение баллов: {h['label']}", "Балл", "Участников")
+        _single_series(ws, chart, col=1, first=r, last=r + len(h["bins"]))
+        ws.add_chart(chart, f"E{r}")
+        r += max(len(h["bins"]) + 3, _CHART_ROWS)
+    ws.column_dimensions["A"].width = 28
+
+
 def _question_stats_sheet(ws, stats: list[dict]) -> None:
     """Вопрос × вариант: число и доля выбравших (ТЗ этапа 2, §7)."""
     _header(ws, ["№", "Вопрос", "Ответили", "Вариант", "Выбрали", "%"])
@@ -288,6 +393,8 @@ def build_workbook(*, rules: Optional[ScoringRulesV1], rows: list[dict],
     if questions:
         _question_stats_sheet(wb.create_sheet("Статистика по вопросам"),
                               analytics.question_stats(enriched, questions))
+    if enriched:
+        _charts_sheet(wb.create_sheet("Графики"), enriched, scales, rules)
 
     buf = io.BytesIO()
     wb.save(buf)
