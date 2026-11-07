@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PublicCampaign from './PublicCampaign';
-import { getPublicCampaign, submitPublicCampaign } from '../../../api/campaigns.api';
+import {
+  getPublicCampaign, submitPublicCampaign, unlockPublicCampaign,
+} from '../../../api/campaigns.api';
 
 jest.mock('../../../api/campaigns.api');
 
@@ -39,6 +41,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = jest.fn();
   getPublicCampaign.mockReset();
   submitPublicCampaign.mockReset();
+  unlockPublicCampaign.mockReset();
   getPublicCampaign.mockResolvedValue(CAMPAIGN);
 });
 
@@ -120,4 +123,47 @@ test('обновилось согласие — возврат к анкете, 
   expect(await screen.findByText(/Текст согласия обновился/)).toBeInTheDocument();
   expect(screen.getByRole('checkbox')).not.toBeChecked();
   await waitFor(() => expect(getPublicCampaign).toHaveBeenCalledTimes(2));
+});
+
+const LOCKED = {
+  title: '1 курс', test_title: 'ИТО', access_code_required: true, closes_at: null,
+  instruction: '', consent: null, faculties: [], questions: [],
+};
+
+test('ещё не началось — дата начала по Москве, без анкеты', async () => {
+  const err = new Error('ns');
+  err.status = 409;
+  err.code = 'campaign_not_started';
+  err.body = { opens_at: '2026-12-01T07:00:00+00:00' };
+  getPublicCampaign.mockRejectedValue(err);
+  render(<PublicCampaign token="tok" />);
+  expect(await screen.findByText('Тестирование ещё не началось')).toBeInTheDocument();
+  expect(screen.getByText(/1 декабря.*10:00.*МСК/)).toBeInTheDocument();
+  expect(screen.queryByText('Перейти к вопросам')).not.toBeInTheDocument();
+});
+
+test('кодовое слово: неверное — сообщение, верное — анкета, слово уходит в отправку', async () => {
+  prefill({ answers: { 10: 101, 11: 111 } });
+  getPublicCampaign.mockResolvedValue(LOCKED);
+  const wrong = new Error('w');
+  wrong.status = 403;
+  wrong.code = 'access_code_invalid';
+  unlockPublicCampaign.mockRejectedValueOnce(wrong).mockResolvedValue(
+    { ...CAMPAIGN, access_code_required: true });
+  submitPublicCampaign.mockResolvedValue({ status: 'accepted' });
+  render(<PublicCampaign token="tok" />);
+  const field = await screen.findByRole('textbox', { name: /Кодовое слово/ });
+  await userEvent.type(field, 'осень');
+  await userEvent.click(screen.getByRole('button', { name: 'Продолжить' }));
+  expect(await screen.findByText(/Неверное кодовое слово/)).toBeInTheDocument();
+  await userEvent.clear(field);
+  await userEvent.type(field, 'Весна 2026');
+  await userEvent.click(screen.getByRole('button', { name: 'Продолжить' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Перейти к вопросам' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Отправить ответы' }));
+  expect(await screen.findByText('Спасибо за участие!')).toBeInTheDocument();
+  expect(unlockPublicCampaign).toHaveBeenLastCalledWith('tok', 'Весна 2026');
+  expect(submitPublicCampaign).toHaveBeenCalledWith('tok', expect.objectContaining({
+    access_code: 'Весна 2026',
+  }));
 });

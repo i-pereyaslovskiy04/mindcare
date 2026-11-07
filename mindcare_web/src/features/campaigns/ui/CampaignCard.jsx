@@ -8,6 +8,7 @@ import Badge from '../../../components/UI/Badge/Badge';
 import Button from '../../../components/UI/Button/Button';
 import TextField from '../../../components/UI/TextField/TextField';
 import ConfirmDialog from '../../assignments/ui/ConfirmDialog';
+import CampaignAccessPanel from './CampaignAccessPanel';
 import CampaignResponses from './CampaignResponses';
 import CampaignResults from './CampaignResults';
 import styles from './CampaignCard.module.css';
@@ -26,6 +27,20 @@ export function exportFilename(title) {
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString('ru-RU') : '';
 }
+
+const MSK = { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+
+function formatMsk(value) {
+  return new Date(value).toLocaleString('ru-RU', MSK);
+}
+
+// Что сейчас видит участник по ссылке (link_state с backend).
+const LINK_STATE = {
+  open: { label: 'Открыта', tone: 'success' },
+  scheduled: { label: 'Ещё не началась', tone: 'warning' },
+  expired: { label: 'Срок истёк', tone: 'neutral' },
+  closed: { label: 'Закрыта', tone: 'neutral' },
+};
 
 const DIALOGS = {
   rotate: {
@@ -54,7 +69,7 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
   const [error, setError] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [dialogError, setDialogError] = useState(null);
-  // Открытая панель: null | 'results' | 'responses'.
+  // Открытая панель: null | 'results' | 'responses' | 'access'.
   const [panel, setPanel] = useState(null);
   const togglePanel = (name) => setPanel((p) => (p === name ? null : name));
   // Переименование: null — не редактируется, строка — черновик названия.
@@ -62,6 +77,7 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
   const [titleError, setTitleError] = useState(null);
   const link = campaignLink(campaign);
   const isOpen = campaign.status === 'open';
+  const state = LINK_STATE[campaign.link_state] || LINK_STATE[isOpen ? 'open' : 'closed'];
 
   async function run(name, action) {
     setBusy(name);
@@ -185,8 +201,17 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
             {campaign.test_title} · создана {formatDate(campaign.created_at)}
             {campaign.closed_at && ` · закрыта ${formatDate(campaign.closed_at)}`}
           </p>
+          {(campaign.opens_at || campaign.closes_at || campaign.access_code_set) && (
+            <p className={styles.meta}>
+              {[
+                campaign.opens_at && `с ${formatMsk(campaign.opens_at)}`,
+                campaign.closes_at && `до ${formatMsk(campaign.closes_at)}`,
+                campaign.access_code_set && 'по кодовому слову',
+              ].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
-        <Badge tone={isOpen ? 'success' : 'neutral'}>{isOpen ? 'Открыта' : 'Закрыта'}</Badge>
+        <Badge tone={state.tone}>{state.label}</Badge>
       </header>
 
       <div className={styles.linkRow}>
@@ -216,6 +241,10 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
           aria-expanded={panel === 'responses'}>
           {panel === 'responses' ? 'Скрыть участников' : 'Участники'}
         </Button>
+        <Button type="button" variant="secondary" onClick={() => togglePanel('access')}
+          aria-expanded={panel === 'access'}>
+          {panel === 'access' ? 'Скрыть сроки и код' : 'Сроки и код'}
+        </Button>
         <Button type="button" variant="secondary" onClick={toggleStatus}
           loading={busy === 'status'}>
           {isOpen ? 'Закрыть' : 'Открыть снова'}
@@ -236,6 +265,12 @@ export default function CampaignCard({ campaign, onChange, onDeleted }) {
 
       <div aria-live="polite" className={styles.message}>{message}</div>
       {error && <p className={styles.error} role="alert">{error}</p>}
+
+      {panel === 'access' && (
+        <div className={styles.responses}>
+          <CampaignAccessPanel campaign={campaign} onChange={onChange} />
+        </div>
+      )}
 
       {panel === 'results' && (
         <div className={styles.responses}>

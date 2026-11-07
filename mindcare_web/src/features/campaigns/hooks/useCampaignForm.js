@@ -11,8 +11,13 @@ import {
  *
  * onConsentOutdated — backend сообщил, что текст согласия обновился: черновик
  * сохраняется, согласие снимается, вызывающий перезагружает анкету.
+ * accessCode — кодовое слово ссылки (если задано), уходит в отправку;
+ * onAccessCodeRejected — слово сменили во время прохождения (403): черновик
+ * сохраняется, вызывающий снова показывает поле слова.
  */
-export default function useCampaignForm(token, campaign, { onConsentOutdated } = {}) {
+export default function useCampaignForm(token, campaign, {
+  onConsentOutdated, accessCode = null, onAccessCodeRejected,
+} = {}) {
   const [draft, setDraft] = useState(() => loadDraft(token));
   const [step, setStep] = useState('profile');
   const [errors, setErrors] = useState({});
@@ -64,7 +69,8 @@ export default function useCampaignForm(token, campaign, { onConsentOutdated } =
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await submitPublicCampaign(token, buildSubmitBody(draft, campaign));
+      const body = buildSubmitBody(draft, campaign);
+      await submitPublicCampaign(token, accessCode ? { ...body, access_code: accessCode } : body);
       clearDraft(token);
       setStep('done');
     } catch (err) {
@@ -73,6 +79,11 @@ export default function useCampaignForm(token, campaign, { onConsentOutdated } =
         setErrors({ consent: 'Текст согласия обновился — прочитайте его и подтвердите снова' });
         setStep('profile');
         onConsentOutdated?.();
+      } else if (err?.status === 403 && err?.code === 'access_code_invalid') {
+        setSubmitError('Кодовое слово изменилось. Уточните новое у организаторов и введите его — ответы сохранены на этой странице.');
+        onAccessCodeRejected?.();
+      } else if (err?.status === 409 && err?.code === 'campaign_not_started') {
+        setSubmitError('Тестирование ещё не началось. Ответы сохранены на этой странице.');
       } else if (err?.status === 404) {
         setSubmitError('Ссылка недействительна или опрос уже завершён. Ответы не сохранены.');
       } else if (err?.status === 422) {
@@ -88,7 +99,7 @@ export default function useCampaignForm(token, campaign, { onConsentOutdated } =
       setSubmitting(false);
     }
     return null;
-  }, [campaign, draft, submitting, token, onConsentOutdated]);
+  }, [campaign, draft, submitting, token, onConsentOutdated, accessCode, onAccessCodeRejected]);
 
   return {
     draft, step, errors, missing, submitting, submitError,

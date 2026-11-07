@@ -2,7 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CampaignCard, { campaignLink, exportFilename } from './CampaignCard';
 import {
-  deleteCampaign, renameCampaign, rotateCampaignLink, setCampaignStatus,
+  clearCampaignAccessCode, deleteCampaign, renameCampaign, rotateCampaignLink,
+  setCampaignAccessCode, setCampaignSchedule, setCampaignStatus,
 } from '../../../api/campaigns.api';
 
 jest.mock('../../../api/campaigns.api');
@@ -118,4 +119,34 @@ test('переименование: ошибка backend показываетс�
   await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Кампания не найдена');
   expect(onChange).not.toHaveBeenCalled();
+});
+
+test('состояние ссылки: ещё не началась, сроки и код в описании', () => {
+  setup({ link_state: 'scheduled', opens_at: '2026-12-01T07:00:00Z', access_code_set: true });
+  expect(screen.getByText('Ещё не началась')).toBeInTheDocument();
+  expect(screen.getByText(/с 1 дек.*10:00.*по кодовому слову/)).toBeInTheDocument();
+});
+
+test('сроки и кодовое слово: сохранение и снятие', async () => {
+  setCampaignAccessCode.mockResolvedValue({ ...CAMPAIGN, access_code_set: true });
+  clearCampaignAccessCode.mockResolvedValue({ ...CAMPAIGN, access_code_set: false });
+  setCampaignSchedule.mockResolvedValue({ ...CAMPAIGN, closes_at: null });
+  const { onChange } = setup({ access_code_set: true, closes_at: '2026-12-01T07:00:00Z' });
+  userEvent.click(screen.getByRole('button', { name: 'Сроки и код' }));
+
+  userEvent.type(screen.getByLabelText('Новое кодовое слово'), 'abc');
+  userEvent.click(screen.getByRole('button', { name: 'Сменить слово' }));
+  expect(await screen.findByText('От 4 до 64 символов')).toBeInTheDocument();
+  expect(setCampaignAccessCode).not.toHaveBeenCalled();
+  userEvent.type(screen.getByLabelText('Новое кодовое слово'), 'd  весна');
+  userEvent.click(screen.getByRole('button', { name: 'Сменить слово' }));
+  await waitFor(() => expect(setCampaignAccessCode).toHaveBeenCalledWith('c-1', 'abcd весна'));
+  expect(await screen.findByText(/повторно его не показать/)).toBeInTheDocument();
+
+  userEvent.click(screen.getByRole('button', { name: 'Снять слово' }));
+  await waitFor(() => expect(clearCampaignAccessCode).toHaveBeenCalledWith('c-1'));
+  userEvent.click(screen.getByRole('button', { name: 'Снять сроки' }));
+  await waitFor(() => expect(setCampaignSchedule).toHaveBeenCalledWith(
+    'c-1', { opens_at: null, closes_at: null }));
+  expect(onChange).toHaveBeenCalledTimes(3);
 });

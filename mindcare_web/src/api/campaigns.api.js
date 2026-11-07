@@ -15,9 +15,22 @@ const enc = encodeURIComponent;
 
 // ── публично ─────────────────────────────────────────────────────────────────
 
-/** GET → { title, test_title, instruction, consent, faculties, questions } */
+/**
+ * GET → { title, test_title, access_code_required, closes_at, instruction,
+ * consent, faculties, questions }. При кодовом слове — только «замок»
+ * (consent null, вопросов нет). До начала срока — 409 campaign_not_started
+ * (err.body.opens_at).
+ */
 export function getPublicCampaign(token) {
   return apiFetch(`${PUBLIC_BASE}/${enc(token)}`);
+}
+
+/** POST { access_code } → та же анкета; неверное слово — 403 access_code_invalid. */
+export function unlockPublicCampaign(token, accessCode) {
+  return apiFetch(`${PUBLIC_BASE}/${enc(token)}/unlock`, {
+    method: 'POST',
+    body: JSON.stringify({ access_code: accessCode }),
+  });
 }
 
 /** POST → { status: 'accepted' } (201 — принято, 200 — повтор того же ключа) */
@@ -68,6 +81,26 @@ export function renameCampaign(uuid, title) {
     method: 'PATCH',
     body: JSON.stringify({ title }),
   });
+}
+
+/** PATCH { opens_at, closes_at } (ISO с часовым поясом или null) → карточка */
+export function setCampaignSchedule(uuid, { opens_at, closes_at }) {
+  return apiFetch(`${SUPERVISOR_BASE}/${enc(uuid)}/schedule`, {
+    method: 'PATCH',
+    body: JSON.stringify({ opens_at, closes_at }),
+  });
+}
+
+/** PUT { access_code } → карточка (слово больше не показывается). */
+export function setCampaignAccessCode(uuid, accessCode) {
+  return apiFetch(`${SUPERVISOR_BASE}/${enc(uuid)}/access-code`, {
+    method: 'PUT',
+    body: JSON.stringify({ access_code: accessCode }),
+  });
+}
+
+export function clearCampaignAccessCode(uuid) {
+  return apiFetch(`${SUPERVISOR_BASE}/${enc(uuid)}/access-code`, { method: 'DELETE' });
 }
 
 export function rotateCampaignLink(uuid) {
