@@ -9,7 +9,8 @@ POST строгий (extra=forbid): анкета, принятие соглас�
 """
 import re
 import uuid as _uuid
-from typing import Literal
+from datetime import datetime
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -57,12 +58,22 @@ class PublicFacultyRead(BaseModel):
 
 
 class PublicCampaignRead(BaseModel):
+    """При access_code_required и без верного слова — только «замок»:
+    consent=None, вопросов и факультетов нет (их открывает POST /unlock)."""
     title: str
     test_title: str
+    access_code_required: bool = False
+    closes_at: Optional[datetime] = None
     instruction: str
-    consent: PublicConsentRead
+    consent: Optional[PublicConsentRead]
     faculties: list[PublicFacultyRead]
     questions: list[PublicQuestionRead]
+
+
+class CampaignUnlockIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    access_code: str = Field(min_length=1, max_length=200)
 
 
 # ── POST ──────────────────────────────────────────────────────────────────────
@@ -86,6 +97,8 @@ class CampaignSubmitIn(BaseModel):
     consent_accepted: Literal[True]
     consent_version: int = Field(strict=True, ge=1)
     answers: list[CampaignAnswerIn] = Field(min_length=1, max_length=MAX_ANSWERS)
+    # Кодовое слово ссылки (если задано супервизором); не хранится и не логируется.
+    access_code: Optional[str] = Field(default=None, max_length=200)
 
     @field_validator("full_name")
     @classmethod

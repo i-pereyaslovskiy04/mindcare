@@ -68,6 +68,15 @@ class TestCampaign(Base):
         CheckConstraint(
             "length(btrim(title)) > 0", name="ck_test_campaigns_title_not_blank",
         ),
+        # Сроки и кодовое слово ссылки (миграция c2a5f7d9e3b1).
+        CheckConstraint(
+            "opens_at IS NULL OR closes_at IS NULL OR opens_at < closes_at",
+            name="ck_test_campaigns_schedule_order",
+        ),
+        CheckConstraint(
+            "access_code_hash IS NULL OR access_code_hash ~ '^\\$2[aby]\\$[0-9]{2}\\$.{53}$'",
+            name="ck_test_campaigns_access_code_hash_format",
+        ),
         # Список кампаний супервизора — keyset по (created_at, id).
         Index("ix_test_campaigns_created", "created_at", "id"),
         # Проверка RESTRICT при удалении теста.
@@ -95,6 +104,9 @@ class TestCampaign(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     closed_at       = Column(DateTime(timezone=True), nullable=True)
+    opens_at        = Column(DateTime(timezone=True), nullable=True)
+    closes_at       = Column(DateTime(timezone=True), nullable=True)
+    access_code_hash = Column(Text, nullable=True)        # ТОЛЬКО bcrypt
 
 
 class CampaignResponse(Base):

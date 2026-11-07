@@ -16,6 +16,7 @@ from typing import Optional
 from sqlalchemy.exc import IntegrityError
 
 from app.audit import Actor, Outcome, Target, record_event
+from app.campaigns import access
 from app.audit.request_context import build_request_context
 from app.campaigns.answers import compute, validate_answers
 from app.core.encryption import encrypt_text
@@ -35,6 +36,18 @@ class CampaignNotFound(Exception):
 
 class ConsentOutdated(Exception):
     """Клиент принял не последнюю версию согласия (→ 409)."""
+
+
+class CampaignNotStarted(Exception):
+    """Срок начала кампании ещё не наступил (→ 409 с датой начала)."""
+
+    def __init__(self, opens_at):
+        super().__init__("campaign_not_started")
+        self.opens_at = opens_at
+
+
+class AccessCodeWrong(Exception):
+    """Кодовое слово не указано, неверно или сменилось во время прохождения (→ 403)."""
 
 
 # ── чтение ────────────────────────────────────────────────────────────────────
@@ -78,7 +91,14 @@ def _test_structure(db, test: Test) -> dict:
 
 
 def _open_campaign_and_test(db, campaign: Optional[TestCampaign]) -> tuple:
-    if campaign is None or campaign.status != "open":
+    """Кампания открыта и в сроках; иначе CampaignNotFound (закрыта, срок
+    истёк) или CampaignNotStarted. Время — сервера."""
+    if campaign is None:
+        raise CampaignNotFound()
+    state = access.state(campaign.status, campaign.opens_at, campaign.closes_at)
+    if state == "scheduled":
+        raise CampaignNotStarted(campaign.opens_at)
+    if state != "open":
         raise CampaignNotFound()
     test = db.get(Test, campaign.test_id)
     if test is None or test.deleted_at is not None:
@@ -94,10 +114,23 @@ def load_public(token_hash: str) -> dict:
         consent = _latest_consent(db)
         return {
             "title": campaign.title,
+            "closes_at": campaign.closes_at,
+            # Только для проверки вне транзакции (service); наружу не отдаётся.
+            "access_code_hash": campaign.access_code_hash,
             "test": _test_structure(db, test),
             "consent": {"version": consent.version, "title": consent.title,
                         "content": consent.content},
         }
+
+
+def access_code_hash(token_hash: str) -> Optional[str]:
+    """Хеш кодового слова открытой кампании в сроках (для проверки до
+    транзакции отправки)."""
+    with SessionLocal() as db:
+        campaign = (db.query(TestCampaign)
+                    .filter(TestCampaign.link_token_hash == token_hash).first())
+        campaign, _ = _open_campaign_and_test(db, campaign)
+        return campaign.access_code_hash
 
 
 # ── отправка ──────────────────────────────────────────────────────────────────
@@ -117,11 +150,17 @@ def _existing(db, campaign_id: int, submission_key) -> bool:
 
 
 def submit(token_hash: str, payload: dict, *, ip: Optional[str],
-           user_agent: Optional[str]) -> str:
+           user_agent: Optional[str], verified_code_hash: Optional[str] = None) -> str:
     """'created' — сохранено; 'replay' — этот submission_key уже принят.
 
-    Исключения: CampaignNotFound, ConsentOutdated, AnswersInvalid,
-    AuditError (сбой обязательного аудита — ничего не сохранено).
+    verified_code_hash — хеш кодового слова, с которым service уже сверил
+    присланное слово (bcrypt — вне транзакции). Под блокировкой строки он
+    обязан совпасть с текущим: слово сменили или задали во время прохождения
+    → AccessCodeWrong.
+
+    Исключения: CampaignNotFound, CampaignNotStarted, AccessCodeWrong,
+    ConsentOutdated, AnswersInvalid, AuditError (сбой обязательного аудита —
+    ничего не сохранено).
     """
     safe_ctx = build_request_context(ip=ip, user_agent=user_agent)
     with SessionLocal() as db:
@@ -136,6 +175,8 @@ def submit(token_hash: str, payload: dict, *, ip: Optional[str],
                                               payload["submission_key"]):
             return "replay"
         campaign, test = _open_campaign_and_test(db, campaign)
+        if campaign.access_code_hash != verified_code_hash:
+            raise AccessCodeWrong()
 
         consent = _latest_consent(db)
         if payload["consent_version"] != consent.version:

@@ -99,6 +99,8 @@ _EXPECTED_AUDIT_LOG_EVENTS = frozenset({
     "test_campaign_created", "test_campaign_closed", "test_campaign_reopened",
     "test_campaign_link_rotated", "test_campaign_deleted",
     "test_campaign_renamed",
+    # ТЗ редактора методик, этап 2, §6: сроки и кодовое слово ссылки.
+    "test_campaign_schedule_changed", "test_campaign_access_code_changed",
     # ADR-037: методики как данные (версии, исправление текстов, импорт).
     "test_version_created", "test_texts_corrected", "test_imported",
     "campaign_response_deleted", "campaign_responses_read",
@@ -136,8 +138,8 @@ def test_registry_exact_contract():
     assert auth_names == _EXPECTED_AUTH_LOG_EVENTS
     assert len(auth_names) == 7
     assert audit_names == _EXPECTED_AUDIT_LOG_EVENTS
-    assert len(audit_names) == 148
-    assert len(REGISTRY) == 155
+    assert len(audit_names) == 150
+    assert len(REGISTRY) == 157
 
 
 def test_unknown_event_rejected():
@@ -248,7 +250,9 @@ def test_registry_total_count_stage_5c3():
     # ADR-036 (экран результатов): campaign_results_read +1 → 144 audit = 151.
     # ADR-036, дополнение 2026-11-06: test_campaign_renamed +1 → 145 audit = 152.
     # ADR-037: test_version_created/texts_corrected/imported +3 → 148 audit = 155.
-    assert len(REGISTRY) == 155
+    # Этап 2 редактора: test_campaign_schedule_changed/access_code_changed
+    # +2 → 150 audit = 157.
+    assert len(REGISTRY) == 157
 
 
 def test_role_metadata_enum_excludes_system():

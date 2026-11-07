@@ -20,7 +20,7 @@ from sqlalchemy import func
 
 from app.audit import Actor, Outcome, Target, record_event
 from app.audit.request_context import build_request_context
-from app.campaigns import tokens
+from app.campaigns import access, tokens
 from app.core.encryption import decrypt_text, encrypt_text
 from app.db.models import (
     CampaignResponse, CampaignResponseAnswer, CampaignResponseScale,
@@ -105,6 +105,11 @@ def _dto(campaign: TestCampaign, test: Optional[Test], count: int,
         "responses_count": count,
         "created_at": campaign.created_at,
         "closed_at": campaign.closed_at,
+        "opens_at": campaign.opens_at,
+        "closes_at": campaign.closes_at,
+        "access_code_set": campaign.access_code_hash is not None,
+        # Что сейчас видит участник по ссылке: open | scheduled | expired | closed.
+        "link_state": access.state(campaign.status, campaign.opens_at, campaign.closes_at),
     }
     if with_link:
         data["link_token"] = decrypt_text(campaign.link_token_enc)
@@ -226,6 +231,44 @@ def rename_campaign(campaign_uuid, *, title: str, actor_id: int, ip, user_agent,
             campaign.title = title
             campaign.updated_at = datetime.now(timezone.utc)
             _event(db, "test_campaign_renamed", actor_id, CAMPAIGN_ENTITY,
+                   campaign.id, ctx, impersonator_id)
+            db.commit()
+        test = db.get(Test, campaign.test_id)
+        count = _counts(db, [campaign.id]).get(campaign.id, 0)
+        return _dto(campaign, test, count, with_link=True)
+
+
+def set_schedule(campaign_uuid, *, opens_at, closes_at, actor_id: int, ip, user_agent,
+                 impersonator_id: Optional[int] = None) -> dict:
+    """Сроки ссылки (любое из значений — None, то есть без ограничения).
+    Те же значения — без изменений и события. Порядок дат проверяет схема."""
+    ctx = build_request_context(ip=ip, user_agent=user_agent)
+    with SessionLocal() as db:
+        campaign = _locked(db, campaign_uuid)
+        if (campaign.opens_at, campaign.closes_at) != (opens_at, closes_at):
+            campaign.opens_at = opens_at
+            campaign.closes_at = closes_at
+            campaign.updated_at = datetime.now(timezone.utc)
+            _event(db, "test_campaign_schedule_changed", actor_id, CAMPAIGN_ENTITY,
+                   campaign.id, ctx, impersonator_id)
+            db.commit()
+        test = db.get(Test, campaign.test_id)
+        count = _counts(db, [campaign.id]).get(campaign.id, 0)
+        return _dto(campaign, test, count, with_link=True)
+
+
+def set_access_code(campaign_uuid, *, code_hash: Optional[str], actor_id: int, ip,
+                    user_agent, impersonator_id: Optional[int] = None) -> dict:
+    """code_hash — bcrypt нового слова (посчитан вызывающим ВНЕ транзакции) или
+    None — снять слово. Задание слова пишет событие всегда (сравнить с прежним
+    без открытого текста нельзя); снятие отсутствующего — без события."""
+    ctx = build_request_context(ip=ip, user_agent=user_agent)
+    with SessionLocal() as db:
+        campaign = _locked(db, campaign_uuid)
+        if code_hash is not None or campaign.access_code_hash is not None:
+            campaign.access_code_hash = code_hash
+            campaign.updated_at = datetime.now(timezone.utc)
+            _event(db, "test_campaign_access_code_changed", actor_id, CAMPAIGN_ENTITY,
                    campaign.id, ctx, impersonator_id)
             db.commit()
         test = db.get(Test, campaign.test_id)

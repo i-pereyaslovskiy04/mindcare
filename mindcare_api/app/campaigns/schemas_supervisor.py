@@ -4,7 +4,7 @@ import uuid as _uuid
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -53,6 +53,30 @@ class CampaignStatusIn(BaseModel):
     status: Literal["open", "closed"]
 
 
+class CampaignScheduleIn(BaseModel):
+    """Сроки ссылки; null — без ограничения. Время — с часовым поясом."""
+    model_config = ConfigDict(extra="forbid")
+
+    opens_at: Optional[datetime]
+    closes_at: Optional[datetime]
+
+    @model_validator(mode="after")
+    def _order(self):
+        for value in (self.opens_at, self.closes_at):
+            if value is not None and value.tzinfo is None:
+                raise ValueError("время указывается с часовым поясом")
+        if self.opens_at and self.closes_at and self.opens_at >= self.closes_at:
+            raise ValueError("начало должно быть раньше окончания")
+        return self
+
+
+class CampaignAccessCodeIn(BaseModel):
+    """Кодовое слово: 4–64 символа после схлопывания пробелов (app/campaigns/access.py)."""
+    model_config = ConfigDict(extra="forbid")
+
+    access_code: str = Field(min_length=1, max_length=200)
+
+
 class CampaignOut(BaseModel):
     uuid: str
     title: str
@@ -62,6 +86,10 @@ class CampaignOut(BaseModel):
     responses_count: int
     created_at: datetime
     closed_at: Optional[datetime]
+    opens_at: Optional[datetime] = None
+    closes_at: Optional[datetime] = None
+    access_code_set: bool = False
+    link_state: Literal["open", "scheduled", "expired", "closed"] = "open"
 
 
 class CampaignDetailOut(CampaignOut):

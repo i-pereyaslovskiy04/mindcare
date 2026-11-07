@@ -264,7 +264,7 @@ def test_options_reflect_the_live_registry(client, admin):
 
     assert body["operations"] == ["UPDATE"]
     assert body["actor_kinds"]["data_change_log"] == ["user", "unavailable"]
-    assert len(body["audit_events"]) == 148
+    assert len(body["audit_events"]) == 150
     assert len(body["auth_events"]) == 7
     assert body["limits"]["max_range_days"] == 90
 

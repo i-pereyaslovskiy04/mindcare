@@ -2,10 +2,17 @@
 Публичный API кампании (ADR-036). Префикс: /api/public/campaigns. Без авторизации.
 
   GET  /{token}         — анкета: название, инструкция, текст согласия,
-                          каталог факультетов, вопросы (без баллов и шкал).
+                          каталог факультетов, вопросы (без баллов и шкал);
+                          при кодовом слове — только «замок»
+                          (access_code_required, без вопросов);
+                          до начала срока — 409 campaign_not_started + opens_at.
+  POST /{token}/unlock  — {access_code} → та же анкета; неверное — 403
+                          access_code_invalid.
   POST /{token}/submit  — анкета + принятие согласия (версия) + ответы на все
                           вопросы. 201 — принято; 200 — повтор того же
-                          submission_key; 404 — нет/закрыта/тест удалён;
+                          submission_key; 404 — нет/закрыта/срок истёк/тест удалён;
+                          403 access_code_invalid (+ access_code в теле);
+                          409 campaign_not_started;
                           409 consent_outdated; 422 — ответы/поля; 429; 503 —
                           сбой обязательного аудита (ничего не сохранено).
 
@@ -20,7 +27,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.campaigns import service
 from app.campaigns.schemas import (
-    CampaignSubmitIn, CampaignSubmitOut, PublicCampaignRead,
+    CampaignSubmitIn, CampaignSubmitOut, CampaignUnlockIn, PublicCampaignRead,
 )
 from app.core.no_store_route import NoStoreRoute, no_store_json
 from app.core.rate_limit import RateLimitExceeded, enforce as enforce_rate_limit
@@ -33,6 +40,15 @@ router = APIRouter(
 
 _NOT_FOUND = "Ссылка недействительна или опрос завершён."
 _RATE_LIMIT = "Слишком много запросов. Подождите несколько минут и повторите."
+_WRONG_CODE = {"detail": "Неверное кодовое слово.", "code": "access_code_invalid"}
+
+
+def _not_started(exc):
+    return no_store_json(409, {
+        "detail": "Тестирование ещё не началось.",
+        "code": "campaign_not_started",
+        "opens_at": exc.opens_at.isoformat() if exc.opens_at else None,
+    })
 
 
 def _client(request: Request):
@@ -56,6 +72,22 @@ def get_campaign(token: str, request: Request):
         return service.get_public_campaign(token)
     except service.CampaignNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    except service.CampaignNotStarted as exc:
+        return _not_started(exc)
+
+
+@router.post("/{token}/unlock", response_model=PublicCampaignRead)
+def unlock_campaign(token: str, body: CampaignUnlockIn, request: Request):
+    ip, _ = _client(request)
+    _limit("campaign_code", ip)
+    try:
+        return service.get_public_campaign(token, body.access_code, unlock=True)
+    except service.CampaignNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    except service.CampaignNotStarted as exc:
+        return _not_started(exc)
+    except service.AccessCodeWrong:
+        return no_store_json(403, _WRONG_CODE)
 
 
 @router.post("/{token}/submit", response_model=CampaignSubmitOut,
@@ -70,6 +102,10 @@ def submit_campaign(token: str, body: CampaignSubmitIn, request: Request,
         outcome = service.submit(token, payload, ip=ip, user_agent=ua)
     except service.CampaignNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    except service.CampaignNotStarted as exc:
+        return _not_started(exc)
+    except service.AccessCodeWrong:
+        return no_store_json(403, _WRONG_CODE)
     except service.ConsentOutdated:
         return no_store_json(409, {
             "detail": "Текст согласия обновился. Обновите страницу и примите его снова.",

@@ -13,6 +13,13 @@
   PATCH  /{uuid} {title}             — переименовать (адрес ссылки не меняется;
                                        то же название — без события);
   PATCH  /{uuid}/status {status}     — закрыть / открыть (повтор — без события);
+  PATCH  /{uuid}/schedule {opens_at, closes_at}
+                                     — сроки ссылки (null — без ограничения;
+                                       те же — без события);
+  PUT    /{uuid}/access-code {access_code}
+                                     — задать/сменить кодовое слово (хранится
+                                       только bcrypt; слово больше не показывается);
+  DELETE /{uuid}/access-code         — снять слово (не было — без события);
   POST   /{uuid}/rotate-link         — новая ссылка, старая перестаёт работать;
   DELETE /{uuid}                     — удалить кампанию со всеми ответами;
   GET    /{uuid}/responses ?size&after — ответы с ФИО (fail-closed аудит);
@@ -28,8 +35,9 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.auth.deps import get_current_user, require_role, resolve_role_or_403
-from app.campaigns import analytics, export, storage_supervisor as store
+from app.campaigns import access, analytics, export, storage_supervisor as store
 from app.campaigns.schemas_supervisor import (
+    CampaignAccessCodeIn, CampaignScheduleIn,
     CampaignCreateIn, CampaignDetailOut, CampaignListOut, CampaignRenameIn,
     CampaignResponseListOut,
     CampaignResultsOut, CampaignStatusIn, CampaignTestOut,
@@ -137,6 +145,51 @@ def set_status(campaign_uuid: str, body: CampaignStatusIn, request: Request,
                                         actor_id=_actor(current_user),
             impersonator_id=current_user.get("impersonator_user_id"), ip=ip,
                                         user_agent=ua))
+    except store.NotFound:
+        raise _not_found()
+
+
+@router.patch("/{campaign_uuid}/schedule", response_model=CampaignDetailOut)
+def set_schedule(campaign_uuid: str, body: CampaignScheduleIn, request: Request,
+                 current_user: dict = Depends(get_current_user)):
+    ip, ua = _client(request)
+    try:
+        return _detail(store.set_schedule(
+            campaign_uuid, opens_at=body.opens_at, closes_at=body.closes_at,
+            actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip, user_agent=ua))
+    except store.NotFound:
+        raise _not_found()
+
+
+@router.put("/{campaign_uuid}/access-code", response_model=CampaignDetailOut)
+def set_access_code(campaign_uuid: str, body: CampaignAccessCodeIn, request: Request,
+                    current_user: dict = Depends(get_current_user)):
+    ip, ua = _client(request)
+    actor_id = _actor(current_user)
+    try:
+        code_hash = access.hash_code(body.access_code)     # bcrypt — до транзакции
+    except access.AccessCodeInvalid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Кодовое слово — от {access.CODE_MIN} до {access.CODE_MAX} символов, "
+                   "без служебных символов")
+    try:
+        return _detail(store.set_access_code(
+            campaign_uuid, code_hash=code_hash, actor_id=actor_id,
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip, user_agent=ua))
+    except store.NotFound:
+        raise _not_found()
+
+
+@router.delete("/{campaign_uuid}/access-code", response_model=CampaignDetailOut)
+def clear_access_code(campaign_uuid: str, request: Request,
+                      current_user: dict = Depends(get_current_user)):
+    ip, ua = _client(request)
+    try:
+        return _detail(store.set_access_code(
+            campaign_uuid, code_hash=None, actor_id=_actor(current_user),
+            impersonator_id=current_user.get("impersonator_user_id"), ip=ip, user_agent=ua))
     except store.NotFound:
         raise _not_found()
 
