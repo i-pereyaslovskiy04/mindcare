@@ -66,6 +66,14 @@ python scripts/complete_group_sessions.py
 # (event_key); exit 1 при ошибке чтения outbox / публикации / отметки.
 python scripts/deliver_system_message_intents.py
 python scripts/deliver_system_message_intents.py --dry-run   # только счёт
+
+# Разовый перенос демо-методик и демо-кампаний (синтетические студенты) с dev на прод.
+# Подкоманды export (dev → scripts/data/demo_campaigns_bundle.json) и import (файл → БД,
+# одна транзакция, идемпотентно по uuid, сверка шкал по ключу прода, откат при расхождении).
+# По умолчанию: методики campaign_only (не в каталоге студентов), кампании закрыты.
+# Перед импортом на проде: alembic upgrade head → scripts/seed_ito_sobchik.py.
+python scripts/migrate_demo_campaigns.py import --owner-email <email> --dry-run
+python scripts/migrate_demo_campaigns.py import --owner-email <email>
 ```
 
 > **Эксплуатационное требование Stage 5C-3:** `extend_schedules.py` и

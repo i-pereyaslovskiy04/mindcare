@@ -3,6 +3,15 @@
 Этот файл описывает проект для Claude Code. Прочитай его целиком перед любой задачей.
 
 Актуальный handoff (ветка `mindcare_vb`):
+`docs/HANDOFFS/2026-11-08-demo-campaigns-migration.md` — скрипт переноса
+демо-методик и демо-кампаний с синтетическими студентами на боевой сайт
+(`mindcare_api/scripts/migrate_demo_campaigns.py`, выгрузка
+`scripts/data/demo_campaigns_bundle.json`; без миграций, REGISTRY 157): только
+синтетика (2 реальных ответа отбрасываются), импорт одной транзакцией с `--dry-run`,
+сверка шкал по ключу прода, по умолчанию методики `campaign_only` и кампании
+закрыты. Порядок: `alembic upgrade head` → `seed_ito_sobchik.py` → импорт.
+
+Предыдущий handoff (ветка `mindcare_vb`):
 `docs/HANDOFFS/2026-11-07-methodology-editor-stage2.md` — редактор методик,
 этап 2 (миграция `c2a5f7d9e3b1`, REGISTRY 155 → 157): свой набор вариантов у
 вопроса в шаблоне xlsx (HADS и подобные), свои уровни шкалы, нормы шкал
